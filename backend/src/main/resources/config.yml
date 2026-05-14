@@ -51,3 +51,11 @@ email:
   # Blank Postmark token routes mail to the logging service (dev default).
   postmarkToken: ${BLISS_POSTMARK_TOKEN:-}
   fromAddress: ${BLISS_EMAIL_FROM:-no-reply@bliss.com}
+
+stripe:
+  # Blank secretKey leaves Stripe endpoints in not-configured (503) state.
+  # Use sk_test_... for development.
+  secretKey: ${STRIPE_SECRET_KEY:-}
+  publishableKey: ${STRIPE_PUBLISHABLE_KEY:-}
+  # Webhook signing secret from `stripe listen --forward-to localhost:8080/api/v1/stripe/webhooks`
+  webhookSecret: ${STRIPE_WEBHOOK_SECRET:-}

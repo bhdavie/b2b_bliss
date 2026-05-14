@@ -1,35 +1,55 @@
-import { fetchMerchantSession } from "@/lib/auth";
+import { StripeConnectCard } from "@/components/merchant/StripeConnectCard";
+import { fetchMerchantSession, fetchStripeStatusServer } from "@/lib/auth";
 
 export default async function SettingsPage() {
   const session = await fetchMerchantSession();
   if (!session) return null;
+  const stripeStatus = await fetchStripeStatusServer();
 
   return (
     <>
       <header>
         <h1 className="text-2xl font-medium">Settings</h1>
         <p className="mt-1 text-ink-muted">
-          Account info pulled from your merchant profile.
+          Account info and payouts.
         </p>
       </header>
 
-      <section className="mt-8 card p-6 space-y-4">
-        <Row label="Email" value={session.email} />
-        <Row label="Business name" value={session.businessName} />
-        <Row label="Business type" value={session.businessType} />
-        <Row label="Phone" value={session.phone} />
-        <Row
-          label="Address"
-          value={[
-            session.address.line1,
-            session.address.line2,
-            [session.address.city, session.address.state, session.address.zip]
+      <section className="mt-8 space-y-4">
+        <h2 className="text-xs uppercase tracking-wide text-ink-muted font-medium">
+          Payouts
+        </h2>
+        {stripeStatus ? (
+          <StripeConnectCard status={stripeStatus} />
+        ) : (
+          <div className="card p-5 text-sm text-ink-muted">
+            Could not load Stripe status.
+          </div>
+        )}
+      </section>
+
+      <section className="mt-10 space-y-4">
+        <h2 className="text-xs uppercase tracking-wide text-ink-muted font-medium">
+          Business
+        </h2>
+        <div className="card p-6 space-y-4">
+          <Row label="Email" value={session.email} />
+          <Row label="Business name" value={session.businessName} />
+          <Row label="Business type" value={session.businessType} />
+          <Row label="Phone" value={session.phone} />
+          <Row
+            label="Address"
+            value={[
+              session.address.line1,
+              session.address.line2,
+              [session.address.city, session.address.state, session.address.zip]
+                .filter(Boolean)
+                .join(", "),
+            ]
               .filter(Boolean)
-              .join(", "),
-          ]
-            .filter(Boolean)
-            .join("\n")}
-        />
+              .join("\n")}
+          />
+        </div>
       </section>
     </>
   );

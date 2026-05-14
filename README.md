@@ -110,6 +110,12 @@ Backend reads from env vars with sensible local defaults (see [backend/src/main/
 | `BLISS_SENTRY_DSN` | empty | Sentry disabled when empty |
 | `BLISS_RUN_MIGRATIONS` | `true` | set `false` in tests |
 | `BLISS_CORS_ORIGINS` | `http://localhost:3000` | comma-separated origins permitted to call the API |
+| `BLISS_FRONTEND_BASE_URL` | `http://localhost:3000` | used to build magic-link URLs and Stripe return URLs |
+| `BLISS_POSTMARK_TOKEN` | empty | activates Postmark (falls back to log when empty) |
+| `BLISS_EMAIL_FROM` | `no-reply@bliss.com` | |
+| `STRIPE_SECRET_KEY` | empty | `sk_test_...` to activate Stripe Connect endpoints |
+| `STRIPE_PUBLISHABLE_KEY` | empty | optional, used client-side later |
+| `STRIPE_WEBHOOK_SECRET` | empty | `whsec_...` from `stripe listen` |
 
 Frontend reads from `NEXT_PUBLIC_*` (see [frontend/.env.example](./frontend/.env.example)):
 
@@ -118,6 +124,26 @@ Frontend reads from `NEXT_PUBLIC_*` (see [frontend/.env.example](./frontend/.env
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080` | |
 | `NEXT_PUBLIC_SENTRY_DSN` | empty | Sentry disabled when empty |
 | `NEXT_PUBLIC_ENV` | `development` | |
+
+## Stripe Connect setup
+
+Phase 2 scaffolds Stripe Connect Express. The integration is inert until you provide keys.
+
+1. Create a Stripe account in test mode at https://dashboard.stripe.com. Enable Connect (Settings → Connect → Get started). Pick **Platform or Marketplace**.
+2. From Developers → API keys, grab the **Secret key** (`sk_test_...`).
+3. Install the Stripe CLI: `brew install stripe/stripe-cli/stripe`. Run `stripe login` once.
+4. In one terminal: `stripe listen --forward-to localhost:8080/api/v1/stripe/webhooks --events account.updated`. It prints a `whsec_...` secret on first run.
+5. Export keys and restart the backend:
+
+   ```sh
+   export STRIPE_SECRET_KEY=sk_test_...
+   export STRIPE_WEBHOOK_SECRET=whsec_...
+   cd backend && mvn compile exec:java
+   ```
+
+6. In the merchant dashboard, the "Stripe Connect" card flips from "Backend not configured" to "Not started". Click **Connect with Stripe**, complete the Express flow with Stripe test data, and you return to `/onboarding/stripe-return`. Webhook updates flow through the running `stripe listen` process.
+
+Until keys are set, the backend returns a clean 503 from `/api/v1/stripe/connect/account-link` and `/api/v1/stripe/webhooks` with body `{"error":"stripe_not_configured", ...}`. The UI renders a "Backend not configured" pill in that state.
 
 ## Run via Docker (alternative)
 

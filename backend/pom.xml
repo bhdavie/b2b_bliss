@@ -19,6 +19,7 @@
         <jjwt.version>0.12.6</jjwt.version>
         <jdbi.version>3.45.4</jdbi.version>
         <hikari.version>6.2.1</hikari.version>
+        <stripe.version>32.1.0</stripe.version>
         <sentry.version>7.18.0</sentry.version>
         <assertj.version>3.26.3</assertj.version>
         <main.class>com.bliss.b2b.BlissApplication</main.class>
@@ -100,6 +101,12 @@
             <groupId>com.zaxxer</groupId>
             <artifactId>HikariCP</artifactId>
             <version>${hikari.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.stripe</groupId>
+            <artifactId>stripe-java</artifactId>
+            <version>${stripe.version}</version>
         </dependency>
 
         <dependency>

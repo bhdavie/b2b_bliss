@@ -36,6 +36,10 @@ public class BlissConfiguration extends Configuration {
     @NotNull
     private EmailConfig email = new EmailConfig();
 
+    @Valid
+    @NotNull
+    private StripeConfig stripe = new StripeConfig();
+
     @JsonProperty public String getEnv() { return env; }
     @JsonProperty public void setEnv(String env) { this.env = env; }
     @JsonProperty public AppConfig getApp() { return app; }
@@ -50,6 +54,8 @@ public class BlissConfiguration extends Configuration {
     @JsonProperty public void setCors(CorsConfig cors) { this.cors = cors; }
     @JsonProperty public EmailConfig getEmail() { return email; }
     @JsonProperty public void setEmail(EmailConfig email) { this.email = email; }
+    @JsonProperty public StripeConfig getStripe() { return stripe; }
+    @JsonProperty public void setStripe(StripeConfig stripe) { this.stripe = stripe; }
 
     public boolean isProduction() {
         return "production".equalsIgnoreCase(env);
@@ -123,5 +129,22 @@ public class BlissConfiguration extends Configuration {
         @JsonProperty public void setPostmarkToken(String postmarkToken) { this.postmarkToken = postmarkToken; }
         @JsonProperty public String getFromAddress() { return fromAddress; }
         @JsonProperty public void setFromAddress(String fromAddress) { this.fromAddress = fromAddress; }
+    }
+
+    public static class StripeConfig {
+        private String secretKey = "";
+        private String publishableKey = "";
+        private String webhookSecret = "";
+
+        @JsonProperty public String getSecretKey() { return secretKey; }
+        @JsonProperty public void setSecretKey(String secretKey) { this.secretKey = secretKey; }
+        @JsonProperty public String getPublishableKey() { return publishableKey; }
+        @JsonProperty public void setPublishableKey(String publishableKey) { this.publishableKey = publishableKey; }
+        @JsonProperty public String getWebhookSecret() { return webhookSecret; }
+        @JsonProperty public void setWebhookSecret(String webhookSecret) { this.webhookSecret = webhookSecret; }
+
+        public boolean isConfigured() {
+            return secretKey != null && !secretKey.isBlank();
+        }
     }
 }

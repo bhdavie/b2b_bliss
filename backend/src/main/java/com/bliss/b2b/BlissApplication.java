@@ -3,12 +3,14 @@ package com.bliss.b2b;
 import com.bliss.b2b.api.AuthResource;
 import com.bliss.b2b.api.HelloResource;
 import com.bliss.b2b.api.MerchantsResource;
+import com.bliss.b2b.api.StripeConnectResource;
 import com.bliss.b2b.auth.JwtCookieAuthFilter;
 import com.bliss.b2b.auth.JwtService;
 import com.bliss.b2b.auth.MerchantAuthenticator;
 import com.bliss.b2b.auth.MerchantPrincipal;
 import com.bliss.b2b.integration.EmailService;
 import com.bliss.b2b.integration.EmailServiceFactory;
+import com.bliss.b2b.integration.StripeConnectService;
 import com.bliss.b2b.observability.SentryBootstrap;
 import com.bliss.b2b.persistence.JdbiBootstrap;
 import com.bliss.b2b.persistence.MagicLinkTokenDao;
@@ -65,13 +67,16 @@ public class BlissApplication extends Application<BlissConfiguration> {
         EmailService emailService = EmailServiceFactory.build(config.getEmail());
         MagicLinkService magicLinkService = new MagicLinkService(
                 merchantDao, tokenDao, emailService, config.getApp());
+        StripeConnectService stripeService = new StripeConnectService(config.getStripe());
 
         JwtService jwtService = new JwtService(config.getJwt());
 
         environment.jersey().register(new HelloResource());
         environment.jersey().register(new AuthResource(
                 magicLinkService, jwtService, config.isProduction(), config.getJwt().getTtlMinutes()));
-        environment.jersey().register(new MerchantsResource(merchantDao));
+        environment.jersey().register(new MerchantsResource(merchantDao, stripeService, emailService));
+        environment.jersey().register(new StripeConnectResource(
+                stripeService, merchantDao, emailService, config.getApp()));
 
         environment.jersey().register(new AuthDynamicFeature(
                 new JwtCookieAuthFilter.Builder()

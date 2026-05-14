@@ -54,4 +54,21 @@ public interface MerchantDao {
             @Bind("addressState") String addressState,
             @Bind("addressZip") String addressZip
     );
+
+    @SqlQuery("SELECT * FROM merchants WHERE stripe_connect_account_id = :stripeAccountId")
+    Optional<Merchant> findByStripeAccountId(@Bind("stripeAccountId") String stripeAccountId);
+
+    @SqlUpdate("""
+            UPDATE merchants
+            SET stripe_connect_account_id = :stripeAccountId
+            WHERE id = :id
+            """)
+    int setStripeAccountId(@Bind("id") UUID id, @Bind("stripeAccountId") String stripeAccountId);
+
+    @SqlUpdate("""
+            UPDATE merchants
+            SET stripe_connect_status = :status
+            WHERE id = :id
+            """)
+    int updateStripeConnectStatus(@Bind("id") UUID id, @Bind("status") String status);
 }

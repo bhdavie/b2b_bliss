@@ -88,3 +88,45 @@ export async function updateMerchant(
   });
   return unwrap<MerchantView>(res);
 }
+
+export type StripeStatus = {
+  status: "not_started" | "in_progress" | "charges_enabled" | "restricted";
+  accountId: string | null;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+  disabledReason: string | null;
+  configured: boolean;
+};
+
+export type StripeAccountLink = {
+  url: string;
+  expiresAt: number | null;
+};
+
+export type StripeNotConfiguredError = {
+  error: "stripe_not_configured";
+  message: string;
+};
+
+export async function fetchStripeStatus(): Promise<StripeStatus> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/stripe-status`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  return unwrap<StripeStatus>(res);
+}
+
+export async function createStripeAccountLink(): Promise<
+  StripeAccountLink | StripeNotConfiguredError
+> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/stripe/connect/account-link`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (res.status === 503) {
+    return (await res.json()) as StripeNotConfiguredError;
+  }
+  return unwrap<StripeAccountLink>(res);
+}

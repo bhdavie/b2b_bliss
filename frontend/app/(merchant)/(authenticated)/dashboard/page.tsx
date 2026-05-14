@@ -1,15 +1,21 @@
-import { fetchMerchantSession } from "@/lib/auth";
+import Link from "next/link";
+import { StripeConnectCard } from "@/components/merchant/StripeConnectCard";
+import { fetchMerchantSession, fetchStripeStatusServer } from "@/lib/auth";
 
 export default async function DashboardPage() {
   const session = await fetchMerchantSession();
   if (!session) return null;
+  const stripeStatus = await fetchStripeStatusServer();
+  const chargesEnabled = stripeStatus?.status === "charges_enabled";
 
   return (
     <>
       <header>
         <h1 className="text-2xl font-medium">Dashboard</h1>
         <p className="mt-1 text-ink-muted">
-          Welcome to Bliss. Bookings and payouts land in upcoming phases.
+          Welcome to Bliss. {chargesEnabled
+            ? "Create your first booking to start taking payment plans."
+            : "Finish Stripe setup to start taking bookings."}
         </p>
       </header>
 
@@ -22,16 +28,28 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <div className="card p-5">
-          <div className="text-xs text-ink-muted">Stripe Connect</div>
-          <div className="mt-1 text-sm font-medium capitalize">
-            {(session.stripeConnectStatus ?? "not_started").replace(/_/g, " ")}
+        {stripeStatus ? (
+          <StripeConnectCard status={stripeStatus} />
+        ) : (
+          <div className="card p-5 text-sm text-ink-muted">
+            Stripe status unavailable.
           </div>
-          <p className="mt-2 text-xs text-ink-soft">
-            We will wire this up in Phase 2 so you can take payouts.
-          </p>
-        </div>
+        )}
       </section>
+
+      {chargesEnabled ? (
+        <section className="mt-8 card p-5 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">Ready to take bookings</div>
+            <p className="text-xs text-ink-muted mt-1">
+              Create a booking to generate a payment plan link.
+            </p>
+          </div>
+          <Link href="/bookings" className="btn-primary">
+            New booking
+          </Link>
+        </section>
+      ) : null}
 
       <section className="mt-8 card-subtle">
         <div className="text-xs text-ink-muted">Account</div>
