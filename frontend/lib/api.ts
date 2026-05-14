@@ -178,6 +178,8 @@ export type Eligibility = {
   depositAmountCents: number;
 };
 
+export type BookingSource = "merchant_initiated" | "customer_initiated";
+
 export type Booking = {
   id: string;
   bookingToken: string;
@@ -186,10 +188,13 @@ export type Booking = {
   serviceDescription: string | null;
   totalAmountCents: number;
   appointmentDate: string;
+  checkoutDate: string | null;
   cancellationPolicy: string | null;
   status: BookingStatus;
+  source: BookingSource;
   customerNameHint: string | null;
   customerEmailHint: string | null;
+  customerPhoneHint: string | null;
   createdAt: string;
   eligibility: Eligibility | null;
   planOptions: PlanOption[] | null;

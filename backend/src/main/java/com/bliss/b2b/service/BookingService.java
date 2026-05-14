@@ -1,6 +1,7 @@
 package com.bliss.b2b.service;
 
 import com.bliss.b2b.domain.Booking;
+import com.bliss.b2b.domain.BookingSource;
 import com.bliss.b2b.persistence.BookingDao;
 import java.security.SecureRandom;
 import java.time.LocalDate;
@@ -37,9 +38,12 @@ public class BookingService {
                     input.serviceDescription(),
                     input.totalAmountCents(),
                     input.appointmentDate(),
+                    null, // checkoutDate — merchant flow is single-date
                     input.cancellationPolicy(),
                     input.customerNameHint(),
-                    input.customerEmailHint()
+                    input.customerEmailHint(),
+                    null, // customerPhoneHint — not collected in merchant form
+                    BookingSource.MERCHANT_INITIATED.wire()
             );
             return bookingDao.findByToken(token).orElseThrow();
         }
@@ -56,6 +60,19 @@ public class BookingService {
 
     public long count(UUID merchantId) {
         return bookingDao.countForMerchant(merchantId);
+    }
+
+    /**
+     * Generate a unique URL-safe booking token. Public because the Phase 13
+     * customer-initiated checkout flow needs the same uniqueness retry
+     * dance when it inserts a booking from the public endpoint.
+     */
+    public String mintUniqueToken() {
+        for (int attempt = 0; attempt < TOKEN_INSERT_RETRIES; attempt++) {
+            String token = generateToken();
+            if (bookingDao.findByToken(token).isEmpty()) return token;
+        }
+        throw new IllegalStateException("Could not generate a unique booking token");
     }
 
     private String generateToken() {

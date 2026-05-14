@@ -12,11 +12,14 @@ public record Booking(
         String serviceDescription,
         long totalAmountCents,
         LocalDate appointmentDate,
+        LocalDate checkoutDate,
         String cancellationPolicy,
         BookingStatus status,
+        BookingSource source,
         UUID customerId,
         String customerNameHint,
         String customerEmailHint,
+        String customerPhoneHint,
         Instant createdAt,
         Instant updatedAt
 ) {}

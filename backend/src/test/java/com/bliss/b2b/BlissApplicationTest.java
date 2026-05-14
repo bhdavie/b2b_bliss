@@ -87,6 +87,65 @@ class BlissApplicationTest {
         assertThat(empty.getStatus()).isEqualTo(400);
     }
 
+    // GET /api/v1/public/merchants/{slug} requires DB access to validate the
+    // slug — see the smoke test for end-to-end coverage. Unit-test the
+    // validation surface of the checkout endpoint instead; those paths fail
+    // fast before any DAO call.
+
+    @Test
+    void publicCheckout_invalidFrequency_returns400() {
+        // Bad frequency surfaces before any DB / Stripe work.
+        Response res = client.target(baseUrl() + "/api/v1/public/checkout")
+                .request()
+                .post(jakarta.ws.rs.client.Entity.json(Map.of(
+                        "merchantSlug", "anything",
+                        "totalAmountCents", 180000,
+                        "appointmentDate", "2027-01-01",
+                        "customerEmail", "x@y.z",
+                        "customerName", "X Y",
+                        "paymentMethodId", "pm_fake",
+                        "frequency", "weekly")));
+        assertThat(res.getStatus()).isEqualTo(400);
+        Map<String, Object> body = res.readEntity(JSON_OBJECT);
+        assertThat(body).containsEntry("error", "invalid_frequency");
+    }
+
+    @Test
+    void publicCheckout_invalidAppointmentDate_returns400() {
+        Response res = client.target(baseUrl() + "/api/v1/public/checkout")
+                .request()
+                .post(jakarta.ws.rs.client.Entity.json(Map.of(
+                        "merchantSlug", "anything",
+                        "totalAmountCents", 180000,
+                        "appointmentDate", "not-a-date",
+                        "customerEmail", "x@y.z",
+                        "customerName", "X Y",
+                        "paymentMethodId", "pm_fake",
+                        "frequency", "monthly")));
+        assertThat(res.getStatus()).isEqualTo(400);
+        Map<String, Object> body = res.readEntity(JSON_OBJECT);
+        assertThat(body).containsEntry("error", "invalid_appointment_date");
+    }
+
+    @Test
+    void publicCheckout_stripeNotConfigured_returns503() {
+        // Stripe is intentionally not configured in the test config, so any
+        // request that gets past JSON parsing hits the 503 inert path.
+        Response res = client.target(baseUrl() + "/api/v1/public/checkout")
+                .request()
+                .post(jakarta.ws.rs.client.Entity.json(Map.of(
+                        "merchantSlug", "anything",
+                        "totalAmountCents", 180000,
+                        "appointmentDate", "2099-01-01",
+                        "customerEmail", "x@y.z",
+                        "customerName", "X Y",
+                        "paymentMethodId", "pm_fake",
+                        "frequency", "monthly")));
+        assertThat(res.getStatus()).isEqualTo(503);
+        Map<String, Object> body = res.readEntity(JSON_OBJECT);
+        assertThat(body).containsEntry("error", "stripe_not_configured");
+    }
+
     private static String baseUrl() {
         return "http://localhost:" + APP.getLocalPort();
     }

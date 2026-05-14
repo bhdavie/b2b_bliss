@@ -1,6 +1,7 @@
 package com.bliss.b2b.persistence;
 
 import com.bliss.b2b.domain.Booking;
+import com.bliss.b2b.domain.BookingSource;
 import com.bliss.b2b.domain.BookingStatus;
 import java.sql.Date;
 import java.sql.ResultSet;
@@ -23,11 +24,14 @@ public class BookingRowMapper implements RowMapper<Booking> {
                 rs.getString("service_description"),
                 rs.getLong("total_amount_cents"),
                 toLocalDate(rs.getDate("appointment_date")),
+                toLocalDate(rs.getDate("checkout_date")),
                 rs.getString("cancellation_policy"),
                 BookingStatus.fromWire(rs.getString("status")),
+                BookingSource.fromWire(rs.getString("booking_source")),
                 (UUID) rs.getObject("customer_id"),
                 rs.getString("customer_name_hint"),
                 rs.getString("customer_email_hint"),
+                rs.getString("customer_phone_hint"),
                 toInstant(rs.getTimestamp("created_at")),
                 toInstant(rs.getTimestamp("updated_at"))
         );

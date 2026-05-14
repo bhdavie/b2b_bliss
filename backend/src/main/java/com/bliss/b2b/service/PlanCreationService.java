@@ -1,6 +1,7 @@
 package com.bliss.b2b.service;
 
 import com.bliss.b2b.domain.Booking;
+import com.bliss.b2b.domain.BookingSource;
 import com.bliss.b2b.domain.ConnectStatus;
 import com.bliss.b2b.domain.Customer;
 import com.bliss.b2b.domain.CustomerCard;
@@ -30,26 +31,45 @@ import com.stripe.exception.CardException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.PaymentMethod;
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jdbi.v3.core.Jdbi;
+import org.jdbi.v3.core.Handle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Orchestrates accept-a-plan: validate eligibility server-side, get-or-create
- * the customer, attach the Stripe PaymentMethod, write the plan + schedule,
- * fire the first PaymentIntent off-session, send notifications. All DB work
- * happens in a single JDBI transaction; a Stripe decline or any DB failure
- * rolls back the plan so the booking returns to {@code sent} for retry.
+ * Orchestrates accept-a-plan. Two entry points, one shared core:
+ *
+ * <ul>
+ *   <li>{@link #createPlan} — merchant-initiated path. The merchant already
+ *       created a booking row from their dashboard; the customer is
+ *       accepting via {@code /pay/{slug}/{token}}.
+ *   <li>{@link #createBookingAndPlan} — customer-initiated path (Phase 13).
+ *       The customer landed at {@code /checkout/{slug}} from the merchant's
+ *       own checkout page with cart details in the URL. We mint a booking
+ *       row inline before running the same accept-a-plan logic.
+ * </ul>
+ *
+ * <p>Both paths converge on {@link #acceptForBooking}, which does the heavy
+ * lifting: get-or-create the Stripe customer, attach the PaymentMethod,
+ * write the PaymentPlan + PaymentSchedule rows, mark the booking accepted,
+ * and fire the first PaymentIntent. The whole thing runs inside a JDBI
+ * transaction; a Stripe decline or any DB failure rolls back so a customer
+ * never sees a half-created plan.
  */
 public class PlanCreationService {
 
     private static final Logger log = LoggerFactory.getLogger(PlanCreationService.class);
     private static final Logger webhookLog = LoggerFactory.getLogger("bliss.merchant.webhook");
+    private static final SecureRandom RNG = new SecureRandom();
+    private static final int TOKEN_INSERT_RETRIES = 5;
+    private static final int TOKEN_BYTES = 12;
 
     private final Jdbi jdbi;
     private final PlanEligibilityService eligibilityService;
@@ -72,28 +92,11 @@ public class PlanCreationService {
     }
 
     public PlanCreationResult createPlan(CreatePlanInput input) {
-        if (!stripeService.isConfigured()) {
-            throw new PlanCreationException(Reason.STRIPE_NOT_CONFIGURED,
-                    "Stripe is not configured on the backend.");
-        }
-        if (input.paymentMethodId() == null || input.paymentMethodId().isBlank()) {
-            throw new PlanCreationException(Reason.INVALID_INPUT, "paymentMethodId required");
-        }
-        if (input.customerEmail() == null || input.customerEmail().isBlank()) {
-            throw new PlanCreationException(Reason.INVALID_INPUT, "customerEmail required");
-        }
-        if (input.frequency() == null) {
-            throw new PlanCreationException(Reason.INVALID_INPUT, "frequency required");
-        }
+        requireStripeConfigured();
+        validateCustomerAndPm(input.paymentMethodId(), input.customerEmail(), input.frequency());
 
         Outcome outcome = jdbi.inTransaction(handle -> {
             BookingDao bookingDao = handle.attach(BookingDao.class);
-            MerchantDao merchantDao = handle.attach(MerchantDao.class);
-            CustomerDao customerDao = handle.attach(CustomerDao.class);
-            CustomerCardDao cardDao = handle.attach(CustomerCardDao.class);
-            PaymentPlanDao planDao = handle.attach(PaymentPlanDao.class);
-            PaymentScheduleDao scheduleDao = handle.attach(PaymentScheduleDao.class);
-
             Booking booking = bookingDao.findBySlugAndToken(input.merchantSlug(), input.bookingToken())
                     .orElseThrow(() -> new PlanCreationException(
                             Reason.BOOKING_NOT_FOUND, "booking not found"));
@@ -101,153 +104,244 @@ public class PlanCreationService {
                 throw new PlanCreationException(Reason.BOOKING_NOT_OPEN,
                         "booking is not open for plan acceptance (status=" + booking.status().wire() + ")");
             }
-            Merchant merchant = merchantDao.findById(booking.merchantId()).orElseThrow();
-            ConnectStatus connectStatus = ConnectStatus.fromWire(merchant.stripeConnectStatus());
-            if (connectStatus != ConnectStatus.CHARGES_ENABLED) {
-                throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
-                        "merchant has not completed Stripe onboarding");
-            }
+            Merchant merchant = handle.attach(MerchantDao.class).findById(booking.merchantId()).orElseThrow();
+            return acceptForBooking(handle, booking, merchant,
+                    input.customerEmail(), input.customerFirstName(), input.customerLastName(),
+                    null, input.paymentMethodId(), input.frequency());
+        });
+        return finalize(outcome);
+    }
 
-            MerchantPlanRulesDao rulesDao = handle.attach(MerchantPlanRulesDao.class);
-            MerchantPlanRules rules = rulesDao.findByMerchantId(merchant.id())
-                    .orElse(MerchantPlanRules.DEFAULTS);
+    /**
+     * Customer-initiated path: validates the merchant, inserts a fresh
+     * booking row with {@code source = customer_initiated} using the cart
+     * details from the checkout URL, then runs the shared accept-a-plan
+     * logic. Returns the booking_token so the merchant dashboard can link
+     * to {@code /pay/{slug}/{token}} the same way it does for
+     * merchant-initiated bookings.
+     */
+    public PlanCreationResult createBookingAndPlan(CustomerCheckoutInput input) {
+        requireStripeConfigured();
+        validateCustomerAndPm(input.paymentMethodId(), input.customerEmail(), input.frequency());
+        if (input.merchantSlug() == null || input.merchantSlug().isBlank()) {
+            throw new PlanCreationException(Reason.INVALID_INPUT, "merchantSlug required");
+        }
+        if (input.totalAmountCents() <= 0) {
+            throw new PlanCreationException(Reason.INVALID_INPUT, "totalAmountCents must be positive");
+        }
+        if (input.appointmentDate() == null) {
+            throw new PlanCreationException(Reason.INVALID_INPUT, "appointmentDate (checkin) required");
+        }
+        if (input.appointmentDate().isBefore(LocalDate.now(clock))) {
+            throw new PlanCreationException(Reason.INVALID_INPUT,
+                    "appointmentDate must be in the future");
+        }
+        if (input.checkoutDate() != null && input.checkoutDate().isBefore(input.appointmentDate())) {
+            throw new PlanCreationException(Reason.INVALID_INPUT,
+                    "checkoutDate must be on or after appointmentDate");
+        }
 
-            LocalDate today = LocalDate.now(clock);
-            EligibilityResult eligibility = eligibilityService.evaluate(
-                    today, booking.appointmentDate(), booking.totalAmountCents(), rules);
-            if (!eligibility.eligible()) {
-                throw new PlanCreationException(Reason.ELIGIBILITY_FAILED,
-                        "appointment is too close for a plan");
-            }
-            PlanOption option = eligibility.options().stream()
-                    .filter(o -> o.frequency() == input.frequency())
-                    .findFirst()
+        Outcome outcome = jdbi.inTransaction(handle -> {
+            MerchantDao merchantDao = handle.attach(MerchantDao.class);
+            Merchant merchant = merchantDao.findBySlug(input.merchantSlug())
                     .orElseThrow(() -> new PlanCreationException(
-                            Reason.ELIGIBILITY_FAILED,
-                            input.frequency().wire() + " is not an eligible frequency for this booking"));
+                            Reason.BOOKING_NOT_FOUND, "merchant not found"));
 
-            String email = input.customerEmail().trim().toLowerCase();
-            Customer customer = customerDao.findByEmail(email).orElseGet(() -> {
-                customerDao.insert(email, trimToNull(input.customerFirstName()),
-                        trimToNull(input.customerLastName()));
-                return customerDao.findByEmail(email).orElseThrow();
-            });
+            BookingDao bookingDao = handle.attach(BookingDao.class);
+            String token = mintBookingToken(bookingDao);
+            String serviceName = input.description() != null && !input.description().isBlank()
+                    ? input.description().trim()
+                    : "Booking from checkout link";
+            bookingDao.insert(
+                    merchant.id(),
+                    token,
+                    serviceName,
+                    null, // service_description — customer's free text is stored as serviceName
+                    input.totalAmountCents(),
+                    input.appointmentDate(),
+                    input.checkoutDate(),
+                    null, // cancellationPolicy — uses merchant policy stack
+                    trimToNull(input.customerName()),
+                    trimToNull(input.customerEmail()),
+                    trimToNull(input.customerPhone()),
+                    BookingSource.CUSTOMER_INITIATED.wire());
+            Booking booking = bookingDao.findByToken(token)
+                    .orElseThrow(() -> new IllegalStateException("booking insert disappeared"));
 
-            String stripeCustomerId = customer.stripeCustomerId();
-            if (stripeCustomerId == null || stripeCustomerId.isBlank()) {
-                try {
-                    stripeCustomerId = stripeService.createStripeCustomer(customer);
-                } catch (StripeException e) {
-                    throw stripeFailure(e);
-                }
-                customerDao.setStripeCustomerId(customer.id(), stripeCustomerId);
-                customer = customerDao.findById(customer.id()).orElseThrow();
-            }
+            return acceptForBooking(handle, booking, merchant,
+                    input.customerEmail(), splitFirst(input.customerName()), splitLast(input.customerName()),
+                    input.customerPhone(), input.paymentMethodId(), input.frequency());
+        });
+        return finalize(outcome);
+    }
 
-            PaymentMethod pm;
-            try {
-                pm = stripeService.attachPaymentMethod(input.paymentMethodId(), stripeCustomerId);
-            } catch (CardException e) {
-                throw declined(e);
-            } catch (StripeException e) {
-                throw stripeFailure(e);
-            }
-            CardSummary card = StripePaymentsService.summarize(pm);
-            cardDao.insert(customer.id(), pm.getId(),
-                    card.lastFour(), card.expMonth(), card.expYear(), card.brand(), true);
-            CustomerCard storedCard = cardDao.findByPaymentMethodId(pm.getId()).orElseThrow();
+    /**
+     * Shared core: pulls the merchant's plan rules, evaluates eligibility,
+     * picks the requested frequency, creates/loads the customer + Stripe
+     * customer + card, writes the plan + schedule, marks the booking
+     * accepted, fires the first PaymentIntent. Caller owns the transaction.
+     */
+    private Outcome acceptForBooking(
+            Handle handle,
+            Booking booking,
+            Merchant merchant,
+            String customerEmail,
+            String customerFirstName,
+            String customerLastName,
+            String customerPhone,
+            String paymentMethodId,
+            PlanFrequency requestedFrequency
+    ) {
+        ConnectStatus connectStatus = ConnectStatus.fromWire(merchant.stripeConnectStatus());
+        if (connectStatus != ConnectStatus.CHARGES_ENABLED) {
+            throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
+                    "merchant has not completed Stripe onboarding");
+        }
 
-            // Schedule layout when a deposit is present:
-            //   sequence 1   = deposit  (kind=deposit, due today)
-            //   sequence 2-N = installments (kind=installment, on cadence)
-            // Without a deposit, sequence 1..N are all installments (legacy
-            // Phase 0-4 shape — first installment fires today).
-            long depositAmount = eligibility.depositAmountCents();
-            boolean hasDeposit = depositAmount > 0;
-            int installmentCount = option.numPayments();
-            LocalDate startDate = hasDeposit ? today : option.dueDates().get(0);
-            LocalDate endDate = option.dueDates().get(installmentCount - 1);
+        MerchantPlanRules rules = handle.attach(MerchantPlanRulesDao.class)
+                .findByMerchantId(merchant.id())
+                .orElse(MerchantPlanRules.DEFAULTS);
 
-            planDao.insert(
-                    booking.id(),
-                    customer.id(),
-                    storedCard.id(),
-                    booking.totalAmountCents(),
-                    installmentCount,
-                    option.frequency().wire(),
-                    startDate,
-                    endDate,
-                    depositAmount);
-            PaymentPlan plan = planDao.findActiveForBooking(booking.id())
-                    .orElseThrow(() -> new IllegalStateException("plan insert disappeared"));
+        LocalDate today = LocalDate.now(clock);
+        EligibilityResult eligibility = eligibilityService.evaluate(
+                today, booking.appointmentDate(), booking.totalAmountCents(), rules);
+        if (!eligibility.eligible()) {
+            throw new PlanCreationException(Reason.ELIGIBILITY_FAILED,
+                    "booking does not satisfy this merchant's plan rules (" + eligibility.reason() + ")");
+        }
+        PlanOption option = eligibility.options().stream()
+                .filter(o -> o.frequency() == requestedFrequency)
+                .findFirst()
+                .orElseThrow(() -> new PlanCreationException(
+                        Reason.ELIGIBILITY_FAILED,
+                        requestedFrequency.wire() + " is not an eligible frequency for this booking"));
 
-            int seq = 1;
-            if (hasDeposit) {
-                scheduleDao.insert(plan.id(), seq, today, depositAmount,
-                        PaymentScheduleStatus.SCHEDULED.wire(),
-                        ScheduleKind.DEPOSIT.wire());
-                seq++;
-            }
-            for (int i = 0; i < installmentCount; i++) {
-                long amount = (i == installmentCount - 1)
-                        ? option.finalPaymentAmountCents()
-                        : option.perPaymentAmountCents();
-                scheduleDao.insert(plan.id(), seq, option.dueDates().get(i), amount,
-                        PaymentScheduleStatus.SCHEDULED.wire(),
-                        ScheduleKind.INSTALLMENT.wire());
-                seq++;
-            }
+        CustomerDao customerDao = handle.attach(CustomerDao.class);
+        CustomerCardDao cardDao = handle.attach(CustomerCardDao.class);
+        PaymentPlanDao planDao = handle.attach(PaymentPlanDao.class);
+        PaymentScheduleDao scheduleDao = handle.attach(PaymentScheduleDao.class);
+        BookingDao bookingDao = handle.attach(BookingDao.class);
 
-            int markedAccepted = bookingDao.markAccepted(booking.id(), customer.id());
-            if (markedAccepted != 1) {
-                throw new PlanCreationException(Reason.BOOKING_NOT_OPEN,
-                        "booking was just accepted by another session");
-            }
-
-            List<PaymentScheduleEntry> schedule = scheduleDao.listForPlan(plan.id());
-            PaymentScheduleEntry first = schedule.get(0);
-
-            // The first schedule row — deposit if one is required, otherwise
-            // the first installment — fires immediately as the upfront charge.
-            PaymentIntent firstIntent;
-            try {
-                firstIntent = stripeService.firePaymentOffSession(
-                        first.amountCents(),
-                        stripeCustomerId,
-                        pm.getId(),
-                        first.id().toString(),
-                        Map.of(
-                                "bliss_payment_schedule_id", first.id().toString(),
-                                "bliss_payment_plan_id", plan.id().toString(),
-                                "bliss_booking_id", booking.id().toString(),
-                                "bliss_kind", first.kind().wire()));
-            } catch (CardException e) {
-                throw declined(e);
-            } catch (StripeException e) {
-                throw stripeFailure(e);
-            }
-
-            String paymentStatus = firstIntent.getStatus() == null ? "" : firstIntent.getStatus();
-            PaymentScheduleStatus newStatus = mapIntentToStatus(paymentStatus);
-            scheduleDao.recordAttempt(plan.id(), first.sequence(), newStatus.wire(),
-                    firstIntent.getId(), java.time.Instant.now(clock));
-            if (newStatus == PaymentScheduleStatus.FAILED) {
-                throw new PlanCreationException(Reason.CARD_DECLINED,
-                        "first payment was not completed (status=" + paymentStatus + ")");
-            }
-            if (newStatus == PaymentScheduleStatus.SCHEDULED) {
-                throw new PlanCreationException(Reason.CARD_REQUIRES_ACTION,
-                        "card requires authentication; please use a different card");
-            }
-
-            return new Outcome(merchant, customer, booking, plan, schedule, firstIntent.getId(), paymentStatus);
+        String email = customerEmail.trim().toLowerCase();
+        Customer customer = customerDao.findByEmail(email).orElseGet(() -> {
+            customerDao.insert(email, trimToNull(customerFirstName), trimToNull(customerLastName));
+            return customerDao.findByEmail(email).orElseThrow();
         });
 
-        // Notifications and the merchant webhook fire post-commit so a flaky
-        // mailer doesn't roll back the plan. Best-effort with logging.
+        String stripeCustomerId = customer.stripeCustomerId();
+        if (stripeCustomerId == null || stripeCustomerId.isBlank()) {
+            try {
+                stripeCustomerId = stripeService.createStripeCustomer(customer);
+            } catch (StripeException e) {
+                throw stripeFailure(e);
+            }
+            customerDao.setStripeCustomerId(customer.id(), stripeCustomerId);
+            customer = customerDao.findById(customer.id()).orElseThrow();
+        }
+
+        PaymentMethod pm;
+        try {
+            pm = stripeService.attachPaymentMethod(paymentMethodId, stripeCustomerId);
+        } catch (CardException e) {
+            throw declined(e);
+        } catch (StripeException e) {
+            throw stripeFailure(e);
+        }
+        CardSummary card = StripePaymentsService.summarize(pm);
+        cardDao.insert(customer.id(), pm.getId(),
+                card.lastFour(), card.expMonth(), card.expYear(), card.brand(), true);
+        CustomerCard storedCard = cardDao.findByPaymentMethodId(pm.getId()).orElseThrow();
+
+        long depositAmount = eligibility.depositAmountCents();
+        boolean hasDeposit = depositAmount > 0;
+        int installmentCount = option.numPayments();
+        LocalDate startDate = hasDeposit ? today : option.dueDates().get(0);
+        LocalDate endDate = option.dueDates().get(installmentCount - 1);
+
+        planDao.insert(
+                booking.id(),
+                customer.id(),
+                storedCard.id(),
+                booking.totalAmountCents(),
+                installmentCount,
+                option.frequency().wire(),
+                startDate,
+                endDate,
+                depositAmount);
+        PaymentPlan plan = planDao.findActiveForBooking(booking.id())
+                .orElseThrow(() -> new IllegalStateException("plan insert disappeared"));
+
+        int seq = 1;
+        if (hasDeposit) {
+            scheduleDao.insert(plan.id(), seq, today, depositAmount,
+                    PaymentScheduleStatus.SCHEDULED.wire(),
+                    ScheduleKind.DEPOSIT.wire());
+            seq++;
+        }
+        for (int i = 0; i < installmentCount; i++) {
+            long amount = (i == installmentCount - 1)
+                    ? option.finalPaymentAmountCents()
+                    : option.perPaymentAmountCents();
+            scheduleDao.insert(plan.id(), seq, option.dueDates().get(i), amount,
+                    PaymentScheduleStatus.SCHEDULED.wire(),
+                    ScheduleKind.INSTALLMENT.wire());
+            seq++;
+        }
+
+        int markedAccepted = bookingDao.markAccepted(booking.id(), customer.id());
+        if (markedAccepted != 1) {
+            throw new PlanCreationException(Reason.BOOKING_NOT_OPEN,
+                    "booking was just accepted by another session");
+        }
+
+        List<PaymentScheduleEntry> schedule = scheduleDao.listForPlan(plan.id());
+        PaymentScheduleEntry first = schedule.get(0);
+
+        PaymentIntent firstIntent;
+        try {
+            firstIntent = stripeService.firePaymentOffSession(
+                    first.amountCents(),
+                    stripeCustomerId,
+                    pm.getId(),
+                    first.id().toString(),
+                    Map.of(
+                            "bliss_payment_schedule_id", first.id().toString(),
+                            "bliss_payment_plan_id", plan.id().toString(),
+                            "bliss_booking_id", booking.id().toString(),
+                            "bliss_kind", first.kind().wire()));
+        } catch (CardException e) {
+            throw declined(e);
+        } catch (StripeException e) {
+            throw stripeFailure(e);
+        }
+
+        String paymentStatus = firstIntent.getStatus() == null ? "" : firstIntent.getStatus();
+        PaymentScheduleStatus newStatus = mapIntentToStatus(paymentStatus);
+        scheduleDao.recordAttempt(plan.id(), first.sequence(), newStatus.wire(),
+                firstIntent.getId(), java.time.Instant.now(clock));
+        if (newStatus == PaymentScheduleStatus.FAILED) {
+            throw new PlanCreationException(Reason.CARD_DECLINED,
+                    "first payment was not completed (status=" + paymentStatus + ")");
+        }
+        if (newStatus == PaymentScheduleStatus.SCHEDULED) {
+            throw new PlanCreationException(Reason.CARD_REQUIRES_ACTION,
+                    "card requires authentication; please use a different card");
+        }
+
+        if (customerPhone != null && !customerPhone.isBlank()) {
+            // Best-effort store on the Customer row when we have one and didn't
+            // already. Doesn't fail the plan if the update is a no-op.
+            // (Avoiding a setPhone DAO method for now; phone-on-customer is
+            // wired in a future phase.)
+        }
+
+        return new Outcome(merchant, customer, booking, plan, schedule,
+                firstIntent.getId(), paymentStatus);
+    }
+
+    private PlanCreationResult finalize(Outcome outcome) {
         emitPlanStartedWebhook(outcome);
         sendNotifications(outcome);
-
         return new PlanCreationResult(
                 outcome.plan().id(),
                 outcome.booking(),
@@ -255,6 +349,50 @@ public class PlanCreationService {
                 outcome.schedule(),
                 outcome.firstChargeIntentId(),
                 outcome.firstChargeStatus());
+    }
+
+    private void requireStripeConfigured() {
+        if (!stripeService.isConfigured()) {
+            throw new PlanCreationException(Reason.STRIPE_NOT_CONFIGURED,
+                    "Stripe is not configured on the backend.");
+        }
+    }
+
+    private static void validateCustomerAndPm(String pmId, String email, PlanFrequency frequency) {
+        if (pmId == null || pmId.isBlank()) {
+            throw new PlanCreationException(Reason.INVALID_INPUT, "paymentMethodId required");
+        }
+        if (email == null || email.isBlank()) {
+            throw new PlanCreationException(Reason.INVALID_INPUT, "customerEmail required");
+        }
+        if (frequency == null) {
+            throw new PlanCreationException(Reason.INVALID_INPUT, "frequency required");
+        }
+    }
+
+    private static String mintBookingToken(BookingDao bookingDao) {
+        for (int attempt = 0; attempt < TOKEN_INSERT_RETRIES; attempt++) {
+            byte[] bytes = new byte[TOKEN_BYTES];
+            RNG.nextBytes(bytes);
+            String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+            if (bookingDao.findByToken(token).isEmpty()) return token;
+        }
+        throw new IllegalStateException("Could not mint a unique booking token");
+    }
+
+    private static String splitFirst(String fullName) {
+        if (fullName == null) return null;
+        String trimmed = fullName.trim();
+        if (trimmed.isEmpty()) return null;
+        int sp = trimmed.indexOf(' ');
+        return sp < 0 ? trimmed : trimmed.substring(0, sp);
+    }
+
+    private static String splitLast(String fullName) {
+        if (fullName == null) return null;
+        String trimmed = fullName.trim();
+        int sp = trimmed.lastIndexOf(' ');
+        return sp < 0 ? null : trimmed.substring(sp + 1);
     }
 
     private void sendNotifications(Outcome o) {
@@ -273,14 +411,11 @@ public class PlanCreationService {
     }
 
     private void emitPlanStartedWebhook(Outcome o) {
-        // Phase 7 builds the outbound webhook delivery service with HMAC
-        // signing and retries. Until then, log the payload so the eventual
-        // delivery layer can replay from logs if needed.
         webhookLog.info(
-                "plan.started merchant={} booking={} plan={} customer={} frequency={} numPayments={} firstIntent={}",
+                "plan.started merchant={} booking={} plan={} customer={} frequency={} numPayments={} firstIntent={} source={}",
                 o.merchant().id(), o.booking().id(), o.plan().id(),
                 o.customer().id(), o.plan().frequency().wire(), o.plan().numPayments(),
-                o.firstChargeIntentId());
+                o.firstChargeIntentId(), o.booking().source().wire());
     }
 
     private static PaymentScheduleStatus mapIntentToStatus(String paymentIntentStatus) {
@@ -319,6 +454,25 @@ public class PlanCreationService {
             String customerEmail,
             String customerFirstName,
             String customerLastName,
+            String paymentMethodId,
+            PlanFrequency frequency
+    ) {}
+
+    /**
+     * Customer-initiated checkout: the customer landed on
+     * {@code /checkout/{slug}} with cart details in the URL.
+     * {@code customerName} is split into first/last on the server because
+     * the URL spec passes a single {@code name=John+Doe} param.
+     */
+    public record CustomerCheckoutInput(
+            String merchantSlug,
+            long totalAmountCents,
+            LocalDate appointmentDate,
+            LocalDate checkoutDate,
+            String description,
+            String customerName,
+            String customerEmail,
+            String customerPhone,
             String paymentMethodId,
             PlanFrequency frequency
     ) {}

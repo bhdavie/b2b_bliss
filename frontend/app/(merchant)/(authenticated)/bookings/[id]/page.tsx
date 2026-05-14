@@ -24,9 +24,22 @@ export default async function BookingDetailPage({
           >
             ← Back to bookings
           </Link>
-          <h1 className="mt-2 text-2xl font-medium">{booking.serviceName}</h1>
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-medium">{booking.serviceName}</h1>
+            {booking.source === "customer_initiated" ? (
+              <span
+                className="inline-flex items-center rounded-full bg-lavender-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-lavender-700"
+                title="Created by the customer from this merchant's checkout link"
+              >
+                From checkout link
+              </span>
+            ) : null}
+          </div>
           <p className="mt-1 text-ink-muted">
-            Appointment {formatScheduleDate(booking.appointmentDate)} ·{" "}
+            {booking.checkoutDate
+              ? `${formatScheduleDate(booking.appointmentDate)} → ${formatScheduleDate(booking.checkoutDate)}`
+              : `Appointment ${formatScheduleDate(booking.appointmentDate)}`}
+            {" · "}
             {formatCents(booking.totalAmountCents)}
           </p>
         </div>
@@ -55,15 +68,20 @@ export default async function BookingDetailPage({
               ? booking.customerNameHint
               : booking.customerEmailHint ?? "Not set"
           }
-          subline={
-            booking.customerNameHint && booking.customerEmailHint
-              ? booking.customerEmailHint
-              : undefined
-          }
+          subline={[
+            booking.customerNameHint ? booking.customerEmailHint : null,
+            booking.customerPhoneHint,
+          ]
+            .filter(Boolean)
+            .join(" · ") || undefined}
         />
         <DetailCard
-          label="Cancellation policy"
-          value={booking.cancellationPolicy ?? "No policy on file"}
+          label={booking.source === "customer_initiated" ? "What the customer booked" : "Cancellation policy"}
+          value={
+            booking.source === "customer_initiated"
+              ? (booking.serviceDescription ?? booking.serviceName ?? "No description provided")
+              : (booking.cancellationPolicy ?? "No policy on file")
+          }
         />
       </section>
 

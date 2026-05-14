@@ -18,6 +18,9 @@ public interface MerchantDao {
     @SqlQuery("SELECT * FROM merchants WHERE email = :email")
     Optional<Merchant> findByEmail(@Bind("email") String email);
 
+    @SqlQuery("SELECT * FROM merchants WHERE slug = :slug")
+    Optional<Merchant> findBySlug(@Bind("slug") String slug);
+
     @SqlUpdate("""
             INSERT INTO merchants (slug, email, status)
             VALUES (:slug, :email, 'pending_verification')

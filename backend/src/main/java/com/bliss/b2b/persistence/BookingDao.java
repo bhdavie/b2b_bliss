@@ -16,12 +16,14 @@ public interface BookingDao {
     @SqlUpdate("""
             INSERT INTO bookings (
                 merchant_id, booking_token, service_name, service_description,
-                total_amount_cents, appointment_date, cancellation_policy,
-                customer_name_hint, customer_email_hint, status
+                total_amount_cents, appointment_date, checkout_date,
+                cancellation_policy, customer_name_hint, customer_email_hint,
+                customer_phone_hint, status, booking_source
             ) VALUES (
                 :merchantId, :bookingToken, :serviceName, :serviceDescription,
-                :totalAmountCents, :appointmentDate, :cancellationPolicy,
-                :customerNameHint, :customerEmailHint, 'sent'
+                :totalAmountCents, :appointmentDate, :checkoutDate,
+                :cancellationPolicy, :customerNameHint, :customerEmailHint,
+                :customerPhoneHint, 'sent', :bookingSource
             )
             """)
     void insert(
@@ -31,9 +33,12 @@ public interface BookingDao {
             @Bind("serviceDescription") String serviceDescription,
             @Bind("totalAmountCents") long totalAmountCents,
             @Bind("appointmentDate") LocalDate appointmentDate,
+            @Bind("checkoutDate") LocalDate checkoutDate,
             @Bind("cancellationPolicy") String cancellationPolicy,
             @Bind("customerNameHint") String customerNameHint,
-            @Bind("customerEmailHint") String customerEmailHint
+            @Bind("customerEmailHint") String customerEmailHint,
+            @Bind("customerPhoneHint") String customerPhoneHint,
+            @Bind("bookingSource") String bookingSource
     );
 
     @SqlQuery("SELECT * FROM bookings WHERE booking_token = :bookingToken")

@@ -95,6 +95,14 @@ function BookingRow({ booking }: { booking: Booking }) {
         >
           {booking.serviceName}
         </Link>
+        {booking.source === "customer_initiated" ? (
+          <span
+            className="ml-2 inline-flex items-center rounded-full bg-lavender-100 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-lavender-700"
+            title="Created by the customer from this merchant's checkout link"
+          >
+            From checkout link
+          </span>
+        ) : null}
       </td>
       <td className="px-4 py-3 text-ink-muted">
         {booking.customerNameHint ?? booking.customerEmailHint ?? (
@@ -103,6 +111,9 @@ function BookingRow({ booking }: { booking: Booking }) {
       </td>
       <td className="px-4 py-3 text-ink-muted">
         {formatScheduleDate(booking.appointmentDate)}
+        {booking.checkoutDate ? (
+          <span className="text-ink-soft"> → {formatScheduleDate(booking.checkoutDate)}</span>
+        ) : null}
       </td>
       <td className="px-4 py-3 text-right tabular-nums">
         {formatCents(booking.totalAmountCents)}

@@ -8,6 +8,8 @@ import com.bliss.b2b.api.MerchantsResource;
 import com.bliss.b2b.api.PlanRulesResource;
 import com.bliss.b2b.api.PlansResource;
 import com.bliss.b2b.api.PublicBookingsResource;
+import com.bliss.b2b.api.PublicCheckoutResource;
+import com.bliss.b2b.api.PublicMerchantsResource;
 import com.bliss.b2b.api.PublicPlansResource;
 import com.bliss.b2b.api.StripeConnectResource;
 import com.bliss.b2b.auth.JwtCookieAuthFilter;
@@ -144,6 +146,9 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 bookingDao, merchantDao, eligibilityService, planRulesService,
                 stripePaymentsService, clock));
         environment.jersey().register(new PublicPlansResource(planCreationService));
+        environment.jersey().register(new PublicMerchantsResource(
+                merchantDao, planRulesService, stripePaymentsService));
+        environment.jersey().register(new PublicCheckoutResource(planCreationService));
         environment.jersey().register(new PlanRulesResource(planRulesService));
         CancellationService cancellationService = new CancellationService(
                 paymentPlanDao, paymentScheduleDao, bookingDao, planRulesService);

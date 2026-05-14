@@ -89,6 +89,105 @@ export async function fetchPublicBooking(
   return (await res.json()) as PublicBooking;
 }
 
+/**
+ * Superset of {@link PublicPolicies} returned by the merchant lookup
+ * endpoint — adds the eligibility-rule fields so the checkout page can
+ * mirror the backend's PlanEligibilityService client-side. The booking
+ * lookup endpoint only returns the customer-facing subset.
+ */
+export type MerchantPolicies = PublicPolicies & {
+  allowedFrequencies: "monthly" | "biweekly" | "both";
+  recommendedFrequency: "monthly" | "biweekly" | null;
+  minLeadTimeWeeks: number;
+  maxLeadTimeWeeks: number | null;
+  minBookingAmountCents: number | null;
+  maxBookingAmountCents: number | null;
+  depositRequired: boolean;
+  depositType: "fixed" | "percentage" | null;
+  depositValue: number | null;
+  depositMaxCents: number | null;
+};
+
+export type PublicMerchant = {
+  merchant: PublicBooking["merchant"];
+  policies: MerchantPolicies;
+  stripe: {
+    configured: boolean;
+    publishableKey: string | null;
+    chargesEnabled: boolean;
+  };
+};
+
+export async function fetchPublicMerchant(
+  slug: string,
+): Promise<PublicMerchant | null> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/public/merchants/${encodeURIComponent(slug)}`,
+    { cache: "no-store" },
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`fetchPublicMerchant failed: ${res.status}`);
+  }
+  return (await res.json()) as PublicMerchant;
+}
+
+export type CheckoutRequest = {
+  merchantSlug: string;
+  totalAmountCents: number;
+  appointmentDate: string;
+  checkoutDate?: string | null;
+  description?: string | null;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string | null;
+  paymentMethodId: string;
+  frequency: PublicPlanFrequency;
+};
+
+export type CheckoutResponse = {
+  bookingId: string;
+  bookingToken: string;
+  planId: string;
+  frequency: PublicPlanFrequency;
+  numPayments: number;
+  totalAmountCents: number;
+  depositAmountCents: number;
+  schedule: {
+    sequence: number;
+    dueDate: string;
+    amountCents: number;
+    status: string;
+    kind: ScheduleKind;
+  }[];
+  firstChargeIntentId: string;
+  firstChargeStatus: string;
+};
+
+export async function submitCheckout(
+  payload: CheckoutRequest,
+): Promise<{ ok: true; data: CheckoutResponse } | { ok: false; error: CreatePlanError; status: number }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/public/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return {
+      ok: false,
+      status: res.status,
+      error: {
+        error: (body as { error?: string }).error ?? "unknown_error",
+        message:
+          (body as { message?: string }).message ??
+          `Could not create booking (${res.status})`,
+      },
+    };
+  }
+  return { ok: true, data: body as CheckoutResponse };
+}
+
 export type CreatePlanRequest = {
   merchantSlug: string;
   bookingToken: string;
