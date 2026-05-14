@@ -66,6 +66,28 @@ export async function signOut(): Promise<void> {
   });
 }
 
+export type DevAuthStatus = {
+  devLoginEnabled: boolean;
+};
+
+export async function fetchDevAuthStatus(): Promise<DevAuthStatus> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/dev-status`, {
+    cache: "no-store",
+  });
+  if (!res.ok) return { devLoginEnabled: false };
+  return (await res.json()) as DevAuthStatus;
+}
+
+export async function devLogin(email: string): Promise<MerchantView> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/dev-login`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return unwrap<MerchantView>(res);
+}
+
 export type UpdateMerchantPayload = {
   businessName: string;
   businessType: string;

@@ -108,8 +108,14 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 config.isProduction() ? "production" : "development");
 
         environment.jersey().register(new HelloResource());
+        // Dev-login bypass is on whenever the env is not production. It
+        // accepts any email at POST /api/v1/auth/dev-login and returns a
+        // signed session immediately. Production deploys must set
+        // BLISS_ENV=production.
+        boolean devLoginEnabled = !config.isProduction();
         environment.jersey().register(new AuthResource(
-                magicLinkService, jwtService, config.isProduction(), sessionTtlMinutes));
+                magicLinkService, jwtService, config.isProduction(),
+                devLoginEnabled, sessionTtlMinutes));
         environment.jersey().register(new MerchantsResource(merchantDao, stripeService, emailService));
         environment.jersey().register(new StripeConnectResource(
                 stripeService, merchantDao, emailService, config.getApp()));

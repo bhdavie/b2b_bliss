@@ -65,6 +65,27 @@ public class MagicLinkService {
     }
 
     /**
+     * Dev-only shortcut: find-or-create a merchant for the email and mark it
+     * verified without any token check. The caller (gated on dev mode) issues
+     * a session immediately. Re-uses the same find-or-create + mark-verified
+     * primitives as the real flow so onboarding state stays consistent.
+     */
+    public Merchant devLogin(String email) {
+        String normalized = email.trim().toLowerCase();
+        Merchant merchant = merchantDao.findByEmail(normalized).orElseGet(() -> {
+            String slug = generateSlug();
+            merchantDao.insertPending(slug, normalized);
+            log.info("Dev-login created merchant slug={} email={}", slug, normalized);
+            return merchantDao.findByEmail(normalized).orElseThrow();
+        });
+        if (merchant.emailVerifiedAt() == null) {
+            merchantDao.markVerified(merchant.id(), Instant.now());
+            return merchantDao.findById(merchant.id()).orElseThrow();
+        }
+        return merchant;
+    }
+
+    /**
      * Returns the merchant for a valid, unconsumed, unexpired token. Consumes
      * the token in the same call. Empty for invalid/expired/already-used tokens.
      */
