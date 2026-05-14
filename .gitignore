@@ -1,0 +1,42 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Backend (Maven / Java)
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/dependency-reduced-pom.xml
+*.class
+hs_err_pid*.log
+
+# Frontend (Next.js / Node)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+frontend/next-env.d.ts
+frontend/.turbo/
+frontend/coverage/
+frontend/.eslintcache
+frontend/tsconfig.tsbuildinfo
+
+# Logs
+*.log
+logs/
+
+# Sentry
+.sentryclirc
+
+# Docker / local data
+.postgres-data/

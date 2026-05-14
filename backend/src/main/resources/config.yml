@@ -1,0 +1,53 @@
+# Dropwizard config. Values default for local dev; env vars override.
+
+server:
+  applicationConnectors:
+    - type: http
+      port: 8080
+  adminConnectors:
+    - type: http
+      port: 8081
+  rootPath: /
+
+logging:
+  level: INFO
+  appenders:
+    - type: console
+      layout:
+        type: json
+      timeZone: UTC
+  loggers:
+    com.bliss.b2b: ${BLISS_LOG_LEVEL:-INFO}
+    bliss.email: INFO
+    org.flywaydb: INFO
+
+env: ${BLISS_ENV:-development}
+
+app:
+  frontendBaseUrl: ${BLISS_FRONTEND_BASE_URL:-http://localhost:3000}
+
+database:
+  url: ${BLISS_DB_URL:-jdbc:postgresql://localhost:5432/bliss}
+  user: ${BLISS_DB_USER:-bliss}
+  password: ${BLISS_DB_PASSWORD:-bliss_dev}
+  runMigrations: ${BLISS_RUN_MIGRATIONS:-true}
+
+jwt:
+  secret: ${BLISS_JWT_SECRET:-dev-secret-change-me-dev-secret-change-me}
+  issuer: bliss-b2b
+  ttlMinutes: ${BLISS_JWT_TTL_MINUTES:-60}
+
+sentry:
+  dsn: ${BLISS_SENTRY_DSN:-}
+  environment: ${BLISS_ENV:-development}
+  release: ${BLISS_RELEASE:-unknown}
+  tracesSampleRate: ${BLISS_SENTRY_TRACES_SAMPLE_RATE:-0.0}
+
+cors:
+  # Comma-separated list of origins permitted to call the API.
+  allowedOrigins: ${BLISS_CORS_ORIGINS:-http://localhost:3000}
+
+email:
+  # Blank Postmark token routes mail to the logging service (dev default).
+  postmarkToken: ${BLISS_POSTMARK_TOKEN:-}
+  fromAddress: ${BLISS_EMAIL_FROM:-no-reply@bliss.com}

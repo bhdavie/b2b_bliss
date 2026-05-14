@@ -1,0 +1,36 @@
+# Test config. Skips DB migrations so the suite runs without Postgres.
+
+server:
+  applicationConnectors:
+    - type: http
+      port: 0
+  adminConnectors:
+    - type: http
+      port: 0
+  rootPath: /
+
+logging:
+  level: WARN
+  appenders:
+    - type: console
+      layout:
+        type: json
+
+env: test
+
+database:
+  url: jdbc:postgresql://localhost:5432/unused
+  user: unused
+  password: unused
+  runMigrations: false
+
+jwt:
+  secret: test-secret-test-secret-test-secret-test-secret
+  issuer: bliss-b2b
+  ttlMinutes: 60
+
+sentry:
+  dsn: ""
+  environment: test
+  release: test
+  tracesSampleRate: 0.0

@@ -1,0 +1,60 @@
+# Local dev stack: Postgres + backend (Dropwizard) + frontend (Next.js dev server).
+# Bring up with: docker compose up --build
+# The backend waits for Postgres to accept connections; Flyway runs migrations on boot.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bliss-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bliss}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bliss_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-bliss}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bliss} -d ${POSTGRES_DB:-bliss}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bliss-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      BLISS_ENV: ${BLISS_ENV:-development}
+      BLISS_JWT_SECRET: ${BLISS_JWT_SECRET:-dev-secret-change-me-dev-secret-change-me}
+      BLISS_SENTRY_DSN: ${BLISS_SENTRY_DSN:-}
+      BLISS_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-bliss}
+      BLISS_DB_USER: ${POSTGRES_USER:-bliss}
+      BLISS_DB_PASSWORD: ${POSTGRES_PASSWORD:-bliss_dev}
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bliss-frontend
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+      NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  postgres_data:
