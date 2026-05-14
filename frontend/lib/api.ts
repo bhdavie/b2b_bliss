@@ -242,6 +242,28 @@ export async function getBooking(id: string): Promise<Booking> {
 
 export type AllowedFrequencies = "monthly" | "biweekly" | "both";
 export type DepositType = "percentage" | "fixed";
+export type FeeType = "fixed" | "percentage";
+export type LateFeeScope = "per_failure" | "once_per_plan";
+
+export type RefundPolicy =
+  | "full"
+  | "none"
+  | "first_installment_only"
+  | "sliding_scale"
+  | "credit_only";
+
+export type PaymentDuePolicy =
+  | "at_appointment"
+  | "one_week_before"
+  | "one_month_before"
+  | "custom_months";
+
+export type AfterRetriesAction =
+  | "cancel_forfeit"
+  | "cancel_refund"
+  | "mark_defaulted"
+  | "convert_to_credit"
+  | "balance_due_at_arrival";
 
 export type PlanRules = {
   minLeadTimeWeeks: number;
@@ -254,6 +276,21 @@ export type PlanRules = {
   depositType: DepositType | null;
   depositValue: number | null;
   depositMaxCents: number | null;
+  refundPolicy: RefundPolicy;
+  refundSlidingThresholdPercent: number | null;
+  cancellationFeeEnabled: boolean;
+  cancellationFeeType: FeeType | null;
+  cancellationFeeValue: number | null;
+  cancellationFeeThresholdPercent: number | null;
+  paymentDuePolicy: PaymentDuePolicy;
+  paymentDueCustomMonths: number | null;
+  retryAttempts: number;
+  retrySpacingDays: number;
+  lateFeeEnabled: boolean;
+  lateFeeType: FeeType | null;
+  lateFeeValue: number | null;
+  lateFeeScope: LateFeeScope | null;
+  afterRetriesAction: AfterRetriesAction;
 };
 
 export const DEFAULT_PLAN_RULES: PlanRules = {
@@ -267,6 +304,21 @@ export const DEFAULT_PLAN_RULES: PlanRules = {
   depositType: null,
   depositValue: null,
   depositMaxCents: null,
+  refundPolicy: "full",
+  refundSlidingThresholdPercent: null,
+  cancellationFeeEnabled: false,
+  cancellationFeeType: null,
+  cancellationFeeValue: null,
+  cancellationFeeThresholdPercent: null,
+  paymentDuePolicy: "at_appointment",
+  paymentDueCustomMonths: null,
+  retryAttempts: 3,
+  retrySpacingDays: 3,
+  lateFeeEnabled: false,
+  lateFeeType: null,
+  lateFeeValue: null,
+  lateFeeScope: null,
+  afterRetriesAction: "mark_defaulted",
 };
 
 export async function fetchPlanRules(): Promise<PlanRules> {
@@ -285,4 +337,109 @@ export async function updatePlanRules(payload: PlanRules): Promise<PlanRules> {
     body: JSON.stringify(payload),
   });
   return unwrap<PlanRules>(res);
+}
+
+export type PaymentPlanStatus =
+  | "active"
+  | "payment_failed_in_retry"
+  | "payment_failed_exhausted"
+  | "balance_due_at_arrival"
+  | "completed"
+  | "defaulted"
+  | "canceled";
+
+export type PlanScheduleEntry = {
+  sequence: number;
+  kind: "deposit" | "installment";
+  dueDate: string;
+  amountCents: number;
+  status: string;
+  retryCount: number;
+};
+
+export type FailedInstallment = {
+  sequence: number;
+  dueDate: string;
+  amountCents: number;
+  retryCount: number;
+  lastError: string | null;
+};
+
+export type PlanDetail = {
+  id: string;
+  bookingId: string;
+  serviceName: string;
+  appointmentDate: string;
+  totalAmountCents: number;
+  depositAmountCents: number;
+  frequency: PlanFrequency;
+  numPayments: number;
+  status: PaymentPlanStatus;
+  customerHint: string | null;
+  schedule: PlanScheduleEntry[];
+  failedInstallment: FailedInstallment | null;
+};
+
+export type AttentionResponse = { plans: PlanDetail[]; count: number };
+
+export async function fetchAttentionPlans(): Promise<AttentionResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/plans/attention`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  return unwrap<AttentionResponse>(res);
+}
+
+export async function fetchPlan(id: string): Promise<PlanDetail> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/plans/${id}`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  return unwrap<PlanDetail>(res);
+}
+
+async function planAction(id: string, action: string, body?: unknown): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/plans/${id}/${action}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: body == null ? "{}" : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Plan ${action} failed: ${res.status} ${text}`);
+  }
+}
+
+export async function retryPlan(id: string): Promise<void> {
+  return planAction(id, "retry");
+}
+
+export async function cancelPlan(id: string): Promise<void> {
+  return planAction(id, "cancel");
+}
+
+export async function resolvePlan(id: string): Promise<void> {
+  return planAction(id, "resolve");
+}
+
+export async function overridePlanState(id: string, status: PaymentPlanStatus): Promise<void> {
+  return planAction(id, "override-state", { status });
+}
+
+export async function devMarkPlanFailed(
+  id: string,
+  mode: "fail" | "exhaust" = "fail",
+): Promise<{ planStatus: PaymentPlanStatus; afterRetriesAction: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/dev/plans/${id}/mark-failed`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Dev mark-failed: ${res.status} ${text}`);
+  }
+  return (await res.json()) as { planStatus: PaymentPlanStatus; afterRetriesAction: string };
 }

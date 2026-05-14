@@ -1,10 +1,15 @@
 package com.bliss.b2b.api;
 
 import com.bliss.b2b.auth.MerchantPrincipal;
+import com.bliss.b2b.payments.AfterRetriesAction;
 import com.bliss.b2b.payments.AllowedFrequencies;
 import com.bliss.b2b.payments.DepositType;
+import com.bliss.b2b.payments.FeeType;
+import com.bliss.b2b.payments.LateFeeScope;
 import com.bliss.b2b.payments.MerchantPlanRules;
+import com.bliss.b2b.payments.PaymentDuePolicy;
 import com.bliss.b2b.payments.PlanFrequency;
+import com.bliss.b2b.payments.RefundPolicy;
 import com.bliss.b2b.service.MerchantPlanRulesService;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.dropwizard.auth.Auth;
@@ -17,20 +22,16 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.Map;
 
-/**
- * Merchant-facing CRUD for plan eligibility rules. GET returns the effective
- * rules (defaults if no row stored); PUT upserts. Only the authenticated
- * merchant can see or modify their own rules.
- */
 @Path("/api/v1/merchants/me/plan-rules")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class PlanRulesResource {
 
     private static final int MAX_WEEKS = 520;
-    private static final long MAX_AMOUNT_CENTS = 1_000_000_000L; // $10M cap, defensive
+    private static final long MAX_AMOUNT_CENTS = 1_000_000_000L;
     private static final long MIN_PERCENT = 1L;
     private static final long MAX_PERCENT = 99L;
+    private static final int MAX_CUSTOM_MONTHS = 24;
 
     private final MerchantPlanRulesService service;
 
@@ -111,12 +112,8 @@ public class PlanRulesResource {
             switch (depositType) {
                 case PERCENTAGE -> {
                     if (depositValue < MIN_PERCENT || depositValue > MAX_PERCENT) {
-                        // 100% means no installments, which is a single charge,
-                        // not a plan. Reject so merchants either lower the
-                        // percentage or disable plans for that booking range.
-                        return badRequest(
-                                "depositValue must be " + MIN_PERCENT + "-" + MAX_PERCENT
-                                        + " when depositType is percentage");
+                        return badRequest("depositValue must be " + MIN_PERCENT + "-" + MAX_PERCENT
+                                + " when depositType is percentage");
                     }
                 }
                 case FIXED -> {
@@ -129,19 +126,147 @@ public class PlanRulesResource {
                 return badRequest("depositMaxCents must be positive");
             }
         } else {
-            // Allow clients to send null for any of the deposit fields when
-            // depositRequired=false. Coerce them to null on the way in so the
-            // stored row matches the disabled-deposit shape.
             depositType = null;
             depositValue = null;
             depositMaxCents = null;
         }
 
+        // --- Refund policy ---
+        RefundPolicy refundPolicy;
+        try {
+            refundPolicy = req.refundPolicy() == null
+                    ? RefundPolicy.FULL
+                    : RefundPolicy.fromWire(req.refundPolicy());
+        } catch (IllegalArgumentException e) {
+            return badRequest("refundPolicy must be one of full, none, first_installment_only, sliding_scale, credit_only");
+        }
+        Integer slidingThreshold = req.refundSlidingThresholdPercent();
+        if (refundPolicy == RefundPolicy.SLIDING_SCALE) {
+            if (slidingThreshold == null || slidingThreshold < 1 || slidingThreshold > 99) {
+                return badRequest("refundSlidingThresholdPercent must be 1-99 when refundPolicy is sliding_scale");
+            }
+        } else {
+            slidingThreshold = null;
+        }
+
+        // --- Cancellation fee ---
+        boolean cancellationFeeEnabled = Boolean.TRUE.equals(req.cancellationFeeEnabled());
+        FeeType cancellationFeeType = null;
+        Long cancellationFeeValue = null;
+        Integer cancellationFeeThreshold = req.cancellationFeeThresholdPercent();
+        if (cancellationFeeEnabled) {
+            if (req.cancellationFeeType() == null || req.cancellationFeeType().isBlank()) {
+                return badRequest("cancellationFeeType required when cancellationFeeEnabled is true");
+            }
+            try {
+                cancellationFeeType = FeeType.fromWire(req.cancellationFeeType());
+            } catch (IllegalArgumentException e) {
+                return badRequest("cancellationFeeType must be one of fixed, percentage");
+            }
+            if (req.cancellationFeeValue() == null) {
+                return badRequest("cancellationFeeValue required when cancellationFeeEnabled is true");
+            }
+            cancellationFeeValue = req.cancellationFeeValue();
+            if (!validFeeValue(cancellationFeeType, cancellationFeeValue)) {
+                return badRequest("cancellationFeeValue must be positive (1-100 if percentage)");
+            }
+            if (cancellationFeeThreshold != null
+                    && (cancellationFeeThreshold < 0 || cancellationFeeThreshold > 100)) {
+                return badRequest("cancellationFeeThresholdPercent must be 0-100");
+            }
+        } else {
+            cancellationFeeType = null;
+            cancellationFeeValue = null;
+            cancellationFeeThreshold = null;
+        }
+
+        // --- Payment due policy ---
+        PaymentDuePolicy paymentDuePolicy;
+        try {
+            paymentDuePolicy = req.paymentDuePolicy() == null
+                    ? PaymentDuePolicy.AT_APPOINTMENT
+                    : PaymentDuePolicy.fromWire(req.paymentDuePolicy());
+        } catch (IllegalArgumentException e) {
+            return badRequest("paymentDuePolicy must be one of at_appointment, one_week_before, one_month_before, custom_months");
+        }
+        Integer customMonths = req.paymentDueCustomMonths();
+        if (paymentDuePolicy == PaymentDuePolicy.CUSTOM_MONTHS) {
+            if (customMonths == null || customMonths < 1 || customMonths > MAX_CUSTOM_MONTHS) {
+                return badRequest("paymentDueCustomMonths must be 1-" + MAX_CUSTOM_MONTHS + " when paymentDuePolicy is custom_months");
+            }
+        } else {
+            customMonths = null;
+        }
+
+        // --- Retry policy ---
+        int retryAttempts = req.retryAttempts() == null ? 3 : req.retryAttempts();
+        if (retryAttempts < 1 || retryAttempts > 5) {
+            return badRequest("retryAttempts must be 1-5");
+        }
+        int retrySpacingDays = req.retrySpacingDays() == null ? 3 : req.retrySpacingDays();
+        if (retrySpacingDays != 1 && retrySpacingDays != 3 && retrySpacingDays != 7) {
+            return badRequest("retrySpacingDays must be one of 1, 3, 7");
+        }
+
+        // --- Late fee ---
+        boolean lateFeeEnabled = Boolean.TRUE.equals(req.lateFeeEnabled());
+        FeeType lateFeeType = null;
+        Long lateFeeValue = null;
+        LateFeeScope lateFeeScope = null;
+        if (lateFeeEnabled) {
+            if (req.lateFeeType() == null || req.lateFeeType().isBlank()) {
+                return badRequest("lateFeeType required when lateFeeEnabled is true");
+            }
+            try {
+                lateFeeType = FeeType.fromWire(req.lateFeeType());
+            } catch (IllegalArgumentException e) {
+                return badRequest("lateFeeType must be one of fixed, percentage");
+            }
+            if (req.lateFeeValue() == null) {
+                return badRequest("lateFeeValue required when lateFeeEnabled is true");
+            }
+            lateFeeValue = req.lateFeeValue();
+            if (!validFeeValue(lateFeeType, lateFeeValue)) {
+                return badRequest("lateFeeValue must be positive (1-100 if percentage)");
+            }
+            if (req.lateFeeScope() == null || req.lateFeeScope().isBlank()) {
+                return badRequest("lateFeeScope required when lateFeeEnabled is true");
+            }
+            try {
+                lateFeeScope = LateFeeScope.fromWire(req.lateFeeScope());
+            } catch (IllegalArgumentException e) {
+                return badRequest("lateFeeScope must be one of per_failure, once_per_plan");
+            }
+        }
+
+        // --- After-retries action ---
+        AfterRetriesAction afterRetries;
+        try {
+            afterRetries = req.afterRetriesAction() == null
+                    ? AfterRetriesAction.MARK_DEFAULTED
+                    : AfterRetriesAction.fromWire(req.afterRetriesAction());
+        } catch (IllegalArgumentException e) {
+            return badRequest("afterRetriesAction must be one of cancel_forfeit, cancel_refund, mark_defaulted, convert_to_credit, balance_due_at_arrival");
+        }
+
         MerchantPlanRules rules = new MerchantPlanRules(
                 minLead, maxLead, allowed, minAmt, maxAmt, recommended,
-                depositRequired, depositType, depositValue, depositMaxCents);
+                depositRequired, depositType, depositValue, depositMaxCents,
+                refundPolicy, slidingThreshold,
+                cancellationFeeEnabled, cancellationFeeType, cancellationFeeValue, cancellationFeeThreshold,
+                paymentDuePolicy, customMonths,
+                retryAttempts, retrySpacingDays,
+                lateFeeEnabled, lateFeeType, lateFeeValue, lateFeeScope,
+                afterRetries);
         service.save(principal.merchant().id(), rules);
         return Response.ok(PlanRulesView.from(rules)).build();
+    }
+
+    private static boolean validFeeValue(FeeType type, long value) {
+        return switch (type) {
+            case PERCENTAGE -> value >= 1 && value <= 100;
+            case FIXED -> value > 0 && value <= MAX_AMOUNT_CENTS;
+        };
     }
 
     private static Response badRequest(String message) {
@@ -158,6 +283,21 @@ public class PlanRulesResource {
             @JsonProperty("depositRequired") Boolean depositRequired,
             @JsonProperty("depositType") String depositType,
             @JsonProperty("depositValue") Long depositValue,
-            @JsonProperty("depositMaxCents") Long depositMaxCents
+            @JsonProperty("depositMaxCents") Long depositMaxCents,
+            @JsonProperty("refundPolicy") String refundPolicy,
+            @JsonProperty("refundSlidingThresholdPercent") Integer refundSlidingThresholdPercent,
+            @JsonProperty("cancellationFeeEnabled") Boolean cancellationFeeEnabled,
+            @JsonProperty("cancellationFeeType") String cancellationFeeType,
+            @JsonProperty("cancellationFeeValue") Long cancellationFeeValue,
+            @JsonProperty("cancellationFeeThresholdPercent") Integer cancellationFeeThresholdPercent,
+            @JsonProperty("paymentDuePolicy") String paymentDuePolicy,
+            @JsonProperty("paymentDueCustomMonths") Integer paymentDueCustomMonths,
+            @JsonProperty("retryAttempts") Integer retryAttempts,
+            @JsonProperty("retrySpacingDays") Integer retrySpacingDays,
+            @JsonProperty("lateFeeEnabled") Boolean lateFeeEnabled,
+            @JsonProperty("lateFeeType") String lateFeeType,
+            @JsonProperty("lateFeeValue") Long lateFeeValue,
+            @JsonProperty("lateFeeScope") String lateFeeScope,
+            @JsonProperty("afterRetriesAction") String afterRetriesAction
     ) {}
 }

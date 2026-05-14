@@ -4,9 +4,11 @@
 import { cookies } from "next/headers";
 import {
   API_BASE_URL,
+  type AttentionResponse,
   type Booking,
   type BookingListResponse,
   type MerchantView,
+  type PlanDetail,
   type PlanRules,
   type StripeStatus,
 } from "./api";
@@ -74,6 +76,34 @@ export async function fetchPlanRulesServer(): Promise<PlanRules | null> {
     throw new Error(`fetchPlanRulesServer failed: ${res.status}`);
   }
   return (await res.json()) as PlanRules;
+}
+
+export async function fetchAttentionPlansServer(): Promise<AttentionResponse | null> {
+  const headers = await sessionHeader();
+  if (!headers) return null;
+  const res = await fetch(`${API_BASE_URL}/api/v1/plans/attention`, {
+    headers,
+    cache: "no-store",
+  });
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    throw new Error(`fetchAttentionPlansServer failed: ${res.status}`);
+  }
+  return (await res.json()) as AttentionResponse;
+}
+
+export async function fetchPlanServer(id: string): Promise<PlanDetail | null> {
+  const headers = await sessionHeader();
+  if (!headers) return null;
+  const res = await fetch(`${API_BASE_URL}/api/v1/plans/${id}`, {
+    headers,
+    cache: "no-store",
+  });
+  if (res.status === 401 || res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`fetchPlanServer failed: ${res.status}`);
+  }
+  return (await res.json()) as PlanDetail;
 }
 
 export async function fetchBookingServer(id: string): Promise<Booking | null> {

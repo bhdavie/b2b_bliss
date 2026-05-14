@@ -14,6 +14,31 @@ export type PublicPlanOption = {
   recommended: boolean;
 };
 
+export type PublicPolicies = {
+  refundPolicy:
+    | "full"
+    | "none"
+    | "first_installment_only"
+    | "sliding_scale"
+    | "credit_only";
+  refundSlidingThresholdPercent: number | null;
+  cancellationFeeEnabled: boolean;
+  cancellationFeeType: "fixed" | "percentage" | null;
+  cancellationFeeValue: number | null;
+  cancellationFeeThresholdPercent: number | null;
+  paymentDuePolicy:
+    | "at_appointment"
+    | "one_week_before"
+    | "one_month_before"
+    | "custom_months";
+  paymentDueCustomMonths: number | null;
+  lateFeeEnabled: boolean;
+  lateFeeType: "fixed" | "percentage" | null;
+  lateFeeValue: number | null;
+  lateFeeScope: "per_failure" | "once_per_plan" | null;
+  afterRetriesAction: string;
+};
+
 export type PublicBooking = {
   merchant: {
     slug: string;
@@ -43,6 +68,7 @@ export type PublicBooking = {
     configured: boolean;
     publishableKey: string | null;
   };
+  policies: PublicPolicies;
   status: string;
 };
 

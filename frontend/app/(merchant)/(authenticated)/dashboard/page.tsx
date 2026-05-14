@@ -1,12 +1,21 @@
 import Link from "next/link";
+import { AttentionCard } from "@/components/merchant/AttentionCard";
 import { StripeConnectCard } from "@/components/merchant/StripeConnectCard";
-import { fetchMerchantSession, fetchStripeStatusServer } from "@/lib/auth";
+import {
+  fetchAttentionPlansServer,
+  fetchMerchantSession,
+  fetchStripeStatusServer,
+} from "@/lib/auth";
 
 export default async function DashboardPage() {
   const session = await fetchMerchantSession();
   if (!session) return null;
-  const stripeStatus = await fetchStripeStatusServer();
+  const [stripeStatus, attention] = await Promise.all([
+    fetchStripeStatusServer(),
+    fetchAttentionPlansServer(),
+  ]);
   const chargesEnabled = stripeStatus?.status === "charges_enabled";
+  const attentionPlans = attention?.plans ?? [];
 
   return (
     <>
@@ -50,6 +59,10 @@ export default async function DashboardPage() {
           </Link>
         </section>
       ) : null}
+
+      <section className="mt-8">
+        <AttentionCard plans={attentionPlans} />
+      </section>
 
       <section className="mt-8 card-subtle">
         <div className="text-xs text-ink-muted">Account</div>

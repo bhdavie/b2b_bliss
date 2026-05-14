@@ -12,7 +12,22 @@ public record PlanRulesView(
         boolean depositRequired,
         String depositType,
         Long depositValue,
-        Long depositMaxCents
+        Long depositMaxCents,
+        String refundPolicy,
+        Integer refundSlidingThresholdPercent,
+        boolean cancellationFeeEnabled,
+        String cancellationFeeType,
+        Long cancellationFeeValue,
+        Integer cancellationFeeThresholdPercent,
+        String paymentDuePolicy,
+        Integer paymentDueCustomMonths,
+        int retryAttempts,
+        int retrySpacingDays,
+        boolean lateFeeEnabled,
+        String lateFeeType,
+        Long lateFeeValue,
+        String lateFeeScope,
+        String afterRetriesAction
 ) {
     public static PlanRulesView from(MerchantPlanRules rules) {
         return new PlanRulesView(
@@ -25,7 +40,22 @@ public record PlanRulesView(
                 rules.depositRequired(),
                 rules.depositType() == null ? null : rules.depositType().wire(),
                 rules.depositValue(),
-                rules.depositMaxCents()
+                rules.depositMaxCents(),
+                rules.refundPolicy().wire(),
+                rules.refundSlidingThresholdPercent(),
+                rules.cancellationFeeEnabled(),
+                rules.cancellationFeeType() == null ? null : rules.cancellationFeeType().wire(),
+                rules.cancellationFeeValue(),
+                rules.cancellationFeeThresholdPercent(),
+                rules.paymentDuePolicy().wire(),
+                rules.paymentDueCustomMonths(),
+                rules.retryAttempts(),
+                rules.retrySpacingDays(),
+                rules.lateFeeEnabled(),
+                rules.lateFeeType() == null ? null : rules.lateFeeType().wire(),
+                rules.lateFeeValue(),
+                rules.lateFeeScope() == null ? null : rules.lateFeeScope().wire(),
+                rules.afterRetriesAction().wire()
         );
     }
 }

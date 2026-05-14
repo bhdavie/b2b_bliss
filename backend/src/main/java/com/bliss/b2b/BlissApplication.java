@@ -2,9 +2,11 @@ package com.bliss.b2b;
 
 import com.bliss.b2b.api.AuthResource;
 import com.bliss.b2b.api.BookingsResource;
+import com.bliss.b2b.api.DevPlansResource;
 import com.bliss.b2b.api.HelloResource;
 import com.bliss.b2b.api.MerchantsResource;
 import com.bliss.b2b.api.PlanRulesResource;
+import com.bliss.b2b.api.PlansResource;
 import com.bliss.b2b.api.PublicBookingsResource;
 import com.bliss.b2b.api.PublicPlansResource;
 import com.bliss.b2b.api.StripeConnectResource;
@@ -23,6 +25,8 @@ import com.bliss.b2b.persistence.JdbiBootstrap;
 import com.bliss.b2b.persistence.MagicLinkTokenDao;
 import com.bliss.b2b.persistence.MerchantDao;
 import com.bliss.b2b.persistence.MerchantPlanRulesDao;
+import com.bliss.b2b.persistence.PaymentPlanDao;
+import com.bliss.b2b.persistence.PaymentScheduleDao;
 import com.bliss.b2b.service.BookingService;
 import com.bliss.b2b.service.MagicLinkService;
 import com.bliss.b2b.service.MerchantPlanRulesService;
@@ -84,6 +88,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
         MagicLinkTokenDao tokenDao = jdbi.onDemand(MagicLinkTokenDao.class);
         BookingDao bookingDao = jdbi.onDemand(BookingDao.class);
         MerchantPlanRulesDao planRulesDao = jdbi.onDemand(MerchantPlanRulesDao.class);
+        PaymentPlanDao paymentPlanDao = jdbi.onDemand(PaymentPlanDao.class);
+        PaymentScheduleDao paymentScheduleDao = jdbi.onDemand(PaymentScheduleDao.class);
 
         // Dev environments use long expiries to keep the inner loop frictionless:
         // a magic link survives an overnight pause and the session cookie keeps
@@ -138,6 +144,9 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 stripePaymentsService, clock));
         environment.jersey().register(new PublicPlansResource(planCreationService));
         environment.jersey().register(new PlanRulesResource(planRulesService));
+        environment.jersey().register(new PlansResource(paymentPlanDao, paymentScheduleDao, bookingDao));
+        environment.jersey().register(new DevPlansResource(
+                devLoginEnabled, paymentPlanDao, paymentScheduleDao, planRulesDao, bookingDao));
 
         environment.jersey().register(new AuthDynamicFeature(
                 new JwtCookieAuthFilter.Builder()

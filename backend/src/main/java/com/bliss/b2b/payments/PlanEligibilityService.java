@@ -65,13 +65,22 @@ public class PlanEligibilityService {
         }
         long installmentTotal = totalAmountCents - deposit;
 
+        int dueOffsetDays = rules.paymentDueOffsetDays();
+
         List<PlanOption> options = new ArrayList<>();
         for (PlanFrequency f : rules.allowedFrequencies().frequencies()) {
-            PlanOption option = buildInstallments(today, appointmentDate, installmentTotal, deposit > 0, f);
+            PlanOption option = buildInstallments(
+                    today, appointmentDate, installmentTotal, deposit > 0, f, dueOffsetDays);
             if (option != null) options.add(option);
         }
         if (options.isEmpty()) {
-            return ineligible("no_plan_fits", days, deposit);
+            // If the merchant configured a non-default payment due deadline
+            // and that's what's blocking, surface a specific reason so the
+            // merchant preview pane can suggest widening the deadline.
+            String reason = dueOffsetDays > MIN_FINAL_PAYMENT_BUFFER_DAYS
+                    ? "exceeds_payment_deadline"
+                    : "no_plan_fits";
+            return ineligible(reason, days, deposit);
         }
         return new EligibilityResult(true, "ok", days, deposit, List.copyOf(options));
     }
@@ -85,10 +94,15 @@ public class PlanEligibilityService {
             LocalDate appointmentDate,
             long installmentTotalCents,
             boolean hasDeposit,
-            PlanFrequency frequency
+            PlanFrequency frequency,
+            int paymentDueOffsetDays
     ) {
         long daysToAppt = ChronoUnit.DAYS.between(today, appointmentDate);
-        long usableDays = daysToAppt - MIN_FINAL_PAYMENT_BUFFER_DAYS;
+        // The merchant's "all payments due by X days before appointment" rule
+        // is a tighter version of the system 3-day retry buffer. Whichever is
+        // larger wins.
+        long effectiveBuffer = Math.max(MIN_FINAL_PAYMENT_BUFFER_DAYS, paymentDueOffsetDays);
+        long usableDays = daysToAppt - effectiveBuffer;
         if (usableDays < 0) return null;
         long intervals = usableDays / frequency.days();
         // Without a deposit the first installment fires today, so the count

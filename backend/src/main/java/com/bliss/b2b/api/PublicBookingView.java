@@ -5,7 +5,6 @@ import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.payments.EligibilityResult;
 import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.payments.PlanFrequency;
-import com.bliss.b2b.payments.PlanOption;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -20,6 +19,7 @@ public record PublicBookingView(
         Eligibility eligibility,
         List<Plan> planOptions,
         Stripe stripe,
+        Policies policies,
         String status
 ) {
     public record MerchantContext(
@@ -62,6 +62,28 @@ public record PublicBookingView(
             String publishableKey
     ) {}
 
+    /**
+     * Customer-facing slice of the merchant's policy stack. The hosted page
+     * uses these to render the "Cancellation policy" trust-signal block.
+     * Refund-policy and fee details are passed through verbatim so the
+     * frontend owns the copy.
+     */
+    public record Policies(
+            String refundPolicy,
+            Integer refundSlidingThresholdPercent,
+            boolean cancellationFeeEnabled,
+            String cancellationFeeType,
+            Long cancellationFeeValue,
+            Integer cancellationFeeThresholdPercent,
+            String paymentDuePolicy,
+            Integer paymentDueCustomMonths,
+            boolean lateFeeEnabled,
+            String lateFeeType,
+            Long lateFeeValue,
+            String lateFeeScope,
+            String afterRetriesAction
+    ) {}
+
     public static PublicBookingView build(
             Merchant merchant,
             Booking booking,
@@ -80,15 +102,26 @@ public record PublicBookingView(
                         o.dueDates(),
                         recommended != null && o.frequency() == recommended))
                 .toList();
+        Policies policies = new Policies(
+                rules.refundPolicy().wire(),
+                rules.refundSlidingThresholdPercent(),
+                rules.cancellationFeeEnabled(),
+                rules.cancellationFeeType() == null ? null : rules.cancellationFeeType().wire(),
+                rules.cancellationFeeValue(),
+                rules.cancellationFeeThresholdPercent(),
+                rules.paymentDuePolicy().wire(),
+                rules.paymentDueCustomMonths(),
+                rules.lateFeeEnabled(),
+                rules.lateFeeType() == null ? null : rules.lateFeeType().wire(),
+                rules.lateFeeValue(),
+                rules.lateFeeScope() == null ? null : rules.lateFeeScope().wire(),
+                rules.afterRetriesAction().wire()
+        );
         return new PublicBookingView(
                 new MerchantContext(
                         merchant.slug(),
                         merchant.businessName(),
                         merchant.businessType(),
-                        // brandColorPrimary and logoUrl are read off the
-                        // merchant row but the domain record does not expose
-                        // them yet; surface null until those fields are wired
-                        // through. The hosted page falls back to defaults.
                         null,
                         null,
                         merchant.email()),
@@ -107,8 +140,8 @@ public record PublicBookingView(
                         eligibility.depositAmountCents()),
                 options,
                 new Stripe(stripeConfigured, stripeConfigured ? stripePublishableKey : null),
+                policies,
                 booking.status().wire()
         );
     }
-
 }

@@ -1,14 +1,14 @@
 package com.bliss.b2b.payments;
 
 /**
- * The configurable knobs a merchant exposes for their own plan eligibility.
- * Nullable fields ({@code maxLeadTimeWeeks}, amount limits,
- * {@code recommendedFrequency}, deposit fields) mean "unset, use system
- * behavior" — not zero.
+ * Per-merchant configuration for plan eligibility and the cancellation /
+ * dunning policy stack. Nullable fields mean "unset, use system behavior".
  *
- * <p>Defaults match the constants used by Phase 0-4: 6-week minimum, both
- * frequencies allowed, no max lead time, no amount limits, recommended
- * frequency auto-resolves to monthly when both are offered, no deposit.
+ * <p>Defaults match the Phase 0-4 behavior: 6-week minimum lead, both
+ * frequencies allowed, no caps, monthly recommended when both offered, no
+ * deposit, full refund on cancellation, no cancellation fee, all payments
+ * due by the appointment date, 3 retries spaced 3 days apart, no late fee,
+ * defaulted plans go to manual resolution.
  */
 public record MerchantPlanRules(
         int minLeadTimeWeeks,
@@ -20,25 +20,39 @@ public record MerchantPlanRules(
         boolean depositRequired,
         DepositType depositType,
         Long depositValue,
-        Long depositMaxCents
+        Long depositMaxCents,
+        RefundPolicy refundPolicy,
+        Integer refundSlidingThresholdPercent,
+        boolean cancellationFeeEnabled,
+        FeeType cancellationFeeType,
+        Long cancellationFeeValue,
+        Integer cancellationFeeThresholdPercent,
+        PaymentDuePolicy paymentDuePolicy,
+        Integer paymentDueCustomMonths,
+        int retryAttempts,
+        int retrySpacingDays,
+        boolean lateFeeEnabled,
+        FeeType lateFeeType,
+        Long lateFeeValue,
+        LateFeeScope lateFeeScope,
+        AfterRetriesAction afterRetriesAction
 ) {
     public static final MerchantPlanRules DEFAULTS = new MerchantPlanRules(
-            6,
-            null,
+            6, null,
             AllowedFrequencies.BOTH,
-            null,
-            null,
-            null,
-            false,
-            null,
-            null,
-            null
+            null, null, null,
+            false, null, null, null,
+            RefundPolicy.FULL, null,
+            false, null, null, null,
+            PaymentDuePolicy.AT_APPOINTMENT, null,
+            3, 3,
+            false, null, null, null,
+            AfterRetriesAction.MARK_DEFAULTED
     );
 
     /**
-     * Resolves which frequency carries the "Recommended" badge when both are
-     * offered. Returns null when only a single option is available — the
-     * caller should not render a badge in that case.
+     * Frequency to carry the "Recommended" badge when both options are
+     * offered. Returns null when only one option is on the table.
      */
     public PlanFrequency resolveRecommended() {
         if (allowedFrequencies != AllowedFrequencies.BOTH) return null;
@@ -47,17 +61,7 @@ public record MerchantPlanRules(
     }
 
     /**
-     * Computes the deposit charge for a booking of the given total. Returns
-     * {@code 0} when no deposit is required. The result is capped at the
-     * merchant's optional {@code depositMaxCents} and at the booking total
-     * (so a fixed deposit larger than the booking does not exceed it).
-     *
-     * <p>The validation layer rejects {@code percentage=100}, so this can
-     * only return a value equal to the booking total when a {@code fixed}
-     * deposit happens to match or exceed the booking — that case is then
-     * surfaced as {@code reason="deposit_too_high"} in
-     * {@link PlanEligibilityService} rather than producing a one-charge
-     * "plan".
+     * Phase 9 deposit math — same shape as before, kept here.
      */
     public long computeDepositCents(long totalAmountCents) {
         if (!depositRequired || depositType == null || depositValue == null) return 0;
@@ -67,5 +71,14 @@ public record MerchantPlanRules(
         };
         if (depositMaxCents != null) raw = Math.min(raw, depositMaxCents);
         return Math.max(0L, Math.min(raw, totalAmountCents));
+    }
+
+    /**
+     * How many days before the appointment all installments must clear by.
+     * Returns 0 for the default "due at appointment" policy. The eligibility
+     * service combines this with the system 3-day retry buffer.
+     */
+    public int paymentDueOffsetDays() {
+        return paymentDuePolicy.offsetDays(paymentDueCustomMonths);
     }
 }

@@ -109,7 +109,11 @@ export function PlanRulesCard({ initial }: { initial: PlanRules }) {
     setError(null);
     setSaving(true);
     try {
+      // Carry the policy stack (refund / cancel-fee / due-date / retry /
+      // late-fee / after-retries) through unchanged — PoliciesCard owns
+      // those fields. Plan rules stays focused on eligibility config.
       const payload: PlanRules = {
+        ...initial,
         minLeadTimeWeeks: minLead,
         maxLeadTimeWeeks: maxLead,
         allowedFrequencies: form.allowedFrequencies,

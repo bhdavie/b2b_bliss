@@ -16,6 +16,39 @@ public interface PaymentPlanDao {
     Optional<PaymentPlan> findById(@Bind("id") UUID id);
 
     @SqlQuery("""
+            SELECT pp.* FROM payment_plans pp
+            JOIN bookings b ON b.id = pp.booking_id
+            WHERE pp.id = :id AND b.merchant_id = :merchantId
+            """)
+    Optional<PaymentPlan> findByIdForMerchant(
+            @Bind("id") UUID id,
+            @Bind("merchantId") UUID merchantId
+    );
+
+    @SqlQuery("""
+            SELECT pp.* FROM payment_plans pp
+            JOIN bookings b ON b.id = pp.booking_id
+            WHERE b.merchant_id = :merchantId
+              AND pp.status IN (
+                'payment_failed_in_retry',
+                'payment_failed_exhausted',
+                'defaulted',
+                'balance_due_at_arrival'
+              )
+            ORDER BY pp.updated_at DESC
+            """)
+    java.util.List<PaymentPlan> findAttentionForMerchant(
+            @Bind("merchantId") UUID merchantId
+    );
+
+    @SqlUpdate("""
+            UPDATE payment_plans
+            SET status = :status
+            WHERE id = :id
+            """)
+    int updateStatus(@Bind("id") UUID id, @Bind("status") String status);
+
+    @SqlQuery("""
             SELECT * FROM payment_plans
             WHERE booking_id = :bookingId
               AND status IN ('active', 'completed')

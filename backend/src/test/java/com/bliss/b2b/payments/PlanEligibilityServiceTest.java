@@ -413,14 +413,80 @@ class PlanEligibilityServiceTest {
         assertThat(MerchantPlanRules.DEFAULTS.computeDepositCents(100_000L)).isZero();
     }
 
+    // -- Payment due deadline (Phase 10) --
+
+    @Test
+    void dueDeadline_atAppointment_doesNotChangeSchedule() {
+        EligibilityResult result = service.evaluate(
+                TODAY, TODAY.plusDays(70), PRICE_CENTS,
+                withDueDeadline(6, AllowedFrequencies.MONTHLY, PaymentDuePolicy.AT_APPOINTMENT, null));
+
+        assertThat(result.eligible()).isTrue();
+        // 70 - 3 = 67 usable days. Monthly: 1 + 67/30 = 3 payments.
+        assertThat(result.options().get(0).numPayments()).isEqualTo(3);
+    }
+
+    @Test
+    void dueDeadline_oneMonthBefore_compressesSchedule() {
+        // 70-day appointment, deadline 30 days before = effective buffer 30.
+        // Usable = 40 days. Monthly: 1 + 40/30 = 2 payments at 0, 30. Final
+        // installment at day 30, which is exactly the deadline.
+        EligibilityResult result = service.evaluate(
+                TODAY, TODAY.plusDays(70), PRICE_CENTS,
+                withDueDeadline(6, AllowedFrequencies.MONTHLY, PaymentDuePolicy.ONE_MONTH_BEFORE, null));
+
+        assertThat(result.eligible()).isTrue();
+        PlanOption monthly = result.options().get(0);
+        assertThat(monthly.numPayments()).isEqualTo(2);
+        assertThat(monthly.dueDates().get(monthly.numPayments() - 1)).isEqualTo(TODAY.plusDays(30));
+    }
+
+    @Test
+    void dueDeadline_oneWeekBefore_yieldsExpectedSchedule() {
+        // 70-day appointment, deadline 7 days before. Usable = 63 days.
+        // Monthly: 1 + 63/30 = 3 payments at 0, 30, 60. Last at day 60 ≤ 63.
+        EligibilityResult result = service.evaluate(
+                TODAY, TODAY.plusDays(70), PRICE_CENTS,
+                withDueDeadline(6, AllowedFrequencies.MONTHLY, PaymentDuePolicy.ONE_WEEK_BEFORE, null));
+
+        PlanOption monthly = result.options().get(0);
+        assertThat(monthly.numPayments()).isEqualTo(3);
+    }
+
+    @Test
+    void dueDeadline_tooTight_returnsExceedsPaymentDeadline() {
+        // 6-week (42-day) booking with custom "3 months before" deadline.
+        // 3 months = 90 days, which is more than the lead time → usable
+        // becomes negative → no plan fits, reason = exceeds_payment_deadline.
+        EligibilityResult result = service.evaluate(
+                TODAY, TODAY.plusDays(42), PRICE_CENTS,
+                withDueDeadline(6, AllowedFrequencies.BOTH, PaymentDuePolicy.CUSTOM_MONTHS, 3));
+
+        assertThat(result.eligible()).isFalse();
+        assertThat(result.reason()).isEqualTo("exceeds_payment_deadline");
+    }
+
+    @Test
+    void dueDeadline_customMonths_appliedCorrectly() {
+        // 16-week (112-day) booking, custom "2 months before" deadline (60
+        // days). Usable = 52 days. Monthly: 1 + 52/30 = 2 payments.
+        EligibilityResult result = service.evaluate(
+                TODAY, TODAY.plusDays(112), PRICE_CENTS,
+                withDueDeadline(6, AllowedFrequencies.MONTHLY, PaymentDuePolicy.CUSTOM_MONTHS, 2));
+
+        assertThat(result.eligible()).isTrue();
+        assertThat(result.options().get(0).numPayments()).isEqualTo(2);
+    }
+
     // -- helpers --
 
     private static MerchantPlanRules noDeposit(
             int minLead, Integer maxLead, AllowedFrequencies freqs,
             Long minAmt, Long maxAmt, PlanFrequency rec
     ) {
-        return new MerchantPlanRules(minLead, maxLead, freqs, minAmt, maxAmt, rec,
-                false, null, null, null);
+        return baseRules(minLead, maxLead, freqs, minAmt, maxAmt, rec,
+                false, null, null, null,
+                PaymentDuePolicy.AT_APPOINTMENT, null);
     }
 
     private static MerchantPlanRules withDeposit(
@@ -428,8 +494,36 @@ class PlanEligibilityServiceTest {
             Long minAmt, Long maxAmt, PlanFrequency rec,
             DepositType depositType, Long depositValue, Long depositMaxCents
     ) {
-        return new MerchantPlanRules(minLead, maxLead, freqs, minAmt, maxAmt, rec,
-                true, depositType, depositValue, depositMaxCents);
+        return baseRules(minLead, maxLead, freqs, minAmt, maxAmt, rec,
+                true, depositType, depositValue, depositMaxCents,
+                PaymentDuePolicy.AT_APPOINTMENT, null);
+    }
+
+    private static MerchantPlanRules withDueDeadline(
+            int minLead, AllowedFrequencies freqs,
+            PaymentDuePolicy policy, Integer customMonths
+    ) {
+        return baseRules(minLead, null, freqs, null, null, null,
+                false, null, null, null,
+                policy, customMonths);
+    }
+
+    private static MerchantPlanRules baseRules(
+            int minLead, Integer maxLead, AllowedFrequencies freqs,
+            Long minAmt, Long maxAmt, PlanFrequency rec,
+            boolean depositRequired, DepositType depositType,
+            Long depositValue, Long depositMaxCents,
+            PaymentDuePolicy paymentDuePolicy, Integer customMonths
+    ) {
+        return new MerchantPlanRules(
+                minLead, maxLead, freqs, minAmt, maxAmt, rec,
+                depositRequired, depositType, depositValue, depositMaxCents,
+                RefundPolicy.FULL, null,
+                false, null, null, null,
+                paymentDuePolicy, customMonths,
+                3, 3,
+                false, null, null, null,
+                AfterRetriesAction.MARK_DEFAULTED);
     }
 
     private static PlanOption byFrequency(List<PlanOption> options, PlanFrequency frequency) {

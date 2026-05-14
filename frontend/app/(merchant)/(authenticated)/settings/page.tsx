@@ -1,4 +1,5 @@
 import { PlanRulesCard } from "@/components/merchant/PlanRulesCard";
+import { PoliciesCard } from "@/components/merchant/PoliciesCard";
 import { StripeConnectCard } from "@/components/merchant/StripeConnectCard";
 import { DEFAULT_PLAN_RULES } from "@/lib/api";
 import {
@@ -33,6 +34,17 @@ export default async function SettingsPage() {
           your customers see.
         </p>
         <PlanRulesCard initial={planRules ?? DEFAULT_PLAN_RULES} />
+      </section>
+
+      <section className="mt-10 space-y-4">
+        <h2 className="text-xs uppercase tracking-wide text-ink-muted font-medium">
+          Cancellation & policies
+        </h2>
+        <p className="text-xs text-ink-muted -mt-2">
+          Refund rules, cancellation fees, payment deadlines, and how failed
+          installments are handled.
+        </p>
+        <PoliciesCard initial={planRules ?? DEFAULT_PLAN_RULES} />
       </section>
 
       <section className="mt-10 space-y-4">

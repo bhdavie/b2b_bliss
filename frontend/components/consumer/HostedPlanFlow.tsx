@@ -14,6 +14,7 @@ import {
 import { DepositCallout } from "./DepositCallout";
 import { MerchantBlock } from "./MerchantBlock";
 import { PlanPicker } from "./PlanPicker";
+import { PolicyDisclosure } from "./PolicyDisclosure";
 import { ScheduleVisualizer } from "./ScheduleVisualizer";
 import { ServiceCard } from "./ServiceCard";
 import {
@@ -76,6 +77,7 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
           option={selectedOption}
           depositAmountCents={depositCents}
         />
+        <PolicyDisclosure policies={booking.policies} />
       </div>
 
       {step === "plan" ? (

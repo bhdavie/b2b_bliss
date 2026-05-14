@@ -39,6 +39,9 @@ public interface BookingDao {
     @SqlQuery("SELECT * FROM bookings WHERE booking_token = :bookingToken")
     Optional<Booking> findByToken(@Bind("bookingToken") String bookingToken);
 
+    @SqlQuery("SELECT * FROM bookings WHERE id = :id")
+    Optional<Booking> findById(@Bind("id") UUID id);
+
     @SqlQuery("""
             SELECT b.* FROM bookings b
             JOIN merchants m ON m.id = b.merchant_id
