@@ -2,6 +2,7 @@ package com.bliss.b2b.persistence;
 
 import com.bliss.b2b.domain.PaymentScheduleEntry;
 import com.bliss.b2b.domain.PaymentScheduleStatus;
+import com.bliss.b2b.domain.ScheduleKind;
 import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -22,6 +23,7 @@ public class PaymentScheduleRowMapper implements RowMapper<PaymentScheduleEntry>
                 toLocalDate(rs.getDate("due_date")),
                 rs.getLong("amount_cents"),
                 PaymentScheduleStatus.fromWire(rs.getString("status")),
+                ScheduleKind.fromWire(rs.getString("kind")),
                 rs.getString("stripe_payment_intent_id"),
                 toInstant(rs.getTimestamp("attempted_at")),
                 toInstant(rs.getTimestamp("paid_at")),

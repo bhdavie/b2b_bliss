@@ -2,6 +2,7 @@ package com.bliss.b2b.api;
 
 import com.bliss.b2b.auth.MerchantPrincipal;
 import com.bliss.b2b.payments.AllowedFrequencies;
+import com.bliss.b2b.payments.DepositType;
 import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.payments.PlanFrequency;
 import com.bliss.b2b.service.MerchantPlanRulesService;
@@ -28,6 +29,8 @@ public class PlanRulesResource {
 
     private static final int MAX_WEEKS = 520;
     private static final long MAX_AMOUNT_CENTS = 1_000_000_000L; // $10M cap, defensive
+    private static final long MIN_PERCENT = 1L;
+    private static final long MAX_PERCENT = 99L;
 
     private final MerchantPlanRulesService service;
 
@@ -83,14 +86,60 @@ public class PlanRulesResource {
             } catch (IllegalArgumentException e) {
                 return badRequest("recommendedFrequency must be one of monthly, biweekly");
             }
-            // Recommended must be allowed.
             if (!allowed.includes(recommended)) {
                 return badRequest("recommendedFrequency must be permitted by allowedFrequencies");
             }
         }
 
+        boolean depositRequired = Boolean.TRUE.equals(req.depositRequired());
+        DepositType depositType = null;
+        Long depositValue = null;
+        Long depositMaxCents = req.depositMaxCents();
+        if (depositRequired) {
+            if (req.depositType() == null || req.depositType().isBlank()) {
+                return badRequest("depositType required when depositRequired is true");
+            }
+            try {
+                depositType = DepositType.fromWire(req.depositType());
+            } catch (IllegalArgumentException e) {
+                return badRequest("depositType must be one of percentage, fixed");
+            }
+            if (req.depositValue() == null) {
+                return badRequest("depositValue required when depositRequired is true");
+            }
+            depositValue = req.depositValue();
+            switch (depositType) {
+                case PERCENTAGE -> {
+                    if (depositValue < MIN_PERCENT || depositValue > MAX_PERCENT) {
+                        // 100% means no installments, which is a single charge,
+                        // not a plan. Reject so merchants either lower the
+                        // percentage or disable plans for that booking range.
+                        return badRequest(
+                                "depositValue must be " + MIN_PERCENT + "-" + MAX_PERCENT
+                                        + " when depositType is percentage");
+                    }
+                }
+                case FIXED -> {
+                    if (depositValue <= 0 || depositValue > MAX_AMOUNT_CENTS) {
+                        return badRequest("depositValue must be positive when depositType is fixed");
+                    }
+                }
+            }
+            if (depositMaxCents != null && (depositMaxCents <= 0 || depositMaxCents > MAX_AMOUNT_CENTS)) {
+                return badRequest("depositMaxCents must be positive");
+            }
+        } else {
+            // Allow clients to send null for any of the deposit fields when
+            // depositRequired=false. Coerce them to null on the way in so the
+            // stored row matches the disabled-deposit shape.
+            depositType = null;
+            depositValue = null;
+            depositMaxCents = null;
+        }
+
         MerchantPlanRules rules = new MerchantPlanRules(
-                minLead, maxLead, allowed, minAmt, maxAmt, recommended);
+                minLead, maxLead, allowed, minAmt, maxAmt, recommended,
+                depositRequired, depositType, depositValue, depositMaxCents);
         service.save(principal.merchant().id(), rules);
         return Response.ok(PlanRulesView.from(rules)).build();
     }
@@ -105,6 +154,10 @@ public class PlanRulesResource {
             @JsonProperty("allowedFrequencies") String allowedFrequencies,
             @JsonProperty("minBookingAmountCents") Long minBookingAmountCents,
             @JsonProperty("maxBookingAmountCents") Long maxBookingAmountCents,
-            @JsonProperty("recommendedFrequency") String recommendedFrequency
+            @JsonProperty("recommendedFrequency") String recommendedFrequency,
+            @JsonProperty("depositRequired") Boolean depositRequired,
+            @JsonProperty("depositType") String depositType,
+            @JsonProperty("depositValue") Long depositValue,
+            @JsonProperty("depositMaxCents") Long depositMaxCents
     ) {}
 }

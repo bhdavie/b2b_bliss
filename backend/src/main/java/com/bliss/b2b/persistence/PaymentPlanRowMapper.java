@@ -27,6 +27,7 @@ public class PaymentPlanRowMapper implements RowMapper<PaymentPlan> {
                 toLocalDate(rs.getDate("start_date")),
                 toLocalDate(rs.getDate("end_date")),
                 PaymentPlanStatus.fromWire(rs.getString("status")),
+                rs.getLong("deposit_amount_cents"),
                 toInstant(rs.getTimestamp("canceled_at")),
                 rs.getString("canceled_reason"),
                 toInstant(rs.getTimestamp("created_at")),

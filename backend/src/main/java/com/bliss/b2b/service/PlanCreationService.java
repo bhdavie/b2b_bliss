@@ -8,6 +8,7 @@ import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.domain.PaymentPlan;
 import com.bliss.b2b.domain.PaymentScheduleEntry;
 import com.bliss.b2b.domain.PaymentScheduleStatus;
+import com.bliss.b2b.domain.ScheduleKind;
 import com.bliss.b2b.integration.EmailService;
 import com.bliss.b2b.integration.EmailTemplates;
 import com.bliss.b2b.integration.StripePaymentsService;
@@ -156,34 +157,49 @@ public class PlanCreationService {
                     card.lastFour(), card.expMonth(), card.expYear(), card.brand(), true);
             CustomerCard storedCard = cardDao.findByPaymentMethodId(pm.getId()).orElseThrow();
 
-            int n = option.numPayments();
-            LocalDate startDate = option.dueDates().get(0);
-            LocalDate endDate = option.dueDates().get(n - 1);
+            // Schedule layout when a deposit is present:
+            //   sequence 1   = deposit  (kind=deposit, due today)
+            //   sequence 2-N = installments (kind=installment, on cadence)
+            // Without a deposit, sequence 1..N are all installments (legacy
+            // Phase 0-4 shape — first installment fires today).
+            long depositAmount = eligibility.depositAmountCents();
+            boolean hasDeposit = depositAmount > 0;
+            int installmentCount = option.numPayments();
+            LocalDate startDate = hasDeposit ? today : option.dueDates().get(0);
+            LocalDate endDate = option.dueDates().get(installmentCount - 1);
 
             planDao.insert(
                     booking.id(),
                     customer.id(),
                     storedCard.id(),
                     booking.totalAmountCents(),
-                    n,
+                    installmentCount,
                     option.frequency().wire(),
                     startDate,
-                    endDate);
+                    endDate,
+                    depositAmount);
             PaymentPlan plan = planDao.findActiveForBooking(booking.id())
                     .orElseThrow(() -> new IllegalStateException("plan insert disappeared"));
 
-            for (int i = 0; i < n; i++) {
-                long amount = (i == n - 1)
+            int seq = 1;
+            if (hasDeposit) {
+                scheduleDao.insert(plan.id(), seq, today, depositAmount,
+                        PaymentScheduleStatus.SCHEDULED.wire(),
+                        ScheduleKind.DEPOSIT.wire());
+                seq++;
+            }
+            for (int i = 0; i < installmentCount; i++) {
+                long amount = (i == installmentCount - 1)
                         ? option.finalPaymentAmountCents()
                         : option.perPaymentAmountCents();
-                scheduleDao.insert(plan.id(), i + 1, option.dueDates().get(i), amount,
-                        PaymentScheduleStatus.SCHEDULED.wire());
+                scheduleDao.insert(plan.id(), seq, option.dueDates().get(i), amount,
+                        PaymentScheduleStatus.SCHEDULED.wire(),
+                        ScheduleKind.INSTALLMENT.wire());
+                seq++;
             }
 
             int markedAccepted = bookingDao.markAccepted(booking.id(), customer.id());
             if (markedAccepted != 1) {
-                // Another concurrent request flipped the status. Surface as
-                // BOOKING_NOT_OPEN so the consumer is told to refresh.
                 throw new PlanCreationException(Reason.BOOKING_NOT_OPEN,
                         "booking was just accepted by another session");
             }
@@ -191,6 +207,8 @@ public class PlanCreationService {
             List<PaymentScheduleEntry> schedule = scheduleDao.listForPlan(plan.id());
             PaymentScheduleEntry first = schedule.get(0);
 
+            // The first schedule row — deposit if one is required, otherwise
+            // the first installment — fires immediately as the upfront charge.
             PaymentIntent firstIntent;
             try {
                 firstIntent = stripeService.firePaymentOffSession(
@@ -201,7 +219,8 @@ public class PlanCreationService {
                         Map.of(
                                 "bliss_payment_schedule_id", first.id().toString(),
                                 "bliss_payment_plan_id", plan.id().toString(),
-                                "bliss_booking_id", booking.id().toString()));
+                                "bliss_booking_id", booking.id().toString(),
+                                "bliss_kind", first.kind().wire()));
             } catch (CardException e) {
                 throw declined(e);
             } catch (StripeException e) {
@@ -210,15 +229,13 @@ public class PlanCreationService {
 
             String paymentStatus = firstIntent.getStatus() == null ? "" : firstIntent.getStatus();
             PaymentScheduleStatus newStatus = mapIntentToStatus(paymentStatus);
-            scheduleDao.recordAttempt(plan.id(), 1, newStatus.wire(),
+            scheduleDao.recordAttempt(plan.id(), first.sequence(), newStatus.wire(),
                     firstIntent.getId(), java.time.Instant.now(clock));
             if (newStatus == PaymentScheduleStatus.FAILED) {
                 throw new PlanCreationException(Reason.CARD_DECLINED,
                         "first payment was not completed (status=" + paymentStatus + ")");
             }
             if (newStatus == PaymentScheduleStatus.SCHEDULED) {
-                // requires_action / requires_confirmation etc. Caller must
-                // complete the SCA challenge. v1 US-only flow rarely hits this.
                 throw new PlanCreationException(Reason.CARD_REQUIRES_ACTION,
                         "card requires authentication; please use a different card");
             }

@@ -8,7 +8,11 @@ public record PlanRulesView(
         String allowedFrequencies,
         Long minBookingAmountCents,
         Long maxBookingAmountCents,
-        String recommendedFrequency
+        String recommendedFrequency,
+        boolean depositRequired,
+        String depositType,
+        Long depositValue,
+        Long depositMaxCents
 ) {
     public static PlanRulesView from(MerchantPlanRules rules) {
         return new PlanRulesView(
@@ -17,7 +21,11 @@ public record PlanRulesView(
                 rules.allowedFrequencies().wire(),
                 rules.minBookingAmountCents(),
                 rules.maxBookingAmountCents(),
-                rules.recommendedFrequency() == null ? null : rules.recommendedFrequency().wire()
+                rules.recommendedFrequency() == null ? null : rules.recommendedFrequency().wire(),
+                rules.depositRequired(),
+                rules.depositType() == null ? null : rules.depositType().wire(),
+                rules.depositValue(),
+                rules.depositMaxCents()
         );
     }
 }

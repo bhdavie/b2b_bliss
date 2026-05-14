@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   updatePlanRules,
   type AllowedFrequencies,
+  type DepositType,
   type PlanFrequency,
   type PlanRules,
 } from "@/lib/api";
@@ -15,6 +16,11 @@ type FormState = {
   minBookingDollars: string;
   maxBookingDollars: string;
   recommendedFrequency: "" | PlanFrequency;
+  depositRequired: boolean;
+  depositType: DepositType;
+  depositPercent: string;
+  depositDollars: string;
+  depositMaxDollars: string;
 };
 
 export function PlanRulesCard({ initial }: { initial: PlanRules }) {
@@ -71,6 +77,35 @@ export function PlanRulesCard({ initial }: { initial: PlanRules }) {
       setError("Maximum amount must be at least the minimum.");
       return;
     }
+
+    let depositValue: number | null = null;
+    let depositMaxCents: number | null = null;
+    let depositType: DepositType | null = null;
+    if (form.depositRequired) {
+      depositType = form.depositType;
+      if (depositType === "percentage") {
+        const pct = parseInt(form.depositPercent, 10);
+        if (!Number.isFinite(pct) || pct < 1 || pct > 99) {
+          setError("Deposit percentage must be 1-99.");
+          return;
+        }
+        depositValue = pct;
+      } else {
+        const cents = parseDollarsOrNull(form.depositDollars);
+        if (cents === undefined || cents === null) {
+          setError("Deposit amount must be a positive dollar value.");
+          return;
+        }
+        depositValue = cents;
+      }
+      const maxCents = parseDollarsOrNull(form.depositMaxDollars);
+      if (maxCents === undefined) {
+        setError("Deposit max must be a positive dollar value or blank.");
+        return;
+      }
+      depositMaxCents = maxCents;
+    }
+
     setError(null);
     setSaving(true);
     try {
@@ -83,6 +118,10 @@ export function PlanRulesCard({ initial }: { initial: PlanRules }) {
         recommendedFrequency: form.recommendedFrequency === ""
           ? null
           : form.recommendedFrequency,
+        depositRequired: form.depositRequired,
+        depositType,
+        depositValue,
+        depositMaxCents,
       };
       const saved = await updatePlanRules(payload);
       setForm(toForm(saved));
@@ -176,6 +215,90 @@ export function PlanRulesCard({ initial }: { initial: PlanRules }) {
         </div>
       </Row>
 
+      <Row
+        label="Deposit at booking"
+        hint="Charge an upfront amount when a customer accepts a plan. The remaining balance divides into installments."
+      >
+        <div className="space-y-3">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <span
+              role="switch"
+              aria-checked={form.depositRequired}
+              tabIndex={0}
+              onClick={() => update("depositRequired", !form.depositRequired)}
+              onKeyDown={(e) => {
+                if (e.key === " " || e.key === "Enter") {
+                  e.preventDefault();
+                  update("depositRequired", !form.depositRequired);
+                }
+              }}
+              className={`relative inline-flex h-5 w-9 flex-none rounded-full transition-colors ${
+                form.depositRequired ? "bg-lavender-500" : "bg-surface-border"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                  form.depositRequired ? "translate-x-4" : ""
+                }`}
+              />
+            </span>
+            <span className="text-sm text-ink">
+              Require a deposit at booking
+            </span>
+          </label>
+
+          {form.depositRequired ? (
+            <div className="space-y-3 rounded-md bg-lavender-50/40 p-3">
+              <div className="grid grid-cols-2 gap-2 max-w-md">
+                {(
+                  [
+                    { value: "percentage", label: "Percentage" },
+                    { value: "fixed", label: "Fixed amount" },
+                  ] satisfies { value: DepositType; label: string }[]
+                ).map((opt) => (
+                  <PillToggle
+                    key={opt.value}
+                    label={opt.label}
+                    selected={form.depositType === opt.value}
+                    onSelect={() => update("depositType", opt.value)}
+                  />
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {form.depositType === "percentage" ? (
+                  <PercentInput
+                    label="Deposit percent"
+                    value={form.depositPercent}
+                    onChange={(v) => update("depositPercent", v)}
+                    placeholder="25"
+                  />
+                ) : (
+                  <DollarInput
+                    label="Deposit amount"
+                    value={form.depositDollars}
+                    onChange={(v) => update("depositDollars", v)}
+                    placeholder="200"
+                  />
+                )}
+                <DollarInput
+                  label="Max deposit (optional)"
+                  value={form.depositMaxDollars}
+                  onChange={(v) => update("depositMaxDollars", v)}
+                  placeholder="No cap"
+                />
+              </div>
+
+              <p className="text-[11px] text-ink-soft leading-snug">
+                {form.depositType === "percentage"
+                  ? "A percentage of the booking total is charged at signup. The optional cap protects against runaway deposits on big-ticket bookings."
+                  : "A fixed dollar amount is charged at signup. If the booking total is smaller than the deposit, the plan flow rejects so you don't accidentally charge above the booking price."}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </Row>
+
       {error ? (
         <div className="text-xs text-red-600" role="alert">
           {error}
@@ -199,6 +322,7 @@ export function PlanRulesCard({ initial }: { initial: PlanRules }) {
 }
 
 function toForm(rules: PlanRules): FormState {
+  const depositType: DepositType = rules.depositType ?? "percentage";
   return {
     minLeadTimeWeeks: String(rules.minLeadTimeWeeks),
     maxLeadTimeWeeks: rules.maxLeadTimeWeeks == null ? "" : String(rules.maxLeadTimeWeeks),
@@ -206,6 +330,17 @@ function toForm(rules: PlanRules): FormState {
     minBookingDollars: centsToDollars(rules.minBookingAmountCents),
     maxBookingDollars: centsToDollars(rules.maxBookingAmountCents),
     recommendedFrequency: rules.recommendedFrequency ?? "",
+    depositRequired: rules.depositRequired,
+    depositType,
+    depositPercent:
+      depositType === "percentage" && rules.depositValue != null
+        ? String(rules.depositValue)
+        : "",
+    depositDollars:
+      depositType === "fixed" && rules.depositValue != null
+        ? centsToDollars(rules.depositValue)
+        : "",
+    depositMaxDollars: centsToDollars(rules.depositMaxCents),
   };
 }
 
@@ -307,6 +442,42 @@ function DollarInput({
           className="input pl-7"
           placeholder={placeholder}
         />
+      </div>
+    </label>
+  );
+}
+
+function PercentInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs text-ink-muted">{label}</span>
+      <div className="relative mt-1.5">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={99}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="input pr-8"
+          placeholder={placeholder}
+        />
+        <span
+          className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-ink-soft"
+          aria-hidden="true"
+        >
+          %
+        </span>
       </div>
     </label>
   );

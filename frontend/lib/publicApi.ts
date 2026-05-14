@@ -36,6 +36,7 @@ export type PublicBooking = {
     eligible: boolean;
     reason: string;
     daysToAppointment: number;
+    depositAmountCents: number;
   };
   planOptions: PublicPlanOption[];
   stripe: {
@@ -70,17 +71,21 @@ export type CreatePlanRequest = {
   frequency: PublicPlanFrequency;
 };
 
+export type ScheduleKind = "deposit" | "installment";
+
 export type CreatePlanResponse = {
   planId: string;
   bookingId: string;
   frequency: PublicPlanFrequency;
   numPayments: number;
   totalAmountCents: number;
+  depositAmountCents: number;
   schedule: {
     sequence: number;
     dueDate: string;
     amountCents: number;
     status: string;
+    kind: ScheduleKind;
   }[];
   firstChargeIntentId: string;
   firstChargeStatus: string;

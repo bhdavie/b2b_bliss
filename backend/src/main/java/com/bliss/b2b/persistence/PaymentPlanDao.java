@@ -26,10 +26,12 @@ public interface PaymentPlanDao {
     @SqlUpdate("""
             INSERT INTO payment_plans (
                 booking_id, customer_id, customer_card_id, total_amount_cents,
-                num_payments, frequency, start_date, end_date, status
+                num_payments, frequency, start_date, end_date, status,
+                deposit_amount_cents
             ) VALUES (
                 :bookingId, :customerId, :customerCardId, :totalAmountCents,
-                :numPayments, :frequency, :startDate, :endDate, 'active'
+                :numPayments, :frequency, :startDate, :endDate, 'active',
+                :depositAmountCents
             )
             """)
     void insert(
@@ -40,6 +42,7 @@ public interface PaymentPlanDao {
             @Bind("numPayments") int numPayments,
             @Bind("frequency") String frequency,
             @Bind("startDate") LocalDate startDate,
-            @Bind("endDate") LocalDate endDate
+            @Bind("endDate") LocalDate endDate,
+            @Bind("depositAmountCents") long depositAmountCents
     );
 }

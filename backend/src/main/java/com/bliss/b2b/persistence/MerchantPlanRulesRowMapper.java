@@ -1,6 +1,7 @@
 package com.bliss.b2b.persistence;
 
 import com.bliss.b2b.payments.AllowedFrequencies;
+import com.bliss.b2b.payments.DepositType;
 import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.payments.PlanFrequency;
 import java.sql.ResultSet;
@@ -18,13 +19,23 @@ public class MerchantPlanRulesRowMapper implements RowMapper<MerchantPlanRules> 
         Long minAmt = (Long) rs.getObject("min_booking_amount_cents");
         Long maxAmt = (Long) rs.getObject("max_booking_amount_cents");
 
+        boolean depositRequired = rs.getBoolean("deposit_required");
+        String depositTypeWire = rs.getString("deposit_type");
+        DepositType depositType = depositTypeWire == null ? null : DepositType.fromWire(depositTypeWire);
+        Long depositValue = (Long) rs.getObject("deposit_value");
+        Long depositMaxCents = (Long) rs.getObject("deposit_max_cents");
+
         return new MerchantPlanRules(
                 rs.getInt("min_lead_time_weeks"),
                 maxLead,
                 AllowedFrequencies.fromWire(rs.getString("allowed_frequencies")),
                 minAmt,
                 maxAmt,
-                recommended
+                recommended,
+                depositRequired,
+                depositType,
+                depositValue,
+                depositMaxCents
         );
     }
 }

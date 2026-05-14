@@ -87,7 +87,8 @@ public class PublicPlansResource {
                         s.sequence(),
                         s.dueDate(),
                         s.amountCents(),
-                        s.status().wire()))
+                        s.status().wire(),
+                        s.kind().wire()))
                 .toList();
         return new CreatePlanResponse(
                 result.planId().toString(),
@@ -95,6 +96,7 @@ public class PublicPlansResource {
                 result.plan().frequency().wire(),
                 result.plan().numPayments(),
                 result.plan().totalAmountCents(),
+                result.plan().depositAmountCents(),
                 schedule,
                 result.firstChargeIntentId(),
                 result.firstChargeStatus());
@@ -116,6 +118,7 @@ public class PublicPlansResource {
             String frequency,
             int numPayments,
             long totalAmountCents,
+            long depositAmountCents,
             List<ScheduleEntryView> schedule,
             String firstChargeIntentId,
             String firstChargeStatus
@@ -125,6 +128,7 @@ public class PublicPlansResource {
             int sequence,
             LocalDate dueDate,
             long amountCents,
-            String status
+            String status,
+            String kind
     ) {}
 }

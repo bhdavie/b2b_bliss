@@ -57,6 +57,11 @@ function copyFor(booking: PublicBooking): { headline: string; body: string } {
         headline: "No payment plan fits this booking",
         body: "There is not enough time to run a payment plan before this booking.",
       };
+    case "deposit_too_high":
+      return {
+        headline: "A payment plan is not available for this booking",
+        body: "The merchant's deposit configuration doesn't fit this booking size.",
+      };
     default:
       return {
         headline: "A payment plan is not available for this booking",

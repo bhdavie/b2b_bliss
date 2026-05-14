@@ -148,7 +148,8 @@ public class BookingsResource {
                 new BookingView.EligibilityView(
                         eligibility.eligible(),
                         eligibility.reason(),
-                        eligibility.daysToAppointment()),
+                        eligibility.daysToAppointment(),
+                        eligibility.depositAmountCents()),
                 options);
     }
 

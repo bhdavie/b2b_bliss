@@ -44,7 +44,8 @@ public record PublicBookingView(
     public record Eligibility(
             boolean eligible,
             String reason,
-            long daysToAppointment
+            long daysToAppointment,
+            long depositAmountCents
     ) {}
 
     public record Plan(
@@ -102,7 +103,8 @@ public record PublicBookingView(
                 new Eligibility(
                         eligibility.eligible(),
                         eligibility.reason(),
-                        eligibility.daysToAppointment()),
+                        eligibility.daysToAppointment(),
+                        eligibility.depositAmountCents()),
                 options,
                 new Stripe(stripeConfigured, stripeConfigured ? stripePublishableKey : null),
                 booking.status().wire()

@@ -22,6 +22,7 @@ export type PreviewReason =
   | "too_far"
   | "amount_too_low"
   | "amount_too_high"
+  | "deposit_too_high"
   | "no_plan_fits"
   | "invalid_input";
 
@@ -29,6 +30,7 @@ export type PreviewResult = {
   eligible: boolean;
   reason: PreviewReason;
   daysToAppointment: number;
+  depositAmountCents: number;
   options: PreviewOption[];
 };
 
@@ -46,30 +48,43 @@ export function previewEligibility(
   rules: PlanRules = DEFAULT_PLAN_RULES,
 ): PreviewResult {
   if (!appointmentDate || Number.isNaN(appointmentDate.getTime())) {
-    return { eligible: false, reason: "invalid_input", daysToAppointment: 0, options: [] };
+    return {
+      eligible: false,
+      reason: "invalid_input",
+      daysToAppointment: 0,
+      depositAmountCents: 0,
+      options: [],
+    };
   }
   const days = daysBetween(today, appointmentDate);
   const weeks = Math.floor(days / 7);
 
   if (weeks < rules.minLeadTimeWeeks) {
-    return { eligible: false, reason: "too_close", daysToAppointment: days, options: [] };
+    return ineligible("too_close", days, 0);
   }
   if (rules.maxLeadTimeWeeks != null && weeks > rules.maxLeadTimeWeeks) {
-    return { eligible: false, reason: "too_far", daysToAppointment: days, options: [] };
+    return ineligible("too_far", days, 0);
   }
   if (
     rules.minBookingAmountCents != null &&
     totalAmountCents > 0 &&
     totalAmountCents < rules.minBookingAmountCents
   ) {
-    return { eligible: false, reason: "amount_too_low", daysToAppointment: days, options: [] };
+    return ineligible("amount_too_low", days, 0);
   }
   if (
     rules.maxBookingAmountCents != null &&
     totalAmountCents > rules.maxBookingAmountCents
   ) {
-    return { eligible: false, reason: "amount_too_high", daysToAppointment: days, options: [] };
+    return ineligible("amount_too_high", days, 0);
   }
+
+  const deposit = computeDepositCents(totalAmountCents, rules);
+  if (deposit > 0 && deposit >= totalAmountCents) {
+    return ineligible("deposit_too_high", days, deposit);
+  }
+  const installmentTotal = totalAmountCents - deposit;
+  const hasDeposit = deposit > 0;
 
   const allowedFrequencies: PlanFrequency[] =
     rules.allowedFrequencies === "monthly"
@@ -81,15 +96,41 @@ export function previewEligibility(
   const recommended = resolveRecommended(rules);
 
   const options = allowedFrequencies
-    .map((f) => buildOption(today, appointmentDate, totalAmountCents, f))
+    .map((f) => buildInstallments(today, appointmentDate, installmentTotal, hasDeposit, f))
     .filter((o): o is Omit<PreviewOption, "recommended"> => o !== null)
     .map((o) => ({ ...o, recommended: recommended != null && o.frequency === recommended }));
 
   if (options.length === 0) {
-    return { eligible: false, reason: "no_plan_fits", daysToAppointment: days, options: [] };
+    return ineligible("no_plan_fits", days, deposit);
   }
 
-  return { eligible: true, reason: "ok", daysToAppointment: days, options };
+  return {
+    eligible: true,
+    reason: "ok",
+    daysToAppointment: days,
+    depositAmountCents: deposit,
+    options,
+  };
+}
+
+function ineligible(
+  reason: PreviewReason,
+  daysToAppointment: number,
+  depositAmountCents: number,
+): PreviewResult {
+  return { eligible: false, reason, daysToAppointment, depositAmountCents, options: [] };
+}
+
+export function computeDepositCents(totalCents: number, rules: PlanRules): number {
+  if (!rules.depositRequired || rules.depositType == null || rules.depositValue == null) {
+    return 0;
+  }
+  let raw =
+    rules.depositType === "percentage"
+      ? Math.floor((totalCents * rules.depositValue) / 100)
+      : rules.depositValue;
+  if (rules.depositMaxCents != null) raw = Math.min(raw, rules.depositMaxCents);
+  return Math.max(0, Math.min(raw, totalCents));
 }
 
 function resolveRecommended(rules: PlanRules): PlanFrequency | null {
@@ -98,10 +139,11 @@ function resolveRecommended(rules: PlanRules): PlanFrequency | null {
   return "monthly";
 }
 
-function buildOption(
+function buildInstallments(
   today: Date,
   appointmentDate: Date,
-  totalAmountCents: number,
+  installmentTotalCents: number,
+  hasDeposit: boolean,
   frequency: PlanFrequency,
 ): Omit<PreviewOption, "recommended"> | null {
   const days = daysBetween(today, appointmentDate);
@@ -109,20 +151,19 @@ function buildOption(
   const usable = days - MIN_FINAL_PAYMENT_BUFFER_DAYS;
   if (usable < 0) return null;
   const intervals = Math.floor(usable / intervalDays);
-  const numPayments = 1 + intervals;
-  if (numPayments < 2) return null;
+  const numPayments = hasDeposit ? intervals : 1 + intervals;
+  if (numPayments < 1) return null;
+  if (!hasDeposit && numPayments < 2) return null;
+  if (installmentTotalCents <= 0) return null;
 
-  let perPayment = 0;
-  let finalPayment = 0;
-  if (totalAmountCents > 0) {
-    perPayment = Math.floor(totalAmountCents / numPayments);
-    const remainder = totalAmountCents - perPayment * numPayments;
-    finalPayment = perPayment + remainder;
-  }
+  const perPayment = Math.floor(installmentTotalCents / numPayments);
+  const remainder = installmentTotalCents - perPayment * numPayments;
+  const finalPayment = perPayment + remainder;
 
   const dueDates: string[] = [];
+  const startMultiplier = hasDeposit ? 1 : 0;
   for (let i = 0; i < numPayments; i++) {
-    dueDates.push(formatDate(addDays(today, i * intervalDays)));
+    dueDates.push(formatDate(addDays(today, (startMultiplier + i) * intervalDays)));
   }
 
   return {
@@ -161,7 +202,6 @@ export function formatCents(cents: number): string {
 }
 
 export function formatScheduleDate(iso: string): string {
-  // iso is yyyy-MM-dd. Parse as local date to avoid timezone drift.
   const parts = iso.split("-").map(Number);
   const y = parts[0] ?? 0;
   const m = parts[1] ?? 1;

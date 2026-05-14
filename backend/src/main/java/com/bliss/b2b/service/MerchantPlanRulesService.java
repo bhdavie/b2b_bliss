@@ -29,7 +29,11 @@ public class MerchantPlanRulesService {
                 rules.allowedFrequencies().wire(),
                 rules.minBookingAmountCents(),
                 rules.maxBookingAmountCents(),
-                rules.recommendedFrequency() == null ? null : rules.recommendedFrequency().wire()
+                rules.recommendedFrequency() == null ? null : rules.recommendedFrequency().wire(),
+                rules.depositRequired(),
+                rules.depositType() == null ? null : rules.depositType().wire(),
+                rules.depositValue(),
+                rules.depositMaxCents()
         );
     }
 }

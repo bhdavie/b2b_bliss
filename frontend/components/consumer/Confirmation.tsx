@@ -45,12 +45,23 @@ export function Confirmation({
           <div className="text-right font-medium text-ink">
             {formatDollarsCompact(plan.totalAmountCents)}
           </div>
+          {plan.depositAmountCents > 0 ? (
+            <>
+              <div className="text-ink-muted">Deposit today</div>
+              <div className="text-right text-ink">
+                {formatDollarsCompact(plan.depositAmountCents)}
+              </div>
+            </>
+          ) : null}
           <div className="text-ink-muted">Plan</div>
           <div className="text-right text-ink">
             {plan.numPayments}{" "}
-            {plan.frequency === "biweekly" ? "bi-weekly" : "monthly"} payments
+            {plan.frequency === "biweekly" ? "bi-weekly" : "monthly"} payment
+            {plan.numPayments === 1 ? "" : "s"}
           </div>
-          <div className="text-ink-muted">First payment</div>
+          <div className="text-ink-muted">
+            {plan.depositAmountCents > 0 ? "Deposit charge" : "First payment"}
+          </div>
           <div className="text-right text-ink">
             {firstSucceeded ? "Charged today" : "Processing"}
           </div>
@@ -65,10 +76,19 @@ export function Confirmation({
           {plan.schedule.map((entry) => (
             <li
               key={entry.sequence}
-              className="flex items-center justify-between px-3 py-2.5 text-[13px]"
+              className={`flex items-center justify-between px-3 py-2.5 text-[13px] ${
+                entry.kind === "deposit" ? "bg-cream-dark/40" : ""
+              }`}
             >
-              <span className="text-ink-muted">
-                {entry.sequence === 1 ? "Today" : formatScheduleDateShort(entry.dueDate)}
+              <span className="flex items-center gap-2 text-ink-muted">
+                {entry.kind === "deposit" ? (
+                  <span className="rounded-full bg-navy px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white">
+                    Deposit
+                  </span>
+                ) : null}
+                <span>
+                  {entry.sequence === 1 ? "Today" : formatScheduleDateShort(entry.dueDate)}
+                </span>
               </span>
               <span className="tabular-nums text-ink">
                 {formatDollarsCompact(entry.amountCents)}

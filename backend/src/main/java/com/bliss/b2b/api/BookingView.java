@@ -67,7 +67,8 @@ public record BookingView(
     public record EligibilityView(
             boolean eligible,
             String reason,
-            long daysToAppointment
+            long daysToAppointment,
+            long depositAmountCents
     ) {}
 
     public record PlanOptionView(

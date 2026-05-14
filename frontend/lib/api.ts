@@ -175,6 +175,7 @@ export type Eligibility = {
   eligible: boolean;
   reason: string;
   daysToAppointment: number;
+  depositAmountCents: number;
 };
 
 export type Booking = {
@@ -240,6 +241,7 @@ export async function getBooking(id: string): Promise<Booking> {
 }
 
 export type AllowedFrequencies = "monthly" | "biweekly" | "both";
+export type DepositType = "percentage" | "fixed";
 
 export type PlanRules = {
   minLeadTimeWeeks: number;
@@ -248,6 +250,10 @@ export type PlanRules = {
   minBookingAmountCents: number | null;
   maxBookingAmountCents: number | null;
   recommendedFrequency: PlanFrequency | null;
+  depositRequired: boolean;
+  depositType: DepositType | null;
+  depositValue: number | null;
+  depositMaxCents: number | null;
 };
 
 export const DEFAULT_PLAN_RULES: PlanRules = {
@@ -257,6 +263,10 @@ export const DEFAULT_PLAN_RULES: PlanRules = {
   minBookingAmountCents: null,
   maxBookingAmountCents: null,
   recommendedFrequency: null,
+  depositRequired: false,
+  depositType: null,
+  depositValue: null,
+  depositMaxCents: null,
 };
 
 export async function fetchPlanRules(): Promise<PlanRules> {

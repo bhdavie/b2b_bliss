@@ -9,7 +9,9 @@ import {
   type CreatePlanResponse,
   type PublicBooking,
   type PublicPlanFrequency,
+  type PublicPlanOption,
 } from "@/lib/publicApi";
+import { DepositCallout } from "./DepositCallout";
 import { MerchantBlock } from "./MerchantBlock";
 import { PlanPicker } from "./PlanPicker";
 import { ScheduleVisualizer } from "./ScheduleVisualizer";
@@ -37,6 +39,9 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
     booking.planOptions.find((o) => o.frequency === selected) ??
     booking.planOptions[0];
 
+  const depositCents = booking.eligibility.depositAmountCents;
+  const hasDeposit = depositCents > 0;
+
   const stripePromise = useMemo<Promise<Stripe | null> | null>(() => {
     if (!booking.stripe.configured || !booking.stripe.publishableKey) return null;
     return loadStripe(booking.stripe.publishableKey);
@@ -56,12 +61,21 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
       <ServiceCard service={booking.service} />
 
       <div className={showCardStep ? "pointer-events-none opacity-30" : ""}>
+        {hasDeposit ? (
+          <DepositCallout
+            depositAmountCents={depositCents}
+            totalAmountCents={booking.service.totalAmountCents}
+          />
+        ) : null}
         <PlanPicker
           options={booking.planOptions}
           selected={selectedOption.frequency}
           onSelect={(f) => setSelected(f)}
         />
-        <ScheduleVisualizer option={selectedOption} />
+        <ScheduleVisualizer
+          option={selectedOption}
+          depositAmountCents={depositCents}
+        />
       </div>
 
       {step === "plan" ? (
@@ -72,7 +86,7 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
             disabled={!booking.stripe.configured}
             className="mt-6 w-full rounded-md bg-lavender-500 px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-lavender-600 disabled:opacity-60"
           >
-            Continue to payment
+            {planCtaLabel(hasDeposit, depositCents, selectedOption, booking.service.totalAmountCents)}
           </button>
           {!booking.stripe.configured ? <StripeNotConfiguredCard /> : null}
           <TrustSignals />
@@ -86,14 +100,8 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
               emailInitial={booking.service.customerEmailHint ?? ""}
               busy={busy}
               onCancel={() => setStep("plan")}
-              ctaLabel={`Confirm and pay ${formatDollarsCompact(selectedOption.perPaymentAmountCents)} today`}
-              disclosure={`Your card will be charged ${formatDollarsCompact(selectedOption.perPaymentAmountCents)} today. ${
-                selectedOption.numPayments - 1
-              } more ${
-                selectedOption.frequency === "biweekly"
-                  ? "bi-weekly"
-                  : "monthly"
-              } payments will follow on the schedule above. You can cancel anytime.`}
+              ctaLabel={cardCtaLabel(hasDeposit, depositCents, selectedOption)}
+              disclosure={disclosureCopy(hasDeposit, depositCents, selectedOption)}
               onCardCollected={async (card) => {
                 await handleSubmit(booking, selectedOption.frequency, card);
               }}
@@ -147,4 +155,48 @@ function extractTokenFromCurrentPath(): string {
   // the URL has the right shape before mounting us.
   const parts = window.location.pathname.split("/").filter(Boolean);
   return parts[2] ?? "";
+}
+
+function planCtaLabel(
+  hasDeposit: boolean,
+  depositCents: number,
+  option: PublicPlanOption,
+  totalCents: number,
+): string {
+  if (!hasDeposit) return "Continue to payment";
+  const remaining = totalCents - depositCents;
+  const cadence = option.frequency === "biweekly" ? "bi-weekly" : "monthly";
+  return `Pay ${formatDollarsCompact(depositCents)} today, schedule ${formatDollarsCompact(remaining)} ${cadence}`;
+}
+
+function cardCtaLabel(
+  hasDeposit: boolean,
+  depositCents: number,
+  option: PublicPlanOption,
+): string {
+  if (hasDeposit) {
+    return `Confirm and pay ${formatDollarsCompact(depositCents)} deposit today`;
+  }
+  return `Confirm and pay ${formatDollarsCompact(option.perPaymentAmountCents)} today`;
+}
+
+function disclosureCopy(
+  hasDeposit: boolean,
+  depositCents: number,
+  option: PublicPlanOption,
+): string {
+  const cadence = option.frequency === "biweekly" ? "bi-weekly" : "monthly";
+  if (hasDeposit) {
+    return (
+      `Your card will be charged ${formatDollarsCompact(depositCents)} today as a deposit. ` +
+      `${option.numPayments} ${cadence} payment${option.numPayments === 1 ? "" : "s"} ` +
+      `of ${formatDollarsCompact(option.perPaymentAmountCents)} will be charged automatically on the schedule above. ` +
+      `You can cancel anytime.`
+    );
+  }
+  return (
+    `Your card will be charged ${formatDollarsCompact(option.perPaymentAmountCents)} today. ` +
+    `${option.numPayments - 1} more ${cadence} payments will follow on the schedule above. ` +
+    `You can cancel anytime.`
+  );
 }

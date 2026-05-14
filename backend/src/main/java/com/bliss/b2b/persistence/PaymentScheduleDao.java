@@ -22,9 +22,9 @@ public interface PaymentScheduleDao {
 
     @SqlUpdate("""
             INSERT INTO payment_schedule (
-                payment_plan_id, sequence, due_date, amount_cents, status
+                payment_plan_id, sequence, due_date, amount_cents, status, kind
             ) VALUES (
-                :paymentPlanId, :sequence, :dueDate, :amountCents, :status
+                :paymentPlanId, :sequence, :dueDate, :amountCents, :status, :kind
             )
             """)
     void insert(
@@ -32,7 +32,8 @@ public interface PaymentScheduleDao {
             @Bind("sequence") int sequence,
             @Bind("dueDate") LocalDate dueDate,
             @Bind("amountCents") long amountCents,
-            @Bind("status") String status
+            @Bind("status") String status,
+            @Bind("kind") String kind
     );
 
     @SqlUpdate("""

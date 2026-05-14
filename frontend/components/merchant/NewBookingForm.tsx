@@ -225,6 +225,16 @@ function EligibilityPreview({
           ? "One plan option offered."
           : "Two plan options offered."}
       </p>
+      {preview.depositAmountCents > 0 ? (
+        <div className="rounded-md border border-navy/20 bg-navy text-white px-3 py-2 text-xs">
+          <div className="text-[10px] uppercase tracking-wide text-dusty-blue">
+            Deposit today
+          </div>
+          <div className="mt-0.5 text-[14px] font-medium tabular-nums">
+            {formatCents(preview.depositAmountCents)}
+          </div>
+        </div>
+      ) : null}
       {preview.options.map((opt) => (
         <div
           key={opt.frequency}
@@ -302,6 +312,13 @@ function IneligibleHint({
         <p className="text-xs text-ink-muted">
           Total is above your plan maximum. Customer will be prompted to pay
           in full.
+        </p>
+      );
+    case "deposit_too_high":
+      return (
+        <p className="text-xs text-ink-muted">
+          Your fixed deposit exceeds this booking total. Lower the deposit or
+          set a max cap in plan rules.
         </p>
       );
     case "no_plan_fits":

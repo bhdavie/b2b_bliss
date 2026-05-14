@@ -11,6 +11,7 @@ public record PaymentScheduleEntry(
         LocalDate dueDate,
         long amountCents,
         PaymentScheduleStatus status,
+        ScheduleKind kind,
         String stripePaymentIntentId,
         Instant attemptedAt,
         Instant paidAt,
