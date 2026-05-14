@@ -7,10 +7,12 @@ import com.bliss.b2b.domain.ConnectStatus;
 import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.integration.StripeConnectService;
 import com.bliss.b2b.payments.EligibilityResult;
+import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.payments.PlanEligibilityService;
 import com.bliss.b2b.payments.PlanOption;
 import com.bliss.b2b.service.BookingService;
 import com.bliss.b2b.service.BookingService.CreateBookingInput;
+import com.bliss.b2b.service.MerchantPlanRulesService;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.dropwizard.auth.Auth;
 import jakarta.ws.rs.Consumes;
@@ -35,6 +37,7 @@ public class BookingsResource {
 
     private final BookingService bookingService;
     private final PlanEligibilityService eligibilityService;
+    private final MerchantPlanRulesService planRulesService;
     private final StripeConnectService stripeService;
     private final AppConfig appConfig;
     private final Clock clock;
@@ -42,12 +45,14 @@ public class BookingsResource {
     public BookingsResource(
             BookingService bookingService,
             PlanEligibilityService eligibilityService,
+            MerchantPlanRulesService planRulesService,
             StripeConnectService stripeService,
             AppConfig appConfig,
             Clock clock
     ) {
         this.bookingService = bookingService;
         this.eligibilityService = eligibilityService;
+        this.planRulesService = planRulesService;
         this.stripeService = stripeService;
         this.appConfig = appConfig;
         this.clock = clock;
@@ -131,8 +136,9 @@ public class BookingsResource {
     }
 
     private BookingView detailView(Merchant merchant, Booking booking) {
+        MerchantPlanRules rules = planRulesService.forMerchant(merchant.id());
         EligibilityResult eligibility = eligibilityService.evaluate(
-                LocalDate.now(clock), booking.appointmentDate(), booking.totalAmountCents());
+                LocalDate.now(clock), booking.appointmentDate(), booking.totalAmountCents(), rules);
         List<BookingView.PlanOptionView> options = eligibility.options().stream()
                 .map(BookingsResource::toOptionView)
                 .toList();

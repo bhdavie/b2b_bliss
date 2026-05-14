@@ -3,6 +3,8 @@
 // plan creation. This duplicate exists only so merchants see the plan options
 // update as they pick an appointment date, without a round-trip per keystroke.
 
+import { DEFAULT_PLAN_RULES, type PlanRules } from "./api";
+
 export type PlanFrequency = "biweekly" | "monthly";
 
 export type PreviewOption = {
@@ -11,11 +13,21 @@ export type PreviewOption = {
   perPaymentAmountCents: number;
   finalPaymentAmountCents: number;
   dueDates: string[]; // yyyy-MM-dd
+  recommended: boolean;
 };
+
+export type PreviewReason =
+  | "ok"
+  | "too_close"
+  | "too_far"
+  | "amount_too_low"
+  | "amount_too_high"
+  | "no_plan_fits"
+  | "invalid_input";
 
 export type PreviewResult = {
   eligible: boolean;
-  reason: "ok" | "too_close" | "invalid_input";
+  reason: PreviewReason;
   daysToAppointment: number;
   options: PreviewOption[];
 };
@@ -26,12 +38,12 @@ const FREQUENCY_DAYS: Record<PlanFrequency, number> = {
 };
 
 const MIN_FINAL_PAYMENT_BUFFER_DAYS = 3;
-const MIN_WEEKS_FOR_PLAN = 6;
 
 export function previewEligibility(
   today: Date,
   appointmentDate: Date | null,
   totalAmountCents: number,
+  rules: PlanRules = DEFAULT_PLAN_RULES,
 ): PreviewResult {
   if (!appointmentDate || Number.isNaN(appointmentDate.getTime())) {
     return { eligible: false, reason: "invalid_input", daysToAppointment: 0, options: [] };
@@ -39,24 +51,51 @@ export function previewEligibility(
   const days = daysBetween(today, appointmentDate);
   const weeks = Math.floor(days / 7);
 
-  if (weeks < MIN_WEEKS_FOR_PLAN) {
+  if (weeks < rules.minLeadTimeWeeks) {
     return { eligible: false, reason: "too_close", daysToAppointment: days, options: [] };
   }
-
-  let frequencies: PlanFrequency[];
-  if (weeks <= 7) {
-    frequencies = ["biweekly"];
-  } else if (weeks <= 12) {
-    frequencies = ["biweekly", "monthly"];
-  } else {
-    frequencies = ["monthly"];
+  if (rules.maxLeadTimeWeeks != null && weeks > rules.maxLeadTimeWeeks) {
+    return { eligible: false, reason: "too_far", daysToAppointment: days, options: [] };
+  }
+  if (
+    rules.minBookingAmountCents != null &&
+    totalAmountCents > 0 &&
+    totalAmountCents < rules.minBookingAmountCents
+  ) {
+    return { eligible: false, reason: "amount_too_low", daysToAppointment: days, options: [] };
+  }
+  if (
+    rules.maxBookingAmountCents != null &&
+    totalAmountCents > rules.maxBookingAmountCents
+  ) {
+    return { eligible: false, reason: "amount_too_high", daysToAppointment: days, options: [] };
   }
 
-  const options = frequencies
+  const allowedFrequencies: PlanFrequency[] =
+    rules.allowedFrequencies === "monthly"
+      ? ["monthly"]
+      : rules.allowedFrequencies === "biweekly"
+        ? ["biweekly"]
+        : ["biweekly", "monthly"];
+
+  const recommended = resolveRecommended(rules);
+
+  const options = allowedFrequencies
     .map((f) => buildOption(today, appointmentDate, totalAmountCents, f))
-    .filter((o): o is PreviewOption => o !== null);
+    .filter((o): o is Omit<PreviewOption, "recommended"> => o !== null)
+    .map((o) => ({ ...o, recommended: recommended != null && o.frequency === recommended }));
+
+  if (options.length === 0) {
+    return { eligible: false, reason: "no_plan_fits", daysToAppointment: days, options: [] };
+  }
 
   return { eligible: true, reason: "ok", daysToAppointment: days, options };
+}
+
+function resolveRecommended(rules: PlanRules): PlanFrequency | null {
+  if (rules.allowedFrequencies !== "both") return null;
+  if (rules.recommendedFrequency != null) return rules.recommendedFrequency;
+  return "monthly";
 }
 
 function buildOption(
@@ -64,10 +103,11 @@ function buildOption(
   appointmentDate: Date,
   totalAmountCents: number,
   frequency: PlanFrequency,
-): PreviewOption | null {
+): Omit<PreviewOption, "recommended"> | null {
   const days = daysBetween(today, appointmentDate);
   const intervalDays = FREQUENCY_DAYS[frequency];
   const usable = days - MIN_FINAL_PAYMENT_BUFFER_DAYS;
+  if (usable < 0) return null;
   const intervals = Math.floor(usable / intervalDays);
   const numPayments = 1 + intervals;
   if (numPayments < 2) return null;

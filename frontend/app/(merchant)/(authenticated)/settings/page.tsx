@@ -1,10 +1,19 @@
+import { PlanRulesCard } from "@/components/merchant/PlanRulesCard";
 import { StripeConnectCard } from "@/components/merchant/StripeConnectCard";
-import { fetchMerchantSession, fetchStripeStatusServer } from "@/lib/auth";
+import { DEFAULT_PLAN_RULES } from "@/lib/api";
+import {
+  fetchMerchantSession,
+  fetchPlanRulesServer,
+  fetchStripeStatusServer,
+} from "@/lib/auth";
 
 export default async function SettingsPage() {
   const session = await fetchMerchantSession();
   if (!session) return null;
-  const stripeStatus = await fetchStripeStatusServer();
+  const [stripeStatus, planRules] = await Promise.all([
+    fetchStripeStatusServer(),
+    fetchPlanRulesServer(),
+  ]);
 
   return (
     <>
@@ -16,6 +25,17 @@ export default async function SettingsPage() {
       </header>
 
       <section className="mt-8 space-y-4">
+        <h2 className="text-xs uppercase tracking-wide text-ink-muted font-medium">
+          Plan rules
+        </h2>
+        <p className="text-xs text-ink-muted -mt-2">
+          Control which bookings can offer a payment plan and which cadences
+          your customers see.
+        </p>
+        <PlanRulesCard initial={planRules ?? DEFAULT_PLAN_RULES} />
+      </section>
+
+      <section className="mt-10 space-y-4">
         <h2 className="text-xs uppercase tracking-wide text-ink-muted font-medium">
           Payouts
         </h2>

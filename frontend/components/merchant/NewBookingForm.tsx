@@ -2,7 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBooking, type CreateBookingPayload } from "@/lib/api";
+import {
+  createBooking,
+  DEFAULT_PLAN_RULES,
+  type CreateBookingPayload,
+  type PlanRules,
+} from "@/lib/api";
 import {
   formatCents,
   formatScheduleDate,
@@ -27,7 +32,11 @@ const EMPTY: FormState = {
   cancellationPolicy: "",
 };
 
-export function NewBookingForm() {
+export function NewBookingForm({
+  planRules = DEFAULT_PLAN_RULES,
+}: {
+  planRules?: PlanRules;
+}) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [submitting, setSubmitting] = useState(false);
@@ -40,8 +49,8 @@ export function NewBookingForm() {
   const totalCents = parseDollarsToCents(form.totalDollars);
   const appointmentDate = parseLocalDate(form.appointmentDate);
   const preview = useMemo(
-    () => previewEligibility(today(), appointmentDate, totalCents ?? 0),
-    [appointmentDate, totalCents],
+    () => previewEligibility(today(), appointmentDate, totalCents ?? 0, planRules),
+    [appointmentDate, totalCents, planRules],
   );
 
   const valid =
@@ -205,20 +214,7 @@ function EligibilityPreview({
   }
 
   if (!preview.eligible) {
-    if (preview.reason === "too_close") {
-      return (
-        <p className="text-xs text-ink-muted">
-          This date is in <strong>{preview.daysToAppointment} days</strong>. We
-          need at least 6 weeks to run a plan. Your customer will see a message
-          to pay you directly.
-        </p>
-      );
-    }
-    return (
-      <p className="text-xs text-ink-soft">
-        Pick a date in the future to preview the plan.
-      </p>
-    );
+    return <IneligibleHint preview={preview} />;
   }
 
   return (
@@ -232,10 +228,25 @@ function EligibilityPreview({
       {preview.options.map((opt) => (
         <div
           key={opt.frequency}
-          className="rounded-md bg-white border border-surface-border p-3 text-xs"
+          className={`relative rounded-md border p-3 text-xs ${
+            opt.recommended
+              ? "border-lavender-500 bg-lavender-50"
+              : "border-surface-border bg-white"
+          }`}
         >
+          {opt.recommended ? (
+            <span className="absolute -top-2 left-2 rounded-full bg-lavender-500 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white">
+              Recommended
+            </span>
+          ) : null}
           <div className="flex items-baseline justify-between">
-            <div className="font-medium capitalize">{opt.frequency}</div>
+            <div
+              className={`font-medium capitalize ${
+                opt.recommended ? "text-lavender-700" : ""
+              }`}
+            >
+              {opt.frequency}
+            </div>
             <div className="text-ink-soft">{opt.numPayments} payments</div>
           </div>
           <div className="mt-1 text-ink-muted">
@@ -256,6 +267,59 @@ function EligibilityPreview({
       </p>
     </div>
   );
+}
+
+function IneligibleHint({
+  preview,
+}: {
+  preview: ReturnType<typeof previewEligibility>;
+}) {
+  switch (preview.reason) {
+    case "too_close":
+      return (
+        <p className="text-xs text-ink-muted">
+          This date is in <strong>{preview.daysToAppointment} days</strong>,
+          inside your minimum lead time. Customer will be prompted to pay
+          directly.
+        </p>
+      );
+    case "too_far":
+      return (
+        <p className="text-xs text-ink-muted">
+          This date is past your maximum lead time. Customer will be prompted
+          to pay directly.
+        </p>
+      );
+    case "amount_too_low":
+      return (
+        <p className="text-xs text-ink-muted">
+          Total is below your plan minimum. Customer will be prompted to pay
+          in full.
+        </p>
+      );
+    case "amount_too_high":
+      return (
+        <p className="text-xs text-ink-muted">
+          Total is above your plan maximum. Customer will be prompted to pay
+          in full.
+        </p>
+      );
+    case "no_plan_fits":
+      return (
+        <p className="text-xs text-ink-muted">
+          No allowed cadence fits before this date. Try widening the lead time
+          or enabling another frequency in plan rules.
+        </p>
+      );
+    case "invalid_input":
+    case "ok":
+    default:
+      return (
+        <p className="text-xs text-ink-soft">
+          Pick a date in the future to preview the plan.
+        </p>
+      );
+  }
 }
 
 function parseDollarsToCents(input: string): number | null {

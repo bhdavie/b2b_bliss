@@ -13,6 +13,7 @@ import com.bliss.b2b.integration.EmailTemplates;
 import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.integration.StripePaymentsService.CardSummary;
 import com.bliss.b2b.payments.EligibilityResult;
+import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.payments.PlanEligibilityService;
 import com.bliss.b2b.payments.PlanFrequency;
 import com.bliss.b2b.payments.PlanOption;
@@ -20,6 +21,7 @@ import com.bliss.b2b.persistence.BookingDao;
 import com.bliss.b2b.persistence.CustomerCardDao;
 import com.bliss.b2b.persistence.CustomerDao;
 import com.bliss.b2b.persistence.MerchantDao;
+import com.bliss.b2b.persistence.MerchantPlanRulesDao;
 import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentScheduleDao;
 import com.bliss.b2b.service.PlanCreationException.Reason;
@@ -105,9 +107,13 @@ public class PlanCreationService {
                         "merchant has not completed Stripe onboarding");
             }
 
+            MerchantPlanRulesDao rulesDao = handle.attach(MerchantPlanRulesDao.class);
+            MerchantPlanRules rules = rulesDao.findByMerchantId(merchant.id())
+                    .orElse(MerchantPlanRules.DEFAULTS);
+
             LocalDate today = LocalDate.now(clock);
             EligibilityResult eligibility = eligibilityService.evaluate(
-                    today, booking.appointmentDate(), booking.totalAmountCents());
+                    today, booking.appointmentDate(), booking.totalAmountCents(), rules);
             if (!eligibility.eligible()) {
                 throw new PlanCreationException(Reason.ELIGIBILITY_FAILED,
                         "appointment is too close for a plan");

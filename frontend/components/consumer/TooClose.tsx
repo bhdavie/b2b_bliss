@@ -6,18 +6,16 @@ export function TooClose({ booking }: { booking: PublicBooking }) {
         "Booking: " + booking.service.name,
       )}`
     : null;
+  const { headline, body } = copyFor(booking);
 
   return (
     <section className="mt-8 rounded-md border border-surface-border bg-white p-6 text-center">
       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-lavender-100 text-lavender-700">
         <CalendarAlertIcon />
       </div>
-      <h2 className="mt-4 text-[16px] font-medium text-ink">
-        This booking is too close for a payment plan
-      </h2>
+      <h2 className="mt-4 text-[16px] font-medium text-ink">{headline}</h2>
       <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">
-        Payment plans are available 6 weeks or more before the booking date.
-        Reach out to {booking.merchant.businessName} directly to arrange
+        {body} Reach out to {booking.merchant.businessName} directly to arrange
         payment.
       </p>
       {mailto ? (
@@ -30,6 +28,41 @@ export function TooClose({ booking }: { booking: PublicBooking }) {
       ) : null}
     </section>
   );
+}
+
+function copyFor(booking: PublicBooking): { headline: string; body: string } {
+  switch (booking.eligibility.reason) {
+    case "too_close":
+      return {
+        headline: "This booking is too close for a payment plan",
+        body: "Payment plans need a few weeks of runway to set up the schedule.",
+      };
+    case "too_far":
+      return {
+        headline: "This booking is too far out for a plan",
+        body: "Plans are available for bookings within the merchant's preferred window.",
+      };
+    case "amount_too_low":
+      return {
+        headline: "This booking is below the plan minimum",
+        body: "Payment plans are available on larger bookings only.",
+      };
+    case "amount_too_high":
+      return {
+        headline: "This booking is above the plan maximum",
+        body: "Payment plans are not offered at this price point.",
+      };
+    case "no_plan_fits":
+      return {
+        headline: "No payment plan fits this booking",
+        body: "There is not enough time to run a payment plan before this booking.",
+      };
+    default:
+      return {
+        headline: "A payment plan is not available for this booking",
+        body: "",
+      };
+  }
 }
 
 function CalendarAlertIcon() {

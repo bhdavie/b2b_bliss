@@ -3,6 +3,8 @@ package com.bliss.b2b.api;
 import com.bliss.b2b.domain.Booking;
 import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.payments.EligibilityResult;
+import com.bliss.b2b.payments.MerchantPlanRules;
+import com.bliss.b2b.payments.PlanFrequency;
 import com.bliss.b2b.payments.PlanOption;
 import java.time.LocalDate;
 import java.util.List;
@@ -63,9 +65,11 @@ public record PublicBookingView(
             Merchant merchant,
             Booking booking,
             EligibilityResult eligibility,
+            MerchantPlanRules rules,
             boolean stripeConfigured,
             String stripePublishableKey
     ) {
+        PlanFrequency recommended = rules.resolveRecommended();
         List<Plan> options = eligibility.options().stream()
                 .map(o -> new Plan(
                         o.frequency().wire(),
@@ -73,7 +77,7 @@ public record PublicBookingView(
                         o.perPaymentAmountCents(),
                         o.finalPaymentAmountCents(),
                         o.dueDates(),
-                        isRecommended(o, eligibility.options())))
+                        recommended != null && o.frequency() == recommended))
                 .toList();
         return new PublicBookingView(
                 new MerchantContext(
@@ -105,11 +109,4 @@ public record PublicBookingView(
         );
     }
 
-    private static boolean isRecommended(PlanOption option, List<PlanOption> all) {
-        if (all.size() < 2) return false;
-        // In the 8-12w bucket both biweekly and monthly are offered; monthly
-        // is the recommended option per CLAUDE.md (fewer charges = less
-        // surface for declines).
-        return option.frequency() == com.bliss.b2b.payments.PlanFrequency.MONTHLY;
-    }
 }

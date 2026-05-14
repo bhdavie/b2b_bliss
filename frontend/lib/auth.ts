@@ -7,6 +7,7 @@ import {
   type Booking,
   type BookingListResponse,
   type MerchantView,
+  type PlanRules,
   type StripeStatus,
 } from "./api";
 
@@ -59,6 +60,20 @@ export async function fetchBookingsServer(): Promise<BookingListResponse | null>
     throw new Error(`fetchBookingsServer failed: ${res.status}`);
   }
   return (await res.json()) as BookingListResponse;
+}
+
+export async function fetchPlanRulesServer(): Promise<PlanRules | null> {
+  const headers = await sessionHeader();
+  if (!headers) return null;
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/plan-rules`, {
+    headers,
+    cache: "no-store",
+  });
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    throw new Error(`fetchPlanRulesServer failed: ${res.status}`);
+  }
+  return (await res.json()) as PlanRules;
 }
 
 export async function fetchBookingServer(id: string): Promise<Booking | null> {

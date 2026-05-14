@@ -4,6 +4,7 @@ import com.bliss.b2b.api.AuthResource;
 import com.bliss.b2b.api.BookingsResource;
 import com.bliss.b2b.api.HelloResource;
 import com.bliss.b2b.api.MerchantsResource;
+import com.bliss.b2b.api.PlanRulesResource;
 import com.bliss.b2b.api.PublicBookingsResource;
 import com.bliss.b2b.api.PublicPlansResource;
 import com.bliss.b2b.api.StripeConnectResource;
@@ -21,8 +22,10 @@ import com.bliss.b2b.persistence.BookingDao;
 import com.bliss.b2b.persistence.JdbiBootstrap;
 import com.bliss.b2b.persistence.MagicLinkTokenDao;
 import com.bliss.b2b.persistence.MerchantDao;
+import com.bliss.b2b.persistence.MerchantPlanRulesDao;
 import com.bliss.b2b.service.BookingService;
 import com.bliss.b2b.service.MagicLinkService;
+import com.bliss.b2b.service.MerchantPlanRulesService;
 import com.bliss.b2b.service.PlanCreationService;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.dropwizard.auth.AuthDynamicFeature;
@@ -80,6 +83,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         MerchantDao merchantDao = jdbi.onDemand(MerchantDao.class);
         MagicLinkTokenDao tokenDao = jdbi.onDemand(MagicLinkTokenDao.class);
         BookingDao bookingDao = jdbi.onDemand(BookingDao.class);
+        MerchantPlanRulesDao planRulesDao = jdbi.onDemand(MerchantPlanRulesDao.class);
 
         // Dev environments use long expiries to keep the inner loop frictionless:
         // a magic link survives an overnight pause and the session cookie keeps
@@ -104,6 +108,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         StripePaymentsService stripePaymentsService = new StripePaymentsService(config.getStripe());
         BookingService bookingService = new BookingService(bookingDao);
         PlanEligibilityService eligibilityService = new PlanEligibilityService();
+        MerchantPlanRulesService planRulesService = new MerchantPlanRulesService(planRulesDao);
         Clock clock = Clock.systemUTC();
         PlanCreationService planCreationService = new PlanCreationService(
                 jdbi, eligibilityService, stripePaymentsService, emailService, clock);
@@ -127,10 +132,12 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new StripeConnectResource(
                 stripeService, merchantDao, emailService, config.getApp()));
         environment.jersey().register(new BookingsResource(
-                bookingService, eligibilityService, stripeService, config.getApp(), clock));
+                bookingService, eligibilityService, planRulesService, stripeService, config.getApp(), clock));
         environment.jersey().register(new PublicBookingsResource(
-                bookingDao, merchantDao, eligibilityService, stripePaymentsService, clock));
+                bookingDao, merchantDao, eligibilityService, planRulesService,
+                stripePaymentsService, clock));
         environment.jersey().register(new PublicPlansResource(planCreationService));
+        environment.jersey().register(new PlanRulesResource(planRulesService));
 
         environment.jersey().register(new AuthDynamicFeature(
                 new JwtCookieAuthFilter.Builder()

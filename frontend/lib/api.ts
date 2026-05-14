@@ -238,3 +238,41 @@ export async function getBooking(id: string): Promise<Booking> {
   });
   return unwrap<Booking>(res);
 }
+
+export type AllowedFrequencies = "monthly" | "biweekly" | "both";
+
+export type PlanRules = {
+  minLeadTimeWeeks: number;
+  maxLeadTimeWeeks: number | null;
+  allowedFrequencies: AllowedFrequencies;
+  minBookingAmountCents: number | null;
+  maxBookingAmountCents: number | null;
+  recommendedFrequency: PlanFrequency | null;
+};
+
+export const DEFAULT_PLAN_RULES: PlanRules = {
+  minLeadTimeWeeks: 6,
+  maxLeadTimeWeeks: null,
+  allowedFrequencies: "both",
+  minBookingAmountCents: null,
+  maxBookingAmountCents: null,
+  recommendedFrequency: null,
+};
+
+export async function fetchPlanRules(): Promise<PlanRules> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/plan-rules`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  return unwrap<PlanRules>(res);
+}
+
+export async function updatePlanRules(payload: PlanRules): Promise<PlanRules> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/plan-rules`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return unwrap<PlanRules>(res);
+}

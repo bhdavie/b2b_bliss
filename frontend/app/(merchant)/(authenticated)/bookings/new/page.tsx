@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { NewBookingForm } from "@/components/merchant/NewBookingForm";
-import { fetchStripeStatusServer } from "@/lib/auth";
+import { DEFAULT_PLAN_RULES } from "@/lib/api";
+import { fetchPlanRulesServer, fetchStripeStatusServer } from "@/lib/auth";
 
 export default async function NewBookingPage() {
-  const stripeStatus = await fetchStripeStatusServer();
+  const [stripeStatus, planRules] = await Promise.all([
+    fetchStripeStatusServer(),
+    fetchPlanRulesServer(),
+  ]);
   const chargesEnabled = stripeStatus?.status === "charges_enabled";
   // In dev mode Stripe is not yet wired; the backend allows booking creation
   // when STRIPE_SECRET_KEY is not configured. Mirror that here so the form is
@@ -41,7 +45,7 @@ export default async function NewBookingPage() {
         </div>
       ) : null}
 
-      <NewBookingForm />
+      <NewBookingForm planRules={planRules ?? DEFAULT_PLAN_RULES} />
     </>
   );
 }
