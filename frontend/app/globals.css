@@ -60,3 +60,18 @@
     @apply rounded-md bg-surface-subtle p-4;
   }
 }
+
+@media print {
+  /* Hide interactive chrome when the consumer saves their schedule as PDF. */
+  header,
+  button {
+    display: none !important;
+  }
+  body {
+    background: #ffffff !important;
+  }
+  main {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+}

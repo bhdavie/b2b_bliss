@@ -4,6 +4,8 @@ import com.bliss.b2b.api.AuthResource;
 import com.bliss.b2b.api.BookingsResource;
 import com.bliss.b2b.api.HelloResource;
 import com.bliss.b2b.api.MerchantsResource;
+import com.bliss.b2b.api.PublicBookingsResource;
+import com.bliss.b2b.api.PublicPlansResource;
 import com.bliss.b2b.api.StripeConnectResource;
 import com.bliss.b2b.auth.JwtCookieAuthFilter;
 import com.bliss.b2b.auth.JwtService;
@@ -12,6 +14,7 @@ import com.bliss.b2b.auth.MerchantPrincipal;
 import com.bliss.b2b.integration.EmailService;
 import com.bliss.b2b.integration.EmailServiceFactory;
 import com.bliss.b2b.integration.StripeConnectService;
+import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.observability.SentryBootstrap;
 import com.bliss.b2b.payments.PlanEligibilityService;
 import com.bliss.b2b.persistence.BookingDao;
@@ -20,6 +23,7 @@ import com.bliss.b2b.persistence.MagicLinkTokenDao;
 import com.bliss.b2b.persistence.MerchantDao;
 import com.bliss.b2b.service.BookingService;
 import com.bliss.b2b.service.MagicLinkService;
+import com.bliss.b2b.service.PlanCreationService;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.dropwizard.auth.AuthDynamicFeature;
 import io.dropwizard.auth.AuthValueFactoryProvider;
@@ -97,9 +101,12 @@ public class BlissApplication extends Application<BlissConfiguration> {
         MagicLinkService magicLinkService = new MagicLinkService(
                 merchantDao, tokenDao, emailService, config.getApp(), magicLinkTtl);
         StripeConnectService stripeService = new StripeConnectService(config.getStripe());
+        StripePaymentsService stripePaymentsService = new StripePaymentsService(config.getStripe());
         BookingService bookingService = new BookingService(bookingDao);
         PlanEligibilityService eligibilityService = new PlanEligibilityService();
         Clock clock = Clock.systemUTC();
+        PlanCreationService planCreationService = new PlanCreationService(
+                jdbi, eligibilityService, stripePaymentsService, emailService, clock);
 
         JwtService jwtService = new JwtService(config.getJwt(), sessionTtl);
 
@@ -121,6 +128,9 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 stripeService, merchantDao, emailService, config.getApp()));
         environment.jersey().register(new BookingsResource(
                 bookingService, eligibilityService, stripeService, config.getApp(), clock));
+        environment.jersey().register(new PublicBookingsResource(
+                bookingDao, merchantDao, eligibilityService, stripePaymentsService, clock));
+        environment.jersey().register(new PublicPlansResource(planCreationService));
 
         environment.jersey().register(new AuthDynamicFeature(
                 new JwtCookieAuthFilter.Builder()

@@ -39,6 +39,28 @@ public interface BookingDao {
     @SqlQuery("SELECT * FROM bookings WHERE booking_token = :bookingToken")
     Optional<Booking> findByToken(@Bind("bookingToken") String bookingToken);
 
+    @SqlQuery("""
+            SELECT b.* FROM bookings b
+            JOIN merchants m ON m.id = b.merchant_id
+            WHERE b.booking_token = :bookingToken
+              AND m.slug = :slug
+            """)
+    Optional<Booking> findBySlugAndToken(
+            @Bind("slug") String slug,
+            @Bind("bookingToken") String bookingToken
+    );
+
+    @SqlUpdate("""
+            UPDATE bookings
+            SET status = 'accepted',
+                customer_id = :customerId
+            WHERE id = :id AND status = 'sent'
+            """)
+    int markAccepted(
+            @Bind("id") UUID id,
+            @Bind("customerId") UUID customerId
+    );
+
     @SqlQuery("SELECT * FROM bookings WHERE id = :id AND merchant_id = :merchantId")
     Optional<Booking> findByIdForMerchant(
             @Bind("id") UUID id,
