@@ -13,30 +13,27 @@ import java.util.Set;
  * <pre>
  * ACTIVE                       -> PAYMENT_FAILED_IN_RETRY     (installment failed, retries remain)
  * ACTIVE                       -> COMPLETED                   (final installment cleared)
- * ACTIVE                       -> CANCELED                    (customer or merchant cancel)
+ * ACTIVE                       -> CANCELED                    (customer or merchant cancel; CancellationService runs)
  *
  * PAYMENT_FAILED_IN_RETRY      -> ACTIVE                      (retry succeeded)
  * PAYMENT_FAILED_IN_RETRY      -> PAYMENT_FAILED_EXHAUSTED    (last retry failed)
- * PAYMENT_FAILED_IN_RETRY      -> CANCELED                    (merchant cancel)
+ * PAYMENT_FAILED_IN_RETRY      -> CANCELED                    (merchant cancel; CancellationService runs)
  *
- * PAYMENT_FAILED_EXHAUSTED     -> CANCELED                    (after-retries = cancel_forfeit | cancel_refund)
- * PAYMENT_FAILED_EXHAUSTED     -> DEFAULTED                   (after-retries = mark_defaulted, the default)
- * PAYMENT_FAILED_EXHAUSTED     -> COMPLETED                   (after-retries = convert_to_credit; remaining converted)
- * PAYMENT_FAILED_EXHAUSTED     -> BALANCE_DUE_AT_ARRIVAL      (after-retries = balance_due_at_arrival)
+ * PAYMENT_FAILED_EXHAUSTED     -> CANCELED                    (after-retries = treat_as_cancellation; CancellationService runs)
+ * PAYMENT_FAILED_EXHAUSTED     -> BALANCE_DUE                 (after-retries = balance_due_at_checkin)
  *
- * BALANCE_DUE_AT_ARRIVAL       -> COMPLETED                   (merchant collected at appointment)
- * BALANCE_DUE_AT_ARRIVAL       -> CANCELED                    (merchant cancel)
+ * BALANCE_DUE                  -> COMPLETED                   (merchant collected at appointment)
+ * BALANCE_DUE                  -> CANCELED                    (merchant cancel; CancellationService runs)
  *
  * DEFAULTED                    -> ACTIVE                      (merchant manual resolve, retry succeeded)
- * DEFAULTED                    -> CANCELED                    (merchant manual close-out)
+ * DEFAULTED                    -> CANCELED                    (merchant manual close-out via CancellationService)
  *
  * COMPLETED, CANCELED          -> (terminal)
  * </pre>
  *
- * <p>The merchant dashboard exposes a manual override for any open plan, so
- * an admin can force a transition that isn't in this table (e.g., from
- * {@code DEFAULTED} back to {@code ACTIVE} via the plan detail page). The
- * automated paths above are what the system performs without admin input.
+ * <p>The {@code DEFAULTED} state is reachable only via the merchant's
+ * manual override (the admin escape hatch on the plan detail page) —
+ * no automated path lands there in Phase 12 onward.
  */
 public final class PaymentPlanStateMachine {
 
@@ -45,13 +42,15 @@ public final class PaymentPlanStateMachine {
     /**
      * Maps a merchant's {@link AfterRetriesAction} configuration to the
      * terminal status the plan should move to when retries are exhausted.
+     * {@code TREAT_AS_CANCELLATION} resolves to {@code CANCELED}; the
+     * actual cancellation work (refund assessment, fee, audit) is the
+     * {@link CancellationService}'s job — this method only names the
+     * target state.
      */
     public static PaymentPlanStatus resolveTerminalState(AfterRetriesAction action) {
         return switch (action) {
-            case CANCEL_FORFEIT, CANCEL_REFUND -> PaymentPlanStatus.CANCELED;
-            case MARK_DEFAULTED -> PaymentPlanStatus.DEFAULTED;
-            case CONVERT_TO_CREDIT -> PaymentPlanStatus.COMPLETED;
-            case BALANCE_DUE_AT_ARRIVAL -> PaymentPlanStatus.BALANCE_DUE_AT_ARRIVAL;
+            case TREAT_AS_CANCELLATION -> PaymentPlanStatus.CANCELED;
+            case BALANCE_DUE_AT_CHECKIN -> PaymentPlanStatus.BALANCE_DUE;
         };
     }
 
@@ -72,10 +71,8 @@ public final class PaymentPlanStateMachine {
                     PaymentPlanStatus.CANCELED);
             case PAYMENT_FAILED_EXHAUSTED -> EnumSet.of(
                     PaymentPlanStatus.CANCELED,
-                    PaymentPlanStatus.DEFAULTED,
-                    PaymentPlanStatus.COMPLETED,
-                    PaymentPlanStatus.BALANCE_DUE_AT_ARRIVAL);
-            case BALANCE_DUE_AT_ARRIVAL -> EnumSet.of(
+                    PaymentPlanStatus.BALANCE_DUE);
+            case BALANCE_DUE -> EnumSet.of(
                     PaymentPlanStatus.COMPLETED,
                     PaymentPlanStatus.CANCELED);
             case DEFAULTED -> EnumSet.of(

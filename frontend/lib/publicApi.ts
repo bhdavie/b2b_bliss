@@ -32,11 +32,13 @@ export type PublicPolicies = {
     | "one_month_before"
     | "custom_months";
   paymentDueCustomMonths: number | null;
+  retryAttempts: number;
+  retrySpacingDays: number;
   lateFeeEnabled: boolean;
   lateFeeType: "fixed" | "percentage" | null;
   lateFeeValue: number | null;
   lateFeeScope: "per_failure" | "once_per_plan" | null;
-  afterRetriesAction: string;
+  afterRetriesAction: "treat_as_cancellation" | "balance_due_at_checkin";
 };
 
 export type PublicBooking = {

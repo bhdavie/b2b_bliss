@@ -9,6 +9,7 @@ import com.bliss.b2b.domain.PaymentScheduleStatus;
 import com.bliss.b2b.persistence.BookingDao;
 import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentScheduleDao;
+import com.bliss.b2b.service.CancellationService;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.dropwizard.auth.Auth;
 import jakarta.ws.rs.Consumes;
@@ -44,15 +45,18 @@ public class PlansResource {
     private final PaymentPlanDao planDao;
     private final PaymentScheduleDao scheduleDao;
     private final BookingDao bookingDao;
+    private final CancellationService cancellationService;
 
     public PlansResource(
             PaymentPlanDao planDao,
             PaymentScheduleDao scheduleDao,
-            BookingDao bookingDao
+            BookingDao bookingDao,
+            CancellationService cancellationService
     ) {
         this.planDao = planDao;
         this.scheduleDao = scheduleDao;
         this.bookingDao = bookingDao;
+        this.cancellationService = cancellationService;
     }
 
     @GET
@@ -117,8 +121,15 @@ public class PlansResource {
         if (id == null) return notFound();
         PaymentPlan plan = planDao.findByIdForMerchant(id, principal.merchant().id()).orElse(null);
         if (plan == null) return notFound();
-        planDao.updateStatus(plan.id(), PaymentPlanStatus.CANCELED.wire());
-        return Response.ok(Map.of("status", "ok", "newPlanStatus", "canceled")).build();
+        CancellationService.CancellationOutcome outcome =
+                cancellationService.cancel(plan, Instant.now(), "merchant_initiated");
+        return Response.ok(Map.of(
+                "status", "ok",
+                "newPlanStatus", "canceled",
+                "refundCents", outcome.assessment().refundCents(),
+                "feeCents", outcome.assessment().feeCents(),
+                "netRefundCents", outcome.assessment().netRefundCents()
+        )).build();
     }
 
     @POST

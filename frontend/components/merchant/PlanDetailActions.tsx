@@ -16,7 +16,7 @@ const OVERRIDE_OPTIONS: PaymentPlanStatus[] = [
   "active",
   "payment_failed_in_retry",
   "payment_failed_exhausted",
-  "balance_due_at_arrival",
+  "balance_due",
   "completed",
   "defaulted",
   "canceled",

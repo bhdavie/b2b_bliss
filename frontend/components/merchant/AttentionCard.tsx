@@ -5,7 +5,7 @@ const STATUS_LABEL: Record<PaymentPlanStatus, string> = {
   active: "Active",
   payment_failed_in_retry: "Payment failed · retrying",
   payment_failed_exhausted: "Retries exhausted",
-  balance_due_at_arrival: "Balance due at check-in",
+  balance_due: "Balance due at check-in",
   completed: "Completed",
   defaulted: "Defaulted",
   canceled: "Canceled",
@@ -15,7 +15,7 @@ const STATUS_PILL: Record<PaymentPlanStatus, string> = {
   active: "bg-emerald-100 text-emerald-700",
   payment_failed_in_retry: "bg-amber-100 text-amber-800",
   payment_failed_exhausted: "bg-red-100 text-red-700",
-  balance_due_at_arrival: "bg-lavender-100 text-lavender-700",
+  balance_due: "bg-lavender-100 text-lavender-700",
   completed: "bg-emerald-100 text-emerald-700",
   defaulted: "bg-red-100 text-red-700",
   canceled: "bg-surface-subtle text-ink-muted",
@@ -55,7 +55,7 @@ export function AttentionCard({ plans }: { plans: PlanDetail[] }) {
                 <div className="mt-0.5 text-xs text-ink-muted">
                   {plan.customerHint ?? "Customer info pending"}
                 </div>
-                {plan.status === "balance_due_at_arrival" ? (
+                {plan.status === "balance_due" ? (
                   <div className="mt-1 text-xs font-medium text-lavender-700">
                     Balance due at check-in:{" "}
                     {formatCents(balanceDue(plan))}

@@ -2,26 +2,24 @@ package com.bliss.b2b.payments;
 
 /**
  * What the system does when the merchant's retry policy is exhausted.
+ * The five-option set from Phase 10 collapsed in Phase 12 to two
+ * delegating choices that don't redefine refund/credit logic — the
+ * configured {@link RefundPolicy} and cancellation fee handle that.
  *
  * <ul>
- *   <li>{@code CANCEL_FORFEIT} — booking canceled, paid installments stay
- *       with the merchant.
- *   <li>{@code CANCEL_REFUND} — booking canceled, paid installments refunded.
- *   <li>{@code MARK_DEFAULTED} — leave the plan in {@code defaulted}; merchant
- *       resolves manually. This is the default and the safest baseline.
- *   <li>{@code CONVERT_TO_CREDIT} — paid amount becomes customer credit for
- *       future bookings with this merchant.
- *   <li>{@code BALANCE_DUE_AT_ARRIVAL} — keep the booking active, end the
- *       payment plan, customer settles the remaining balance with the
- *       merchant directly at the appointment.
+ *   <li>{@code BALANCE_DUE_AT_CHECKIN} — keep the booking active, move
+ *       the plan to {@code BALANCE_DUE}. No refund issued, no fee. The
+ *       customer settles the unpaid remainder when they arrive.
+ *   <li>{@code TREAT_AS_CANCELLATION} — invoke the same cancellation
+ *       handler used for a customer-initiated cancel, with
+ *       {@code Instant.now()} as the cancellation timestamp. The
+ *       merchant's Refund policy and Cancellation fee evaluate against
+ *       that moment.
  * </ul>
  */
 public enum AfterRetriesAction {
-    CANCEL_FORFEIT("cancel_forfeit"),
-    CANCEL_REFUND("cancel_refund"),
-    MARK_DEFAULTED("mark_defaulted"),
-    CONVERT_TO_CREDIT("convert_to_credit"),
-    BALANCE_DUE_AT_ARRIVAL("balance_due_at_arrival");
+    BALANCE_DUE_AT_CHECKIN("balance_due_at_checkin"),
+    TREAT_AS_CANCELLATION("treat_as_cancellation");
 
     private final String wire;
 

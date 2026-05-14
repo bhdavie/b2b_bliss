@@ -8,7 +8,7 @@ const STATUS_LABEL: Record<PaymentPlanStatus, string> = {
   active: "Active",
   payment_failed_in_retry: "Payment failed · retrying",
   payment_failed_exhausted: "Retries exhausted",
-  balance_due_at_arrival: "Balance due at check-in",
+  balance_due: "Balance due at check-in",
   completed: "Completed",
   defaulted: "Defaulted",
   canceled: "Canceled",
@@ -18,7 +18,7 @@ const STATUS_PILL: Record<PaymentPlanStatus, string> = {
   active: "bg-emerald-100 text-emerald-700",
   payment_failed_in_retry: "bg-amber-100 text-amber-800",
   payment_failed_exhausted: "bg-red-100 text-red-700",
-  balance_due_at_arrival: "bg-lavender-100 text-lavender-700",
+  balance_due: "bg-lavender-100 text-lavender-700",
   completed: "bg-emerald-100 text-emerald-700",
   defaulted: "bg-red-100 text-red-700",
   canceled: "bg-surface-subtle text-ink-muted",
@@ -61,7 +61,7 @@ export default async function PlanDetailPage({
         </p>
       </header>
 
-      {plan.status === "balance_due_at_arrival" ? (
+      {plan.status === "balance_due" ? (
         <section className="mt-6 rounded-md border-2 border-lavender-500 bg-lavender-50 p-4">
           <div className="text-[11px] font-medium uppercase tracking-wide text-lavender-700">
             Balance due at check-in

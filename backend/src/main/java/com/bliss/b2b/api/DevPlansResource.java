@@ -4,12 +4,14 @@ import com.bliss.b2b.domain.PaymentPlan;
 import com.bliss.b2b.domain.PaymentPlanStatus;
 import com.bliss.b2b.domain.PaymentScheduleEntry;
 import com.bliss.b2b.domain.PaymentScheduleStatus;
+import com.bliss.b2b.payments.AfterRetriesAction;
 import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.persistence.MerchantPlanRulesDao;
 import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentScheduleDao;
 import com.bliss.b2b.persistence.BookingDao;
 import com.bliss.b2b.domain.Booking;
+import com.bliss.b2b.service.CancellationService;
 import com.bliss.b2b.service.PaymentPlanStateMachine;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.ws.rs.Consumes;
@@ -43,19 +45,22 @@ public class DevPlansResource {
     private final PaymentScheduleDao scheduleDao;
     private final MerchantPlanRulesDao rulesDao;
     private final BookingDao bookingDao;
+    private final CancellationService cancellationService;
 
     public DevPlansResource(
             boolean devEnabled,
             PaymentPlanDao planDao,
             PaymentScheduleDao scheduleDao,
             MerchantPlanRulesDao rulesDao,
-            BookingDao bookingDao
+            BookingDao bookingDao,
+            CancellationService cancellationService
     ) {
         this.devEnabled = devEnabled;
         this.planDao = planDao;
         this.scheduleDao = scheduleDao;
         this.rulesDao = rulesDao;
         this.bookingDao = bookingDao;
+        this.cancellationService = cancellationService;
     }
 
     /**
@@ -103,26 +108,38 @@ public class DevPlansResource {
         String mode = req == null || req.mode() == null ? "fail" : req.mode();
         PaymentPlanStatus newStatus;
         String terminalAction = null;
+        java.util.Map<String, Object> response = new java.util.LinkedHashMap<>();
         if ("exhaust".equalsIgnoreCase(mode)) {
             Booking booking = bookingDao.findById(plan.bookingId())
                     .orElseThrow(() -> new IllegalStateException("booking not found"));
             MerchantPlanRules rules = rulesDao.findByMerchantId(booking.merchantId())
                     .orElse(MerchantPlanRules.DEFAULTS);
             terminalAction = rules.afterRetriesAction().wire();
-            newStatus = PaymentPlanStateMachine.resolveTerminalState(rules.afterRetriesAction());
+            if (rules.afterRetriesAction() == AfterRetriesAction.TREAT_AS_CANCELLATION) {
+                // Single canonical path: same cancellation handler the customer
+                // hits when they cancel. Refund + fee evaluate against now.
+                CancellationService.CancellationOutcome outcome =
+                        cancellationService.cancel(plan, Instant.now(), "retries_exhausted");
+                newStatus = PaymentPlanStatus.CANCELED;
+                response.put("refundCents", outcome.assessment().refundCents());
+                response.put("feeCents", outcome.assessment().feeCents());
+                response.put("netRefundCents", outcome.assessment().netRefundCents());
+            } else {
+                newStatus = PaymentPlanStateMachine.resolveTerminalState(rules.afterRetriesAction());
+                planDao.updateStatus(plan.id(), newStatus.wire());
+            }
         } else {
             newStatus = PaymentPlanStatus.PAYMENT_FAILED_IN_RETRY;
+            planDao.updateStatus(plan.id(), newStatus.wire());
         }
-        planDao.updateStatus(plan.id(), newStatus.wire());
         log.info("Dev-mode mark-failed plan={} mode={} newStatus={} terminalAction={}",
                 plan.id(), mode, newStatus.wire(), terminalAction);
-        return Response.ok(Map.of(
-                "status", "ok",
-                "mode", mode,
-                "planStatus", newStatus.wire(),
-                "failedInstallmentSequence", next.sequence(),
-                "afterRetriesAction", terminalAction == null ? "n/a" : terminalAction
-        )).build();
+        response.put("status", "ok");
+        response.put("mode", mode);
+        response.put("planStatus", newStatus.wire());
+        response.put("failedInstallmentSequence", next.sequence());
+        response.put("afterRetriesAction", terminalAction == null ? "n/a" : terminalAction);
+        return Response.ok(response).build();
     }
 
     private static Response notFound() {

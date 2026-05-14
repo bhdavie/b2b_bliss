@@ -259,11 +259,8 @@ export type PaymentDuePolicy =
   | "custom_months";
 
 export type AfterRetriesAction =
-  | "cancel_forfeit"
-  | "cancel_refund"
-  | "mark_defaulted"
-  | "convert_to_credit"
-  | "balance_due_at_arrival";
+  | "treat_as_cancellation"
+  | "balance_due_at_checkin";
 
 export type PlanRules = {
   minLeadTimeWeeks: number;
@@ -318,7 +315,7 @@ export const DEFAULT_PLAN_RULES: PlanRules = {
   lateFeeType: null,
   lateFeeValue: null,
   lateFeeScope: null,
-  afterRetriesAction: "mark_defaulted",
+  afterRetriesAction: "treat_as_cancellation",
 };
 
 export async function fetchPlanRules(): Promise<PlanRules> {
@@ -343,7 +340,7 @@ export type PaymentPlanStatus =
   | "active"
   | "payment_failed_in_retry"
   | "payment_failed_exhausted"
-  | "balance_due_at_arrival"
+  | "balance_due"
   | "completed"
   | "defaulted"
   | "canceled";

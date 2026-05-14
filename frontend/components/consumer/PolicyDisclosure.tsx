@@ -13,6 +13,7 @@ export function PolicyDisclosure({ policies }: { policies: PublicPolicies }) {
   const refundLine = refundCopy(policies);
   const cancelFeeLine = cancellationFeeCopy(policies);
   const dueLine = dueDateCopy(policies);
+  const failureLine = failedPaymentCopy(policies);
   const lateFeeLine = lateFeeCopy(policies);
 
   return (
@@ -24,6 +25,7 @@ export function PolicyDisclosure({ policies }: { policies: PublicPolicies }) {
         <PolicyLine>{refundLine}</PolicyLine>
         {cancelFeeLine ? <PolicyLine>{cancelFeeLine}</PolicyLine> : null}
         <PolicyLine>{dueLine}</PolicyLine>
+        <PolicyLine subtle>{failureLine}</PolicyLine>
         {lateFeeLine ? <PolicyLine subtle>{lateFeeLine}</PolicyLine> : null}
       </ul>
     </section>
@@ -91,6 +93,18 @@ function dueDateCopy(policies: PublicPolicies): string {
       return `All payments due ${m} ${m === 1 ? "month" : "months"} before your appointment.`;
     }
   }
+}
+
+function failedPaymentCopy(policies: PublicPolicies): string {
+  const attempts = policies.retryAttempts;
+  const spacing = policies.retrySpacingDays;
+  const retryClause = attempts === 1
+    ? `we'll retry once`
+    : `we'll retry up to ${attempts} times, ${spacing} ${spacing === 1 ? "day" : "days"} apart`;
+  const afterClause = policies.afterRetriesAction === "balance_due_at_checkin"
+    ? "your booking holds the remaining balance until check-in"
+    : "your booking is canceled under the refund policy above";
+  return `If a payment fails, ${retryClause}. After that, ${afterClause}.`;
 }
 
 function lateFeeCopy(policies: PublicPolicies): string | null {

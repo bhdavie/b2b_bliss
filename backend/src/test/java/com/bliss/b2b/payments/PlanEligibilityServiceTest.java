@@ -523,7 +523,7 @@ class PlanEligibilityServiceTest {
                 paymentDuePolicy, customMonths,
                 3, 3,
                 false, null, null, null,
-                AfterRetriesAction.MARK_DEFAULTED);
+                AfterRetriesAction.TREAT_AS_CANCELLATION);
     }
 
     private static PlanOption byFrequency(List<PlanOption> options, PlanFrequency frequency) {

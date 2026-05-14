@@ -33,7 +33,7 @@ public interface PaymentPlanDao {
                 'payment_failed_in_retry',
                 'payment_failed_exhausted',
                 'defaulted',
-                'balance_due_at_arrival'
+                'balance_due'
               )
             ORDER BY pp.updated_at DESC
             """)
@@ -47,6 +47,19 @@ public interface PaymentPlanDao {
             WHERE id = :id
             """)
     int updateStatus(@Bind("id") UUID id, @Bind("status") String status);
+
+    @SqlUpdate("""
+            UPDATE payment_plans
+            SET status = 'canceled',
+                canceled_at = :canceledAt,
+                canceled_reason = :reason
+            WHERE id = :id
+            """)
+    int markCanceled(
+            @Bind("id") UUID id,
+            @Bind("canceledAt") java.time.Instant canceledAt,
+            @Bind("reason") String reason
+    );
 
     @SqlQuery("""
             SELECT * FROM payment_plans

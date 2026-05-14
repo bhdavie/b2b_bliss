@@ -60,29 +60,14 @@ const DUE_POLICY_OPTIONS: { value: PaymentDuePolicy; label: string; body: string
 
 const AFTER_RETRIES_OPTIONS: { value: AfterRetriesAction; label: string; body: string }[] = [
   {
-    value: "mark_defaulted",
-    label: "Mark as defaulted",
-    body: "Plan stays defaulted; you resolve manually. Safest default.",
-  },
-  {
-    value: "cancel_forfeit",
-    label: "Cancel · keep installments",
-    body: "Booking canceled. Paid installments stay with you.",
-  },
-  {
-    value: "cancel_refund",
-    label: "Cancel · refund installments",
-    body: "Booking canceled. Paid installments returned to the customer.",
-  },
-  {
-    value: "convert_to_credit",
-    label: "Convert to credit",
-    body: "Paid amount becomes customer credit for future bookings.",
-  },
-  {
-    value: "balance_due_at_arrival",
+    value: "balance_due_at_checkin",
     label: "Balance due at check-in",
     body: "Booking stays active. Customer settles the remaining balance directly when they arrive.",
+  },
+  {
+    value: "treat_as_cancellation",
+    label: "Treat as a cancellation",
+    body: "Booking is canceled. Your Refund policy above governs the outcome.",
   },
 ];
 

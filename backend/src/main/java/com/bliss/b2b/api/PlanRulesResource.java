@@ -243,10 +243,10 @@ public class PlanRulesResource {
         AfterRetriesAction afterRetries;
         try {
             afterRetries = req.afterRetriesAction() == null
-                    ? AfterRetriesAction.MARK_DEFAULTED
+                    ? AfterRetriesAction.TREAT_AS_CANCELLATION
                     : AfterRetriesAction.fromWire(req.afterRetriesAction());
         } catch (IllegalArgumentException e) {
-            return badRequest("afterRetriesAction must be one of cancel_forfeit, cancel_refund, mark_defaulted, convert_to_credit, balance_due_at_arrival");
+            return badRequest("afterRetriesAction must be one of treat_as_cancellation, balance_due_at_checkin");
         }
 
         MerchantPlanRules rules = new MerchantPlanRules(

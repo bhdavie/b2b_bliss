@@ -28,6 +28,7 @@ import com.bliss.b2b.persistence.MerchantPlanRulesDao;
 import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentScheduleDao;
 import com.bliss.b2b.service.BookingService;
+import com.bliss.b2b.service.CancellationService;
 import com.bliss.b2b.service.MagicLinkService;
 import com.bliss.b2b.service.MerchantPlanRulesService;
 import com.bliss.b2b.service.PlanCreationService;
@@ -144,9 +145,13 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 stripePaymentsService, clock));
         environment.jersey().register(new PublicPlansResource(planCreationService));
         environment.jersey().register(new PlanRulesResource(planRulesService));
-        environment.jersey().register(new PlansResource(paymentPlanDao, paymentScheduleDao, bookingDao));
+        CancellationService cancellationService = new CancellationService(
+                paymentPlanDao, paymentScheduleDao, bookingDao, planRulesService);
+        environment.jersey().register(new PlansResource(
+                paymentPlanDao, paymentScheduleDao, bookingDao, cancellationService));
         environment.jersey().register(new DevPlansResource(
-                devLoginEnabled, paymentPlanDao, paymentScheduleDao, planRulesDao, bookingDao));
+                devLoginEnabled, paymentPlanDao, paymentScheduleDao, planRulesDao,
+                bookingDao, cancellationService));
 
         environment.jersey().register(new AuthDynamicFeature(
                 new JwtCookieAuthFilter.Builder()

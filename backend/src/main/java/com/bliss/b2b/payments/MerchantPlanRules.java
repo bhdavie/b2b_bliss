@@ -7,8 +7,10 @@ package com.bliss.b2b.payments;
  * <p>Defaults match the Phase 0-4 behavior: 6-week minimum lead, both
  * frequencies allowed, no caps, monthly recommended when both offered, no
  * deposit, full refund on cancellation, no cancellation fee, all payments
- * due by the appointment date, 3 retries spaced 3 days apart, no late fee,
- * defaulted plans go to manual resolution.
+ * due by the appointment date, 3 retries spaced 3 days apart, no late fee.
+ * When retries are exhausted the plan defaults to
+ * {@link AfterRetriesAction#TREAT_AS_CANCELLATION}, which delegates the
+ * outcome to the Refund policy + Cancellation fee above.
  */
 public record MerchantPlanRules(
         int minLeadTimeWeeks,
@@ -47,7 +49,7 @@ public record MerchantPlanRules(
             PaymentDuePolicy.AT_APPOINTMENT, null,
             3, 3,
             false, null, null, null,
-            AfterRetriesAction.MARK_DEFAULTED
+            AfterRetriesAction.TREAT_AS_CANCELLATION
     );
 
     /**
