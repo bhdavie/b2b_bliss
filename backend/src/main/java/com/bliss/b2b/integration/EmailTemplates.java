@@ -1,22 +1,36 @@
 package com.bliss.b2b.integration;
 
 import com.bliss.b2b.domain.Merchant;
+import java.time.Duration;
 
 public final class EmailTemplates {
 
     private EmailTemplates() {}
 
-    public static EmailMessage magicLink(String to, String url) {
+    public static EmailMessage magicLink(String to, String url, Duration linkTtl) {
         return new EmailMessage(
                 to,
                 "Sign in to Bliss",
                 """
                 Welcome to Bliss. Click the link below to finish signing in.
-                This link expires in 15 minutes.
+                This link expires in %s.
 
                 %s
-                """.formatted(url)
+                """.formatted(formatTtl(linkTtl), url)
         );
+    }
+
+    private static String formatTtl(Duration ttl) {
+        long hours = ttl.toHours();
+        if (hours >= 24 && ttl.toMinutes() % 60 == 0) {
+            long days = hours / 24;
+            return days == 1 ? "1 day" : days + " days";
+        }
+        if (hours >= 1 && ttl.toMinutes() % 60 == 0) {
+            return hours == 1 ? "1 hour" : hours + " hours";
+        }
+        long mins = ttl.toMinutes();
+        return mins + " minutes";
     }
 
     public static EmailMessage stripeOnboardingComplete(Merchant merchant) {

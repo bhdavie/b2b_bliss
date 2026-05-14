@@ -130,3 +130,89 @@ export async function createStripeAccountLink(): Promise<
   }
   return unwrap<StripeAccountLink>(res);
 }
+
+export type BookingStatus =
+  | "draft"
+  | "sent"
+  | "accepted"
+  | "in_progress"
+  | "completed"
+  | "canceled";
+
+export type PlanFrequency = "biweekly" | "monthly";
+
+export type PlanOption = {
+  frequency: PlanFrequency;
+  numPayments: number;
+  perPaymentAmountCents: number;
+  finalPaymentAmountCents: number;
+  dueDates: string[]; // ISO yyyy-MM-dd
+};
+
+export type Eligibility = {
+  eligible: boolean;
+  reason: string;
+  daysToAppointment: number;
+};
+
+export type Booking = {
+  id: string;
+  bookingToken: string;
+  hostedUrl: string;
+  serviceName: string;
+  serviceDescription: string | null;
+  totalAmountCents: number;
+  appointmentDate: string;
+  cancellationPolicy: string | null;
+  status: BookingStatus;
+  customerNameHint: string | null;
+  customerEmailHint: string | null;
+  createdAt: string;
+  eligibility: Eligibility | null;
+  planOptions: PlanOption[] | null;
+};
+
+export type CreateBookingPayload = {
+  serviceName: string;
+  serviceDescription?: string;
+  totalAmountCents: number;
+  appointmentDate: string;
+  cancellationPolicy?: string;
+  customerNameHint?: string;
+  customerEmailHint?: string;
+};
+
+export type BookingListResponse = {
+  bookings: Booking[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export async function createBooking(
+  payload: CreateBookingPayload,
+): Promise<Booking> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/bookings`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return unwrap<Booking>(res);
+}
+
+export async function listBookings(): Promise<BookingListResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/bookings`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  return unwrap<BookingListResponse>(res);
+}
+
+export async function getBooking(id: string): Promise<Booking> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/bookings/${id}`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  return unwrap<Booking>(res);
+}

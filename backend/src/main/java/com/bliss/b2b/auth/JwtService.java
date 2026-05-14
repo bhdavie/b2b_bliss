@@ -17,6 +17,10 @@ public class JwtService {
     private final Duration ttl;
 
     public JwtService(JwtConfig config) {
+        this(config, Duration.ofMinutes(config.getTtlMinutes()));
+    }
+
+    public JwtService(JwtConfig config, Duration ttl) {
         byte[] secretBytes = config.getSecret().getBytes(StandardCharsets.UTF_8);
         if (secretBytes.length < 32) {
             throw new IllegalStateException(
@@ -24,7 +28,7 @@ public class JwtService {
         }
         this.signingKey = Keys.hmacShaKeyFor(secretBytes);
         this.issuer = config.getIssuer();
-        this.ttl = Duration.ofMinutes(config.getTtlMinutes());
+        this.ttl = ttl;
     }
 
     public String issue(String email, String merchantId) {

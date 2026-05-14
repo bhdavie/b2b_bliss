@@ -23,23 +23,25 @@ public class MagicLinkService {
     private static final Logger log = LoggerFactory.getLogger(MagicLinkService.class);
     private static final SecureRandom RNG = new SecureRandom();
     private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
-    private static final Duration LINK_TTL = Duration.ofMinutes(15);
 
     private final MerchantDao merchantDao;
     private final MagicLinkTokenDao tokenDao;
     private final EmailService emailService;
     private final AppConfig appConfig;
+    private final Duration linkTtl;
 
     public MagicLinkService(
             MerchantDao merchantDao,
             MagicLinkTokenDao tokenDao,
             EmailService emailService,
-            AppConfig appConfig
+            AppConfig appConfig,
+            Duration linkTtl
     ) {
         this.merchantDao = merchantDao;
         this.tokenDao = tokenDao;
         this.emailService = emailService;
         this.appConfig = appConfig;
+        this.linkTtl = linkTtl;
     }
 
     /**
@@ -56,10 +58,10 @@ public class MagicLinkService {
         });
         String rawToken = randomToken();
         String hash = sha256Hex(rawToken);
-        Instant expiresAt = Instant.now().plus(LINK_TTL);
+        Instant expiresAt = Instant.now().plus(linkTtl);
         tokenDao.insert(merchant.id(), hash, expiresAt);
         String link = appConfig.getFrontendBaseUrl() + "/verify?token=" + rawToken;
-        emailService.send(EmailTemplates.magicLink(merchant.email(), link));
+        emailService.send(EmailTemplates.magicLink(merchant.email(), link, linkTtl));
     }
 
     /**

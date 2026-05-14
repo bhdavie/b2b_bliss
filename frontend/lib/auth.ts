@@ -2,7 +2,13 @@
 // backend on behalf of the current request. Used by server components.
 
 import { cookies } from "next/headers";
-import { API_BASE_URL, type MerchantView, type StripeStatus } from "./api";
+import {
+  API_BASE_URL,
+  type Booking,
+  type BookingListResponse,
+  type MerchantView,
+  type StripeStatus,
+} from "./api";
 
 export const SESSION_COOKIE = "bliss_session";
 
@@ -39,4 +45,32 @@ export async function fetchStripeStatusServer(): Promise<StripeStatus | null> {
     throw new Error(`fetchStripeStatusServer failed: ${res.status}`);
   }
   return (await res.json()) as StripeStatus;
+}
+
+export async function fetchBookingsServer(): Promise<BookingListResponse | null> {
+  const headers = await sessionHeader();
+  if (!headers) return null;
+  const res = await fetch(`${API_BASE_URL}/api/v1/bookings`, {
+    headers,
+    cache: "no-store",
+  });
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    throw new Error(`fetchBookingsServer failed: ${res.status}`);
+  }
+  return (await res.json()) as BookingListResponse;
+}
+
+export async function fetchBookingServer(id: string): Promise<Booking | null> {
+  const headers = await sessionHeader();
+  if (!headers) return null;
+  const res = await fetch(`${API_BASE_URL}/api/v1/bookings/${id}`, {
+    headers,
+    cache: "no-store",
+  });
+  if (res.status === 401 || res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`fetchBookingServer failed: ${res.status}`);
+  }
+  return (await res.json()) as Booking;
 }
