@@ -84,36 +84,7 @@ export function CheckoutFlow({
         plan={syntheticPlanFromCheckout(confirmed)} />;
   }
 
-  // Stripe not wired on the backend — show the inert state alongside the
-  // booking summary so the customer still sees the merchant context.
-  if (!merchant.stripe.configured) {
-    return (
-      <>
-        <MerchantBlock merchant={merchant.merchant} />
-        <CheckoutSummaryCard cart={cart} />
-        <StripeNotConfiguredCard />
-        <TrustSignals />
-      </>
-    );
-  }
-
-  // Merchant hasn't completed Stripe Connect onboarding — block submit
-  // but still show the booking context.
-  if (!merchant.stripe.chargesEnabled) {
-    return (
-      <>
-        <MerchantBlock merchant={merchant.merchant} />
-        <CheckoutSummaryCard cart={cart} />
-        <section className="mt-6 rounded-md border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-900">
-          <div className="font-medium">This merchant isn&apos;t ready to accept payment plans yet</div>
-          <p className="mt-1 text-[12px]">
-            {merchant.merchant.businessName} is still finishing payment setup.
-            Reach out to them for an alternate way to pay.
-          </p>
-        </section>
-      </>
-    );
-  }
+  const stripeReady = merchant.stripe.configured && merchant.stripe.chargesEnabled;
 
   const ineligible = !preview.eligible;
   // For ineligible, render the TooClose component which dispatches on
@@ -161,30 +132,46 @@ export function CheckoutFlow({
           <button
             type="button"
             onClick={() => setStep("card")}
+            disabled={!stripeReady}
             className="mt-6 w-full rounded-md bg-lavender-500 px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-lavender-600 disabled:opacity-60"
           >
             {ctaLabel(hasDeposit, depositCents, publicOption, cart.totalCents)}
           </button>
+          {!merchant.stripe.configured ? (
+            <StripeNotConfiguredCard />
+          ) : !merchant.stripe.chargesEnabled ? (
+            <section className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-900">
+              <div className="font-medium">This merchant isn&apos;t ready to accept payment plans yet</div>
+              <p className="mt-1 text-[12px]">
+                {merchant.merchant.businessName} is still finishing payment setup.
+                Reach out to them for an alternate way to pay.
+              </p>
+            </section>
+          ) : null}
           <TrustSignals />
         </>
       ) : null}
 
-      {showCardStep && stripePromise ? (
-        <Elements stripe={stripePromise}>
-          <StripeCardSection
-            emailInitial={cart.email ?? ""}
-            busy={busy}
-            onCancel={() => setStep("plan")}
-            ctaLabel={cardCta(hasDeposit, depositCents, publicOption)}
-            disclosure={disclosureCopy(hasDeposit, depositCents, publicOption)}
-            onCardCollected={async (card) => {
-              await handleSubmit(card);
-            }}
-          />
-          {topError ? (
-            <div className="mt-3 text-[12px] text-red-600" role="alert">{topError}</div>
-          ) : null}
-        </Elements>
+      {showCardStep ? (
+        stripePromise ? (
+          <Elements stripe={stripePromise}>
+            <StripeCardSection
+              emailInitial={cart.email ?? ""}
+              busy={busy}
+              onCancel={() => setStep("plan")}
+              ctaLabel={cardCta(hasDeposit, depositCents, publicOption)}
+              disclosure={disclosureCopy(hasDeposit, depositCents, publicOption)}
+              onCardCollected={async (card) => {
+                await handleSubmit(card);
+              }}
+            />
+            {topError ? (
+              <div className="mt-3 text-[12px] text-red-600" role="alert">{topError}</div>
+            ) : null}
+          </Elements>
+        ) : (
+          <StripeNotConfiguredCard />
+        )
       ) : null}
     </>
   );
