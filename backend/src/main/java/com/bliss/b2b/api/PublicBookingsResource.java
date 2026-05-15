@@ -61,8 +61,13 @@ public class PublicBookingsResource {
         Booking booking = maybe.get();
         Merchant merchant = merchantDao.findById(booking.merchantId()).orElseThrow();
         MerchantPlanRules rules = planRulesService.forMerchant(merchant.id());
+        // Prefer pre-discount price so a refreshed /pay link on a booking
+        // that has already had the discount applied doesn't double-discount.
+        long evaluateInput = booking.originalTotalAmountCents() != null
+                ? booking.originalTotalAmountCents()
+                : booking.totalAmountCents();
         EligibilityResult eligibility = eligibilityService.evaluate(
-                LocalDate.now(clock), booking.appointmentDate(), booking.totalAmountCents(), rules);
+                LocalDate.now(clock), booking.appointmentDate(), evaluateInput, rules);
         PublicBookingView view = PublicBookingView.build(
                 merchant, booking, eligibility, rules,
                 stripeService.isConfigured(), stripeService.publishableKey());

@@ -77,13 +77,20 @@ public class StripePaymentsService {
     }
 
     /**
-     * Fires the first payment off-session against the saved PaymentMethod.
-     * Returns the resulting PaymentIntent. Throws on Stripe error including
-     * card decline (CardException). Caller wraps in a transaction so a decline
-     * rolls back the plan.
+     * Fires the initial deposit payment on-session (the customer is actively
+     * completing the checkout form) and vaults the PaymentMethod for future
+     * off-session installment charges via {@code setup_future_usage}. Returns
+     * the resulting PaymentIntent. Throws on Stripe error including card
+     * decline (CardException). Caller wraps in a transaction so a decline rolls
+     * back the plan.
      *
      * <p>{@code idempotencyKey} should be the PaymentSchedule row id so a
      * retry on the same row does not double-charge.
+     *
+     * <p>Stripe rejects {@code off_session=true} combined with
+     * {@code setup_future_usage}, so we omit off_session here. A separate
+     * code path (future scheduled-charges job) handles off-session
+     * installments against the saved PaymentMethod.
      */
     public PaymentIntent firePaymentOffSession(
             long amountCents,
@@ -99,8 +106,14 @@ public class StripePaymentsService {
                 .setCustomer(stripeCustomerId)
                 .setPaymentMethod(paymentMethodId)
                 .setConfirm(true)
-                .setOffSession(true)
                 .setSetupFutureUsage(PaymentIntentCreateParams.SetupFutureUsage.OFF_SESSION)
+                .setAutomaticPaymentMethods(
+                        PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
+                                .setEnabled(true)
+                                .setAllowRedirects(
+                                        PaymentIntentCreateParams.AutomaticPaymentMethods
+                                                .AllowRedirects.NEVER)
+                                .build())
                 .putAllMetadata(metadata)
                 .build();
         RequestOptions opts = RequestOptions.builder()

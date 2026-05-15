@@ -21,6 +21,7 @@ type FormState = {
   depositPercent: string;
   depositDollars: string;
   depositMaxDollars: string;
+  discountPercent: string;
 };
 
 export function PlanRulesCard({ initial }: { initial: PlanRules }) {
@@ -106,6 +107,18 @@ export function PlanRulesCard({ initial }: { initial: PlanRules }) {
       depositMaxCents = maxCents;
     }
 
+    // Plan discount: empty input → 0%, otherwise integer 0-50%.
+    const discountInputTrimmed = form.discountPercent.trim();
+    let discountBasisPoints = 0;
+    if (discountInputTrimmed !== "") {
+      const pct = parseInt(discountInputTrimmed, 10);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 50) {
+        setError("Plan discount must be 0-50%.");
+        return;
+      }
+      discountBasisPoints = pct * 100;
+    }
+
     setError(null);
     setSaving(true);
     try {
@@ -126,6 +139,7 @@ export function PlanRulesCard({ initial }: { initial: PlanRules }) {
         depositType,
         depositValue,
         depositMaxCents,
+        discountBasisPoints,
       };
       const saved = await updatePlanRules(payload);
       setForm(toForm(saved));
@@ -303,6 +317,22 @@ export function PlanRulesCard({ initial }: { initial: PlanRules }) {
         </div>
       </Row>
 
+      <Row
+        label="Discount for plan customers (%)"
+        hint="Optional discount applied to the booking total when the customer pays with Bliss. Common range: 0-15%. Leave at 0 to disable."
+      >
+        <div className="max-w-[140px]">
+          <PercentInput
+            label="Discount percent"
+            value={form.discountPercent}
+            onChange={(v) => update("discountPercent", v)}
+            placeholder="0"
+            min={0}
+            max={50}
+          />
+        </div>
+      </Row>
+
       {error ? (
         <div className="text-xs text-red-600" role="alert">
           {error}
@@ -345,6 +375,10 @@ function toForm(rules: PlanRules): FormState {
         ? centsToDollars(rules.depositValue)
         : "",
     depositMaxDollars: centsToDollars(rules.depositMaxCents),
+    discountPercent:
+      rules.discountBasisPoints > 0
+        ? String(Math.round(rules.discountBasisPoints / 100))
+        : "",
   };
 }
 
@@ -456,11 +490,15 @@ function PercentInput({
   value,
   onChange,
   placeholder,
+  min = 1,
+  max = 99,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  min?: number;
+  max?: number;
 }) {
   return (
     <label className="block">
@@ -469,8 +507,8 @@ function PercentInput({
         <input
           type="number"
           inputMode="numeric"
-          min={1}
-          max={99}
+          min={min}
+          max={max}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className="input pr-8"

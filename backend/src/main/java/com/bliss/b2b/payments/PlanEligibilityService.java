@@ -36,34 +36,37 @@ public class PlanEligibilityService {
     ) {
         long days = ChronoUnit.DAYS.between(today, appointmentDate);
         long weeks = days / 7;
+        long discountedTotal = rules.applyDiscountCents(totalAmountCents);
 
         if (weeks < rules.minLeadTimeWeeks()) {
-            return ineligible("too_close", days, 0L);
+            return ineligible("too_close", days, 0L, totalAmountCents, discountedTotal);
         }
         if (rules.maxLeadTimeWeeks() != null && weeks > rules.maxLeadTimeWeeks()) {
-            return ineligible("too_far", days, 0L);
+            return ineligible("too_far", days, 0L, totalAmountCents, discountedTotal);
         }
-        // Amount limits apply to the full booking total, not the post-deposit
-        // balance. A merchant who only offers plans on $1k+ bookings doesn't
-        // suddenly accept a $200 booking because a $100 deposit shrinks the
-        // installment principal.
+        // Amount limits apply to the booking's published price (pre-discount),
+        // not the post-discount or post-deposit balance. A merchant who only
+        // offers plans on $1k+ bookings is gating on the actual ticket size.
         if (rules.minBookingAmountCents() != null && totalAmountCents < rules.minBookingAmountCents()) {
-            return ineligible("amount_too_low", days, 0L);
+            return ineligible("amount_too_low", days, 0L, totalAmountCents, discountedTotal);
         }
         if (rules.maxBookingAmountCents() != null && totalAmountCents > rules.maxBookingAmountCents()) {
-            return ineligible("amount_too_high", days, 0L);
+            return ineligible("amount_too_high", days, 0L, totalAmountCents, discountedTotal);
         }
 
-        long deposit = rules.computeDepositCents(totalAmountCents);
-        if (deposit >= totalAmountCents && deposit > 0) {
+        // Deposit and installments are computed off the post-discount total so
+        // the customer's combined payments equal what they were quoted on the
+        // checkout page.
+        long deposit = rules.computeDepositCents(discountedTotal);
+        if (deposit >= discountedTotal && deposit > 0) {
             // A fixed deposit that swallows the entire booking total — most
             // commonly a $50 fixed deposit on a $40 service when the merchant
             // didn't set a max cap. Reject so the merchant fixes their config
             // rather than the customer paying in full through what was
             // supposed to be a plan flow.
-            return ineligible("deposit_too_high", days, deposit);
+            return ineligible("deposit_too_high", days, deposit, totalAmountCents, discountedTotal);
         }
-        long installmentTotal = totalAmountCents - deposit;
+        long installmentTotal = discountedTotal - deposit;
 
         int dueOffsetDays = rules.paymentDueOffsetDays();
 
@@ -80,13 +83,18 @@ public class PlanEligibilityService {
             String reason = dueOffsetDays > MIN_FINAL_PAYMENT_BUFFER_DAYS
                     ? "exceeds_payment_deadline"
                     : "no_plan_fits";
-            return ineligible(reason, days, deposit);
+            return ineligible(reason, days, deposit, totalAmountCents, discountedTotal);
         }
-        return new EligibilityResult(true, "ok", days, deposit, List.copyOf(options));
+        return new EligibilityResult(true, "ok", days, deposit,
+                totalAmountCents, discountedTotal, List.copyOf(options));
     }
 
-    private static EligibilityResult ineligible(String reason, long days, long deposit) {
-        return new EligibilityResult(false, reason, days, deposit, List.of());
+    private static EligibilityResult ineligible(
+            String reason, long days, long deposit,
+            long originalTotal, long discountedTotal
+    ) {
+        return new EligibilityResult(false, reason, days, deposit,
+                originalTotal, discountedTotal, List.of());
     }
 
     private PlanOption buildInstallments(
@@ -104,29 +112,55 @@ public class PlanEligibilityService {
         long effectiveBuffer = Math.max(MIN_FINAL_PAYMENT_BUFFER_DAYS, paymentDueOffsetDays);
         long usableDays = daysToAppt - effectiveBuffer;
         if (usableDays < 0) return null;
-        long intervals = usableDays / frequency.days();
-        // Without a deposit the first installment fires today, so the count
-        // is 1 + intervals (matches Phase 0-4 math). With a deposit the
-        // first installment is pushed to day F, so the count drops to
-        // intervals (no day-0 installment).
-        int numPayments = hasDeposit ? (int) intervals : (int) (1 + intervals);
+
+        List<LocalDate> dueDates;
+        if (frequency == PlanFrequency.MONTHLY && hasDeposit) {
+            // Anchor monthly installments to the 1st of each calendar month so
+            // they line up with typical pay cycles. Skip the first 1st if it
+            // lands within 7 days of the deposit charge to avoid stacking two
+            // charges in the same week.
+            dueDates = monthlyFirstOfMonthDueDates(today, appointmentDate.minusDays(effectiveBuffer));
+        } else {
+            long intervals = usableDays / frequency.days();
+            // Without a deposit the first installment fires today, so the count
+            // is 1 + intervals (matches Phase 0-4 math). With a deposit the
+            // first installment is pushed to day F, so the count drops to
+            // intervals (no day-0 installment).
+            int n = hasDeposit ? (int) intervals : (int) (1 + intervals);
+            if (n < 1) return null;
+            // A plan with zero deposit and just one installment is really a
+            // single charge — keep the legacy >= 2 floor for that case. With a
+            // deposit, 1 installment is fine because the deposit counts as the
+            // first commitment event.
+            if (!hasDeposit && n < 2) return null;
+            dueDates = new ArrayList<>(n);
+            int startMultiplier = hasDeposit ? 1 : 0;
+            for (int i = 0; i < n; i++) {
+                dueDates.add(today.plusDays((long) (startMultiplier + i) * frequency.days()));
+            }
+        }
+
+        int numPayments = dueDates.size();
         if (numPayments < 1) return null;
-        // A plan with zero deposit and just one installment is really a
-        // single charge — keep the legacy >= 2 floor for that case. With a
-        // deposit, 1 installment is fine because the deposit counts as the
-        // first commitment event.
-        if (!hasDeposit && numPayments < 2) return null;
         if (installmentTotalCents <= 0) return null;
 
         long perPayment = installmentTotalCents / numPayments;
         long remainder = installmentTotalCents - perPayment * numPayments;
         long finalPayment = perPayment + remainder;
 
-        List<LocalDate> dueDates = new ArrayList<>(numPayments);
-        int startMultiplier = hasDeposit ? 1 : 0;
-        for (int i = 0; i < numPayments; i++) {
-            dueDates.add(today.plusDays((long) (startMultiplier + i) * frequency.days()));
-        }
         return new PlanOption(frequency, numPayments, perPayment, finalPayment, List.copyOf(dueDates));
+    }
+
+    private static List<LocalDate> monthlyFirstOfMonthDueDates(LocalDate today, LocalDate cutoff) {
+        LocalDate earliest = today.plusDays(7);
+        LocalDate cursor = earliest.getDayOfMonth() == 1
+                ? earliest
+                : earliest.withDayOfMonth(1).plusMonths(1);
+        List<LocalDate> dates = new ArrayList<>();
+        while (!cursor.isAfter(cutoff)) {
+            dates.add(cursor);
+            cursor = cursor.plusMonths(1);
+        }
+        return dates;
     }
 }

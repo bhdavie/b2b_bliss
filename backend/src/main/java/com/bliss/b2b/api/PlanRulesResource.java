@@ -32,6 +32,7 @@ public class PlanRulesResource {
     private static final long MIN_PERCENT = 1L;
     private static final long MAX_PERCENT = 99L;
     private static final int MAX_CUSTOM_MONTHS = 24;
+    private static final int MAX_DISCOUNT_BASIS_POINTS = 5_000;
 
     private final MerchantPlanRulesService service;
 
@@ -249,6 +250,12 @@ public class PlanRulesResource {
             return badRequest("afterRetriesAction must be one of treat_as_cancellation, balance_due_at_checkin");
         }
 
+        // --- Plan discount ---
+        int discountBasisPoints = req.discountBasisPoints() == null ? 0 : req.discountBasisPoints();
+        if (discountBasisPoints < 0 || discountBasisPoints > MAX_DISCOUNT_BASIS_POINTS) {
+            return badRequest("discountBasisPoints must be 0-" + MAX_DISCOUNT_BASIS_POINTS);
+        }
+
         MerchantPlanRules rules = new MerchantPlanRules(
                 minLead, maxLead, allowed, minAmt, maxAmt, recommended,
                 depositRequired, depositType, depositValue, depositMaxCents,
@@ -257,7 +264,8 @@ public class PlanRulesResource {
                 paymentDuePolicy, customMonths,
                 retryAttempts, retrySpacingDays,
                 lateFeeEnabled, lateFeeType, lateFeeValue, lateFeeScope,
-                afterRetries);
+                afterRetries,
+                discountBasisPoints);
         service.save(principal.merchant().id(), rules);
         return Response.ok(PlanRulesView.from(rules)).build();
     }
@@ -298,6 +306,7 @@ public class PlanRulesResource {
             @JsonProperty("lateFeeType") String lateFeeType,
             @JsonProperty("lateFeeValue") Long lateFeeValue,
             @JsonProperty("lateFeeScope") String lateFeeScope,
-            @JsonProperty("afterRetriesAction") String afterRetriesAction
+            @JsonProperty("afterRetriesAction") String afterRetriesAction,
+            @JsonProperty("discountBasisPoints") Integer discountBasisPoints
     ) {}
 }

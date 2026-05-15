@@ -12,6 +12,7 @@ import {
   type PublicPlanOption,
 } from "@/lib/publicApi";
 import { DepositCallout } from "./DepositCallout";
+import { DiscountBreakdown } from "./DiscountBreakdown";
 import { MerchantBlock } from "./MerchantBlock";
 import { PlanPicker } from "./PlanPicker";
 import { PolicyDisclosure } from "./PolicyDisclosure";
@@ -62,10 +63,14 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
       <ServiceCard service={booking.service} />
 
       <div className={showCardStep ? "pointer-events-none opacity-30" : ""}>
+        <DiscountBreakdown
+          originalTotalCents={booking.eligibility.originalTotalAmountCents}
+          discountedTotalCents={booking.eligibility.discountedTotalAmountCents}
+        />
         {hasDeposit ? (
           <DepositCallout
             depositAmountCents={depositCents}
-            totalAmountCents={booking.service.totalAmountCents}
+            totalAmountCents={booking.eligibility.discountedTotalAmountCents}
           />
         ) : null}
         <PlanPicker
@@ -88,7 +93,7 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
             disabled={!booking.stripe.configured}
             className="mt-6 w-full rounded-md bg-lavender-500 px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-lavender-600 disabled:opacity-60"
           >
-            {planCtaLabel(hasDeposit, depositCents, selectedOption, booking.service.totalAmountCents)}
+            {planCtaLabel(hasDeposit, depositCents, selectedOption, booking.eligibility.discountedTotalAmountCents)}
           </button>
           {!booking.stripe.configured ? <StripeNotConfiguredCard /> : null}
           <TrustSignals />

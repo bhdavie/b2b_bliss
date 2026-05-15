@@ -48,7 +48,8 @@ public class MerchantPlanRulesService {
                 rules.lateFeeType() == null ? null : rules.lateFeeType().wire(),
                 rules.lateFeeValue(),
                 rules.lateFeeScope() == null ? null : rules.lateFeeScope().wire(),
-                rules.afterRetriesAction().wire()
+                rules.afterRetriesAction().wire(),
+                rules.discountBasisPoints()
         );
     }
 }

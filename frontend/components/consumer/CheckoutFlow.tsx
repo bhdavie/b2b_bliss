@@ -19,6 +19,7 @@ import {
   type PreviewResult,
 } from "@/lib/eligibility";
 import { DepositCallout } from "./DepositCallout";
+import { DiscountBreakdown } from "./DiscountBreakdown";
 import { MerchantBlock } from "./MerchantBlock";
 import { PlanPicker } from "./PlanPicker";
 import { PolicyDisclosure } from "./PolicyDisclosure";
@@ -48,9 +49,14 @@ type Step = "plan" | "card" | "confirmed";
 export function CheckoutFlow({
   merchant,
   cart,
+  returnUrl,
 }: {
   merchant: PublicMerchant;
   cart: CheckoutCart;
+  // TODO: in production, validate return_url against an allow-list of
+  // merchant-registered URLs to prevent open-redirect attacks. No validation
+  // needed for local demo.
+  returnUrl?: string | null;
 }) {
   const [step, setStep] = useState<Step>("plan");
   const [busy, setBusy] = useState(false);
@@ -94,7 +100,10 @@ export function CheckoutFlow({
       <>
         <MerchantBlock merchant={merchant.merchant} />
         <CheckoutSummaryCard cart={cart} />
-        <TooClose booking={syntheticBookingFromCart(merchant, cart, preview.reason, preview.daysToAppointment)} />
+        <TooClose
+          booking={syntheticBookingFromCart(merchant, cart, preview.reason, preview.daysToAppointment)}
+          returnUrl={returnUrl}
+        />
       </>
     );
   }
@@ -112,10 +121,14 @@ export function CheckoutFlow({
       <CheckoutSummaryCard cart={cart} />
 
       <div className={showCardStep ? "pointer-events-none opacity-30" : ""}>
+        <DiscountBreakdown
+          originalTotalCents={preview.originalTotalAmountCents}
+          discountedTotalCents={preview.discountedTotalAmountCents}
+        />
         {hasDeposit ? (
           <DepositCallout
             depositAmountCents={depositCents}
-            totalAmountCents={cart.totalCents}
+            totalAmountCents={preview.discountedTotalAmountCents}
           />
         ) : null}
         <PlanPicker
@@ -135,18 +148,44 @@ export function CheckoutFlow({
             disabled={!stripeReady}
             className="mt-6 w-full rounded-md bg-lavender-500 px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-lavender-600 disabled:opacity-60"
           >
-            {ctaLabel(hasDeposit, depositCents, publicOption, cart.totalCents)}
+            {ctaLabel(hasDeposit, depositCents, publicOption, preview.discountedTotalAmountCents)}
           </button>
+          {returnUrl ? (
+            <div className="mt-2 text-center">
+              <a
+                href={returnUrl}
+                className="text-[12px] text-ink-muted hover:underline"
+              >
+                Return to {merchant.merchant.businessName}
+              </a>
+            </div>
+          ) : null}
           {!merchant.stripe.configured ? (
-            <StripeNotConfiguredCard />
+            <>
+              <StripeNotConfiguredCard />
+              {returnUrl ? (
+                <ReturnToMerchantCta
+                  href={returnUrl}
+                  merchantName={merchant.merchant.businessName}
+                />
+              ) : null}
+            </>
           ) : !merchant.stripe.chargesEnabled ? (
-            <section className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-900">
-              <div className="font-medium">This merchant isn&apos;t ready to accept payment plans yet</div>
-              <p className="mt-1 text-[12px]">
-                {merchant.merchant.businessName} is still finishing payment setup.
-                Reach out to them for an alternate way to pay.
-              </p>
-            </section>
+            <>
+              <section className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-900">
+                <div className="font-medium">This merchant isn&apos;t ready to accept payment plans yet</div>
+                <p className="mt-1 text-[12px]">
+                  {merchant.merchant.businessName} is still finishing payment setup.
+                  Reach out to them for an alternate way to pay.
+                </p>
+              </section>
+              {returnUrl ? (
+                <ReturnToMerchantCta
+                  href={returnUrl}
+                  merchantName={merchant.merchant.businessName}
+                />
+              ) : null}
+            </>
           ) : null}
           <TrustSignals />
         </>
@@ -164,6 +203,8 @@ export function CheckoutFlow({
               onCardCollected={async (card) => {
                 await handleSubmit(card);
               }}
+              returnUrl={returnUrl}
+              merchantName={merchant.merchant.businessName}
             />
             {topError ? (
               <div className="mt-3 text-[12px] text-red-600" role="alert">{topError}</div>
@@ -218,6 +259,7 @@ function adaptPolicies(p: PublicMerchant["policies"]): PlanRules {
     depositType: p.depositType,
     depositValue: p.depositValue,
     depositMaxCents: p.depositMaxCents,
+    discountBasisPoints: p.discountBasisPoints,
   };
 }
 
@@ -316,6 +358,8 @@ function syntheticBookingFromCart(
       reason,
       daysToAppointment,
       depositAmountCents: 0,
+      originalTotalAmountCents: cart.totalCents,
+      discountedTotalAmountCents: cart.totalCents,
     },
     planOptions: [],
     stripe: merchant.stripe,
@@ -331,11 +375,23 @@ function syntheticPlanFromCheckout(r: CheckoutResponse) {
     frequency: r.frequency,
     numPayments: r.numPayments,
     totalAmountCents: r.totalAmountCents,
+    originalTotalAmountCents: r.originalTotalAmountCents,
     depositAmountCents: r.depositAmountCents,
     schedule: r.schedule,
     firstChargeIntentId: r.firstChargeIntentId,
     firstChargeStatus: r.firstChargeStatus,
   };
+}
+
+function ReturnToMerchantCta({ href, merchantName }: { href: string; merchantName: string }) {
+  return (
+    <a
+      href={href}
+      className="mt-4 flex w-full items-center justify-center rounded-md bg-lavender-500 px-4 py-3 text-[14px] font-medium text-white no-underline hover:bg-lavender-600"
+    >
+      Return to {merchantName}
+    </a>
+  );
 }
 
 // Suppress unused: computeDepositCents is exported by eligibility.ts but

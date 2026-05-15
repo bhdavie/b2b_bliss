@@ -48,9 +48,11 @@ export default async function CheckoutPage(props: {
     );
   }
 
+  const returnUrl = firstOf(raw.return_url) ?? null;
+
   return (
     <PageChrome>
-      <CheckoutFlow merchant={merchant} cart={parsed.cart} />
+      <CheckoutFlow merchant={merchant} cart={parsed.cart} returnUrl={returnUrl} />
     </PageChrome>
   );
 }

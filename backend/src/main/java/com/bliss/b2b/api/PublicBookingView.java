@@ -45,7 +45,9 @@ public record PublicBookingView(
             boolean eligible,
             String reason,
             long daysToAppointment,
-            long depositAmountCents
+            long depositAmountCents,
+            long originalTotalAmountCents,
+            long discountedTotalAmountCents
     ) {}
 
     public record Plan(
@@ -132,7 +134,12 @@ public record PublicBookingView(
                 new Service(
                         booking.serviceName(),
                         booking.serviceDescription(),
-                        booking.totalAmountCents(),
+                        // Surface the published price to the consumer page;
+                        // a row that has had the discount applied still
+                        // exposes the pre-discount total via originalTotal.
+                        booking.originalTotalAmountCents() != null
+                                ? booking.originalTotalAmountCents()
+                                : booking.totalAmountCents(),
                         booking.appointmentDate(),
                         booking.cancellationPolicy(),
                         booking.customerNameHint(),
@@ -141,7 +148,9 @@ public record PublicBookingView(
                         eligibility.eligible(),
                         eligibility.reason(),
                         eligibility.daysToAppointment(),
-                        eligibility.depositAmountCents()),
+                        eligibility.depositAmountCents(),
+                        eligibility.originalTotalAmountCents(),
+                        eligibility.discountedTotalAmountCents()),
                 options,
                 new Stripe(stripeConfigured, stripeConfigured ? stripePublishableKey : null),
                 policies,

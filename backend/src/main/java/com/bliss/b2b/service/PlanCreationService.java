@@ -203,8 +203,15 @@ public class PlanCreationService {
                 .orElse(MerchantPlanRules.DEFAULTS);
 
         LocalDate today = LocalDate.now(clock);
+        // Prefer the booking's pre-discount price when present so a
+        // re-evaluation of an already-discounted booking row doesn't double-
+        // discount. For freshly-created bookings, total_amount_cents is the
+        // published price.
+        long evaluateInput = booking.originalTotalAmountCents() != null
+                ? booking.originalTotalAmountCents()
+                : booking.totalAmountCents();
         EligibilityResult eligibility = eligibilityService.evaluate(
-                today, booking.appointmentDate(), booking.totalAmountCents(), rules);
+                today, booking.appointmentDate(), evaluateInput, rules);
         if (!eligibility.eligible()) {
             throw new PlanCreationException(Reason.ELIGIBILITY_FAILED,
                     "booking does not satisfy this merchant's plan rules (" + eligibility.reason() + ")");
@@ -258,11 +265,20 @@ public class PlanCreationService {
         LocalDate startDate = hasDeposit ? today : option.dueDates().get(0);
         LocalDate endDate = option.dueDates().get(installmentCount - 1);
 
+        long discountedTotal = eligibility.discountedTotalAmountCents();
+        long originalTotal = eligibility.originalTotalAmountCents();
+        // Persist the discount on the booking when one applied so the merchant
+        // dashboard can show the savings. No-op when total equals total.
+        if (discountedTotal != originalTotal) {
+            bookingDao.applyPlanDiscount(booking.id(), discountedTotal, originalTotal);
+            booking = bookingDao.findById(booking.id()).orElseThrow();
+        }
+
         planDao.insert(
                 booking.id(),
                 customer.id(),
                 storedCard.id(),
-                booking.totalAmountCents(),
+                discountedTotal,
                 installmentCount,
                 option.frequency().wire(),
                 startDate,

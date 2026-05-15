@@ -54,6 +54,8 @@ public class MerchantPlanRulesRowMapper implements RowMapper<MerchantPlanRules> 
 
         AfterRetriesAction afterRetries = AfterRetriesAction.fromWire(rs.getString("after_retries_action"));
 
+        int discountBasisPoints = rs.getInt("discount_basis_points");
+
         return new MerchantPlanRules(
                 rs.getInt("min_lead_time_weeks"),
                 maxLead,
@@ -79,7 +81,8 @@ public class MerchantPlanRulesRowMapper implements RowMapper<MerchantPlanRules> 
                 lateFeeType,
                 lateFeeValue,
                 lateFeeScope,
-                afterRetries
+                afterRetries,
+                discountBasisPoints
         );
     }
 }

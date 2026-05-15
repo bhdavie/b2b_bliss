@@ -11,6 +11,7 @@ public record Booking(
         String serviceName,
         String serviceDescription,
         long totalAmountCents,
+        Long originalTotalAmountCents,
         LocalDate appointmentDate,
         LocalDate checkoutDate,
         String cancellationPolicy,

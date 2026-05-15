@@ -89,4 +89,21 @@ public interface BookingDao {
 
     @SqlQuery("SELECT COUNT(*) FROM bookings WHERE merchant_id = :merchantId")
     long countForMerchant(@Bind("merchantId") UUID merchantId);
+
+    /**
+     * Applied at plan-acceptance time when the merchant's plan_rules carry a
+     * non-zero discount. {@code originalTotalCents} captures the pre-discount
+     * published price so the dashboard can show the savings story.
+     */
+    @SqlUpdate("""
+            UPDATE bookings
+            SET total_amount_cents = :discountedTotalCents,
+                original_total_cents = :originalTotalCents
+            WHERE id = :id
+            """)
+    int applyPlanDiscount(
+            @Bind("id") UUID id,
+            @Bind("discountedTotalCents") long discountedTotalCents,
+            @Bind("originalTotalCents") long originalTotalCents
+    );
 }

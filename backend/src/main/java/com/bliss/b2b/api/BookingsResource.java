@@ -137,8 +137,14 @@ public class BookingsResource {
 
     private BookingView detailView(Merchant merchant, Booking booking) {
         MerchantPlanRules rules = planRulesService.forMerchant(merchant.id());
+        // Re-running eligibility on a booking that has already been
+        // discounted (originalTotalAmountCents set) would double-apply the
+        // discount; preview against the pre-discount price instead.
+        long evaluateInput = booking.originalTotalAmountCents() != null
+                ? booking.originalTotalAmountCents()
+                : booking.totalAmountCents();
         EligibilityResult eligibility = eligibilityService.evaluate(
-                LocalDate.now(clock), booking.appointmentDate(), booking.totalAmountCents(), rules);
+                LocalDate.now(clock), booking.appointmentDate(), evaluateInput, rules);
         List<BookingView.PlanOptionView> options = eligibility.options().stream()
                 .map(BookingsResource::toOptionView)
                 .toList();

@@ -187,6 +187,7 @@ export type Booking = {
   serviceName: string;
   serviceDescription: string | null;
   totalAmountCents: number;
+  originalTotalAmountCents: number | null;
   appointmentDate: string;
   checkoutDate: string | null;
   cancellationPolicy: string | null;
@@ -293,6 +294,7 @@ export type PlanRules = {
   lateFeeValue: number | null;
   lateFeeScope: LateFeeScope | null;
   afterRetriesAction: AfterRetriesAction;
+  discountBasisPoints: number;
 };
 
 export const DEFAULT_PLAN_RULES: PlanRules = {
@@ -321,6 +323,7 @@ export const DEFAULT_PLAN_RULES: PlanRules = {
   lateFeeValue: null,
   lateFeeScope: null,
   afterRetriesAction: "treat_as_cancellation",
+  discountBasisPoints: 0,
 };
 
 export async function fetchPlanRules(): Promise<PlanRules> {

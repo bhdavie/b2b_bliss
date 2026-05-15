@@ -26,7 +26,7 @@ public interface MerchantPlanRulesDao {
                 payment_due_policy, payment_due_custom_months,
                 retry_attempts, retry_spacing_days,
                 late_fee_enabled, late_fee_type, late_fee_value, late_fee_scope,
-                after_retries_action
+                after_retries_action, discount_basis_points
             ) VALUES (
                 :merchantId, :minLeadTimeWeeks, :maxLeadTimeWeeks,
                 :allowedFrequencies, :minBookingAmountCents,
@@ -38,7 +38,7 @@ public interface MerchantPlanRulesDao {
                 :paymentDuePolicy, :paymentDueCustomMonths,
                 :retryAttempts, :retrySpacingDays,
                 :lateFeeEnabled, :lateFeeType, :lateFeeValue, :lateFeeScope,
-                :afterRetriesAction
+                :afterRetriesAction, :discountBasisPoints
             )
             ON CONFLICT (merchant_id) DO UPDATE SET
                 min_lead_time_weeks = EXCLUDED.min_lead_time_weeks,
@@ -65,7 +65,8 @@ public interface MerchantPlanRulesDao {
                 late_fee_type = EXCLUDED.late_fee_type,
                 late_fee_value = EXCLUDED.late_fee_value,
                 late_fee_scope = EXCLUDED.late_fee_scope,
-                after_retries_action = EXCLUDED.after_retries_action
+                after_retries_action = EXCLUDED.after_retries_action,
+                discount_basis_points = EXCLUDED.discount_basis_points
             """)
     void upsert(
             @Bind("merchantId") UUID merchantId,
@@ -93,6 +94,7 @@ public interface MerchantPlanRulesDao {
             @Bind("lateFeeType") String lateFeeType,
             @Bind("lateFeeValue") Long lateFeeValue,
             @Bind("lateFeeScope") String lateFeeScope,
-            @Bind("afterRetriesAction") String afterRetriesAction
+            @Bind("afterRetriesAction") String afterRetriesAction,
+            @Bind("discountBasisPoints") int discountBasisPoints
     );
 }

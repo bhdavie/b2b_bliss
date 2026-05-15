@@ -7,6 +7,7 @@ import {
   type CreatePlanResponse,
   type PublicBooking,
 } from "@/lib/publicApi";
+import { DiscountBreakdown } from "./DiscountBreakdown";
 
 export function Confirmation({
   booking,
@@ -18,6 +19,9 @@ export function Confirmation({
   const firstPaymentStatus = plan.firstChargeStatus.toLowerCase();
   const firstSucceeded =
     firstPaymentStatus === "succeeded" || firstPaymentStatus === "paid";
+  const hasDiscount =
+    plan.originalTotalAmountCents != null
+    && plan.originalTotalAmountCents > plan.totalAmountCents;
 
   return (
     <div>
@@ -41,10 +45,20 @@ export function Confirmation({
           {formatScheduleDateLong(booking.service.appointmentDate)}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-y-2 text-[12px]">
-          <div className="text-ink-muted">Total</div>
-          <div className="text-right font-medium text-ink">
-            {formatDollarsCompact(plan.totalAmountCents)}
-          </div>
+          {hasDiscount && plan.originalTotalAmountCents != null ? (
+            <DiscountBreakdown
+              originalTotalCents={plan.originalTotalAmountCents}
+              discountedTotalCents={plan.totalAmountCents}
+              variant="rows"
+            />
+          ) : (
+            <>
+              <div className="text-ink-muted">Total</div>
+              <div className="text-right font-medium text-ink">
+                {formatDollarsCompact(plan.totalAmountCents)}
+              </div>
+            </>
+          )}
           {plan.depositAmountCents > 0 ? (
             <>
               <div className="text-ink-muted">Deposit today</div>

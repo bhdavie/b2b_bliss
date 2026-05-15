@@ -45,7 +45,8 @@ public record PublicMerchantView(
             boolean depositRequired,
             String depositType,
             Long depositValue,
-            Long depositMaxCents
+            Long depositMaxCents,
+            int discountBasisPoints
     ) {}
 
     public record Stripe(

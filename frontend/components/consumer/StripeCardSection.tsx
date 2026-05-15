@@ -35,6 +35,8 @@ export function StripeCardSection({
   busy,
   disclosure,
   ctaLabel,
+  returnUrl,
+  merchantName,
 }: {
   emailInitial: string;
   onCancel: () => void;
@@ -42,6 +44,8 @@ export function StripeCardSection({
   busy: boolean;
   disclosure: string;
   ctaLabel: string;
+  returnUrl?: string | null;
+  merchantName?: string;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -132,14 +136,24 @@ export function StripeCardSection({
         >
           {submitting || busy ? "Setting up plan..." : ctaLabel}
         </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={submitting || busy}
-          className="text-[12px] text-ink-muted hover:underline"
-        >
-          Back to plan options
-        </button>
+        <div className="flex items-center justify-center gap-3 text-[12px] text-ink-muted">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={submitting || busy}
+            className="hover:underline"
+          >
+            Back to plan options
+          </button>
+          {returnUrl && merchantName ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <a href={returnUrl} className="hover:underline">
+                Return to {merchantName}
+              </a>
+            </>
+          ) : null}
+        </div>
       </div>
     </form>
   );

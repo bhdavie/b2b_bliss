@@ -116,7 +116,20 @@ function BookingRow({ booking }: { booking: Booking }) {
         ) : null}
       </td>
       <td className="px-4 py-3 text-right tabular-nums">
-        {formatCents(booking.totalAmountCents)}
+        {booking.originalTotalAmountCents != null
+        && booking.originalTotalAmountCents > booking.totalAmountCents ? (
+          <div className="flex flex-col items-end leading-tight">
+            <span>{formatCents(booking.totalAmountCents)}</span>
+            <span
+              className="text-[10px] text-ink-soft line-through"
+              title="Pre-discount price"
+            >
+              {formatCents(booking.originalTotalAmountCents)}
+            </span>
+          </div>
+        ) : (
+          formatCents(booking.totalAmountCents)
+        )}
       </td>
       <td className="px-4 py-3">
         <StatusBadge status={booking.status} />

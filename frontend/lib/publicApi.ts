@@ -64,6 +64,8 @@ export type PublicBooking = {
     reason: string;
     daysToAppointment: number;
     depositAmountCents: number;
+    originalTotalAmountCents: number;
+    discountedTotalAmountCents: number;
   };
   planOptions: PublicPlanOption[];
   stripe: {
@@ -106,6 +108,7 @@ export type MerchantPolicies = PublicPolicies & {
   depositType: "fixed" | "percentage" | null;
   depositValue: number | null;
   depositMaxCents: number | null;
+  discountBasisPoints: number;
 };
 
 export type PublicMerchant = {
@@ -152,6 +155,7 @@ export type CheckoutResponse = {
   frequency: PublicPlanFrequency;
   numPayments: number;
   totalAmountCents: number;
+  originalTotalAmountCents: number | null;
   depositAmountCents: number;
   schedule: {
     sequence: number;
@@ -206,6 +210,7 @@ export type CreatePlanResponse = {
   frequency: PublicPlanFrequency;
   numPayments: number;
   totalAmountCents: number;
+  originalTotalAmountCents: number | null;
   depositAmountCents: number;
   schedule: {
     sequence: number;

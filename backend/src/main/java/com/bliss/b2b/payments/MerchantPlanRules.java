@@ -37,7 +37,8 @@ public record MerchantPlanRules(
         FeeType lateFeeType,
         Long lateFeeValue,
         LateFeeScope lateFeeScope,
-        AfterRetriesAction afterRetriesAction
+        AfterRetriesAction afterRetriesAction,
+        int discountBasisPoints
 ) {
     public static final MerchantPlanRules DEFAULTS = new MerchantPlanRules(
             6, null,
@@ -49,7 +50,8 @@ public record MerchantPlanRules(
             PaymentDuePolicy.AT_APPOINTMENT, null,
             3, 3,
             false, null, null, null,
-            AfterRetriesAction.TREAT_AS_CANCELLATION
+            AfterRetriesAction.TREAT_AS_CANCELLATION,
+            0
     );
 
     /**
@@ -82,5 +84,15 @@ public record MerchantPlanRules(
      */
     public int paymentDueOffsetDays() {
         return paymentDuePolicy.offsetDays(paymentDueCustomMonths);
+    }
+
+    /**
+     * Applies the merchant's plan discount to a booking total. 1000 bp == 10%.
+     * Floors the result so we never overcharge — at worst the merchant eats
+     * a fractional cent of "intended discount" they configured.
+     */
+    public long applyDiscountCents(long totalCents) {
+        if (discountBasisPoints <= 0 || totalCents <= 0) return totalCents;
+        return totalCents * (10_000L - discountBasisPoints) / 10_000L;
     }
 }

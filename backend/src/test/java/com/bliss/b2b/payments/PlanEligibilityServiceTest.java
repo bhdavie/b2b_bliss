@@ -293,10 +293,10 @@ class PlanEligibilityServiceTest {
         assertThat(monthly.numPayments()).isEqualTo(2);
         assertThat(monthly.perPaymentAmountCents()).isEqualTo(30_000L);
         assertThat(monthly.finalPaymentAmountCents()).isEqualTo(30_000L);
-        // First installment is at day F (one cadence interval after today),
-        // not day 0 — the deposit holds day 0.
-        assertThat(monthly.dueDates().get(0)).isEqualTo(TODAY.plusDays(30));
-        assertThat(monthly.dueDates().get(1)).isEqualTo(TODAY.plusDays(60));
+        // Monthly installments anchor to the 1st of each calendar month. First
+        // 1st ≥ TODAY + 7 days (2026-05-21) → 2026-06-01.
+        assertThat(monthly.dueDates().get(0)).isEqualTo(LocalDate.of(2026, 6, 1));
+        assertThat(monthly.dueDates().get(1)).isEqualTo(LocalDate.of(2026, 7, 1));
     }
 
     @Test
@@ -330,11 +330,13 @@ class PlanEligibilityServiceTest {
         assertThat(result.eligible()).isTrue();
         assertThat(result.depositAmountCents()).isEqualTo(50_000L);
         PlanOption monthly = result.options().get(0);
-        // (91 - 3) / 30 = 2 intervals, with deposit so numPayments = 2
-        assertThat(monthly.numPayments()).isEqualTo(2);
-        // $9,500 / 2 = $4,750 each
-        assertThat(monthly.perPaymentAmountCents()).isEqualTo(475_000L);
-        assertThat(monthly.finalPaymentAmountCents()).isEqualTo(475_000L);
+        // TODAY 2026-05-14, appt 2026-08-13, cutoff 2026-08-10. 1st-of-month
+        // installments anchored to dates ≥ TODAY+7 (2026-05-21) → June 1,
+        // July 1, Aug 1 = 3 installments.
+        assertThat(monthly.numPayments()).isEqualTo(3);
+        // $9,500 / 3 = $3,166.66 each, remainder 2 cents on the final
+        assertThat(monthly.perPaymentAmountCents()).isEqualTo(316_666L);
+        assertThat(monthly.finalPaymentAmountCents()).isEqualTo(316_668L);
     }
 
     @Test
@@ -378,9 +380,10 @@ class PlanEligibilityServiceTest {
 
     @Test
     void depositPresent_atSixWeeksMonthly_fitsOneInstallment() {
-        // 6 weeks (42 days) + monthly + deposit: with the deposit pushing
-        // the first installment to day 30, intervals = (42-3)/30 = 1, so
-        // 1 installment. Allowed because deposit + 1 installment is a plan.
+        // 6 weeks (42 days) + monthly + deposit. TODAY 2026-05-14, appt
+        // 2026-06-25, cutoff 2026-06-22. 1st-of-month anchored ≥ TODAY+7
+        // (2026-05-21) → June 1. Only 2026-06-01 fits before cutoff, so
+        // 1 installment.
         MerchantPlanRules rules = withDeposit(
                 6, null, AllowedFrequencies.MONTHLY, null, null, null,
                 DepositType.PERCENTAGE, 25L, null);
@@ -393,7 +396,7 @@ class PlanEligibilityServiceTest {
         PlanOption monthly = result.options().get(0);
         assertThat(monthly.numPayments()).isEqualTo(1);
         assertThat(monthly.perPaymentAmountCents()).isEqualTo(60_000L);
-        assertThat(monthly.dueDates()).containsExactly(TODAY.plusDays(30));
+        assertThat(monthly.dueDates()).containsExactly(LocalDate.of(2026, 6, 1));
     }
 
     @Test
@@ -411,6 +414,98 @@ class PlanEligibilityServiceTest {
     @Test
     void computeDeposit_disabled_returnsZero() {
         assertThat(MerchantPlanRules.DEFAULTS.computeDepositCents(100_000L)).isZero();
+    }
+
+    // -- Plan discount (Phase 14) --
+
+    @Test
+    void discount_zero_returnsTotalsEqual() {
+        EligibilityResult result = service.evaluate(
+                TODAY, TODAY.plusDays(91), 195_000L, MerchantPlanRules.DEFAULTS);
+        assertThat(result.originalTotalAmountCents()).isEqualTo(195_000L);
+        assertThat(result.discountedTotalAmountCents()).isEqualTo(195_000L);
+    }
+
+    @Test
+    void discount_tenPercent_appliedBeforeDepositAndInstallments() {
+        // $1,950 booking, 10% discount → $1,755. 10% deposit on $1,755 = $175 (floor on 50bp).
+        // Installments cover $1,755 - $175 = $1,580 over the monthly schedule.
+        MerchantPlanRules rules = new MerchantPlanRules(
+                6, null,
+                AllowedFrequencies.MONTHLY,
+                null, null, null,
+                true, DepositType.PERCENTAGE, 10L, null,
+                RefundPolicy.FULL, null,
+                false, null, null, null,
+                PaymentDuePolicy.AT_APPOINTMENT, null,
+                3, 3,
+                false, null, null, null,
+                AfterRetriesAction.TREAT_AS_CANCELLATION,
+                1000
+        );
+
+        EligibilityResult result = service.evaluate(
+                TODAY, TODAY.plusDays(91), 195_000L, rules);
+
+        assertThat(result.eligible()).isTrue();
+        assertThat(result.originalTotalAmountCents()).isEqualTo(195_000L);
+        assertThat(result.discountedTotalAmountCents()).isEqualTo(175_500L);
+        // Deposit math runs on the discounted total, not the original.
+        assertThat(result.depositAmountCents()).isEqualTo(17_550L);
+    }
+
+    @Test
+    void discount_appliesToInstallmentSchedule() {
+        MerchantPlanRules rules = new MerchantPlanRules(
+                6, null,
+                AllowedFrequencies.MONTHLY,
+                null, null, null,
+                false, null, null, null,
+                RefundPolicy.FULL, null,
+                false, null, null, null,
+                PaymentDuePolicy.AT_APPOINTMENT, null,
+                3, 3,
+                false, null, null, null,
+                AfterRetriesAction.TREAT_AS_CANCELLATION,
+                2000
+        );
+
+        EligibilityResult result = service.evaluate(
+                TODAY, TODAY.plusDays(91), 100_000L, rules); // 20% off $1000 → $800
+
+        assertThat(result.discountedTotalAmountCents()).isEqualTo(80_000L);
+        // Sum of installments equals discounted total (no deposit branch).
+        PlanOption monthly = result.options().get(0);
+        assertSchedulesSumsToTotal(monthly, 80_000L);
+    }
+
+    @Test
+    void discount_amountLimitsAppliedToOriginalNotDiscountedTotal() {
+        // Merchant has $1k floor. Booking of $1,050 with 10% discount would be
+        // $945 post-discount, but the $1k floor measures the published price.
+        MerchantPlanRules rules = new MerchantPlanRules(
+                6, null,
+                AllowedFrequencies.BOTH,
+                100_000L, null, null,
+                false, null, null, null,
+                RefundPolicy.FULL, null,
+                false, null, null, null,
+                PaymentDuePolicy.AT_APPOINTMENT, null,
+                3, 3,
+                false, null, null, null,
+                AfterRetriesAction.TREAT_AS_CANCELLATION,
+                1000
+        );
+
+        EligibilityResult ok = service.evaluate(
+                TODAY, TODAY.plusDays(91), 105_000L, rules);
+        assertThat(ok.eligible()).isTrue();
+        assertThat(ok.discountedTotalAmountCents()).isEqualTo(94_500L);
+
+        EligibilityResult tooLow = service.evaluate(
+                TODAY, TODAY.plusDays(91), 95_000L, rules);
+        assertThat(tooLow.eligible()).isFalse();
+        assertThat(tooLow.reason()).isEqualTo("amount_too_low");
     }
 
     // -- Payment due deadline (Phase 10) --
@@ -523,7 +618,8 @@ class PlanEligibilityServiceTest {
                 paymentDuePolicy, customMonths,
                 3, 3,
                 false, null, null, null,
-                AfterRetriesAction.TREAT_AS_CANCELLATION);
+                AfterRetriesAction.TREAT_AS_CANCELLATION,
+                0);
     }
 
     private static PlanOption byFrequency(List<PlanOption> options, PlanFrequency frequency) {

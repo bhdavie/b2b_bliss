@@ -1,12 +1,19 @@
 import type { PublicBooking } from "@/lib/publicApi";
 
-export function TooClose({ booking }: { booking: PublicBooking }) {
+export function TooClose({
+  booking,
+  returnUrl,
+}: {
+  booking: PublicBooking;
+  returnUrl?: string | null;
+}) {
   const mailto = booking.merchant.contactEmail
     ? `mailto:${booking.merchant.contactEmail}?subject=${encodeURIComponent(
         "Booking: " + booking.service.name,
       )}`
     : null;
   const { headline, body } = copyFor(booking);
+  const merchantName = booking.merchant.businessName;
 
   return (
     <section className="mt-8 rounded-md border border-surface-border bg-white p-6 text-center">
@@ -15,15 +22,31 @@ export function TooClose({ booking }: { booking: PublicBooking }) {
       </div>
       <h2 className="mt-4 text-[16px] font-medium text-ink">{headline}</h2>
       <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">
-        {body} Reach out to {booking.merchant.businessName} directly to arrange
-        payment.
+        {body} Reach out to {merchantName} directly to arrange payment.
       </p>
-      {mailto ? (
+      {returnUrl ? (
+        <div className="mt-5 flex flex-col items-center gap-3">
+          <a
+            href={returnUrl}
+            className="inline-flex w-full max-w-xs items-center justify-center rounded-md bg-lavender-500 px-4 py-2.5 text-[13px] font-medium text-white no-underline hover:bg-lavender-600"
+          >
+            Return to {merchantName}
+          </a>
+          {mailto ? (
+            <a
+              href={mailto}
+              className="text-[12px] text-ink-muted underline hover:text-ink"
+            >
+              Email {merchantName}
+            </a>
+          ) : null}
+        </div>
+      ) : mailto ? (
         <a
           href={mailto}
           className="mt-5 inline-flex items-center justify-center rounded-md bg-lavender-500 px-4 py-2.5 text-[13px] font-medium text-white no-underline hover:bg-lavender-600"
         >
-          Email {booking.merchant.businessName}
+          Email {merchantName}
         </a>
       ) : null}
     </section>

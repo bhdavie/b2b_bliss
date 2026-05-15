@@ -23,6 +23,7 @@ public class BookingRowMapper implements RowMapper<Booking> {
                 rs.getString("service_name"),
                 rs.getString("service_description"),
                 rs.getLong("total_amount_cents"),
+                (Long) rs.getObject("original_total_cents"),
                 toLocalDate(rs.getDate("appointment_date")),
                 toLocalDate(rs.getDate("checkout_date")),
                 rs.getString("cancellation_policy"),

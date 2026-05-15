@@ -27,7 +27,8 @@ public record PlanRulesView(
         String lateFeeType,
         Long lateFeeValue,
         String lateFeeScope,
-        String afterRetriesAction
+        String afterRetriesAction,
+        int discountBasisPoints
 ) {
     public static PlanRulesView from(MerchantPlanRules rules) {
         return new PlanRulesView(
@@ -55,7 +56,8 @@ public record PlanRulesView(
                 rules.lateFeeType() == null ? null : rules.lateFeeType().wire(),
                 rules.lateFeeValue(),
                 rules.lateFeeScope() == null ? null : rules.lateFeeScope().wire(),
-                rules.afterRetriesAction().wire()
+                rules.afterRetriesAction().wire(),
+                rules.discountBasisPoints()
         );
     }
 }

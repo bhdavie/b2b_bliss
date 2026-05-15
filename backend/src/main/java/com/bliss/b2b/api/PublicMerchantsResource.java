@@ -83,7 +83,8 @@ public class PublicMerchantsResource {
                         rules.depositRequired(),
                         rules.depositType() == null ? null : rules.depositType().wire(),
                         rules.depositValue(),
-                        rules.depositMaxCents()),
+                        rules.depositMaxCents(),
+                        rules.discountBasisPoints()),
                 new PublicMerchantView.Stripe(
                         stripeService.isConfigured(),
                         stripeService.isConfigured() ? stripeService.publishableKey() : null,
