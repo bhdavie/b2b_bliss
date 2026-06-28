@@ -24,7 +24,7 @@ export default async function AccountSettingsPage() {
 
   return (
     <PortalShell active="settings">
-      <h1 className="text-3xl font-semibold tracking-tight text-brand-navy">
+      <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
         Settings
       </h1>
       <p className="mt-1 text-sm text-ink-muted">
@@ -32,7 +32,7 @@ export default async function AccountSettingsPage() {
       </p>
 
       <section className="mt-6 rounded-none border border-brand-neutral bg-white p-6">
-        <h2 className="text-xl font-semibold text-brand-navy">Account</h2>
+        <h2 className="text-2xl font-bold text-brand-navy">Account</h2>
         <dl className="mt-4 space-y-3">
           <Field label="Name" value={name ?? "Not on file"} />
           <Field label="Email" value={data.email} />
@@ -41,7 +41,7 @@ export default async function AccountSettingsPage() {
       </section>
 
       <section className="mt-6 rounded-none border border-brand-neutral bg-white p-6">
-        <h2 className="text-xl font-semibold text-brand-navy">Card on file</h2>
+        <h2 className="text-2xl font-bold text-brand-navy">Card on file</h2>
         <div className="mt-4">
           {portal ? (
             <SettingsCardOnFile
@@ -65,7 +65,7 @@ export default async function AccountSettingsPage() {
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4 border-b border-brand-neutral pb-3 last:border-b-0 last:pb-0">
-      <dt className="text-xs uppercase tracking-[0.18em] text-ink-muted">
+      <dt className="text-xs text-ink-muted">
         {label}
       </dt>
       <dd className="text-right text-sm text-ink">{value}</dd>

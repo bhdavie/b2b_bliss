@@ -19,14 +19,14 @@ export default async function SettingsPage() {
   return (
     <>
       <header>
-        <h1 className="text-2xl font-medium">Settings</h1>
+        <h1 className="text-3xl font-bold">Settings</h1>
         <p className="mt-1 text-ink-muted">
           Account info and payouts.
         </p>
       </header>
 
       <section className="mt-8 space-y-4">
-        <h2 className="text-xs uppercase tracking-wide text-ink-muted font-medium">
+        <h2 className="text-sm text-ink-muted font-semibold">
           Plan rules
         </h2>
         <p className="text-xs text-ink-muted -mt-2">
@@ -37,7 +37,7 @@ export default async function SettingsPage() {
       </section>
 
       <section className="mt-10 space-y-4">
-        <h2 className="text-xs uppercase tracking-wide text-ink-muted font-medium">
+        <h2 className="text-sm text-ink-muted font-semibold">
           Cancellation & policies
         </h2>
         <p className="text-xs text-ink-muted -mt-2">
@@ -48,7 +48,7 @@ export default async function SettingsPage() {
       </section>
 
       <section className="mt-10 space-y-4">
-        <h2 className="text-xs uppercase tracking-wide text-ink-muted font-medium">
+        <h2 className="text-sm text-ink-muted font-semibold">
           Payouts
         </h2>
         {stripeStatus ? (
@@ -61,7 +61,7 @@ export default async function SettingsPage() {
       </section>
 
       <section className="mt-10 space-y-4">
-        <h2 className="text-xs uppercase tracking-wide text-ink-muted font-medium">
+        <h2 className="text-sm text-ink-muted font-semibold">
           Business
         </h2>
         <div className="card p-6 space-y-4">

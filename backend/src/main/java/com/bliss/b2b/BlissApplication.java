@@ -172,7 +172,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new PublicPlansPortalResource(
                 planPortalService, stripePaymentsService));
         environment.jersey().register(new PublicAccountResource(
-                customerAuthService, paymentPlanDao));
+                customerAuthService, paymentPlanDao, clock));
         environment.jersey().register(new PlanRulesResource(planRulesService));
         environment.jersey().register(new PlansResource(
                 paymentPlanDao, paymentScheduleDao, bookingDao, cancellationService));

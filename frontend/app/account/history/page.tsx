@@ -15,13 +15,11 @@ export default async function AccountHistoryPage() {
     redirect("/account/login");
   }
 
-  const past = data.plans.filter(
-    (p) => p.status === "completed" || p.status === "canceled",
-  );
+  const past = data.plans.filter((p) => p.complete || p.status === "canceled");
 
   return (
     <PortalShell active="history">
-      <h1 className="text-3xl font-semibold tracking-tight text-brand-navy">
+      <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
         Plan history
       </h1>
       <p className="mt-1 text-sm text-ink-muted">

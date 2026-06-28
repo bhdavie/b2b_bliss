@@ -20,7 +20,7 @@ export default async function DashboardPage() {
   return (
     <>
       <header>
-        <h1 className="text-2xl font-medium">Dashboard</h1>
+        <h1 className="text-3xl font-bold">Dashboard</h1>
         <p className="mt-1 text-ink-muted">
           Welcome to Bliss. {chargesEnabled
             ? "Create your first booking to start taking payment plans."

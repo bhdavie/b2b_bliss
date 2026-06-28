@@ -28,7 +28,7 @@ export function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <label className="block">
-        <span className="mb-1 block text-xs uppercase tracking-wider text-ink-muted">
+        <span className="mb-1 block text-xs text-ink-muted">
           Email
         </span>
         <input
@@ -41,7 +41,7 @@ export function LoginForm() {
         />
       </label>
       <label className="block">
-        <span className="mb-1 block text-xs uppercase tracking-wider text-ink-muted">
+        <span className="mb-1 block text-xs text-ink-muted">
           Password
         </span>
         <input

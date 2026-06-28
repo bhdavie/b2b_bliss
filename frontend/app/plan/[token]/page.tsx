@@ -1,5 +1,6 @@
 import { fetchPlanPortal } from "@/lib/publicApi";
 import { PlanPortal } from "@/components/portal/PlanPortal";
+import { PortalShell } from "@/components/portal/PortalShell";
 
 type Params = { token: string };
 
@@ -9,17 +10,23 @@ export default async function PlanPortalPage(props: { params: Promise<Params> })
 
   if (!portal) {
     return (
-      <div className="min-h-screen bg-white text-ink font-body">
-        <div className="mx-auto max-w-2xl px-6 py-24 text-center">
-          <h1 className="font-display text-3xl text-brand-navy">Plan not found</h1>
+      <PortalShell active="plans">
+        <div className="py-16 text-center">
+          <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
+            Plan not found
+          </h1>
           <p className="mt-3 text-sm text-ink-muted">
             This link is no longer active or the plan has been canceled. If you
             think this is a mistake, contact the merchant who sent you the link.
           </p>
         </div>
-      </div>
+      </PortalShell>
     );
   }
 
-  return <PlanPortal token={token} initial={portal} />;
+  return (
+    <PortalShell active="plans">
+      <PlanPortal token={token} initial={portal} />
+    </PortalShell>
+  );
 }

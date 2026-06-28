@@ -20,17 +20,16 @@ export default async function AccountPage() {
     redirect("/account/login");
   }
 
-  const active = data.plans.filter((p) => p.status === "active");
+  const active = data.plans.filter(
+    (p) => !p.complete && p.status !== "canceled",
+  );
   const totalRemaining = active.reduce((sum, p) => sum + p.remainingCents, 0);
   const next = nextPaymentAcross(active);
   const greetingName = data.email.split("@")[0] ?? "there";
 
   return (
     <PortalShell active="home">
-      <p className="text-[11px] uppercase tracking-[0.25em] text-ink-muted">
-        Your Bliss account
-      </p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight text-brand-navy">
+      <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
         Welcome back, {greetingName}
       </h1>
       <p className="mt-1 text-sm text-ink-muted">Signed in as {data.email}</p>
@@ -49,7 +48,7 @@ export default async function AccountPage() {
         />
       </div>
 
-      <h2 className="mt-10 text-xl font-semibold text-brand-navy">Your plans</h2>
+      <h2 className="mt-10 text-2xl font-bold text-brand-navy">Your plans</h2>
       <div className="mt-4">
         <PlansList plans={active} />
       </div>
@@ -76,7 +75,7 @@ function Stat({
 }) {
   return (
     <div className="rounded-none border border-brand-lavender bg-white p-4">
-      <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+      <div className="text-[10px] text-ink-muted">
         {label}
       </div>
       <div className="mt-1 text-xl font-semibold tabular-nums text-brand-navy">

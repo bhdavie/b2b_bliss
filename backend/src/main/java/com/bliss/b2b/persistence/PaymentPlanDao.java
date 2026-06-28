@@ -151,6 +151,27 @@ public interface PaymentPlanDao {
     @RegisterConstructorMapper(PlanScheduleSummary.class)
     List<PlanScheduleSummary> summarizeSchedules(@BindList("planIds") List<UUID> planIds);
 
+    /**
+     * Raw schedule rows (due date + amount) for a set of plans, so the account
+     * list can run the same as-of-today PlanProgress derivation the portal uses.
+     */
+    @SqlQuery("""
+            SELECT payment_plan_id AS paymentPlanId,
+                   due_date AS dueDate,
+                   amount_cents AS amountCents
+            FROM payment_schedule
+            WHERE payment_plan_id IN (<planIds>)
+            ORDER BY payment_plan_id, sequence
+            """)
+    @RegisterConstructorMapper(ScheduleRow.class)
+    List<ScheduleRow> scheduleRowsForPlans(@BindList("planIds") List<UUID> planIds);
+
+    record ScheduleRow(
+            UUID paymentPlanId,
+            LocalDate dueDate,
+            long amountCents
+    ) {}
+
     record PaymentPlanListItem(
             UUID id,
             UUID bookingId,

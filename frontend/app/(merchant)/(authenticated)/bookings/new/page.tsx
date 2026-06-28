@@ -29,7 +29,7 @@ export default async function NewBookingPage() {
           >
             ← Back to bookings
           </Link>
-          <h1 className="mt-2 text-2xl font-medium">New booking</h1>
+          <h1 className="mt-2 text-3xl font-bold">New booking</h1>
           <p className="mt-1 text-ink-muted">
             Set the service, total, and date. We will derive the plan options
             automatically based on how far out the appointment is.

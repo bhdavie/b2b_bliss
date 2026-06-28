@@ -401,6 +401,9 @@ export type PublicPlanPortal = {
   processingFeeCents: number;
   paidCents: number;
   remainingCents: number;
+  nextDueDate: string | null;
+  nextDueAmountCents: number | null;
+  complete: boolean;
   stripe: {
     configured: boolean;
     publishableKey: string | null;
@@ -515,6 +518,7 @@ export type AccountPlanCard = {
   serviceName: string;
   appointmentDate: string;
   checkoutDate: string | null;
+  complete: boolean;
   totalAmountCents: number;
   originalTotalAmountCents: number | null;
   totalWithFeeCents: number;

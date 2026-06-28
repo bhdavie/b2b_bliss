@@ -16,7 +16,7 @@ export default async function AccountLoginPage() {
         </div>
       </header>
       <main className="mx-auto max-w-md px-6 py-12">
-        <h1 className="text-3xl font-semibold tracking-tight text-brand-navy">
+        <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
           Welcome back
         </h1>
         <p className="mt-2 text-sm text-ink-muted">

@@ -3,9 +3,10 @@ package com.bliss.b2b.api;
 import com.bliss.b2b.auth.SessionCookies;
 import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentPlanDao.PaymentPlanListItem;
-import com.bliss.b2b.persistence.PaymentPlanDao.PlanScheduleSummary;
+import com.bliss.b2b.persistence.PaymentPlanDao.ScheduleRow;
 import com.bliss.b2b.service.CustomerAuthService;
 import com.bliss.b2b.service.CustomerAuthService.LoginResult;
+import com.bliss.b2b.service.PlanProgress;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.CookieParam;
@@ -16,7 +17,10 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,10 +48,13 @@ public class PublicAccountResource {
 
     private final CustomerAuthService authService;
     private final PaymentPlanDao planDao;
+    private final Clock clock;
 
-    public PublicAccountResource(CustomerAuthService authService, PaymentPlanDao planDao) {
+    public PublicAccountResource(
+            CustomerAuthService authService, PaymentPlanDao planDao, Clock clock) {
         this.authService = authService;
         this.planDao = planDao;
+        this.clock = clock;
     }
 
     @POST
@@ -92,13 +99,29 @@ public class PublicAccountResource {
         }
         try {
             List<PaymentPlanListItem> items = planDao.findAllForCustomerEmail(email.get());
-            Map<UUID, PlanScheduleSummary> summaryByPlan = new HashMap<>();
+            Map<UUID, PlanProgress.Snapshot> progressByPlan = new HashMap<>();
             if (!items.isEmpty()) {
                 List<UUID> planIds = items.stream().map(PaymentPlanListItem::id).toList();
-                planDao.summarizeSchedules(planIds)
-                        .forEach(s -> summaryByPlan.put(s.paymentPlanId(), s));
+                Map<UUID, List<PlanProgress.Row>> rowsByPlan = new HashMap<>();
+                for (ScheduleRow r : planDao.scheduleRowsForPlans(planIds)) {
+                    rowsByPlan
+                            .computeIfAbsent(r.paymentPlanId(), k -> new ArrayList<>())
+                            .add(new PlanProgress.Row(r.dueDate(), r.amountCents()));
+                }
+                LocalDate today = LocalDate.now(clock);
+                for (PaymentPlanListItem item : items) {
+                    long totalWithFee = item.totalAmountCents() + item.processingFeeCents();
+                    progressByPlan.put(
+                            item.id(),
+                            PlanProgress.asOf(
+                                    rowsByPlan.getOrDefault(item.id(), List.of()),
+                                    totalWithFee,
+                                    today,
+                                    item.status()));
+                }
             }
-            return Response.ok(PublicAccountPlansView.from(email.get(), items, summaryByPlan))
+            return Response.ok(
+                    PublicAccountPlansView.from(email.get(), items, progressByPlan))
                     .build();
         } catch (RuntimeException e) {
             log.error("Failed to load account plans for {}", email.get(), e);

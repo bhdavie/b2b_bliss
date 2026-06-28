@@ -107,7 +107,7 @@ export function CancelPlanSection({
   return (
     <div className="space-y-3 rounded-none border border-brand-lavender bg-brand-lavender/10 p-4">
       <div>
-        <div className="text-[11px] uppercase tracking-[0.18em] text-ink-muted">
+        <div className="text-[11px] text-ink-muted">
           Refund {inWindow ? "(includes the Bliss fee)" : "(per the hotel policy)"}
         </div>
         <div className="mt-1 text-2xl font-semibold tabular-nums text-brand-navy">

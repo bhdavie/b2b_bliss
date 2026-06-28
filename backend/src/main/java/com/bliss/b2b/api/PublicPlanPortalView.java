@@ -5,7 +5,6 @@ import com.bliss.b2b.domain.CustomerCard;
 import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.domain.PaymentPlan;
 import com.bliss.b2b.domain.PaymentScheduleEntry;
-import com.bliss.b2b.domain.PaymentScheduleStatus;
 import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.service.PlanPortalService.PortalSnapshot;
 import java.time.Instant;
@@ -27,17 +26,15 @@ public record PublicPlanPortalView(
         long processingFeeCents,
         long paidCents,
         long remainingCents,
+        LocalDate nextDueDate,
+        Long nextDueAmountCents,
+        boolean complete,
         StripeStateView stripe
 ) {
 
     public static PublicPlanPortalView from(PortalSnapshot s, StripePaymentsService stripeService) {
-        long paid = s.schedule().stream()
-                .filter(e -> e.status() == PaymentScheduleStatus.PAID)
-                .mapToLong(PaymentScheduleEntry::amountCents)
-                .sum();
-        long totalCustomerCharges = s.plan().totalAmountCents() + s.processingFeeCents();
-        long remaining = Math.max(0L, totalCustomerCharges - paid);
-
+        // As-of-today derivation (single source of truth, see PlanProgress).
+        var progress = s.progress();
         return new PublicPlanPortalView(
                 MerchantView.from(s.merchant()),
                 BookingView.from(s.booking()),
@@ -45,8 +42,11 @@ public record PublicPlanPortalView(
                 s.schedule().stream().map(ScheduleEntryView::from).toList(),
                 CardView.from(s.card()),
                 s.processingFeeCents(),
-                paid,
-                remaining,
+                progress.paidCents(),
+                progress.remainingCents(),
+                progress.nextDueDate(),
+                progress.nextDueAmountCents(),
+                progress.complete(),
                 new StripeStateView(stripeService.isConfigured(), stripeService.publishableKey()));
     }
 

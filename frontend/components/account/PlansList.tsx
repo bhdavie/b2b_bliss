@@ -15,7 +15,7 @@ export function PlansList({
   if (plans.length === 0) {
     return (
       <section className="rounded-none border border-brand-neutral bg-white p-10 text-center">
-        <h2 className="text-xl font-semibold text-brand-navy">{emptyTitle}</h2>
+        <h2 className="text-2xl font-bold text-brand-navy">{emptyTitle}</h2>
         <p className="mt-2 text-sm text-ink-muted">{emptyBody}</p>
       </section>
     );

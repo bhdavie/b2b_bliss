@@ -17,7 +17,7 @@ export default async function BookingsPage() {
     <>
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-medium">Bookings</h1>
+          <h1 className="text-3xl font-bold">Bookings</h1>
           <p className="mt-1 text-ink-muted">
             Create a booking and share the payment plan link with your customer.
           </p>

@@ -40,8 +40,15 @@ export function PlanPortal({
     hasDiscount && portal.booking.originalTotalAmountCents != null
       ? Math.round((savings / portal.booking.originalTotalAmountCents) * 100)
       : 0;
-  const nextDue = portal.schedule.find((s) => s.status === "scheduled");
-  const planComplete = portal.plan.status === "completed";
+  // As-of-today derivation comes from the backend (single source of truth).
+  const planComplete = portal.complete;
+  const nextDueAmount = portal.nextDueAmountCents;
+  const nextDueDate = portal.nextDueDate;
+  const hasUpcoming =
+    !planComplete && nextDueAmount != null && nextDueDate != null;
+  const displayStatus = planComplete ? "completed" : portal.plan.status;
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   // Hawthorn gets the on-brand regional close-out; other merchants get a
   // neutral fallback so the celebration UI works for any completed plan.
   const enjoyCopy =
@@ -50,36 +57,29 @@ export function PlanPortal({
       : "Enjoy your stay.";
 
   return (
-    <div className="min-h-screen bg-white text-ink font-body">
-      <header className="border-b border-brand-neutral bg-gradient-to-b from-white to-brand-lavender/15">
-        <div className="mx-auto max-w-3xl px-6 pt-5">
-          <Link
-            href="/account"
-            className="text-xs font-medium uppercase tracking-[0.18em] text-brand-purple no-underline hover:underline"
-          >
-            Back to your plans
-          </Link>
-        </div>
-        <div className="mx-auto max-w-3xl px-6 pb-10 pt-4 text-center">
-          <p className="text-[11px] uppercase tracking-[0.25em] text-ink-muted">
-            Your payment plan
-          </p>
-          <h1 className="mt-2 font-semibold text-3xl tracking-tight text-brand-navy">
-            {portal.merchant.businessName}
-          </h1>
-          <p className="mt-1 text-sm text-ink-muted">
-            {portal.booking.serviceName}
-          </p>
-        </div>
-      </header>
+    <div className="space-y-6">
+      <div>
+        <Link
+          href="/account/plans"
+          className="text-sm font-medium text-brand-purple no-underline hover:underline"
+        >
+          Back to your plans
+        </Link>
+        <h1 className="mt-4 text-4xl font-bold tracking-tight text-brand-navy">
+          {portal.merchant.businessName}
+        </h1>
+        <p className="mt-1 text-sm text-ink-muted">
+          {portal.booking.serviceName}
+        </p>
+      </div>
 
-      <main className="mx-auto max-w-3xl px-6 py-10 space-y-6">
+      <div className="space-y-6">
         {planComplete ? (
           <section className="text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-none bg-brand-lavender text-white">
               <CheckIcon />
             </div>
-            <h1 className="mt-4 font-semibold text-3xl text-brand-navy">
+            <h1 className="mt-4 font-bold text-4xl text-brand-navy">
               You&apos;re all set
             </h1>
             <p className="mt-2 text-sm text-ink-muted">
@@ -108,12 +108,12 @@ export function PlanPortal({
                 className={
                   planComplete
                     ? "rounded-none bg-brand-lavender px-3 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
-                    : portal.plan.status === "active"
+                    : displayStatus === "active"
                     ? "rounded-none border border-brand-lavender bg-white px-3 py-0.5 text-xs font-medium uppercase tracking-[0.12em] text-brand-purple"
                     : "rounded-none bg-amber-100 px-3 py-0.5 text-xs font-medium uppercase tracking-[0.12em] text-amber-900"
                 }
               >
-                {portal.plan.status.replace(/_/g, " ")}
+                {displayStatus.replace(/_/g, " ")}
               </span>
             }
           />
@@ -147,7 +147,7 @@ export function PlanPortal({
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-none bg-brand-purple px-3 py-2">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-white/80">
+                <div className="text-[11px] text-white/80">
                   Paid to date
                 </div>
                 <div className="mt-1 font-semibold text-lg text-white">
@@ -155,7 +155,7 @@ export function PlanPortal({
                 </div>
               </div>
               <div className="rounded-none border-2 border-brand-lavender bg-white px-3 py-2">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-ink-muted">
+                <div className="text-[11px] text-ink-muted">
                   Remaining
                 </div>
                 <div className="mt-1 font-semibold text-lg text-brand-navy">
@@ -166,20 +166,20 @@ export function PlanPortal({
           </Card>
         ) : null}
 
-        {nextDue && !planComplete ? (
+        {hasUpcoming ? (
           <Card title="Next payment">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
               <div>
                 <div className="font-semibold text-3xl text-brand-navy">
-                  {formatDollars(nextDue.amountCents)}
+                  {formatDollars(nextDueAmount ?? 0)}
                 </div>
-                <div className="mt-1 text-xs uppercase tracking-[0.18em] text-ink-muted">
-                  Due {formatScheduleDateLong(nextDue.dueDate)}
+                <div className="mt-1 text-xs text-ink-muted">
+                  Due {formatScheduleDateLong(nextDueDate ?? "")}
                 </div>
               </div>
               <PayEarlyButton
                 token={token}
-                amount={nextDue.amountCents}
+                amount={nextDueAmount ?? 0}
                 onPaid={refresh}
               />
             </div>
@@ -188,32 +188,35 @@ export function PlanPortal({
 
         <Card title="Schedule">
           <ol className="divide-y divide-brand-neutral">
-            {labelSchedule(portal.schedule).map(({ entry, label }) => (
-              <li
-                key={entry.sequence}
-                className="flex items-center justify-between gap-4 py-3 text-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <StatusPill status={entry.status} />
-                  <div>
-                    <div className="text-ink">{label}</div>
-                    {entry.kind === "installment" || entry.status !== "paid" ? (
+            {labelSchedule(portal.schedule).map(({ entry, label }) => {
+              // As-of-today display: a row whose due date has passed reads paid.
+              const rowStatus =
+                entry.status === "canceled"
+                  ? "canceled"
+                  : entry.dueDate <= todayIso
+                    ? "paid"
+                    : "scheduled";
+              return (
+                <li
+                  key={entry.sequence}
+                  className="flex items-center justify-between gap-4 py-3 text-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <StatusPill status={rowStatus} />
+                    <div>
+                      <div className="text-ink">{label}</div>
                       <div className="text-xs text-ink-muted">
+                        {rowStatus === "paid" ? "Due " : ""}
                         {formatScheduleDateShort(entry.dueDate)}
                       </div>
-                    ) : null}
-                    {entry.status === "paid" && entry.paidAt ? (
-                      <div className="text-xs text-ink-muted">
-                        Paid {formatScheduleDateShort(entry.paidAt.slice(0, 10))}
-                      </div>
-                    ) : null}
+                    </div>
                   </div>
-                </div>
-                <div className="font-semibold text-lg tabular-nums text-brand-navy">
-                  {formatDollars(entry.amountCents)}
-                </div>
-              </li>
-            ))}
+                  <div className="font-semibold text-lg tabular-nums text-brand-navy">
+                    {formatDollars(entry.amountCents)}
+                  </div>
+                </li>
+              );
+            })}
           </ol>
         </Card>
 
@@ -244,7 +247,7 @@ export function PlanPortal({
           </Card>
         ) : null}
 
-        {portal.plan.status === "active" ? (
+        {!planComplete && portal.plan.status === "active" ? (
           <Card title="Cancel plan">
             <CancelPlanSection
               token={token}
@@ -257,11 +260,11 @@ export function PlanPortal({
           </Card>
         ) : null}
 
-        <footer className="pt-4 pb-12 text-center text-xs text-ink-muted">
+        <footer className="pt-4 pb-2 text-center text-xs text-ink-muted">
           Powered by{" "}
           <BlissWordmark />
         </footer>
-      </main>
+      </div>
     </div>
   );
 }
@@ -269,7 +272,7 @@ export function PlanPortal({
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-none border border-brand-neutral bg-white/70 p-6 shadow-sm backdrop-blur-sm">
-      <h2 className="mb-4 font-semibold text-xl text-brand-navy">{title}</h2>
+      <h2 className="mb-4 font-bold text-2xl text-brand-navy">{title}</h2>
       {children}
     </section>
   );
@@ -278,7 +281,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-brand-neutral py-2 last:border-b-0 text-sm">
-      <span className="text-xs uppercase tracking-[0.18em] text-ink-muted">
+      <span className="text-xs text-ink-muted">
         {label}
       </span>
       <span className="text-right text-ink">{value}</span>

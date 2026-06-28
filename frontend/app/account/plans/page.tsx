@@ -15,11 +15,13 @@ export default async function AccountPlansPage() {
     redirect("/account/login");
   }
 
-  const active = data.plans.filter((p) => p.status === "active");
+  const active = data.plans.filter(
+    (p) => !p.complete && p.status !== "canceled",
+  );
 
   return (
     <PortalShell active="plans">
-      <h1 className="text-3xl font-semibold tracking-tight text-brand-navy">
+      <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
         Active plans
       </h1>
       <p className="mt-1 text-sm text-ink-muted">

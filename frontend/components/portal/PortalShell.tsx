@@ -42,25 +42,25 @@ export function PortalShell({
   return (
     <div className="min-h-screen bg-white text-ink font-body">
       <header className="border-b border-brand-neutral">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <Link href="/account" className="no-underline">
             <BlissWordmark className="text-2xl text-brand-purple" />
           </Link>
           <form action={signOut}>
             <button
               type="submit"
-              className="text-xs font-medium uppercase tracking-[0.18em] text-ink-muted transition-colors hover:text-brand-purple"
+              className="text-xs font-medium text-ink-muted transition-colors hover:text-brand-purple"
             >
               Sign out
             </button>
           </form>
         </div>
-        <nav className="mx-auto flex max-w-3xl gap-1 px-4">
+        <nav className="mx-auto flex max-w-7xl gap-1 px-4">
           {TABS.map((t) => (
             <Link
               key={t.key}
               href={t.href}
-              className={`border-b-2 px-3 py-3 text-sm font-medium no-underline transition-colors ${
+              className={`border-b-2 px-3 py-3 text-base font-bold no-underline transition-colors ${
                 active === t.key
                   ? "border-brand-purple text-brand-purple"
                   : "border-transparent text-ink-muted hover:text-brand-navy"
@@ -71,7 +71,7 @@ export function PortalShell({
           ))}
         </nav>
       </header>
-      <main className="mx-auto max-w-3xl px-6 py-10">{children}</main>
+      <main className="mx-auto max-w-7xl px-6 py-10 sm:px-8">{children}</main>
     </div>
   );
 }

@@ -25,7 +25,7 @@ export default async function BookingDetailPage({
             ← Back to bookings
           </Link>
           <div className="mt-2 flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-medium">{booking.serviceName}</h1>
+            <h1 className="text-3xl font-bold">{booking.serviceName}</h1>
             {booking.source === "customer_initiated" ? (
               <span
                 className="inline-flex items-center rounded-full bg-brand-lavender px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white"
@@ -86,7 +86,7 @@ export default async function BookingDetailPage({
       </section>
 
       <section className="mt-8">
-        <h2 className="text-xs uppercase tracking-wide text-ink-muted font-medium">
+        <h2 className="text-sm text-ink-muted font-semibold">
           Plan options for your customer
         </h2>
         <div className="mt-3">

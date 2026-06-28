@@ -16,8 +16,9 @@ export function PlanCard({
   plan: AccountPlanCard;
   muted?: boolean;
 }) {
-  const complete = plan.status === "completed";
   const canceled = plan.status === "canceled";
+  const complete = plan.complete;
+  const badgeStatus = canceled ? "canceled" : complete ? "completed" : "active";
   const dateRange = plan.checkoutDate
     ? `${formatScheduleDateShort(plan.appointmentDate)} to ${formatScheduleDateShort(plan.checkoutDate)}`
     : formatScheduleDateLong(plan.appointmentDate);
@@ -33,15 +34,15 @@ export function PlanCard({
     >
       <div className="flex items-baseline justify-between gap-3">
         <h2
-          className={`text-xl font-semibold ${muted ? "text-ink-muted" : "text-brand-navy"}`}
+          className={`text-2xl font-bold ${muted ? "text-ink-muted" : "text-brand-navy"}`}
         >
           {plan.merchantBusinessName}
         </h2>
-        <StatusBadge status={plan.status} />
+        <StatusBadge status={badgeStatus} />
       </div>
 
       <p className="mt-1 text-sm text-ink-muted">{plan.serviceName}</p>
-      <p className="text-xs uppercase tracking-[0.12em] text-ink-muted">
+      <p className="text-xs text-ink-muted">
         {dateRange}
       </p>
 
@@ -75,7 +76,7 @@ export function PlanCard({
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-none border border-brand-lavender bg-white px-3 py-2">
-      <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+      <div className="text-[10px] text-ink-muted">
         {label}
       </div>
       <div className="mt-1 text-lg font-semibold tabular-nums text-brand-navy">

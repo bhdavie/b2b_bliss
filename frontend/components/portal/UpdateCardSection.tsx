@@ -82,7 +82,7 @@ export function UpdateCardSection({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded-none border border-brand-lavender bg-white p-4">
-      <div className="text-xs uppercase tracking-[0.18em] text-ink-muted">
+      <div className="text-xs text-ink-muted">
         Replace card
       </div>
       <label className="block">

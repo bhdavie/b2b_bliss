@@ -2,7 +2,7 @@ export default function PayoutsPage() {
   return (
     <>
       <header>
-        <h1 className="text-2xl font-medium">Payouts</h1>
+        <h1 className="text-3xl font-bold">Payouts</h1>
         <p className="mt-1 text-ink-muted">
           Payouts route through Stripe Connect once you complete onboarding in
           Phase 2.

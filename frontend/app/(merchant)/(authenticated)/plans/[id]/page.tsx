@@ -48,7 +48,7 @@ export default async function PlanDetailPage({
           ← Back to dashboard
         </Link>
         <div className="mt-2 flex items-baseline justify-between gap-3">
-          <h1 className="text-2xl font-medium">{plan.serviceName}</h1>
+          <h1 className="text-3xl font-bold">{plan.serviceName}</h1>
           <span
             className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${STATUS_PILL[plan.status]}`}
           >
@@ -63,7 +63,7 @@ export default async function PlanDetailPage({
 
       {plan.status === "balance_due" ? (
         <section className="mt-6 rounded-md border-2 border-brand-purple bg-white p-4">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-brand-purple">
+          <div className="text-[11px] font-medium text-brand-purple">
             Balance due at check-in
           </div>
           <div className="mt-1 text-[24px] font-medium tabular-nums text-brand-navy">
@@ -78,7 +78,7 @@ export default async function PlanDetailPage({
 
       {plan.failedInstallment ? (
         <section className="mt-6 rounded-md border border-amber-200 bg-amber-50 p-4">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-amber-800">
+          <div className="text-[11px] font-medium text-amber-800">
             Failed installment
           </div>
           <div className="mt-1 text-sm text-amber-900">
@@ -122,7 +122,7 @@ export default async function PlanDetailPage({
       </section>
 
       <section className="mt-6">
-        <div className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+        <div className="text-[11px] font-medium text-ink-muted">
           Schedule
         </div>
         <ol className="mt-2.5 divide-y divide-brand-neutral rounded-md border border-brand-neutral bg-white">

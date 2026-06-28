@@ -24,6 +24,7 @@ import com.stripe.model.PaymentMethod;
 import com.stripe.model.SetupIntent;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -88,9 +89,17 @@ public class PlanPortalService {
             Customer customer = handle.attach(CustomerDao.class).findById(plan.customerId()).orElse(null);
             CustomerCard card = handle.attach(CustomerCardDao.class)
                     .findDefaultForCustomer(plan.customerId()).orElse(null);
+            // As-of-today progress: due-on-or-before-today rows are treated paid.
+            PlanProgress.Snapshot progress = PlanProgress.asOf(
+                    schedule.stream()
+                            .map(e -> new PlanProgress.Row(e.dueDate(), e.amountCents()))
+                            .toList(),
+                    plan.totalAmountCents() + plan.processingFeeCents(),
+                    LocalDate.now(clock),
+                    plan.status().wire());
             return Optional.of(new PortalSnapshot(
                     merchant, booking, plan, schedule, customer, card,
-                    plan.processingFeeCents()));
+                    plan.processingFeeCents(), progress));
         });
     }
 
@@ -299,7 +308,8 @@ public class PlanPortalService {
             List<PaymentScheduleEntry> schedule,
             Customer customer,
             CustomerCard card,
-            long processingFeeCents
+            long processingFeeCents,
+            PlanProgress.Snapshot progress
     ) {}
 
     public record PayResult(String paymentIntentId, String status) {}

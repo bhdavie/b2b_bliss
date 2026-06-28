@@ -1,7 +1,7 @@
 package com.bliss.b2b.api;
 
 import com.bliss.b2b.persistence.PaymentPlanDao.PaymentPlanListItem;
-import com.bliss.b2b.persistence.PaymentPlanDao.PlanScheduleSummary;
+import com.bliss.b2b.service.PlanProgress;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -20,15 +20,14 @@ public record PublicAccountPlansView(
     public static PublicAccountPlansView from(
             String email,
             List<PaymentPlanListItem> items,
-            Map<java.util.UUID, PlanScheduleSummary> summaryByPlan
+            Map<java.util.UUID, PlanProgress.Snapshot> progressByPlan
     ) {
-        // Each plan carries its own resolved fee: 5% for plans created after the
-        // fee migration, the legacy flat fee for backfilled ones. The top-level
+        // Money + next-payment are derived as-of-today by PlanProgress (single
+        // source of truth shared with the portal). The top-level
         // processingFeeCents is deprecated now that fees are per-plan; the
         // frontend reads each card's totalWithFeeCents instead.
         List<PlanCardView> cards = items.stream()
-                .map(item -> PlanCardView.from(
-                        item, summaryByPlan.get(item.id()), item.processingFeeCents()))
+                .map(item -> PlanCardView.from(item, progressByPlan.get(item.id())))
                 .toList();
         return new PublicAccountPlansView(email, 0L, cards);
     }
@@ -37,6 +36,7 @@ public record PublicAccountPlansView(
             String planId,
             String bookingToken,
             String status,
+            boolean complete,               // all installments due on or before today
             String merchantSlug,
             String merchantBusinessName,
             String serviceName,
@@ -45,7 +45,7 @@ public record PublicAccountPlansView(
             long totalAmountCents,          // discounted (plan total)
             Long originalTotalAmountCents,  // pre-discount (booking original)
             long totalWithFeeCents,         // what customer actually pays
-            long paidCents,                 // sum of paid schedule rows
+            long paidCents,                 // due on or before today
             long remainingCents,            // totalWithFee minus paid
             int numPayments,
             String frequency,
@@ -56,19 +56,23 @@ public record PublicAccountPlansView(
     ) {
         static PlanCardView from(
                 PaymentPlanListItem item,
-                PlanScheduleSummary summary,
-                long processingFeeCents
+                PlanProgress.Snapshot progress
         ) {
-            int paid = summary == null ? 0 : summary.paidCount();
-            int scheduled = summary == null ? 0 : summary.scheduledCount();
-            long paidCents = summary == null ? 0L : summary.paidCents();
-            LocalDate nextDate = summary == null ? null : summary.nextDueDate();
-            Long nextAmount = summary == null ? null : summary.nextDueAmountCents();
-            long totalWithFeeCents = item.totalAmountCents() + processingFeeCents;
+            long totalWithFeeCents = item.totalAmountCents() + item.processingFeeCents();
+            long paidCents = progress == null ? 0L : progress.paidCents();
+            long remainingCents = progress == null
+                    ? totalWithFeeCents
+                    : progress.remainingCents();
+            int paidCount = progress == null ? 0 : progress.paidCount();
+            int upcomingCount = progress == null ? 0 : progress.upcomingCount();
+            boolean complete = progress != null && progress.complete();
+            LocalDate nextDate = progress == null ? null : progress.nextDueDate();
+            Long nextAmount = progress == null ? null : progress.nextDueAmountCents();
             return new PlanCardView(
                     item.id().toString(),
                     item.bookingToken(),
                     item.status(),
+                    complete,
                     item.merchantSlug(),
                     item.merchantBusinessName(),
                     item.serviceName(),
@@ -78,11 +82,11 @@ public record PublicAccountPlansView(
                     item.originalTotalCents(),
                     totalWithFeeCents,
                     paidCents,
-                    Math.max(0L, totalWithFeeCents - paidCents),
+                    remainingCents,
                     item.numPayments(),
                     item.frequency(),
-                    paid,
-                    scheduled,
+                    paidCount,
+                    upcomingCount,
                     nextDate,
                     nextAmount);
         }
