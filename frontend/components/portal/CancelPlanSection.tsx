@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { cancelPlan, formatDollars } from "@/lib/publicApi";
 
 // Policy-gated cancel. Refundability is derived from the rate name in the
@@ -29,15 +30,14 @@ export function CancelPlanSection({
   appointmentDate,
   paidCents,
   processingFeeCents,
-  onCanceled,
 }: {
   token: string;
   serviceName: string;
   appointmentDate: string;
   paidCents: number;
   processingFeeCents: number;
-  onCanceled: () => void | Promise<void>;
 }) {
+  const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,13 +76,27 @@ export function CancelPlanSection({
   async function confirmCancel() {
     setBusy(true);
     setError(null);
-    const res = await cancelPlan(token);
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error.message);
+    let res;
+    try {
+      res = await cancelPlan(token);
+    } catch {
+      // Genuine network failure unrelated to the plan state.
+      setBusy(false);
+      setError("Something went wrong. Please check your connection and try again.");
       return;
     }
-    await onCanceled();
+    // A 404 (plan no longer active) or 409 means the plan is already cancelled.
+    // Treat that as success and route to history the same way, so the guest
+    // never sees a raw "plan not found" string.
+    const alreadyCancelled =
+      !res.ok && (res.status === 404 || res.status === 409);
+    if (res.ok || alreadyCancelled) {
+      // Keep busy true so the buttons stay disabled through navigation.
+      router.push(`/account/history?canceled=${encodeURIComponent(token)}`);
+      return;
+    }
+    setBusy(false);
+    setError("We could not cancel this plan. Please try again.");
   }
 
   if (!confirming) {

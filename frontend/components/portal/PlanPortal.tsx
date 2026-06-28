@@ -255,7 +255,6 @@ export function PlanPortal({
               appointmentDate={portal.booking.appointmentDate}
               paidCents={portal.paidCents}
               processingFeeCents={portal.processingFeeCents}
-              onCanceled={refresh}
             />
           </Card>
         ) : null}

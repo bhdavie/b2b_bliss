@@ -4,7 +4,11 @@ import { fetchAccountPlans } from "@/lib/publicApi";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PlansList } from "@/components/account/PlansList";
 
-export default async function AccountHistoryPage() {
+export default async function AccountHistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ canceled?: string }>;
+}) {
   const cookieStore = await cookies();
   if (!cookieStore.get("bliss_customer_session")?.value) {
     redirect("/account/login");
@@ -15,10 +19,31 @@ export default async function AccountHistoryPage() {
     redirect("/account/login");
   }
 
-  const past = data.plans.filter((p) => p.complete || p.status === "canceled");
+  const canceledToken = (await searchParams).canceled ?? null;
+
+  // Pin the just-cancelled plan to the top; everything else keeps its
+  // created-date order from the backend.
+  const past = data.plans
+    .filter((p) => p.complete || p.status === "canceled")
+    .slice()
+    .sort((a, b) => {
+      if (a.bookingToken === canceledToken) return -1;
+      if (b.bookingToken === canceledToken) return 1;
+      return 0;
+    });
 
   return (
     <PortalShell active="history">
+      {canceledToken ? (
+        <div className="mb-6 rounded-none border border-brand-lavender bg-brand-lavender/15 px-5 py-4">
+          <div className="text-base font-bold text-brand-navy">
+            Cancellation confirmed
+          </div>
+          <p className="mt-1 text-sm text-ink-muted">
+            Your plan has been cancelled and the remaining payments are stopped.
+          </p>
+        </div>
+      ) : null}
       <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
         Plan history
       </h1>

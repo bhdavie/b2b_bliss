@@ -534,22 +534,22 @@ function SiteHeader() {
         <div className="flex items-center gap-3">
           <div className="flex items-center text-[#23262e]" aria-hidden="true">
             <span
-              className="text-4xl leading-none"
+              className="text-5xl leading-none"
               style={{ fontFamily: "var(--font-caveat), cursive", fontWeight: 700 }}
             >
               MH
             </span>
           </div>
           <div>
-            <div className="font-serif text-xl leading-tight tracking-tight text-[#23262e]">
+            <div className="font-serif text-2xl leading-tight tracking-tight text-[#23262e]">
               Marbrook House
             </div>
-            <div className="text-[11px] uppercase tracking-[0.22em] text-[#23262e]/55">
+            <div className="text-xs uppercase tracking-[0.22em] text-[#23262e]/55">
               Hudson Valley, New York
             </div>
           </div>
         </div>
-        <nav className="hidden gap-7 text-xs uppercase tracking-[0.18em] text-[#23262e]/60 sm:flex">
+        <nav className="hidden gap-7 text-sm uppercase tracking-[0.18em] text-[#23262e]/60 sm:flex">
           <span>Rooms</span>
           <span>Dining</span>
           <span>The grounds</span>
@@ -564,7 +564,7 @@ function HeroBanner() {
   return (
     <section className="relative w-full">
       <div
-        className="h-[440px] w-full bg-cover bg-center"
+        className="h-[370px] w-full bg-cover bg-bottom"
         style={{ backgroundImage: "url(/hud_valley_pic.jpg)" }}
         role="img"
         aria-label="Marbrook House and the Hudson Valley"
