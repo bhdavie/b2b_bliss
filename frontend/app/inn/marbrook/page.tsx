@@ -12,6 +12,7 @@ import {
 import { previewEligibility, formatScheduleDate } from "@/lib/eligibility";
 import { calcInstallmentPlan } from "@/lib/blissFee";
 import {
+  attemptCustomerLogin,
   createPlan,
   type PublicPlanFrequency,
   type CreatePlanResponse,
@@ -77,13 +78,14 @@ function guestsLabel(adults: number, children: number): string {
   return `${a}, ${c}`;
 }
 
-// Stable per-night marketing teaser for the rate cards: the nightly rate over a
-// fixed 6 installments, rounded to whole dollars. Anchored to PER NIGHT, so it
-// does not move when the guest changes dates and reads apples-to-apples with the
-// per-night sticker price. Intentionally NOT the real schedule; the accurate
-// full-stay numbers (tax + fee, via calcInstallmentPlan) live at checkout / pay.
-function perNightOver6Label(nightlyCents: number): string {
-  return `$${Math.round(nightlyCents / 6 / 100)}`;
+// Per-night installment teaser for the rate cards: the nightly rate (pre-tax,
+// pre-fee) divided by the REAL biweekly installment count for the selected
+// dates, rounded to whole dollars. The count comes from previewEligibility (the
+// shared cadence source of truth, mirroring the backend), so the teaser,
+// checkout, and portal reconcile and update together when dates/nights change.
+// Per-night basis reads apples-to-apples with the per-night sticker price.
+function perNightInstallmentLabel(nightlyCents: number, count: number): string {
+  return `$${Math.round(nightlyCents / count / 100)}`;
 }
 
 type Rate = {
@@ -202,16 +204,19 @@ export default function MarbrookHousePage() {
   const [children, setChildren] = useState(DEFAULT_CHILDREN);
   const nights = nightsBetween(checkinIso, checkoutIso);
 
-  // Contact info, pre-filled so the demo moves quickly.
+  // Contact info. Intentionally NOT prefilled: every booking must carry the
+  // guest's own name and email so the plan binds to their customer record and
+  // signs them into the portal. A shared default identity (the old
+  // "Ava Mercer / ava@example.com") collided every booking onto one customer.
   const [prefix, setPrefix] = useState("Ms");
-  const [firstName, setFirstName] = useState("Ava");
-  const [lastName, setLastName] = useState("Mercer");
-  const [phone, setPhone] = useState("+1 917 555 0142");
-  const [email, setEmail] = useState("ava@example.com");
-  const [addressLine1, setAddressLine1] = useState("44 Warren Street");
-  const [addressCity, setAddressCity] = useState("Hudson");
-  const [addressState, setAddressState] = useState("NY");
-  const [addressZip, setAddressZip] = useState("12534");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [addressLine1, setAddressLine1] = useState("");
+  const [addressCity, setAddressCity] = useState("");
+  const [addressState, setAddressState] = useState("");
+  const [addressZip, setAddressZip] = useState("");
 
   // Card fields (demo only). One shared set; only the selected option's
   // expansion renders them, so a single source serves both payment methods.
@@ -313,6 +318,18 @@ export default function MarbrookHousePage() {
   }
 
   function onBookNow() {
+    // Require the guest's own identity — no shared default to fall back on.
+    if (firstName.trim() === "" || lastName.trim() === "") {
+      setError("Enter the guest's first and last name to complete the booking.");
+      window.scrollTo({ top: 0 });
+      return;
+    }
+    if (email.trim() === "") {
+      setError("Enter the guest's email to complete the booking.");
+      window.scrollTo({ top: 0 });
+      return;
+    }
+    setError(null);
     if (paymentMethod === "bliss") void bookWithPlan();
     else void bookWithCard();
   }
@@ -355,7 +372,7 @@ export default function MarbrookHousePage() {
       const res = await createPlan({
         merchantSlug: merchant.slug,
         bookingToken: booking.bookingToken,
-        customerEmail: email.trim() || "guest@example.com",
+        customerEmail: email.trim(),
         customerFirstName: firstName.trim() || undefined,
         customerLastName: lastName.trim() || undefined,
         paymentMethodId: "pm_card_visa",
@@ -369,6 +386,18 @@ export default function MarbrookHousePage() {
         setError(res.error.message);
         setSubmitting(false);
         return;
+      }
+      // Sign this guest into their portal so /account reflects the booking's
+      // guest (not a stale session). The customer was just created by createPlan;
+      // demo login resolves by email and ignores the password. A login hiccup
+      // shouldn't block the confirmation, so failures are swallowed.
+      const guestEmail = email.trim();
+      if (guestEmail) {
+        try {
+          await attemptCustomerLogin({ email: guestEmail, password: "demo" });
+        } catch {
+          // non-fatal: guest can still sign in from the portal
+        }
       }
       setBooked({ method: "bliss", plan: res.data });
       setSubmitting(false);
@@ -1042,7 +1071,7 @@ function RoomStep({
             {RATES.map((r) => (
               <div
                 key={r.id}
-                className={`flex flex-col gap-4 rounded-none border p-5 sm:flex-row sm:items-center sm:justify-between ${
+                className={`flex flex-col gap-4 rounded-none border-2 p-5 sm:flex-row sm:items-center sm:justify-between ${
                   selectedRateId === r.id
                     ? "border-[#1A56DB] bg-[#1A56DB]/5"
                     : "border-[#1A56DB] bg-white"
@@ -1063,8 +1092,8 @@ function RoomStep({
                     {installmentCount ? (
                       <div className="mt-1">
                         <div className="text-[11px] text-[#23262e]/70">
-                          or pay {perNightOver6Label(r.nightlyCents)}/night over
-                          6 installments
+                          or pay {perNightInstallmentLabel(r.nightlyCents, installmentCount)}/night over{" "}
+                          {installmentCount} installments
                         </div>
                         <div className="text-[10px] text-[#23262e]/45">
                           no credit check · excluding taxes
@@ -1392,7 +1421,7 @@ function CheckoutStep(props: {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <div className="font-medium text-[#51576A]">
-                  Pay in installments over time
+                  Pay installments over time
                 </div>
                 <div className="text-sm text-[#51576A]/70">
                   Split your stay into smaller payments on your debit or credit
@@ -1667,7 +1696,7 @@ function PlanChoice({
       aria-pressed={selected}
       className={`relative rounded-none p-3 text-left transition-colors ${
         selected
-          ? "border-2 border-brand-purple bg-brand-lavender/20"
+          ? "border-2 border-[#C9AFFA] bg-brand-lavender/20"
           : "border-[0.5px] border-brand-neutral bg-white hover:border-brand-dusty"
       }`}
     >
@@ -1798,11 +1827,11 @@ function PaymentOption({
 }) {
   const ring = selected
     ? accent === "bliss"
-      ? "border-[#C9AFFA] ring-1 ring-[#C9AFFA] bg-[#C9AFFA]/8"
-      : "border-[#1A56DB] ring-1 ring-[#1A56DB]/30 bg-[#1A56DB]/5"
+      ? "border border-[#C9AFFA] ring-1 ring-[#C9AFFA] bg-[#C9AFFA]/8"
+      : "border border-[#1A56DB] ring-1 ring-[#1A56DB]/30 bg-[#1A56DB]/5"
     : accent === "bliss"
-      ? "border-[#C9AFFA] bg-white hover:border-[#97ACC8]"
-      : "border-[#1A56DB] bg-white hover:border-[#1545B0]";
+      ? "border border-[#C9AFFA] bg-white hover:border-[#97ACC8]"
+      : "border border-[#1A56DB] bg-white hover:border-[#1545B0]";
   const dot = selected
     ? accent === "bliss"
       ? "border-[#97ACC8] bg-[#C9AFFA]"
@@ -1812,7 +1841,7 @@ function PaymentOption({
     <button
       type="button"
       onClick={onSelect}
-      className={`flex w-full items-start gap-3 rounded-none border p-4 text-left transition ${ring}`}
+      className={`flex w-full items-start gap-3 rounded-none p-4 text-left transition ${ring}`}
     >
       <span
         className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${dot}`}

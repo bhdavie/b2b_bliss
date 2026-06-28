@@ -26,15 +26,15 @@ export function PlanCard({
   return (
     <Link
       href={`/plan/${plan.bookingToken}`}
-      className={`block rounded-none border p-6 transition ${
+      className={`group block rounded-none border p-6 no-underline transition hover:no-underline ${
         muted
-          ? "border-brand-neutral bg-brand-neutral/10 hover:bg-brand-neutral/20"
-          : "border-brand-neutral bg-white hover:border-brand-purple/40"
+          ? "border-brand-neutral bg-brand-neutral/10 hover:border-2 hover:border-brand-neutral hover:bg-brand-neutral/20"
+          : "border-brand-neutral bg-white hover:border-2 hover:border-brand-purple"
       }`}
     >
       <div className="flex items-baseline justify-between gap-3">
         <h2
-          className={`text-2xl font-bold ${muted ? "text-ink-muted" : "text-brand-navy"}`}
+          className={`text-2xl font-bold group-hover:underline ${muted ? "text-ink-muted" : "text-brand-navy"}`}
         >
           {plan.merchantBusinessName}
         </h2>

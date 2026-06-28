@@ -73,7 +73,7 @@ const AFTER_RETRIES_OPTIONS: { value: AfterRetriesAction; label: string; body: s
 
 export function PoliciesCard({
   initial,
-  saveButtonClassName = "btn-primary",
+  saveButtonClassName = "btn-primary-merchant",
 }: {
   initial: PlanRules;
   saveButtonClassName?: string;
@@ -335,7 +335,7 @@ export function PoliciesCard({
               placeholder="3"
             />
             <label className="block">
-              <span className="text-xs text-ink-muted">Spacing (days)</span>
+              <span className="text-xs text-brand-navy">Spacing (days)</span>
               <select
                 value={form.retrySpacingDays}
                 onChange={(e) => update("retrySpacingDays", e.target.value as "1" | "3" | "7")}
@@ -387,7 +387,7 @@ export function PoliciesCard({
                     />
                   )}
                   <label className="block">
-                    <span className="text-xs text-ink-muted">Apply</span>
+                    <span className="text-xs text-brand-navy">Apply</span>
                     <select
                       value={form.lateFeeScope}
                       onChange={(e) => update("lateFeeScope", e.target.value as LateFeeScope)}
@@ -428,7 +428,7 @@ export function PoliciesCard({
       ) : null}
 
       <div className="flex items-center justify-between">
-        <div className="text-xs text-ink-muted">
+        <div className="text-xs text-brand-navy">
           {savedAt ? "Policies saved" : "These show on the customer's hosted page as trust signals."}
         </div>
         <button type="submit" disabled={saving} className={saveButtonClassName}>
@@ -509,7 +509,7 @@ function Row({
     <section className="grid gap-3 sm:grid-cols-[200px_1fr]">
       <div>
         <div className="text-sm font-medium text-ink">{label}</div>
-        {hint ? <div className="mt-1 text-xs text-ink-muted leading-snug">{hint}</div> : null}
+        {hint ? <div className="mt-1 text-xs text-brand-navy leading-snug">{hint}</div> : null}
       </div>
       <div>{children}</div>
     </section>
@@ -541,7 +541,7 @@ function OptionCard({
       <div className={`text-sm font-medium ${selected ? "text-[#51576A]" : "text-ink"}`}>
         {label}
       </div>
-      <div className="mt-0.5 text-xs text-ink-muted leading-snug">{body}</div>
+      <div className="mt-0.5 text-xs text-brand-navy leading-snug">{body}</div>
     </button>
   );
 }
@@ -623,7 +623,7 @@ function NumberInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-ink-muted">{label}</span>
+      <span className="text-xs text-brand-navy">{label}</span>
       <input
         type="number"
         inputMode="numeric"
@@ -650,7 +650,7 @@ function PercentInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-ink-muted">{label}</span>
+      <span className="text-xs text-brand-navy">{label}</span>
       <div className="relative mt-1.5">
         <input
           type="number"
@@ -686,7 +686,7 @@ function DollarInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-ink-muted">{label}</span>
+      <span className="text-xs text-brand-navy">{label}</span>
       <div className="relative mt-1.5">
         <span
           className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-ink-muted"

@@ -42,10 +42,10 @@ export default async function PlanDetailPage({
     <>
       <header>
         <Link
-          href="/dashboard"
+          href="/home"
           className="text-xs text-ink-muted hover:underline"
         >
-          ← Back to dashboard
+          ← Back to overview
         </Link>
         <div className="mt-2 flex items-baseline justify-between gap-3">
           <h1 className="text-3xl font-bold">{plan.serviceName}</h1>

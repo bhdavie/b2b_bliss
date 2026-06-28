@@ -1,5 +1,6 @@
 package com.bliss.b2b.payments;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -27,6 +28,12 @@ import java.util.List;
 public class PlanEligibilityService {
 
     public static final int MIN_FINAL_PAYMENT_BUFFER_DAYS = 3;
+
+    // Monthly only: payment 2 (the first installment) must be at least this many
+    // days after the booking date. The first anchor occurrence that falls inside
+    // this window is skipped to the next month so it isn't a too-soon second
+    // charge against the immediate payment 1.
+    private static final int MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS = 14;
 
     public EligibilityResult evaluate(
             LocalDate today,
@@ -114,12 +121,18 @@ public class PlanEligibilityService {
         if (usableDays < 0) return null;
 
         List<LocalDate> dueDates;
-        if (frequency == PlanFrequency.MONTHLY && hasDeposit) {
-            // Anchor monthly installments to the 1st of each calendar month so
-            // they line up with typical pay cycles. The helper itself enforces
-            // "first 1st strictly after today" so the deposit and the first
-            // installment never collide.
-            dueDates = monthlyFirstOfMonthDueDates(today, appointmentDate.minusDays(effectiveBuffer));
+        if (frequency == PlanFrequency.MONTHLY) {
+            // Monthly: payment 1 is the immediate charge on the booking date
+            // itself and is deliberately NOT business-day shifted (it fires the
+            // day the booking is made, even on a weekend). Payments 2..N collect
+            // on a fixed monthly anchor (the 2nd or 16th, chosen by booking
+            // date), each resolved through the weekend roll-forward. See
+            // monthlyDueDates for the anchor-selection / spacing rule.
+            dueDates = monthlyDueDates(today, appointmentDate.minusDays(effectiveBuffer), hasDeposit);
+            if (dueDates.isEmpty()) return null;
+            // Without a deposit, payment 1 (today) counts toward the schedule, so
+            // a real "plan" still needs at least one monthly installment after it.
+            if (!hasDeposit && dueDates.size() < 2) return null;
         } else {
             long intervals = usableDays / frequency.days();
             // Without a deposit the first installment fires today, so the count
@@ -138,6 +151,11 @@ public class PlanEligibilityService {
             for (int i = 0; i < n; i++) {
                 dueDates.add(today.plusDays((long) (startMultiplier + i) * frequency.days()));
             }
+            // Weekday-only rule (biweekly): roll every charge — including the
+            // immediate payment 1 — off the weekend forward to Monday.
+            for (int i = 0; i < dueDates.size(); i++) {
+                dueDates.set(i, rollForwardToWeekday(dueDates.get(i)));
+            }
         }
 
         int numPayments = dueDates.size();
@@ -151,19 +169,55 @@ public class PlanEligibilityService {
         return new PlanOption(frequency, numPayments, perPayment, finalPayment, List.copyOf(dueDates));
     }
 
-    private static List<LocalDate> monthlyFirstOfMonthDueDates(LocalDate today, LocalDate cutoff) {
-        // First 1st-of-month strictly after today, so the deposit (which fires
-        // today) and the first installment never collide. The only other
-        // constraint is the pre-check-in cutoff. A customer who books in the
-        // last few days of a month gets their first installment a few days
-        // after the deposit — accepted as the cost of consistent payday
-        // anchoring across the rest of the plan.
-        LocalDate cursor = today.withDayOfMonth(1).plusMonths(1);
+    /**
+     * Rolls a payment date off the weekend. Saturday and Sunday both move
+     * FORWARD to the following Monday; weekdays are returned unchanged. Never
+     * rolls backward, so an adjusted date is never earlier than computed. Used
+     * for every payment in a schedule, including the immediate first charge.
+     */
+    public static LocalDate rollForwardToWeekday(LocalDate date) {
+        DayOfWeek dow = date.getDayOfWeek();
+        if (dow == DayOfWeek.SATURDAY) return date.plusDays(2);
+        if (dow == DayOfWeek.SUNDAY) return date.plusDays(1);
+        return date;
+    }
+
+    private static List<LocalDate> monthlyDueDates(LocalDate today, LocalDate cutoff, boolean hasDeposit) {
+        // Payment 1 is the immediate charge on the booking date itself — no
+        // anchor logic and no weekend shift. Included here only when there is no
+        // separate deposit; when a deposit is configured it fires today via the
+        // deposit row, so dueDates holds installments only.
         List<LocalDate> dates = new ArrayList<>();
-        while (!cursor.isAfter(cutoff)) {
-            dates.add(cursor);
+        if (!hasDeposit) {
+            dates.add(today);
+        }
+        // Installments collect on a fixed monthly anchor (the 2nd or the 16th),
+        // chosen by the booking day. Payment 2 is the first anchor occurrence at
+        // least MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS days after the booking
+        // date (so it isn't a too-soon second charge); payments 3..N advance one
+        // month at a time on the same anchor. Each anchor date is resolved
+        // through the weekend roll-forward. No extra buffer math — the buffer is
+        // baked into the anchor days (2nd not 1st, 16th not 15th).
+        int anchorDay = monthlyAnchorDay(today.getDayOfMonth());
+        LocalDate cursor = today.withDayOfMonth(anchorDay);
+        while (ChronoUnit.DAYS.between(today, cursor) < MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS) {
             cursor = cursor.plusMonths(1);
         }
+        for (; ; cursor = cursor.plusMonths(1)) {
+            LocalDate due = rollForwardToWeekday(cursor);
+            if (due.isAfter(cutoff)) break;
+            dates.add(due);
+        }
         return dates;
+    }
+
+    /**
+     * The fixed monthly collection anchor (day of month) for a plan, chosen by
+     * the booking's day of month: bookings on day 1-10 or 26-end collect on the
+     * 2nd, bookings on day 11-25 collect on the 16th. Using the 2nd/16th rather
+     * than the 1st/15th bakes a small buffer into every anchor.
+     */
+    private static int monthlyAnchorDay(int bookingDayOfMonth) {
+        return (bookingDayOfMonth >= 11 && bookingDayOfMonth <= 25) ? 16 : 2;
     }
 }

@@ -1,6 +1,8 @@
 package com.bliss.b2b.api;
 
 import com.bliss.b2b.auth.SessionCookies;
+import com.bliss.b2b.domain.Customer;
+import com.bliss.b2b.persistence.CustomerDao;
 import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentPlanDao.PaymentPlanListItem;
 import com.bliss.b2b.persistence.PaymentPlanDao.ScheduleRow;
@@ -48,12 +50,17 @@ public class PublicAccountResource {
 
     private final CustomerAuthService authService;
     private final PaymentPlanDao planDao;
+    private final CustomerDao customerDao;
     private final Clock clock;
 
     public PublicAccountResource(
-            CustomerAuthService authService, PaymentPlanDao planDao, Clock clock) {
+            CustomerAuthService authService,
+            PaymentPlanDao planDao,
+            CustomerDao customerDao,
+            Clock clock) {
         this.authService = authService;
         this.planDao = planDao;
+        this.customerDao = customerDao;
         this.clock = clock;
     }
 
@@ -120,8 +127,12 @@ public class PublicAccountResource {
                                     item.status()));
                 }
             }
+            Customer customer = customerDao.findByEmail(email.get()).orElse(null);
+            String firstName = customer == null ? null : customer.firstName();
+            String lastName = customer == null ? null : customer.lastName();
             return Response.ok(
-                    PublicAccountPlansView.from(email.get(), items, progressByPlan))
+                    PublicAccountPlansView.from(
+                            email.get(), firstName, lastName, items, progressByPlan))
                     .build();
         } catch (RuntimeException e) {
             log.error("Failed to load account plans for {}", email.get(), e);

@@ -42,4 +42,19 @@ public interface CustomerDao {
             UPDATE customers SET last_login_at = :at WHERE id = :id
             """)
     int touchLastLogin(@Bind("id") UUID id, @Bind("at") Instant at);
+
+    // Keep the customer's name in sync with what the guest entered at checkout.
+    // COALESCE so a blank/missing name on this booking never wipes an existing
+    // name; a provided name wins so the latest booking's identity sticks.
+    @SqlUpdate("""
+            UPDATE customers
+            SET first_name = COALESCE(:firstName, first_name),
+                last_name = COALESCE(:lastName, last_name)
+            WHERE id = :id
+            """)
+    int updateName(
+            @Bind("id") UUID id,
+            @Bind("firstName") String firstName,
+            @Bind("lastName") String lastName
+    );
 }

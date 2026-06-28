@@ -77,6 +77,11 @@ const config: Config = {
       },
       boxShadow: {
         card: "0 1px 2px rgba(81, 87, 106, 0.06), 0 1px 1px rgba(81, 87, 106, 0.04)",
+        // Real card elevation, navy-tinted to match the brand shadow color.
+        elevated:
+          "0 1px 3px rgba(81, 87, 106, 0.10), 0 8px 24px -6px rgba(81, 87, 106, 0.10)",
+        "elevated-lg":
+          "0 2px 4px rgba(81, 87, 106, 0.10), 0 16px 36px -8px rgba(81, 87, 106, 0.14)",
       },
     },
   },

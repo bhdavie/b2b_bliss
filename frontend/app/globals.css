@@ -36,6 +36,21 @@
     @apply opacity-60 cursor-not-allowed;
   }
 
+  /* Merchant-only primary action button. Lavender fill, square corners per the
+     Bliss merchant color mapping. Scoped by usage to merchant components so it
+     never affects the guest portal or the Marbrook funnel. */
+  .btn-primary-merchant {
+    @apply inline-flex items-center justify-center rounded-md bg-brand-lavender px-4 py-2.5 text-white font-medium transition-colors;
+  }
+
+  .btn-primary-merchant:hover {
+    @apply bg-brand-lavender/80;
+  }
+
+  .btn-primary-merchant:disabled {
+    @apply opacity-60 cursor-not-allowed;
+  }
+
   .btn-ghost {
     @apply inline-flex items-center justify-center rounded-md border border-brand-neutral bg-transparent px-3 py-2 text-sm text-ink transition-colors;
   }

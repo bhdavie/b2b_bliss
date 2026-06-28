@@ -26,7 +26,7 @@ export function VerifyClient() {
     verifyMagicLinkToken(token)
       .then((merchant) => {
         setStatus("success");
-        router.push(merchant.onboardingComplete ? "/dashboard" : "/onboarding");
+        router.push(merchant.onboardingComplete ? "/home" : "/onboarding");
       })
       .catch((err: unknown) => {
         setStatus("error");

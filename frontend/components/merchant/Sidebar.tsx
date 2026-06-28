@@ -9,10 +9,11 @@ import { SignOutButton } from "./SignOutButton";
 type NavItem = { href: string; label: string };
 
 const NAV: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard" },
+  { href: "/home", label: "Home" },
+  { href: "/dashboard", label: "Account settings" },
   { href: "/bookings", label: "Bookings" },
   { href: "/payouts", label: "Payouts" },
-  { href: "/settings", label: "Settings" },
+  { href: "/settings", label: "Payment settings" },
 ];
 
 export function Sidebar({ email }: { email: string }) {
@@ -21,7 +22,7 @@ export function Sidebar({ email }: { email: string }) {
   return (
     <aside className="md:fixed md:inset-y-0 md:left-0 md:w-60 md:border-r md:border-brand-neutral md:bg-white flex flex-col">
       <div className="px-5 py-5 flex items-center justify-between md:block">
-        <BlissWordmark className="text-lg tracking-tight text-brand-navy" />
+        <BlissWordmark className="text-lg tracking-tight text-brand-purple" />
         <div className="text-xs text-ink-muted mt-0.5 hidden md:block">
           Merchant dashboard
         </div>
@@ -35,10 +36,10 @@ export function Sidebar({ email }: { email: string }) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-2 rounded-md px-3 py-2 text-base font-bold transition-colors ${
+              className={`flex items-center gap-2 rounded-none px-3 py-2 text-sm font-medium transition-colors ${
                 active
-                  ? "bg-brand-lavender text-white"
-                  : "text-ink-muted hover:bg-brand-cream/60 hover:text-ink"
+                  ? "bg-brand-lavender/20 text-brand-purple"
+                  : "text-brand-navy/60 hover:bg-brand-cream/50 hover:text-brand-navy"
               }`}
             >
               {item.label}

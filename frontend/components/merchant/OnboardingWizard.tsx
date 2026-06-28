@@ -7,6 +7,7 @@ import { updateMerchant, type UpdateMerchantPayload } from "@/lib/api";
 type FormState = {
   businessName: string;
   businessType: string;
+  numberOfRooms: string;
   phone: string;
   addressLine1: string;
   addressLine2: string;
@@ -16,12 +17,20 @@ type FormState = {
 };
 
 const BUSINESS_TYPES = [
-  { value: "photography", label: "Wedding or portrait photographer" },
-  { value: "hotel", label: "Boutique hotel or resort" },
-  { value: "retreat", label: "Retreat or workshop operator" },
-  { value: "salon", label: "Salon or barber" },
-  { value: "medspa", label: "Med spa or wellness clinic" },
-  { value: "other", label: "Something else" },
+  { value: "boutique_hotel", label: "Boutique hotel" },
+  { value: "independent_hotel", label: "Independent hotel" },
+  { value: "resort", label: "Resort" },
+  { value: "inn_bnb", label: "Inn / B&B" },
+  { value: "lodge", label: "Lodge" },
+];
+
+const ROOM_COUNTS = [
+  { value: "under_25", label: "Under 25 rooms" },
+  { value: "25_75", label: "25–75 rooms" },
+  { value: "76_150", label: "76–150 rooms" },
+  { value: "151_300", label: "151–300 rooms" },
+  { value: "301_500", label: "301–500 rooms" },
+  { value: "500_plus", label: "500+ rooms" },
 ];
 
 const STEPS = [
@@ -70,7 +79,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
     };
     try {
       await updateMerchant(payload);
-      router.push("/dashboard");
+      router.push("/home");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");
@@ -85,16 +94,16 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
       {step === 0 && (
         <section className="mt-6 space-y-4">
           <label className="block">
-            <span className="label">Business name</span>
+            <span className="label text-brand-navy">Business name</span>
             <input
               className="input mt-1.5"
               value={form.businessName}
               onChange={(e) => update("businessName", e.target.value)}
-              placeholder="Sarah Lee Photography"
+              placeholder="Marbrook House"
             />
           </label>
           <label className="block">
-            <span className="label">Business type</span>
+            <span className="label text-brand-navy">Business type</span>
             <select
               className="input mt-1.5 bg-white"
               value={form.businessType}
@@ -108,13 +117,28 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
               ))}
             </select>
           </label>
+          <label className="block">
+            <span className="label text-brand-navy">Number of rooms</span>
+            <select
+              className="input mt-1.5 bg-white"
+              value={form.numberOfRooms}
+              onChange={(e) => update("numberOfRooms", e.target.value)}
+            >
+              <option value="">Pick one</option>
+              {ROOM_COUNTS.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </section>
       )}
 
       {step === 1 && (
         <section className="mt-6 space-y-4">
           <label className="block">
-            <span className="label">Phone (optional)</span>
+            <span className="label text-brand-navy">Phone (optional)</span>
             <input
               className="input mt-1.5"
               value={form.phone}
@@ -123,7 +147,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
               type="tel"
             />
           </label>
-          <p className="text-xs text-ink-muted">
+          <p className="text-xs text-brand-navy">
             We will not text customers from your number. This is for your account
             only.
           </p>
@@ -133,7 +157,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
       {step === 2 && (
         <section className="mt-6 space-y-4">
           <label className="block">
-            <span className="label">Street address</span>
+            <span className="label text-brand-navy">Street address</span>
             <input
               className="input mt-1.5"
               value={form.addressLine1}
@@ -142,7 +166,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
             />
           </label>
           <label className="block">
-            <span className="label">Suite or unit (optional)</span>
+            <span className="label text-brand-navy">Suite or unit (optional)</span>
             <input
               className="input mt-1.5"
               value={form.addressLine2}
@@ -152,7 +176,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
           </label>
           <div className="grid grid-cols-3 gap-3">
             <label className="block col-span-1">
-              <span className="label">City</span>
+              <span className="label text-brand-navy">City</span>
               <input
                 className="input mt-1.5"
                 value={form.addressCity}
@@ -161,7 +185,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
               />
             </label>
             <label className="block col-span-1">
-              <span className="label">State</span>
+              <span className="label text-brand-navy">State</span>
               <input
                 className="input mt-1.5"
                 value={form.addressState}
@@ -172,7 +196,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
               />
             </label>
             <label className="block col-span-1">
-              <span className="label">Zip</span>
+              <span className="label text-brand-navy">Zip</span>
               <input
                 className="input mt-1.5"
                 value={form.addressZip}
@@ -181,7 +205,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
               />
             </label>
           </div>
-          <p className="text-xs text-ink-muted">
+          <p className="text-xs text-brand-navy">
             EIN, banking, and KYB go directly to Stripe Connect in the next
             phase. We do not store any of that here.
           </p>
@@ -206,7 +230,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
         {step < STEPS.length - 1 ? (
           <button
             type="button"
-            className="btn-primary"
+            className="btn-primary-merchant"
             disabled={!canAdvance()}
             onClick={() => setStep((s) => s + 1)}
           >
@@ -215,7 +239,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
         ) : (
           <button
             type="button"
-            className="btn-primary"
+            className="btn-primary-merchant"
             disabled={!canAdvance() || submitting}
             onClick={handleSubmit}
           >

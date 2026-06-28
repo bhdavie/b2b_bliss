@@ -14,9 +14,9 @@ export default async function StripeReturnPage() {
     redirect("/login");
   }
 
-  // If everything is good, send them straight to the dashboard.
+  // If everything is good, send them straight to the overview.
   if (status.status === "charges_enabled") {
-    redirect("/dashboard");
+    redirect("/home");
   }
 
   return (
@@ -37,8 +37,8 @@ export default async function StripeReturnPage() {
         </div>
 
         <p className="mt-6 text-center text-sm">
-          <Link href="/dashboard" className="text-brand-purple">
-            Go to dashboard
+          <Link href="/home" className="text-brand-purple">
+            Go to overview
           </Link>
         </p>
       </div>

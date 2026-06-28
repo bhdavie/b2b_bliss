@@ -41,15 +41,15 @@ export function PortalShell({
 }) {
   return (
     <div className="min-h-screen bg-white text-ink font-body">
-      <header className="border-b border-brand-neutral">
+      <header className="border-b border-brand-purple-dark bg-brand-purple">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <Link href="/account" className="no-underline">
-            <BlissWordmark className="text-2xl text-brand-purple" />
+            <BlissWordmark className="text-4xl text-white" />
           </Link>
           <form action={signOut}>
             <button
               type="submit"
-              className="text-xs font-medium text-ink-muted transition-colors hover:text-brand-purple"
+              className="text-base font-medium text-white/80 transition-colors hover:text-white"
             >
               Sign out
             </button>
@@ -62,8 +62,8 @@ export function PortalShell({
               href={t.href}
               className={`border-b-2 px-3 py-3 text-base font-bold no-underline transition-colors ${
                 active === t.key
-                  ? "border-brand-purple text-brand-purple"
-                  : "border-transparent text-ink-muted hover:text-brand-navy"
+                  ? "border-brand-lavender text-white"
+                  : "border-transparent text-white/60 hover:text-white"
               }`}
             >
               {t.label}

@@ -90,6 +90,9 @@ export function PlanPortal({
         ) : null}
 
         <Card title="Booking">
+          {portal.booking.customerNameHint ? (
+            <Row label="Guest" value={portal.booking.customerNameHint} />
+          ) : null}
           <Row label="Stay" value={portal.booking.serviceName} />
           <Row
             label="Check-in"

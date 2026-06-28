@@ -3,121 +3,94 @@
 import { BlissWordmark } from "@/components/BlissWordmark";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { devLogin, fetchDevAuthStatus, requestMagicLink } from "@/lib/api";
+import { useState } from "react";
+import { devLogin } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  // Demo defaults: both fields are pre-filled so signing in needs no typing.
+  const [email, setEmail] = useState("demo@marbrookhouse.com");
+  const [password, setPassword] = useState("1234");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [devMode, setDevMode] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchDevAuthStatus()
-      .then((status) => {
-        if (!cancelled) setDevMode(status.devLoginEnabled);
-      })
-      .catch(() => {
-        if (!cancelled) setDevMode(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      if (devMode) {
-        const merchant = await devLogin(email);
-        router.push(merchant.onboardingComplete ? "/dashboard" : "/onboarding");
-        router.refresh();
-        return;
-      }
-      await requestMagicLink(email);
-      router.push(`/check-email?email=${encodeURIComponent(email)}`);
+      // Demo / dev sign-in: the password is decorative and not validated.
+      // devLogin establishes the merchant session so the dashboard loads.
+      const merchant = await devLogin(email);
+      router.push(merchant.onboardingComplete ? "/home" : "/onboarding");
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed");
       setSubmitting(false);
     }
   }
 
-  // Wait for the dev-mode probe to settle before rendering the CTA so we
-  // never flash "We will email you a link" to a developer who clicks
-  // through instantly in demo mode.
-  const ready = devMode !== null;
-  const cta = !ready
-    ? "Continue"
-    : devMode
-      ? submitting
-        ? "Signing in"
-        : "Sign in"
-      : submitting
-        ? "Sending"
-        : "Continue";
-
   return (
-    <main className="min-h-screen flex items-center justify-center px-6 font-body">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-sm flex flex-col gap-4"
-      >
-        <header>
-          <BlissWordmark className="text-xl tracking-tight text-brand-navy" />
-          <h1 className="mt-4 text-lg font-medium">Sign in</h1>
-          <p className="mt-1 text-ink-muted">
-            {!ready
-              ? " "
-              : devMode
-                ? "Enter any email to sign in instantly."
-                : "We will email you a link to sign in."}
+    <main className="flex min-h-screen items-center justify-center bg-brand-cream/40 px-6 font-body">
+      <div className="w-full max-w-sm">
+        <div className="text-center">
+          <BlissWordmark className="text-3xl tracking-tight text-brand-purple" />
+        </div>
+
+        <div className="mt-6 rounded-none border border-brand-neutral bg-white p-8 shadow-sm">
+          <h1 className="text-2xl font-bold text-brand-navy">Sign in</h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            Sign in to your Marbrook House dashboard.
           </p>
-        </header>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="label">Email</span>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="input"
-            autoComplete="email"
-          />
-        </label>
+          <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
+            <label className="flex flex-col gap-1.5">
+              <span className="label">Email</span>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                className="w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 text-sm text-ink focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/60"
+              />
+            </label>
 
-        {error ? (
-          <div className="text-xs text-red-600" role="alert">
-            {error}
-          </div>
-        ) : null}
+            <label className="flex flex-col gap-1.5">
+              <span className="label">Password</span>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                className="w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 text-sm text-ink focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/60"
+              />
+            </label>
 
-        <button
-          type="submit"
-          disabled={!ready || submitting}
-          className="btn-primary"
-        >
-          {cta}
-        </button>
+            {error ? (
+              <div className="text-xs text-red-600" role="alert">
+                {error}
+              </div>
+            ) : null}
 
-        {devMode ? (
-          <p className="text-[10px] uppercase tracking-wide text-amber-700 bg-amber-100 px-2 py-1 rounded text-center">
-            Dev mode · magic-link bypass active
-          </p>
-        ) : null}
+            <button
+              type="submit"
+              disabled={submitting}
+              className="mt-1 inline-flex items-center justify-center rounded-md bg-brand-purple px-4 py-2.5 font-medium text-white transition-colors hover:bg-brand-purple-dark disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitting ? "Signing in" : "Sign in"}
+            </button>
+          </form>
+        </div>
 
-        <p className="text-xs text-ink-muted text-center">
+        <p className="mt-6 text-center text-xs text-ink-muted">
           New here?{" "}
-          <Link href="/signup" className="text-brand-purple">
+          <Link href="/signup" className="font-medium text-brand-purple">
             Create an account
           </Link>
         </p>
-      </form>
+      </div>
     </main>
   );
 }

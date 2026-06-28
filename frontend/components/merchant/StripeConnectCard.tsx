@@ -40,11 +40,6 @@ export function StripeConnectCard({
           <div className="text-xs text-ink-muted">Stripe Connect</div>
           <div className="mt-1 flex items-center gap-2">
             <StatusPill status={status.status} />
-            {!status.configured && (
-              <span className="text-[10px] uppercase tracking-wide text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                Backend not configured
-              </span>
-            )}
           </div>
           <p className="mt-2 text-sm text-ink-muted">
             <StatusCopy status={status} />
@@ -123,15 +118,6 @@ function StatusPill({ status }: { status: StripeStatus["status"] }) {
 }
 
 function StatusCopy({ status }: { status: StripeStatus }) {
-  if (!status.configured) {
-    return (
-      <>
-        Stripe is scaffolded but not yet keyed up on the backend. Set{" "}
-        <span className="font-mono">STRIPE_SECRET_KEY</span> to enable the
-        Connect flow.
-      </>
-    );
-  }
   switch (status.status) {
     case "not_started":
       return (

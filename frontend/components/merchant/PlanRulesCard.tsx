@@ -26,7 +26,7 @@ type FormState = {
 
 export function PlanRulesCard({
   initial,
-  saveButtonClassName = "btn-primary",
+  saveButtonClassName = "btn-primary-merchant",
 }: {
   initial: PlanRules;
   saveButtonClassName?: string;
@@ -313,7 +313,7 @@ export function PlanRulesCard({
                 />
               </div>
 
-              <p className="text-[11px] text-ink-muted leading-snug">
+              <p className="text-[11px] text-brand-navy leading-snug">
                 {form.depositType === "percentage"
                   ? "A percentage of the booking total is charged at signup. The optional cap protects against runaway deposits on big-ticket bookings."
                   : "A fixed dollar amount is charged at signup. If the booking total is smaller than the deposit, the plan flow rejects so you don't accidentally charge above the booking price."}
@@ -346,7 +346,7 @@ export function PlanRulesCard({
       ) : null}
 
       <div className="flex items-center justify-between border-t border-brand-neutral pt-4">
-        <div className="text-xs text-ink-muted">
+        <div className="text-xs text-brand-navy">
           {savedAt ? "Rules saved" : "Customers see these on their hosted page."}
         </div>
         <button
@@ -420,7 +420,7 @@ function Row({
       <div>
         <div className="text-sm font-medium text-ink">{label}</div>
         {hint ? (
-          <div className="mt-1 text-xs text-ink-muted leading-snug">{hint}</div>
+          <div className="mt-1 text-xs text-brand-navy leading-snug">{hint}</div>
         ) : null}
       </div>
       <div>{children}</div>
@@ -443,7 +443,7 @@ function NumberInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-ink-muted">{label}</span>
+      <span className="text-xs text-brand-navy">{label}</span>
       <input
         type="number"
         inputMode="numeric"
@@ -470,7 +470,7 @@ function DollarInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-ink-muted">{label}</span>
+      <span className="text-xs text-brand-navy">{label}</span>
       <div className="relative mt-1.5">
         <span
           className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-ink-muted"
@@ -508,7 +508,7 @@ function PercentInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-ink-muted">{label}</span>
+      <span className="text-xs text-brand-navy">{label}</span>
       <div className="relative mt-1.5">
         <input
           type="number"
@@ -558,7 +558,7 @@ function FrequencyOption({
       <div className={`text-sm font-medium ${selected ? "text-[#51576A]" : "text-ink"}`}>
         {label}
       </div>
-      <div className="mt-0.5 text-xs text-ink-muted leading-snug">{body}</div>
+      <div className="mt-0.5 text-xs text-brand-navy leading-snug">{body}</div>
       <input
         type="radio"
         name="allowed_frequencies"

@@ -9,17 +9,17 @@ export default async function OnboardingPage() {
     redirect("/login");
   }
   if (session.onboardingComplete) {
-    redirect("/dashboard");
+    redirect("/home");
   }
 
   return (
     <main className="min-h-screen bg-white py-10 px-6 font-body">
       <div className="max-w-xl mx-auto">
         <header className="text-center">
-          <BlissWordmark className="text-xl tracking-tight text-brand-navy" />
-          <h1 className="mt-6 text-2xl font-medium">Set up your business</h1>
-          <p className="mt-1 text-ink-muted">
-            Three quick steps. Stripe Connect comes after this in the next phase.
+          <BlissWordmark className="text-xl tracking-tight text-brand-purple" />
+          <h1 className="mt-6 text-2xl font-medium text-brand-navy">Set up your business</h1>
+          <p className="mt-1 text-brand-navy">
+            Three quick steps to get your property set up.
           </p>
         </header>
 
@@ -27,6 +27,7 @@ export default async function OnboardingPage() {
           initial={{
             businessName: session.businessName ?? "",
             businessType: session.businessType ?? "",
+            numberOfRooms: "",
             phone: session.phone ?? "",
             addressLine1: session.address.line1 ?? "",
             addressLine2: session.address.line2 ?? "",

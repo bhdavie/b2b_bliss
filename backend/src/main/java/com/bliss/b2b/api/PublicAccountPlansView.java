@@ -13,12 +13,16 @@ import java.util.Map;
  */
 public record PublicAccountPlansView(
         String email,
+        String firstName,
+        String lastName,
         long processingFeeCents,
         List<PlanCardView> plans
 ) {
 
     public static PublicAccountPlansView from(
             String email,
+            String firstName,
+            String lastName,
             List<PaymentPlanListItem> items,
             Map<java.util.UUID, PlanProgress.Snapshot> progressByPlan
     ) {
@@ -29,7 +33,7 @@ public record PublicAccountPlansView(
         List<PlanCardView> cards = items.stream()
                 .map(item -> PlanCardView.from(item, progressByPlan.get(item.id())))
                 .toList();
-        return new PublicAccountPlansView(email, 0L, cards);
+        return new PublicAccountPlansView(email, firstName, lastName, 0L, cards);
     }
 
     public record PlanCardView(

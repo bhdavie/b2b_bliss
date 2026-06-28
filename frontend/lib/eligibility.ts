@@ -43,6 +43,12 @@ const FREQUENCY_DAYS: Record<PlanFrequency, number> = {
 
 const MIN_FINAL_PAYMENT_BUFFER_DAYS = 3;
 
+// Monthly only: the first installment (payment 2) must be at least this many
+// days after the booking date, else it skips to the following month so it
+// isn't a same-week double charge against the immediate payment 1. Mirrors
+// PlanEligibilityService.MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS.
+const MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS = 14;
+
 export function previewEligibility(
   today: Date,
   appointmentDate: Date | null,
@@ -175,13 +181,15 @@ function buildInstallments(
   if (usable < 0) return null;
 
   let dueDates: string[];
-  if (frequency === "monthly" && hasDeposit) {
-    // Anchor monthly installments to the 1st of each calendar month so they
-    // line up with typical pay cycles. The helper itself enforces "first 1st
-    // strictly after today" so the deposit and first installment never
-    // collide.
+  if (frequency === "monthly") {
+    // Monthly: payment 1 is the immediate charge on the booking date itself
+    // (NOT business-day shifted). Payments 2..N collect on a fixed monthly
+    // anchor (the 2nd or 16th, chosen by booking date), each resolved through
+    // the weekend roll-forward. See monthlyDueDates for the anchor rule.
     const cutoff = addDays(appointmentDate, -MIN_FINAL_PAYMENT_BUFFER_DAYS);
-    dueDates = monthlyFirstOfMonthDueDates(today, cutoff);
+    dueDates = monthlyDueDates(today, cutoff, hasDeposit);
+    if (dueDates.length === 0) return null;
+    if (!hasDeposit && dueDates.length < 2) return null;
   } else {
     const intervals = Math.floor(usable / intervalDays);
     const n = hasDeposit ? intervals : 1 + intervals;
@@ -190,7 +198,7 @@ function buildInstallments(
     dueDates = [];
     const startMultiplier = hasDeposit ? 1 : 0;
     for (let i = 0; i < n; i++) {
-      dueDates.push(formatDate(addDays(today, (startMultiplier + i) * intervalDays)));
+      dueDates.push(formatDate(rollForwardToWeekday(addDays(today, (startMultiplier + i) * intervalDays))));
     }
   }
 
@@ -211,18 +219,40 @@ function buildInstallments(
   };
 }
 
-function monthlyFirstOfMonthDueDates(today: Date, cutoff: Date): string[] {
-  // First 1st-of-month strictly after today, so the deposit (which fires
-  // today) and the first installment never collide. The only other
-  // constraint is the pre-check-in cutoff. Mirrors the backend's
-  // monthlyFirstOfMonthDueDates in PlanEligibilityService.java.
-  let cursor = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+// Mirrors PlanEligibilityService.monthlyDueDates. Payment 1 is the immediate
+// charge on the booking date itself (no anchor logic, NOT weekend-shifted),
+// included only when there is no separate deposit. Installments collect on a
+// fixed monthly anchor (the 2nd or the 16th, chosen by booking day); payment 2
+// is the first anchor occurrence at least MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS
+// days after the booking, and payments 3..N advance one month at a time on the
+// same anchor. Each anchor date is resolved through the weekend roll-forward.
+function monthlyDueDates(today: Date, cutoff: Date, hasDeposit: boolean): string[] {
   const dates: string[] = [];
-  while (cursor.getTime() <= cutoff.getTime()) {
-    dates.push(formatDate(cursor));
-    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+  if (!hasDeposit) {
+    dates.push(formatDate(today));
+  }
+  const anchorDay = monthlyAnchorDay(today.getDate());
+  let cursor = new Date(today.getFullYear(), today.getMonth(), anchorDay);
+  while (daysBetween(today, cursor) < MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS) {
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, anchorDay);
+  }
+  for (
+    ;
+    ;
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, anchorDay)
+  ) {
+    const due = rollForwardToWeekday(cursor);
+    if (due.getTime() > cutoff.getTime()) break;
+    dates.push(formatDate(due));
   }
   return dates;
+}
+
+// The fixed monthly collection anchor (day of month), chosen by the booking's
+// day of month: day 1-10 or 26-end -> the 2nd; day 11-25 -> the 16th. Mirrors
+// PlanEligibilityService.monthlyAnchorDay.
+function monthlyAnchorDay(bookingDayOfMonth: number): number {
+  return bookingDayOfMonth >= 11 && bookingDayOfMonth <= 25 ? 16 : 2;
 }
 
 function daysBetween(a: Date, b: Date): number {
@@ -235,6 +265,17 @@ function addDays(d: Date, n: number): Date {
   const next = new Date(d);
   next.setDate(next.getDate() + n);
   return next;
+}
+
+// Weekday-only rule (mirrors PlanEligibilityService.rollForwardToWeekday on the
+// backend): no payment may land on a weekend. Saturday and Sunday both roll
+// FORWARD to the following Monday; weekdays are returned unchanged. Never rolls
+// backward, so an adjusted date is never earlier than its computed date.
+function rollForwardToWeekday(d: Date): Date {
+  const day = d.getDay(); // 0 = Sunday, 6 = Saturday
+  if (day === 6) return addDays(d, 2);
+  if (day === 0) return addDays(d, 1);
+  return d;
 }
 
 function formatDate(d: Date): string {

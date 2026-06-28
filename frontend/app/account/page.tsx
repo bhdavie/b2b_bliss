@@ -2,6 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   fetchAccountPlans,
+  fetchPlanPortal,
   formatDollars,
   formatScheduleDateShort,
   type AccountPlanCard,
@@ -25,12 +26,22 @@ export default async function AccountPage() {
   );
   const totalRemaining = active.reduce((sum, p) => sum + p.remainingCents, 0);
   const next = nextPaymentAcross(active);
-  const greetingName = data.email.split("@")[0] ?? "there";
+  // Greet by the guest's first name, never the email prefix. Read from the same
+  // source Settings uses — the booking's captured name (customerNameHint) — and
+  // prefer the customer-record first name when it's populated. With no name
+  // anywhere, fall back to a plain "Welcome back".
+  const anchor =
+    data.plans.find((p) => p.status === "active") ?? data.plans[0] ?? null;
+  const portal = anchor ? await fetchPlanPortal(anchor.bookingToken) : null;
+  const nameHint = portal?.booking.customerNameHint ?? null;
+  const firstName =
+    (data.firstName?.trim() ?? "") ||
+    (nameHint ? (nameHint.trim().split(/\s+/)[0] ?? "") : "");
 
   return (
     <PortalShell active="home">
       <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
-        Welcome back, {greetingName}
+        {firstName ? `Welcome back, ${firstName}` : "Welcome back"}
       </h1>
       <p className="mt-1 text-sm text-ink-muted">Signed in as {data.email}</p>
 

@@ -534,6 +534,8 @@ export type AccountPlanCard = {
 
 export type AccountPlansResponse = {
   email: string;
+  firstName: string | null;
+  lastName: string | null;
   processingFeeCents: number;
   plans: AccountPlanCard[];
 };

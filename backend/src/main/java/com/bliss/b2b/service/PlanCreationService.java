@@ -110,7 +110,14 @@ public class PlanCreationService {
             PlanOption option) {
         int seq = 1;
         if (hasDeposit) {
-            scheduleDao.insert(planId, seq, today, depositAmount + feeCents,
+            // The deposit fires immediately on plan creation. For biweekly the
+            // weekday-only rule rolls it off the weekend like the installments;
+            // for monthly, payment 1 fires on the booking date itself (no shift,
+            // even on a weekend).
+            LocalDate depositDate = option.frequency() == PlanFrequency.MONTHLY
+                    ? today
+                    : PlanEligibilityService.rollForwardToWeekday(today);
+            scheduleDao.insert(planId, seq, depositDate, depositAmount + feeCents,
                     PaymentScheduleStatus.SCHEDULED.wire(), ScheduleKind.DEPOSIT.wire());
             seq++;
             for (int i = 0; i < installmentCount; i++) {
@@ -308,6 +315,11 @@ public class PlanCreationService {
             customerDao.insert(email, trimToNull(customerFirstName), trimToNull(customerLastName));
             return customerDao.findByEmail(email).orElseThrow();
         });
+        // Keep the customer's name current with what this guest entered at
+        // checkout, so a returning email reflects the latest booking instead of
+        // a stale name. New emails already inserted the name above.
+        customerDao.updateName(customer.id(), trimToNull(customerFirstName), trimToNull(customerLastName));
+        customer = customerDao.findById(customer.id()).orElseThrow();
 
         String stripeCustomerId = customer.stripeCustomerId();
         if (stripeCustomerId == null || stripeCustomerId.isBlank()) {
@@ -477,6 +489,11 @@ public class PlanCreationService {
             customerDao.insert(email, trimToNull(customerFirstName), trimToNull(customerLastName));
             return customerDao.findByEmail(email).orElseThrow();
         });
+        // Keep the customer's name current with what this guest entered at
+        // checkout, so a returning email reflects the latest booking instead of
+        // a stale name. New emails already inserted the name above.
+        customerDao.updateName(customer.id(), trimToNull(customerFirstName), trimToNull(customerLastName));
+        customer = customerDao.findById(customer.id()).orElseThrow();
 
         String stripeCustomerId = customer.stripeCustomerId();
         if (stripeCustomerId == null || stripeCustomerId.isBlank()) {
