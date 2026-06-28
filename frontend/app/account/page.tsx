@@ -1,75 +1,88 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { fetchAccountPlans } from "@/lib/publicApi";
+import {
+  fetchAccountPlans,
+  formatDollars,
+  formatScheduleDateShort,
+  type AccountPlanCard,
+} from "@/lib/publicApi";
+import { PortalShell } from "@/components/portal/PortalShell";
 import { PlansList } from "@/components/account/PlansList";
 
 export default async function AccountPage() {
   const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("bliss_customer_session");
-  if (!sessionCookie?.value) {
+  if (!cookieStore.get("bliss_customer_session")?.value) {
     redirect("/account/login");
   }
-  // Forward the cookie header so the backend's CookieParam picks it up.
   const cookieHeader = (await headers()).get("cookie") ?? null;
   const data = await fetchAccountPlans(cookieHeader);
-
   if (!data) {
-    // Backend rejected the session — clear and bounce to login.
     redirect("/account/login");
   }
 
+  const active = data.plans.filter((p) => p.status === "active");
+  const totalRemaining = active.reduce((sum, p) => sum + p.remainingCents, 0);
+  const next = nextPaymentAcross(active);
+  const greetingName = data.email.split("@")[0] ?? "there";
+
   return (
-    <div className="min-h-screen bg-white text-ink font-body">
-      <header className="border-b border-brand-neutral bg-gradient-to-b from-white to-brand-lavender/15">
-        <div className="mx-auto max-w-3xl px-6 py-10">
-          <div className="flex items-baseline justify-between gap-4">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.25em] text-ink-muted">
-                Your Bliss account
-              </p>
-              <h1 className="mt-2 font-display text-3xl tracking-tight text-brand-navy">
-                Your payment plans
-              </h1>
-              <p className="mt-1 text-sm text-ink-muted">
-                Signed in as {data.email}
-              </p>
-            </div>
-            <SignOutForm />
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-3xl px-6 py-10">
-        <PlansList plans={data.plans} />
-      </main>
-    </div>
+    <PortalShell active="home">
+      <p className="text-[11px] uppercase tracking-[0.25em] text-ink-muted">
+        Your Bliss account
+      </p>
+      <h1 className="mt-2 text-3xl font-semibold tracking-tight text-brand-navy">
+        Welcome back, {greetingName}
+      </h1>
+      <p className="mt-1 text-sm text-ink-muted">Signed in as {data.email}</p>
+
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Stat label="Active plans" value={String(active.length)} />
+        <Stat label="Total remaining" value={formatDollars(totalRemaining)} />
+        <Stat
+          label="Next payment"
+          value={
+            next
+              ? `${formatDollars(next.nextDueAmountCents ?? 0)} · ${formatScheduleDateShort(next.nextDueDate ?? "")}`
+              : "Nothing due"
+          }
+          sub={next ? next.merchantBusinessName : undefined}
+        />
+      </div>
+
+      <h2 className="mt-10 text-xl font-semibold text-brand-navy">Your plans</h2>
+      <div className="mt-4">
+        <PlansList plans={active} />
+      </div>
+    </PortalShell>
   );
 }
 
-function SignOutForm() {
-  async function signOut() {
-    "use server";
-    const { cookies: serverCookies } = await import("next/headers");
-    const store = await serverCookies();
-    store.delete("bliss_customer_session");
-    try {
-      await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080"}/api/v1/public/account/logout`,
-        { method: "POST" },
-      );
-    } catch {
-      // ignore — local cookie already cleared above
-    }
-    const { redirect: r } = await import("next/navigation");
-    r("/account/login");
-  }
+function nextPaymentAcross(plans: AccountPlanCard[]): AccountPlanCard | null {
+  const due = plans.filter((p) => p.nextDueDate && p.nextDueAmountCents != null);
+  if (due.length === 0) return null;
+  return due.reduce((best, p) =>
+    (p.nextDueDate ?? "") < (best.nextDueDate ?? "") ? p : best,
+  );
+}
+
+function Stat({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
   return (
-    <form action={signOut}>
-      <button
-        type="submit"
-        className="text-xs font-medium uppercase tracking-[0.18em] text-ink-muted underline-offset-2 hover:underline"
-      >
-        Sign out
-      </button>
-    </form>
+    <div className="rounded-none border border-brand-lavender bg-white p-4">
+      <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+        {label}
+      </div>
+      <div className="mt-1 text-xl font-semibold tabular-nums text-brand-navy">
+        {value}
+      </div>
+      {sub ? <div className="mt-0.5 text-xs text-ink-muted">{sub}</div> : null}
+    </div>
   );
 }

@@ -132,8 +132,10 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 jdbi, eligibilityService, stripePaymentsService, emailService, clock);
         MewsSyncService mewsSyncService = new MewsSyncService(
                 mewsApiClient, jdbi, eligibilityService, planCreationService, clock);
+        CancellationService cancellationService = new CancellationService(
+                paymentPlanDao, paymentScheduleDao, bookingDao, planRulesService);
         PlanPortalService planPortalService = new PlanPortalService(
-                jdbi, stripePaymentsService, clock);
+                jdbi, stripePaymentsService, cancellationService, clock);
         com.bliss.b2b.persistence.CustomerDao customerDao =
                 jdbi.onDemand(com.bliss.b2b.persistence.CustomerDao.class);
 
@@ -172,8 +174,6 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new PublicAccountResource(
                 customerAuthService, paymentPlanDao));
         environment.jersey().register(new PlanRulesResource(planRulesService));
-        CancellationService cancellationService = new CancellationService(
-                paymentPlanDao, paymentScheduleDao, bookingDao, planRulesService);
         environment.jersey().register(new PlansResource(
                 paymentPlanDao, paymentScheduleDao, bookingDao, cancellationService));
         environment.jersey().register(new DevPlansResource(

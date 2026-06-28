@@ -81,7 +81,7 @@ export function UpdateCardSection({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded border border-brand-lavender bg-white p-4">
+    <form onSubmit={handleSubmit} className="space-y-3 rounded-none border border-brand-lavender bg-white p-4">
       <div className="text-xs uppercase tracking-[0.18em] text-ink-muted">
         Replace card
       </div>
@@ -93,7 +93,7 @@ export function UpdateCardSection({
           onChange={(e) => setCardNumber(e.target.value)}
           inputMode="numeric"
           autoComplete="cc-number"
-          className="mt-1 w-full rounded border border-brand-neutral bg-white px-3 py-2 text-sm tabular-nums focus:border-brand-navy focus:outline-none"
+          className="mt-1 w-full rounded-none border border-brand-neutral bg-white px-3 py-2 text-sm tabular-nums focus:border-brand-navy focus:outline-none"
         />
       </label>
       <div className="grid grid-cols-2 gap-3">
@@ -105,7 +105,7 @@ export function UpdateCardSection({
             onChange={(e) => setExpiry(e.target.value)}
             inputMode="numeric"
             autoComplete="cc-exp"
-            className="mt-1 w-full rounded border border-brand-neutral bg-white px-3 py-2 text-sm tabular-nums focus:border-brand-navy focus:outline-none"
+            className="mt-1 w-full rounded-none border border-brand-neutral bg-white px-3 py-2 text-sm tabular-nums focus:border-brand-navy focus:outline-none"
           />
         </label>
         <label className="block">
@@ -116,7 +116,7 @@ export function UpdateCardSection({
             onChange={(e) => setZip(e.target.value)}
             inputMode="numeric"
             autoComplete="postal-code"
-            className="mt-1 w-full rounded border border-brand-neutral bg-white px-3 py-2 text-sm tabular-nums focus:border-brand-navy focus:outline-none"
+            className="mt-1 w-full rounded-none border border-brand-neutral bg-white px-3 py-2 text-sm tabular-nums focus:border-brand-navy focus:outline-none"
           />
         </label>
       </div>
@@ -130,14 +130,14 @@ export function UpdateCardSection({
           type="button"
           onClick={() => setOpen(false)}
           disabled={busy}
-          className="rounded border border-brand-neutral px-3 py-2 text-xs text-ink-muted hover:bg-brand-lavender/10 disabled:opacity-50"
+          className="rounded-none border border-brand-neutral px-3 py-2 text-xs text-ink-muted hover:bg-brand-lavender/10 disabled:opacity-50"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={busy}
-          className="rounded bg-brand-purple px-4 py-2 text-xs font-medium text-white hover:bg-brand-purple-dark disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-none bg-brand-purple px-4 py-2 text-xs font-medium text-white hover:bg-brand-purple-dark disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Saving…" : "Save new card"}
         </button>

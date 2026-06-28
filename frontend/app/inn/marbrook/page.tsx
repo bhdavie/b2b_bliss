@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   createBooking,
   devLogin,
@@ -452,6 +453,7 @@ export default function MarbrookHousePage() {
             {step === "checkout" && rate && pricing ? (
               booked ? (
                 <BookedPanel
+                  booked={booked}
                   rate={rate}
                   stayLabel={stayRangeLabel(checkinIso, checkoutIso)}
                 />
@@ -1740,9 +1742,17 @@ function PlanSchedule({ option }: { option: PlanOptionPreview }) {
   );
 }
 
-// Inline confirmation shown after Book now. No /pay navigation.
-// Same confirmation for both payment paths (pay in full and installments).
-function BookedPanel({ rate, stayLabel }: { rate: Rate; stayLabel: string }) {
+// Inline confirmation shown after Book now. No /pay navigation. Shared by both
+// payment paths; the installment path adds a single portal link below.
+function BookedPanel({
+  booked,
+  rate,
+  stayLabel,
+}: {
+  booked: BookedState;
+  rate: Rate;
+  stayLabel: string;
+}) {
   return (
     <section>
       <div className="rounded-none border border-[#1A56DB] bg-white p-6">
@@ -1758,6 +1768,18 @@ function BookedPanel({ rate, stayLabel }: { rate: Rate; stayLabel: string }) {
         <p className="mt-5 text-sm text-[#23262e]/75">
           A confirmation is on its way to your email.
         </p>
+        {booked.method === "bliss" ? (
+          <p className="mt-2 text-sm text-[#23262e]/75">
+            Track and manage your payments{" "}
+            <Link
+              href={`/plan/${booked.plan.bookingToken}`}
+              className="text-[#6A629E] underline underline-offset-2 hover:text-[#564E89]"
+            >
+              here
+            </Link>
+            .
+          </p>
+        ) : null}
       </div>
     </section>
   );

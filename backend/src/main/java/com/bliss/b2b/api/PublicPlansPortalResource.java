@@ -71,6 +71,23 @@ public class PublicPlansPortalResource {
     }
 
     @POST
+    @Path("/{token}/cancel")
+    public Response cancel(@PathParam("token") String token) {
+        if (token == null || token.isBlank()) return notFound();
+        try {
+            // State transition only. The refund/fee assessment is computed and
+            // logged inside CancellationService but not posted to Stripe.
+            portalService.cancelPlan(token);
+            return Response.ok(Map.of("status", "ok")).build();
+        } catch (PortalException e) {
+            return mapError(e);
+        } catch (RuntimeException e) {
+            log.error("Unexpected error in cancel for token={}", token, e);
+            return Response.status(500).entity(Map.of("error", "internal_error")).build();
+        }
+    }
+
+    @POST
     @Path("/{token}/setup-intent")
     public Response setupIntent(@PathParam("token") String token) {
         try {

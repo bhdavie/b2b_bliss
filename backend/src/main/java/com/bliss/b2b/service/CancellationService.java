@@ -75,6 +75,9 @@ public class CancellationService {
         long netRefundCents = Math.max(0L, refundCents - feeCents);
 
         planDao.markCanceled(plan.id(), at, reason);
+        // Stop every future charge: cancel the remaining non-terminal rows so
+        // the scheduled-charge runner skips them. Paid rows stay as history.
+        scheduleDao.cancelRemaining(plan.id());
 
         Assessment assessment = new Assessment(
                 paidCents, paidInstallments, progressPercent,

@@ -37,7 +37,7 @@ export function PayEarlyButton({
           type="button"
           onClick={() => setConfirming(true)}
           disabled={busy}
-          className="rounded bg-brand-purple px-5 py-3 text-sm font-medium text-white transition hover:bg-brand-purple-dark disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-none bg-brand-purple px-5 py-3 text-sm font-medium text-white transition hover:bg-brand-purple-dark disabled:cursor-not-allowed disabled:opacity-50"
         >
           Pay early
         </button>
@@ -60,7 +60,7 @@ export function PayEarlyButton({
           type="button"
           onClick={() => setConfirming(false)}
           disabled={busy}
-          className="rounded border border-brand-neutral px-3 py-2 text-xs text-ink-muted hover:bg-brand-lavender/10 disabled:opacity-50"
+          className="rounded-none border border-brand-neutral px-3 py-2 text-xs text-ink-muted hover:bg-brand-lavender/10 disabled:opacity-50"
         >
           Cancel
         </button>
@@ -68,7 +68,7 @@ export function PayEarlyButton({
           type="button"
           onClick={handlePay}
           disabled={busy}
-          className="rounded bg-brand-purple px-4 py-2 text-xs font-medium text-white hover:bg-brand-purple-dark disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-none bg-brand-purple px-4 py-2 text-xs font-medium text-white hover:bg-brand-purple-dark disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Charging…" : `Charge ${formatDollars(amount)}`}
         </button>

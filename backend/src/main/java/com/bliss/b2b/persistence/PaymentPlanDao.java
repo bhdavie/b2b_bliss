@@ -141,6 +141,7 @@ public interface PaymentPlanDao {
                 payment_plan_id AS paymentPlanId,
                 COUNT(*) FILTER (WHERE status='paid')::int AS paidCount,
                 COUNT(*) FILTER (WHERE status='scheduled')::int AS scheduledCount,
+                COALESCE(SUM(amount_cents) FILTER (WHERE status='paid'), 0) AS paidCents,
                 MIN(CASE WHEN status='scheduled' THEN due_date END) AS nextDueDate,
                 MIN(CASE WHEN status='scheduled' THEN amount_cents END) AS nextDueAmountCents
             FROM payment_schedule
@@ -173,6 +174,7 @@ public interface PaymentPlanDao {
             UUID paymentPlanId,
             int paidCount,
             int scheduledCount,
+            long paidCents,
             LocalDate nextDueDate,
             Long nextDueAmountCents
     ) {}

@@ -446,6 +446,33 @@ export async function payNextInstallment(
   };
 }
 
+/**
+ * Customer-initiated cancellation. State transition only on the backend (marks
+ * the plan canceled and stops the remaining schedule rows). No Stripe refund is
+ * posted; the refund figure shown to the guest is computed client-side from the
+ * rate policy.
+ */
+export async function cancelPlan(
+  token: string,
+): Promise<{ ok: true } | { ok: false; error: PortalActionError; status: number }> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/public/plans/${encodeURIComponent(token)}/cancel`,
+    { method: "POST", headers: { "Content-Type": "application/json" } },
+  );
+  const body = await res.json().catch(() => ({} as Record<string, unknown>));
+  if (!res.ok) {
+    return {
+      ok: false,
+      status: res.status,
+      error: {
+        error: (body as { error?: string }).error ?? "unknown_error",
+        message: (body as { message?: string }).message ?? `Cancel failed (${res.status})`,
+      },
+    };
+  }
+  return { ok: true };
+}
+
 export async function createPortalSetupIntent(
   token: string,
 ): Promise<{ ok: true; clientSecret: string } | { ok: false; error: PortalActionError; status: number }> {
@@ -491,6 +518,8 @@ export type AccountPlanCard = {
   totalAmountCents: number;
   originalTotalAmountCents: number | null;
   totalWithFeeCents: number;
+  paidCents: number;
+  remainingCents: number;
   numPayments: number;
   frequency: PublicPlanFrequency;
   paidCount: number;

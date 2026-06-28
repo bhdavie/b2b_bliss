@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { BlissWordmark } from "@/components/BlissWordmark";
 import {
   fetchPlanPortal,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/publicApi";
 import { PayEarlyButton } from "./PayEarlyButton";
 import { UpdateCardSection } from "./UpdateCardSection";
+import { CancelPlanSection } from "./CancelPlanSection";
 
 export function PlanPortal({
   token,
@@ -50,11 +52,19 @@ export function PlanPortal({
   return (
     <div className="min-h-screen bg-white text-ink font-body">
       <header className="border-b border-brand-neutral bg-gradient-to-b from-white to-brand-lavender/15">
-        <div className="mx-auto max-w-3xl px-6 py-10 text-center">
+        <div className="mx-auto max-w-3xl px-6 pt-5">
+          <Link
+            href="/account"
+            className="text-xs font-medium uppercase tracking-[0.18em] text-brand-purple no-underline hover:underline"
+          >
+            Back to your plans
+          </Link>
+        </div>
+        <div className="mx-auto max-w-3xl px-6 pb-10 pt-4 text-center">
           <p className="text-[11px] uppercase tracking-[0.25em] text-ink-muted">
             Your payment plan
           </p>
-          <h1 className="mt-2 font-display text-3xl tracking-tight text-brand-navy">
+          <h1 className="mt-2 font-semibold text-3xl tracking-tight text-brand-navy">
             {portal.merchant.businessName}
           </h1>
           <p className="mt-1 text-sm text-ink-muted">
@@ -66,10 +76,10 @@ export function PlanPortal({
       <main className="mx-auto max-w-3xl px-6 py-10 space-y-6">
         {planComplete ? (
           <section className="text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-lavender text-white">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-none bg-brand-lavender text-white">
               <CheckIcon />
             </div>
-            <h1 className="mt-4 font-display text-3xl text-brand-navy">
+            <h1 className="mt-4 font-semibold text-3xl text-brand-navy">
               You&apos;re all set
             </h1>
             <p className="mt-2 text-sm text-ink-muted">
@@ -97,10 +107,10 @@ export function PlanPortal({
               <span
                 className={
                   planComplete
-                    ? "rounded-full bg-brand-lavender px-3 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
+                    ? "rounded-none bg-brand-lavender px-3 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
                     : portal.plan.status === "active"
-                    ? "rounded-full border border-brand-lavender bg-white px-3 py-0.5 text-xs font-medium uppercase tracking-[0.12em] text-brand-purple"
-                    : "rounded-full bg-amber-100 px-3 py-0.5 text-xs font-medium uppercase tracking-[0.12em] text-amber-900"
+                    ? "rounded-none border border-brand-lavender bg-white px-3 py-0.5 text-xs font-medium uppercase tracking-[0.12em] text-brand-purple"
+                    : "rounded-none bg-amber-100 px-3 py-0.5 text-xs font-medium uppercase tracking-[0.12em] text-amber-900"
                 }
               >
                 {portal.plan.status.replace(/_/g, " ")}
@@ -130,25 +140,25 @@ export function PlanPortal({
               />
             </div>
             <div className="mt-3 flex items-baseline justify-between border-t border-brand-neutral pt-3">
-              <span className="font-display text-lg text-brand-navy">Total</span>
-              <span className="font-display text-2xl font-semibold text-brand-navy">
+              <span className="font-semibold text-lg text-brand-navy">Total</span>
+              <span className="font-semibold text-2xl font-semibold text-brand-navy">
                 {formatDollars(totalDue)}
               </span>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded bg-brand-purple px-3 py-2">
+              <div className="rounded-none bg-brand-purple px-3 py-2">
                 <div className="text-[11px] uppercase tracking-[0.18em] text-white/80">
                   Paid to date
                 </div>
-                <div className="mt-1 font-display text-lg text-white">
+                <div className="mt-1 font-semibold text-lg text-white">
                   {formatDollars(portal.paidCents)}
                 </div>
               </div>
-              <div className="rounded border-2 border-brand-lavender bg-white px-3 py-2">
+              <div className="rounded-none border-2 border-brand-lavender bg-white px-3 py-2">
                 <div className="text-[11px] uppercase tracking-[0.18em] text-ink-muted">
                   Remaining
                 </div>
-                <div className="mt-1 font-display text-lg text-brand-navy">
+                <div className="mt-1 font-semibold text-lg text-brand-navy">
                   {formatDollars(portal.remainingCents)}
                 </div>
               </div>
@@ -160,7 +170,7 @@ export function PlanPortal({
           <Card title="Next payment">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
               <div>
-                <div className="font-display text-3xl text-brand-navy">
+                <div className="font-semibold text-3xl text-brand-navy">
                   {formatDollars(nextDue.amountCents)}
                 </div>
                 <div className="mt-1 text-xs uppercase tracking-[0.18em] text-ink-muted">
@@ -199,7 +209,7 @@ export function PlanPortal({
                     ) : null}
                   </div>
                 </div>
-                <div className="font-display text-lg tabular-nums text-brand-navy">
+                <div className="font-semibold text-lg tabular-nums text-brand-navy">
                   {formatDollars(entry.amountCents)}
                 </div>
               </li>
@@ -212,7 +222,7 @@ export function PlanPortal({
             {portal.card ? (
               <div className="flex items-center justify-between gap-4 text-sm">
                 <div>
-                  <div className="font-display text-lg text-brand-navy">
+                  <div className="font-semibold text-lg text-brand-navy">
                     {brandLabel(portal.card.brand)} •••• {portal.card.lastFour}
                   </div>
                   <div className="mt-1 text-xs text-ink-muted">
@@ -234,6 +244,19 @@ export function PlanPortal({
           </Card>
         ) : null}
 
+        {portal.plan.status === "active" ? (
+          <Card title="Cancel plan">
+            <CancelPlanSection
+              token={token}
+              serviceName={portal.booking.serviceName}
+              appointmentDate={portal.booking.appointmentDate}
+              paidCents={portal.paidCents}
+              processingFeeCents={portal.processingFeeCents}
+              onCanceled={refresh}
+            />
+          </Card>
+        ) : null}
+
         <footer className="pt-4 pb-12 text-center text-xs text-ink-muted">
           Powered by{" "}
           <BlissWordmark />
@@ -245,8 +268,8 @@ export function PlanPortal({
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-brand-neutral bg-white/70 p-6 shadow-sm backdrop-blur-sm">
-      <h2 className="mb-4 font-display text-xl text-brand-navy">{title}</h2>
+    <section className="rounded-none border border-brand-neutral bg-white/70 p-6 shadow-sm backdrop-blur-sm">
+      <h2 className="mb-4 font-semibold text-xl text-brand-navy">{title}</h2>
       {children}
     </section>
   );
@@ -298,7 +321,7 @@ function StatusPill({ status }: { status: string }) {
   })();
   return (
     <span
-      className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${cls}`}
+      className={`inline-block rounded-none px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${cls}`}
     >
       {status}
     </span>

@@ -44,12 +44,36 @@ public class PlanPortalService {
 
     private final Jdbi jdbi;
     private final StripePaymentsService stripeService;
+    private final CancellationService cancellationService;
     private final Clock clock;
 
-    public PlanPortalService(Jdbi jdbi, StripePaymentsService stripeService, Clock clock) {
+    public PlanPortalService(
+            Jdbi jdbi,
+            StripePaymentsService stripeService,
+            CancellationService cancellationService,
+            Clock clock) {
         this.jdbi = jdbi;
         this.stripeService = stripeService;
+        this.cancellationService = cancellationService;
         this.clock = clock;
+    }
+
+    /**
+     * Customer-initiated cancellation from the plan portal. Resolves the plan
+     * by booking token and routes through the single canonical
+     * {@link CancellationService#cancel} path (marks the plan canceled and
+     * cancels the remaining schedule rows). Money movement is computed and
+     * logged there but not executed. Throws {@link PortalException} when the
+     * plan is absent or already in a terminal state.
+     */
+    public void cancelPlan(String bookingToken) {
+        PaymentPlan plan = jdbi.withHandle(handle ->
+                resolveOrThrow(handle, bookingToken).plan());
+        if (plan.status() != PaymentPlanStatus.ACTIVE) {
+            throw new PortalException(
+                    PortalErrorCode.PLAN_NOT_ACTIVE, "plan is not active");
+        }
+        cancellationService.cancel(plan, Instant.now(clock), "customer_initiated");
     }
 
     public Optional<PortalSnapshot> getPortal(String bookingToken) {

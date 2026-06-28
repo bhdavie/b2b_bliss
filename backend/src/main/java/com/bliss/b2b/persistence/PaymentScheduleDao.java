@@ -90,4 +90,16 @@ public interface PaymentScheduleDao {
             @Bind("paymentIntentId") String paymentIntentId,
             @Bind("now") Instant now
     );
+
+    /**
+     * Cancel every not-yet-terminal row for a plan so no further charges fire.
+     * Paid rows are left untouched (they stay part of the paid history).
+     */
+    @SqlUpdate("""
+            UPDATE payment_schedule
+            SET status = 'canceled'
+            WHERE payment_plan_id = :paymentPlanId
+              AND status IN ('scheduled', 'processing', 'failed', 'retrying')
+            """)
+    int cancelRemaining(@Bind("paymentPlanId") UUID paymentPlanId);
 }

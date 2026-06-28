@@ -37,7 +37,7 @@ export function LoginForm() {
           onChange={(e) => setEmail(e.target.value)}
           autoComplete="email"
           required
-          className="w-full rounded border border-brand-neutral bg-white px-3 py-2.5 focus:border-brand-navy focus:outline-none"
+          className="w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 focus:border-brand-navy focus:outline-none"
         />
       </label>
       <label className="block">
@@ -50,12 +50,12 @@ export function LoginForm() {
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
           required
-          className="w-full rounded border border-brand-neutral bg-white px-3 py-2.5 focus:border-brand-navy focus:outline-none"
+          className="w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 focus:border-brand-navy focus:outline-none"
         />
       </label>
 
       {error ? (
-        <div role="alert" className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+        <div role="alert" className="rounded-none border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
           {error}
         </div>
       ) : null}
@@ -63,7 +63,7 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={busy}
-        className="w-full rounded bg-brand-purple px-4 py-3 text-center text-sm font-medium text-white shadow-sm transition hover:bg-brand-purple-dark disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full rounded-none bg-brand-purple px-4 py-3 text-center text-sm font-medium text-white shadow-sm transition hover:bg-brand-purple-dark disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? "Signing in…" : "Sign in"}
       </button>

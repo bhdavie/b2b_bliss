@@ -45,6 +45,8 @@ public record PublicAccountPlansView(
             long totalAmountCents,          // discounted (plan total)
             Long originalTotalAmountCents,  // pre-discount (booking original)
             long totalWithFeeCents,         // what customer actually pays
+            long paidCents,                 // sum of paid schedule rows
+            long remainingCents,            // totalWithFee minus paid
             int numPayments,
             String frequency,
             int paidCount,
@@ -59,8 +61,10 @@ public record PublicAccountPlansView(
         ) {
             int paid = summary == null ? 0 : summary.paidCount();
             int scheduled = summary == null ? 0 : summary.scheduledCount();
+            long paidCents = summary == null ? 0L : summary.paidCents();
             LocalDate nextDate = summary == null ? null : summary.nextDueDate();
             Long nextAmount = summary == null ? null : summary.nextDueAmountCents();
+            long totalWithFeeCents = item.totalAmountCents() + processingFeeCents;
             return new PlanCardView(
                     item.id().toString(),
                     item.bookingToken(),
@@ -72,7 +76,9 @@ public record PublicAccountPlansView(
                     item.checkoutDate(),
                     item.totalAmountCents(),
                     item.originalTotalCents(),
-                    item.totalAmountCents() + processingFeeCents,
+                    totalWithFeeCents,
+                    paidCents,
+                    Math.max(0L, totalWithFeeCents - paidCents),
                     item.numPayments(),
                     item.frequency(),
                     paid,
