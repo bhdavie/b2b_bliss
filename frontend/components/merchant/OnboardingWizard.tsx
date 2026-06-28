@@ -123,7 +123,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
               type="tel"
             />
           </label>
-          <p className="text-xs text-ink-soft">
+          <p className="text-xs text-ink-muted">
             We will not text customers from your number. This is for your account
             only.
           </p>
@@ -181,7 +181,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
               />
             </label>
           </div>
-          <p className="text-xs text-ink-soft">
+          <p className="text-xs text-ink-muted">
             EIN, banking, and KYB go directly to Stripe Connect in the next
             phase. We do not store any of that here.
           </p>
@@ -238,23 +238,23 @@ function Stepper({ current }: { current: number }) {
             <span
               className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-medium ${
                 state === "active"
-                  ? "bg-lavender-500 text-white"
+                  ? "bg-brand-lavender text-white"
                   : state === "done"
-                    ? "bg-lavender-100 text-lavender-700"
-                    : "bg-surface-subtle text-ink-soft"
+                    ? "bg-brand-lavender text-white"
+                    : "bg-brand-cream/60 text-ink-muted"
               }`}
             >
               {i + 1}
             </span>
             <span
               className={`${
-                state === "pending" ? "text-ink-soft" : "text-ink"
+                state === "pending" ? "text-ink-muted" : "text-ink"
               } ${state === "active" ? "font-medium" : ""}`}
             >
               {s.title}
             </span>
             {i < STEPS.length - 1 && (
-              <span className="w-6 h-px bg-surface-border" />
+              <span className="w-6 h-px bg-brand-neutral" />
             )}
           </li>
         );

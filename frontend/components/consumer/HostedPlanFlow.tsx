@@ -5,6 +5,8 @@ import { loadStripe, type Stripe } from "@stripe/stripe-js";
 import { useMemo, useState } from "react";
 import {
   createPlan,
+  deriveDisplayAmounts,
+  distributeInstallments,
   formatDollarsCompact,
   type CreatePlanResponse,
   type PublicBooking,
@@ -12,7 +14,6 @@ import {
   type PublicPlanOption,
 } from "@/lib/publicApi";
 import { DepositCallout } from "./DepositCallout";
-import { DiscountBreakdown } from "./DiscountBreakdown";
 import { MerchantBlock } from "./MerchantBlock";
 import { PlanPicker } from "./PlanPicker";
 import { PolicyDisclosure } from "./PolicyDisclosure";
@@ -20,11 +21,11 @@ import { ScheduleVisualizer } from "./ScheduleVisualizer";
 import { ServiceCard } from "./ServiceCard";
 import {
   StripeCardSection,
-  StripeNotConfiguredCard,
   type CollectedCard,
 } from "./StripeCardSection";
 import { TrustSignals } from "./TrustSignals";
 import { Confirmation } from "./Confirmation";
+import { DemoCardSection } from "./DemoCardSection";
 
 type Step = "plan" | "card" | "confirmed";
 
@@ -56,31 +57,43 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
   if (!selectedOption) return null;
 
   const showCardStep = step === "card";
+  const display = deriveDisplayAmounts({
+    discountedTotalCents: booking.eligibility.discountedTotalAmountCents,
+    originalDepositCents: depositCents,
+  });
+  const distribution = distributeInstallments({
+    remainingCents: display.remainingCents,
+    numPayments: selectedOption.numPayments,
+  });
 
   return (
     <>
       <MerchantBlock merchant={booking.merchant} />
-      <ServiceCard service={booking.service} />
+      <ServiceCard
+        service={booking.service}
+        originalTotalCents={booking.eligibility.originalTotalAmountCents}
+        discountedTotalCents={booking.eligibility.discountedTotalAmountCents}
+      />
 
       <div className={showCardStep ? "pointer-events-none opacity-30" : ""}>
-        <DiscountBreakdown
-          originalTotalCents={booking.eligibility.originalTotalAmountCents}
-          discountedTotalCents={booking.eligibility.discountedTotalAmountCents}
-        />
         {hasDeposit ? (
           <DepositCallout
-            depositAmountCents={depositCents}
-            totalAmountCents={booking.eligibility.discountedTotalAmountCents}
+            todayCents={display.todayCents}
+            remainingCents={display.remainingCents}
+            depositRate={display.depositRate}
           />
         ) : null}
         <PlanPicker
           options={booking.planOptions}
           selected={selectedOption.frequency}
           onSelect={(f) => setSelected(f)}
+          remainingCents={display.remainingCents}
         />
         <ScheduleVisualizer
           option={selectedOption}
-          depositAmountCents={depositCents}
+          todayCents={display.todayCents}
+          perPaymentCents={distribution.perPaymentCents}
+          finalPaymentCents={distribution.finalPaymentCents}
         />
         <PolicyDisclosure policies={booking.policies} />
       </div>
@@ -90,12 +103,10 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
           <button
             type="button"
             onClick={() => setStep("card")}
-            disabled={!booking.stripe.configured}
-            className="mt-6 w-full rounded-md bg-lavender-500 px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-lavender-600 disabled:opacity-60"
+            className="mt-6 w-full rounded-md bg-brand-purple px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-purple-dark disabled:opacity-60"
           >
-            {planCtaLabel(hasDeposit, depositCents, selectedOption, booking.eligibility.discountedTotalAmountCents)}
+            Book now
           </button>
-          {!booking.stripe.configured ? <StripeNotConfiguredCard /> : null}
           <TrustSignals />
         </>
       ) : null}
@@ -107,8 +118,8 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
               emailInitial={booking.service.customerEmailHint ?? ""}
               busy={busy}
               onCancel={() => setStep("plan")}
-              ctaLabel={cardCtaLabel(hasDeposit, depositCents, selectedOption)}
-              disclosure={disclosureCopy(hasDeposit, depositCents, selectedOption)}
+              ctaLabel="Book now"
+              disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, selectedOption)}
               onCardCollected={async (card) => {
                 await handleSubmit(booking, selectedOption.frequency, card);
               }}
@@ -120,11 +131,68 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
             ) : null}
           </Elements>
         ) : (
-          <StripeNotConfiguredCard />
+          <DemoCardSection
+            emailInitial={booking.service.customerEmailHint ?? ""}
+            busy={busy}
+            onCancel={() => setStep("plan")}
+            ctaLabel="Book now"
+            disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, selectedOption)}
+            onDemoSubmit={handleDemoSubmit}
+          />
         )
       ) : null}
     </>
   );
+
+  function handleDemoSubmit() {
+    if (!selectedOption) return;
+    // Synthesize a CreatePlanResponse from in-scope booking data so the
+    // customer always lands on the confirmation page, even when the
+    // merchant's Stripe account isn't wired up. Amounts mirror the
+    // deriveDisplayAmounts / distributeInstallments split, so the
+    // confirmation page reads back consistent numbers.
+    const now = Date.now();
+    const schedule: CreatePlanResponse["schedule"] = [];
+    if (display.todayCents > 0) {
+      schedule.push({
+        sequence: schedule.length + 1,
+        dueDate: isoToday(),
+        amountCents: display.todayCents,
+        status: "scheduled",
+        kind: "deposit",
+      });
+    }
+    selectedOption.dueDates.forEach((dueDate, i) => {
+      const isFinal = i === selectedOption.dueDates.length - 1;
+      schedule.push({
+        sequence: schedule.length + 1,
+        dueDate,
+        amountCents: isFinal
+          ? distribution.finalPaymentCents
+          : distribution.perPaymentCents,
+        status: "scheduled",
+        kind: "installment",
+      });
+    });
+    const synthetic: CreatePlanResponse = {
+      planId: `demo-plan-${now}`,
+      bookingId: `demo-booking-${now}`,
+      // No real plan persisted on this path — the Confirmation Manage-plan
+      // link is gated on a truthy token, so empty string falls back to
+      // the static notice. /pay demo persistence is out of scope for now.
+      bookingToken: "",
+      frequency: selectedOption.frequency,
+      numPayments: selectedOption.numPayments,
+      totalAmountCents: booking.eligibility.discountedTotalAmountCents,
+      originalTotalAmountCents: booking.eligibility.originalTotalAmountCents,
+      depositAmountCents: display.todayCents,
+      schedule,
+      firstChargeIntentId: null as unknown as string,
+      firstChargeStatus: "demo",
+    };
+    setConfirmed(synthetic);
+    setStep("confirmed");
+  }
 
   async function handleSubmit(
     booking: PublicBooking,
@@ -156,6 +224,11 @@ function pickDefaultFrequency(booking: PublicBooking): PublicPlanFrequency {
   return booking.planOptions[0]?.frequency ?? "monthly";
 }
 
+function isoToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function extractTokenFromCurrentPath(): string {
   // The path is /pay/{slug}/{token}. We're a client component so reading
   // window.location is fine; the parent server component already validated
@@ -164,45 +237,23 @@ function extractTokenFromCurrentPath(): string {
   return parts[2] ?? "";
 }
 
-function planCtaLabel(
-  hasDeposit: boolean,
-  depositCents: number,
-  option: PublicPlanOption,
-  totalCents: number,
-): string {
-  if (!hasDeposit) return "Continue to payment";
-  const remaining = totalCents - depositCents;
-  const cadence = option.frequency === "biweekly" ? "bi-weekly" : "monthly";
-  return `Pay ${formatDollarsCompact(depositCents)} today, schedule ${formatDollarsCompact(remaining)} ${cadence}`;
-}
-
-function cardCtaLabel(
-  hasDeposit: boolean,
-  depositCents: number,
-  option: PublicPlanOption,
-): string {
-  if (hasDeposit) {
-    return `Confirm and pay ${formatDollarsCompact(depositCents)} deposit today`;
-  }
-  return `Confirm and pay ${formatDollarsCompact(option.perPaymentAmountCents)} today`;
-}
-
 function disclosureCopy(
   hasDeposit: boolean,
-  depositCents: number,
+  todayCents: number,
+  perPaymentCents: number,
   option: PublicPlanOption,
 ): string {
   const cadence = option.frequency === "biweekly" ? "bi-weekly" : "monthly";
   if (hasDeposit) {
     return (
-      `Your card will be charged ${formatDollarsCompact(depositCents)} today as a deposit. ` +
+      `Your card will be charged ${formatDollarsCompact(todayCents)} today as a deposit. ` +
       `${option.numPayments} ${cadence} payment${option.numPayments === 1 ? "" : "s"} ` +
-      `of ${formatDollarsCompact(option.perPaymentAmountCents)} will be charged automatically on the schedule above. ` +
+      `of ${formatDollarsCompact(perPaymentCents)} will be charged automatically on the schedule above. ` +
       `You can cancel anytime.`
     );
   }
   return (
-    `Your card will be charged ${formatDollarsCompact(option.perPaymentAmountCents)} today. ` +
+    `Your card will be charged ${formatDollarsCompact(perPaymentCents)} today. ` +
     `${option.numPayments - 1} more ${cadence} payments will follow on the schedule above. ` +
     `You can cancel anytime.`
   );

@@ -10,7 +10,7 @@ export function MerchantBlock({
   return (
     <section className="flex items-center gap-3">
       <div
-        className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-lavender-100 text-[13px] font-medium text-lavender-700"
+        className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-brand-lavender text-[13px] font-medium text-white"
         aria-hidden="true"
       >
         {initials}

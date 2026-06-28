@@ -177,8 +177,9 @@ function buildInstallments(
   let dueDates: string[];
   if (frequency === "monthly" && hasDeposit) {
     // Anchor monthly installments to the 1st of each calendar month so they
-    // line up with typical pay cycles. Skip any 1st within 7 days of the
-    // deposit charge to avoid stacking two charges in the same week.
+    // line up with typical pay cycles. The helper itself enforces "first 1st
+    // strictly after today" so the deposit and first installment never
+    // collide.
     const cutoff = addDays(appointmentDate, -MIN_FINAL_PAYMENT_BUFFER_DAYS);
     dueDates = monthlyFirstOfMonthDueDates(today, cutoff);
   } else {
@@ -211,11 +212,11 @@ function buildInstallments(
 }
 
 function monthlyFirstOfMonthDueDates(today: Date, cutoff: Date): string[] {
-  const earliest = addDays(today, 7);
-  let cursor =
-    earliest.getDate() === 1
-      ? new Date(earliest)
-      : new Date(earliest.getFullYear(), earliest.getMonth() + 1, 1);
+  // First 1st-of-month strictly after today, so the deposit (which fires
+  // today) and the first installment never collide. The only other
+  // constraint is the pre-check-in cutoff. Mirrors the backend's
+  // monthlyFirstOfMonthDueDates in PlanEligibilityService.java.
+  let cursor = new Date(today.getFullYear(), today.getMonth() + 1, 1);
   const dates: string[] = [];
   while (cursor.getTime() <= cutoff.getTime()) {
     dates.push(formatDate(cursor));

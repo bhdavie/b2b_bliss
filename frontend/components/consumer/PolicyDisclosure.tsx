@@ -17,7 +17,7 @@ export function PolicyDisclosure({ policies }: { policies: PublicPolicies }) {
   const lateFeeLine = lateFeeCopy(policies);
 
   return (
-    <section className="mt-6 rounded-md border border-surface-border bg-white p-4">
+    <section className="mt-6 rounded-md border border-brand-neutral bg-white p-4">
       <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-ink-muted">
         Cancellation policy
       </div>
@@ -43,7 +43,7 @@ function PolicyLine({
     <li className="flex items-start gap-2.5">
       <span
         className={`mt-1.5 inline-block h-1 w-1 flex-none rounded-full ${
-          subtle ? "bg-ink-soft" : "bg-lavender-500"
+          subtle ? "bg-ink-muted" : "bg-brand-purple"
         }`}
         aria-hidden="true"
       />
@@ -55,7 +55,7 @@ function PolicyLine({
 function refundCopy(policies: PublicPolicies): string {
   switch (policies.refundPolicy) {
     case "full":
-      return "Full refund anytime before your appointment.";
+      return "Full refund anytime before your check-in.";
     case "none":
       return "No refunds on paid installments.";
     case "first_installment_only":

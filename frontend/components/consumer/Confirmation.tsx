@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   formatDollarsCompact,
   formatScheduleDateLong,
@@ -7,7 +8,7 @@ import {
   type CreatePlanResponse,
   type PublicBooking,
 } from "@/lib/publicApi";
-import { DiscountBreakdown } from "./DiscountBreakdown";
+import { feeFor } from "@/lib/blissFee";
 
 export function Confirmation({
   booking,
@@ -22,11 +23,21 @@ export function Confirmation({
   const hasDiscount =
     plan.originalTotalAmountCents != null
     && plan.originalTotalAmountCents > plan.totalAmountCents;
+  const savings =
+    hasDiscount && plan.originalTotalAmountCents != null
+      ? plan.originalTotalAmountCents - plan.totalAmountCents
+      : 0;
+  const percent =
+    hasDiscount && plan.originalTotalAmountCents != null
+      ? Math.round((savings / plan.originalTotalAmountCents) * 100)
+      : 0;
+  const processingFeeCents = feeFor(plan.totalAmountCents);
+  const displayedTotalCents = plan.totalAmountCents + processingFeeCents;
 
   return (
     <div>
       <div className="mt-6 flex flex-col items-center text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-lavender-100 text-lavender-700">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-lavender text-white">
           <CheckIcon />
         </div>
         <h1 className="mt-4 text-[24px] font-medium leading-tight text-ink">
@@ -37,7 +48,7 @@ export function Confirmation({
         </p>
       </div>
 
-      <section className="mt-6 rounded-md bg-cream-dark p-4">
+      <section className="mt-6 rounded-md bg-brand-cream/60 p-4">
         <div className="text-[14px] font-medium text-ink">
           {booking.service.name}
         </div>
@@ -46,19 +57,27 @@ export function Confirmation({
         </div>
         <div className="mt-4 grid grid-cols-2 gap-y-2 text-[12px]">
           {hasDiscount && plan.originalTotalAmountCents != null ? (
-            <DiscountBreakdown
-              originalTotalCents={plan.originalTotalAmountCents}
-              discountedTotalCents={plan.totalAmountCents}
-              variant="rows"
-            />
-          ) : (
             <>
-              <div className="text-ink-muted">Total</div>
-              <div className="text-right font-medium text-ink">
-                {formatDollarsCompact(plan.totalAmountCents)}
+              <div className="text-[11px] text-ink-muted">Subtotal</div>
+              <div className="text-right text-[11px] text-ink-muted line-through tabular-nums">
+                {formatDollarsCompact(plan.originalTotalAmountCents)}
+              </div>
+              <div className="text-[11px] text-emerald-700">
+                Plan discount ({percent}%)
+              </div>
+              <div className="text-right text-[11px] text-emerald-700 tabular-nums">
+                -{formatDollarsCompact(savings)}
               </div>
             </>
-          )}
+          ) : null}
+          <div className="text-[11px] text-ink-muted">Processing fee</div>
+          <div className="text-right text-[11px] text-ink-muted tabular-nums">
+            +{formatDollarsCompact(processingFeeCents)}
+          </div>
+          <div className="text-[15px] font-bold text-ink">Total</div>
+          <div className="text-right text-[15px] font-bold text-ink tabular-nums">
+            {formatDollarsCompact(displayedTotalCents)}
+          </div>
           {plan.depositAmountCents > 0 ? (
             <>
               <div className="text-ink-muted">Deposit today</div>
@@ -86,22 +105,22 @@ export function Confirmation({
         <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-ink-muted">
           Schedule
         </div>
-        <ol className="mt-2.5 divide-y divide-surface-border rounded-md border border-surface-border bg-white">
+        <ol className="mt-2.5 divide-y divide-brand-neutral rounded-md border border-brand-neutral bg-white">
           {plan.schedule.map((entry) => (
             <li
               key={entry.sequence}
               className={`flex items-center justify-between px-3 py-2.5 text-[13px] ${
-                entry.kind === "deposit" ? "bg-cream-dark/40" : ""
+                entry.kind === "deposit" ? "bg-brand-cream/60" : ""
               }`}
             >
               <span className="flex items-center gap-2 text-ink-muted">
                 {entry.kind === "deposit" ? (
-                  <span className="rounded-full bg-navy px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white">
+                  <span className="rounded-full bg-brand-lavender px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white">
                     Deposit
                   </span>
                 ) : null}
                 <span>
-                  {entry.sequence === 1 ? "Today" : formatScheduleDateShort(entry.dueDate)}
+                  {entry.kind === "deposit" ? "Today" : formatScheduleDateShort(entry.dueDate)}
                 </span>
               </span>
               <span className="tabular-nums text-ink">
@@ -116,13 +135,22 @@ export function Confirmation({
         <button
           type="button"
           onClick={() => window.print()}
-          className="w-full rounded-md bg-lavender-500 px-4 py-3 text-[14px] font-medium text-white transition-colors hover:bg-lavender-600"
+          className="w-full rounded-md bg-brand-navy px-4 py-3 text-[14px] font-medium text-white transition-colors hover:bg-brand-navy-dark"
         >
           Save schedule as PDF
         </button>
-        <p className="text-center text-[11px] text-ink-soft">
-          Manage your plan anytime at bliss.com/account
-        </p>
+        {plan.bookingToken ? (
+          <Link
+            href={`/plan/${plan.bookingToken}`}
+            className="text-center text-[12px] font-medium text-brand-purple underline-offset-2 hover:underline"
+          >
+            Manage your plan
+          </Link>
+        ) : (
+          <p className="text-center text-[11px] text-ink-muted">
+            Manage your plan anytime at bliss.com/account
+          </p>
+        )}
       </div>
     </div>
   );

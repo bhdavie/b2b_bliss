@@ -1,6 +1,7 @@
 package com.bliss.b2b.persistence;
 
 import com.bliss.b2b.domain.Customer;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.jdbi.v3.sqlobject.config.RegisterRowMapper;
@@ -36,4 +37,9 @@ public interface CustomerDao {
             @Bind("id") UUID id,
             @Bind("stripeCustomerId") String stripeCustomerId
     );
+
+    @SqlUpdate("""
+            UPDATE customers SET last_login_at = :at WHERE id = :id
+            """)
+    int touchLastLogin(@Bind("id") UUID id, @Bind("at") Instant at);
 }

@@ -43,6 +43,23 @@ public class JwtService {
                 .compact();
     }
 
+    /**
+     * Issues a customer-side session token. Distinct from {@link #issue}
+     * via the {@code role=customer} claim so the verifier on the customer
+     * portal can reject merchant tokens that happened to leak across.
+     */
+    public String issueCustomer(String email) {
+        Instant now = Instant.now();
+        return Jwts.builder()
+                .issuer(issuer)
+                .subject(email)
+                .claim("role", "customer")
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plus(ttl)))
+                .signWith(signingKey, Jwts.SIG.HS256)
+                .compact();
+    }
+
     public Claims verify(String token) {
         return Jwts.parser()
                 .verifyWith(signingKey)

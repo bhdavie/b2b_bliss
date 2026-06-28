@@ -32,7 +32,7 @@ export default async function DashboardPage() {
         <div className="card p-5">
           <div className="text-xs text-ink-muted">Business</div>
           <div className="mt-1 text-sm font-medium">{session.businessName}</div>
-          <div className="mt-0.5 text-xs text-ink-soft capitalize">
+          <div className="mt-0.5 text-xs text-ink-muted capitalize">
             {session.businessType}
           </div>
         </div>
@@ -67,7 +67,7 @@ export default async function DashboardPage() {
       <section className="mt-8 card-subtle">
         <div className="text-xs text-ink-muted">Account</div>
         <div className="mt-1 text-sm">{session.email}</div>
-        <div className="mt-1 text-xs text-ink-soft font-mono">{session.id}</div>
+        <div className="mt-1 text-xs text-ink-muted font-mono">{session.id}</div>
       </section>
     </>
   );

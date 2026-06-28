@@ -15,10 +15,10 @@ const STATUS_PILL: Record<PaymentPlanStatus, string> = {
   active: "bg-emerald-100 text-emerald-700",
   payment_failed_in_retry: "bg-amber-100 text-amber-800",
   payment_failed_exhausted: "bg-red-100 text-red-700",
-  balance_due: "bg-lavender-100 text-lavender-700",
+  balance_due: "bg-brand-lavender text-white",
   completed: "bg-emerald-100 text-emerald-700",
   defaulted: "bg-red-100 text-red-700",
-  canceled: "bg-surface-subtle text-ink-muted",
+  canceled: "bg-brand-cream/60 text-ink-muted",
 };
 
 export function AttentionCard({ plans }: { plans: PlanDetail[] }) {
@@ -35,18 +35,18 @@ export function AttentionCard({ plans }: { plans: PlanDetail[] }) {
 
   return (
     <div className="card overflow-hidden">
-      <div className="border-b border-surface-border bg-surface-subtle px-4 py-2.5">
+      <div className="border-b border-brand-neutral bg-brand-cream/60 px-4 py-2.5">
         <div className="flex items-baseline justify-between">
           <div className="text-sm font-medium">Plans needing attention</div>
           <div className="text-xs text-ink-muted">{plans.length}</div>
         </div>
       </div>
-      <ul className="divide-y divide-surface-border">
+      <ul className="divide-y divide-brand-neutral">
         {plans.map((plan) => (
           <li key={plan.id}>
             <Link
               href={`/plans/${plan.id}`}
-              className="grid gap-3 px-4 py-3 hover:bg-surface-subtle/60 sm:grid-cols-[1fr_auto] sm:items-center"
+              className="grid gap-3 px-4 py-3 hover:bg-brand-cream/40 sm:grid-cols-[1fr_auto] sm:items-center"
             >
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium text-ink">
@@ -56,7 +56,7 @@ export function AttentionCard({ plans }: { plans: PlanDetail[] }) {
                   {plan.customerHint ?? "Customer info pending"}
                 </div>
                 {plan.status === "balance_due" ? (
-                  <div className="mt-1 text-xs font-medium text-lavender-700">
+                  <div className="mt-1 text-xs font-medium text-brand-purple">
                     Balance due at check-in:{" "}
                     {formatCents(balanceDue(plan))}
                   </div>

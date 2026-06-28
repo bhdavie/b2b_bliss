@@ -5,11 +5,14 @@ import com.bliss.b2b.api.BookingsResource;
 import com.bliss.b2b.api.DevPlansResource;
 import com.bliss.b2b.api.HelloResource;
 import com.bliss.b2b.api.MerchantsResource;
+import com.bliss.b2b.api.MewsController;
 import com.bliss.b2b.api.PlanRulesResource;
 import com.bliss.b2b.api.PlansResource;
 import com.bliss.b2b.api.PublicBookingsResource;
+import com.bliss.b2b.api.PublicAccountResource;
 import com.bliss.b2b.api.PublicCheckoutResource;
 import com.bliss.b2b.api.PublicMerchantsResource;
+import com.bliss.b2b.api.PublicPlansPortalResource;
 import com.bliss.b2b.api.PublicPlansResource;
 import com.bliss.b2b.api.StripeConnectResource;
 import com.bliss.b2b.auth.JwtCookieAuthFilter;
@@ -18,6 +21,8 @@ import com.bliss.b2b.auth.MerchantAuthenticator;
 import com.bliss.b2b.auth.MerchantPrincipal;
 import com.bliss.b2b.integration.EmailService;
 import com.bliss.b2b.integration.EmailServiceFactory;
+import com.bliss.b2b.integration.MewsApiClient;
+import com.bliss.b2b.integration.MewsConfig;
 import com.bliss.b2b.integration.StripeConnectService;
 import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.observability.SentryBootstrap;
@@ -32,8 +37,11 @@ import com.bliss.b2b.persistence.PaymentScheduleDao;
 import com.bliss.b2b.service.BookingService;
 import com.bliss.b2b.service.CancellationService;
 import com.bliss.b2b.service.MagicLinkService;
+import com.bliss.b2b.service.MewsSyncService;
 import com.bliss.b2b.service.MerchantPlanRulesService;
+import com.bliss.b2b.service.CustomerAuthService;
 import com.bliss.b2b.service.PlanCreationService;
+import com.bliss.b2b.service.PlanPortalService;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.dropwizard.auth.AuthDynamicFeature;
 import io.dropwizard.auth.AuthValueFactoryProvider;
@@ -115,20 +123,30 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 merchantDao, tokenDao, emailService, config.getApp(), magicLinkTtl);
         StripeConnectService stripeService = new StripeConnectService(config.getStripe());
         StripePaymentsService stripePaymentsService = new StripePaymentsService(config.getStripe());
+        MewsApiClient mewsApiClient = new MewsApiClient(MewsConfig.load());
         BookingService bookingService = new BookingService(bookingDao);
         PlanEligibilityService eligibilityService = new PlanEligibilityService();
         MerchantPlanRulesService planRulesService = new MerchantPlanRulesService(planRulesDao);
         Clock clock = Clock.systemUTC();
         PlanCreationService planCreationService = new PlanCreationService(
                 jdbi, eligibilityService, stripePaymentsService, emailService, clock);
+        MewsSyncService mewsSyncService = new MewsSyncService(
+                mewsApiClient, jdbi, eligibilityService, planCreationService, clock);
+        PlanPortalService planPortalService = new PlanPortalService(
+                jdbi, stripePaymentsService, clock);
+        com.bliss.b2b.persistence.CustomerDao customerDao =
+                jdbi.onDemand(com.bliss.b2b.persistence.CustomerDao.class);
 
         JwtService jwtService = new JwtService(config.getJwt(), sessionTtl);
+        CustomerAuthService customerAuthService = new CustomerAuthService(
+                customerDao, jwtService, clock);
 
         log.info("Auth expiries: magic-link={} session={}min ({})",
                 magicLinkTtl, sessionTtlMinutes,
                 config.isProduction() ? "production" : "development");
 
         environment.jersey().register(new HelloResource());
+        environment.jersey().register(new MewsController(mewsSyncService, mewsApiClient));
         // Dev-login bypass is on whenever the env is not production. It
         // accepts any email at POST /api/v1/auth/dev-login and returns a
         // signed session immediately. Production deploys must set
@@ -149,6 +167,10 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new PublicMerchantsResource(
                 merchantDao, planRulesService, stripePaymentsService));
         environment.jersey().register(new PublicCheckoutResource(planCreationService));
+        environment.jersey().register(new PublicPlansPortalResource(
+                planPortalService, stripePaymentsService));
+        environment.jersey().register(new PublicAccountResource(
+                customerAuthService, paymentPlanDao));
         environment.jersey().register(new PlanRulesResource(planRulesService));
         CancellationService cancellationService = new CancellationService(
                 paymentPlanDao, paymentScheduleDao, bookingDao, planRulesService);

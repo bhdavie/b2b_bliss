@@ -18,10 +18,10 @@ const STATUS_PILL: Record<PaymentPlanStatus, string> = {
   active: "bg-emerald-100 text-emerald-700",
   payment_failed_in_retry: "bg-amber-100 text-amber-800",
   payment_failed_exhausted: "bg-red-100 text-red-700",
-  balance_due: "bg-lavender-100 text-lavender-700",
+  balance_due: "bg-brand-lavender text-white",
   completed: "bg-emerald-100 text-emerald-700",
   defaulted: "bg-red-100 text-red-700",
-  canceled: "bg-surface-subtle text-ink-muted",
+  canceled: "bg-brand-cream/60 text-ink-muted",
 };
 
 export default async function PlanDetailPage({
@@ -62,11 +62,11 @@ export default async function PlanDetailPage({
       </header>
 
       {plan.status === "balance_due" ? (
-        <section className="mt-6 rounded-md border-2 border-lavender-500 bg-lavender-50 p-4">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-lavender-700">
+        <section className="mt-6 rounded-md border-2 border-brand-purple bg-white p-4">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-brand-purple">
             Balance due at check-in
           </div>
-          <div className="mt-1 text-[24px] font-medium tabular-nums text-navy">
+          <div className="mt-1 text-[24px] font-medium tabular-nums text-brand-navy">
             {formatCents(balance)}
           </div>
           <p className="mt-1 text-xs text-ink-muted">
@@ -114,7 +114,7 @@ export default async function PlanDetailPage({
           <div className="mt-1 text-sm tabular-nums">
             {formatCents(plan.totalAmountCents)} ·{" "}
             <span className="text-emerald-700">{formatCents(paidCents)}</span> ·{" "}
-            <span className={balance > 0 ? "text-ink" : "text-ink-soft"}>
+            <span className={balance > 0 ? "text-ink" : "text-ink-muted"}>
               {formatCents(balance)}
             </span>
           </div>
@@ -125,12 +125,12 @@ export default async function PlanDetailPage({
         <div className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
           Schedule
         </div>
-        <ol className="mt-2.5 divide-y divide-surface-border rounded-md border border-surface-border bg-white">
+        <ol className="mt-2.5 divide-y divide-brand-neutral rounded-md border border-brand-neutral bg-white">
           {plan.schedule.map((entry) => (
             <li
               key={entry.sequence}
               className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-2.5 text-[13px] ${
-                entry.kind === "deposit" ? "bg-cream-dark/40" : ""
+                entry.kind === "deposit" ? "bg-brand-cream/60" : ""
               }`}
             >
               <span className="text-xs text-ink-muted tabular-nums w-10">
@@ -138,14 +138,14 @@ export default async function PlanDetailPage({
               </span>
               <span className="flex items-center gap-2 text-ink-muted">
                 {entry.kind === "deposit" ? (
-                  <span className="rounded-full bg-navy px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white">
+                  <span className="rounded-full bg-brand-lavender px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white">
                     Deposit
                   </span>
                 ) : null}
                 <span>{entry.dueDate}</span>
                 <StatusPill status={entry.status} />
                 {entry.retryCount > 0 ? (
-                  <span className="text-[10px] text-ink-soft">
+                  <span className="text-[10px] text-ink-muted">
                     · {entry.retryCount} retr{entry.retryCount === 1 ? "y" : "ies"}
                   </span>
                 ) : null}
@@ -173,7 +173,7 @@ function StatusPill({ status }: { status: string }) {
         ? "bg-red-100 text-red-700"
         : status === "processing"
           ? "bg-amber-100 text-amber-800"
-          : "bg-surface-subtle text-ink-muted";
+          : "bg-brand-cream/60 text-ink-muted";
   return (
     <span
       className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide ${cls}`}

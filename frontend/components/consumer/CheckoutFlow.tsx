@@ -4,6 +4,8 @@ import { Elements } from "@stripe/react-stripe-js";
 import { loadStripe, type Stripe } from "@stripe/stripe-js";
 import { useMemo, useState } from "react";
 import {
+  deriveDisplayAmounts,
+  distributeInstallments,
   formatDollarsCompact,
   submitCheckout,
   type CheckoutResponse,
@@ -19,7 +21,6 @@ import {
   type PreviewResult,
 } from "@/lib/eligibility";
 import { DepositCallout } from "./DepositCallout";
-import { DiscountBreakdown } from "./DiscountBreakdown";
 import { MerchantBlock } from "./MerchantBlock";
 import { PlanPicker } from "./PlanPicker";
 import { PolicyDisclosure } from "./PolicyDisclosure";
@@ -28,11 +29,11 @@ import { TooClose } from "./TooClose";
 import { TrustSignals } from "./TrustSignals";
 import {
   StripeCardSection,
-  StripeNotConfiguredCard,
   type CollectedCard,
 } from "./StripeCardSection";
 import { Confirmation } from "./Confirmation";
 import { CheckoutSummaryCard } from "./CheckoutSummaryCard";
+import { DemoCardSection } from "./DemoCardSection";
 
 export type CheckoutCart = {
   totalCents: number;
@@ -90,8 +91,6 @@ export function CheckoutFlow({
         plan={syntheticPlanFromCheckout(confirmed)} />;
   }
 
-  const stripeReady = merchant.stripe.configured && merchant.stripe.chargesEnabled;
-
   const ineligible = !preview.eligible;
   // For ineligible, render the TooClose component which dispatches on
   // the eligibility reason — same UX as the merchant-link flow.
@@ -99,7 +98,11 @@ export function CheckoutFlow({
     return (
       <>
         <MerchantBlock merchant={merchant.merchant} />
-        <CheckoutSummaryCard cart={cart} />
+        <CheckoutSummaryCard
+          cart={cart}
+          originalTotalCents={preview.originalTotalAmountCents}
+          discountedTotalCents={preview.discountedTotalAmountCents}
+        />
         <TooClose
           booking={syntheticBookingFromCart(merchant, cart, preview.reason, preview.daysToAppointment)}
           returnUrl={returnUrl}
@@ -114,29 +117,44 @@ export function CheckoutFlow({
   const hasDeposit = depositCents > 0;
   const publicOption = toPublicPlanOption(selectedOption);
   const planOptions = preview.options.map(toPublicPlanOption);
+  const display = deriveDisplayAmounts({
+    discountedTotalCents: preview.discountedTotalAmountCents,
+    originalDepositCents: depositCents,
+  });
+  const distribution = distributeInstallments({
+    remainingCents: display.remainingCents,
+    numPayments: publicOption.numPayments,
+  });
 
   return (
     <>
       <MerchantBlock merchant={merchant.merchant} />
-      <CheckoutSummaryCard cart={cart} />
+      <CheckoutSummaryCard
+        cart={cart}
+        originalTotalCents={preview.originalTotalAmountCents}
+        discountedTotalCents={preview.discountedTotalAmountCents}
+      />
 
       <div className={showCardStep ? "pointer-events-none opacity-30" : ""}>
-        <DiscountBreakdown
-          originalTotalCents={preview.originalTotalAmountCents}
-          discountedTotalCents={preview.discountedTotalAmountCents}
-        />
         {hasDeposit ? (
           <DepositCallout
-            depositAmountCents={depositCents}
-            totalAmountCents={preview.discountedTotalAmountCents}
+            todayCents={display.todayCents}
+            remainingCents={display.remainingCents}
+            depositRate={display.depositRate}
           />
         ) : null}
         <PlanPicker
           options={planOptions}
           selected={publicOption.frequency}
           onSelect={(f) => setSelected(f)}
+          remainingCents={display.remainingCents}
         />
-        <ScheduleVisualizer option={publicOption} depositAmountCents={depositCents} />
+        <ScheduleVisualizer
+          option={publicOption}
+          todayCents={display.todayCents}
+          perPaymentCents={distribution.perPaymentCents}
+          finalPaymentCents={distribution.finalPaymentCents}
+        />
         <PolicyDisclosure policies={merchant.policies} />
       </div>
 
@@ -145,10 +163,9 @@ export function CheckoutFlow({
           <button
             type="button"
             onClick={() => setStep("card")}
-            disabled={!stripeReady}
-            className="mt-6 w-full rounded-md bg-lavender-500 px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-lavender-600 disabled:opacity-60"
+            className="mt-6 w-full rounded-md bg-brand-purple px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-purple-dark disabled:opacity-60"
           >
-            {ctaLabel(hasDeposit, depositCents, publicOption, preview.discountedTotalAmountCents)}
+            Book now
           </button>
           {returnUrl ? (
             <div className="mt-2 text-center">
@@ -159,33 +176,6 @@ export function CheckoutFlow({
                 Return to {merchant.merchant.businessName}
               </a>
             </div>
-          ) : null}
-          {!merchant.stripe.configured ? (
-            <>
-              <StripeNotConfiguredCard />
-              {returnUrl ? (
-                <ReturnToMerchantCta
-                  href={returnUrl}
-                  merchantName={merchant.merchant.businessName}
-                />
-              ) : null}
-            </>
-          ) : !merchant.stripe.chargesEnabled ? (
-            <>
-              <section className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-900">
-                <div className="font-medium">This merchant isn&apos;t ready to accept payment plans yet</div>
-                <p className="mt-1 text-[12px]">
-                  {merchant.merchant.businessName} is still finishing payment setup.
-                  Reach out to them for an alternate way to pay.
-                </p>
-              </section>
-              {returnUrl ? (
-                <ReturnToMerchantCta
-                  href={returnUrl}
-                  merchantName={merchant.merchant.businessName}
-                />
-              ) : null}
-            </>
           ) : null}
           <TrustSignals />
         </>
@@ -198,8 +188,8 @@ export function CheckoutFlow({
               emailInitial={cart.email ?? ""}
               busy={busy}
               onCancel={() => setStep("plan")}
-              ctaLabel={cardCta(hasDeposit, depositCents, publicOption)}
-              disclosure={disclosureCopy(hasDeposit, depositCents, publicOption)}
+              ctaLabel="Book now"
+              disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, publicOption)}
               onCardCollected={async (card) => {
                 await handleSubmit(card);
               }}
@@ -211,11 +201,52 @@ export function CheckoutFlow({
             ) : null}
           </Elements>
         ) : (
-          <StripeNotConfiguredCard />
+          <DemoCardSection
+            emailInitial={cart.email ?? ""}
+            busy={busy}
+            onCancel={() => setStep("plan")}
+            ctaLabel="Book now"
+            disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, publicOption)}
+            onDemoSubmit={handleDemoSubmit}
+            returnUrl={returnUrl}
+            merchantName={merchant.merchant.businessName}
+          />
         )
       ) : null}
     </>
   );
+
+  async function handleDemoSubmit(card: import("./DemoCardSection").DemoCardSubmission) {
+    // Demo mode: POST to /api/v1/public/checkout the same way the real path
+    // does, with a synthesized pm_demo_* id and the form's card details.
+    // The backend's PlanCreationService demo branch persists the same DB
+    // rows the real path persists. No client-side synthesis here.
+    setTopError(null);
+    setBusy(true);
+    const result = await submitCheckout({
+      merchantSlug: merchant.merchant.slug,
+      totalAmountCents: cart.totalCents,
+      appointmentDate: cart.checkin,
+      checkoutDate: cart.checkout,
+      description: cart.description,
+      customerName: cart.name ?? card.email.split("@")[0] ?? "",
+      customerEmail: card.email,
+      customerPhone: cart.phone,
+      paymentMethodId: `pm_demo_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`,
+      frequency: publicOption.frequency,
+      demoCardLastFour: card.lastFour,
+      demoCardExpMonth: card.expMonth,
+      demoCardExpYear: card.expYear,
+      demoCardBrand: card.brand,
+    });
+    setBusy(false);
+    if (!result.ok) {
+      setTopError(result.error.message);
+      return;
+    }
+    setConfirmed(result.data);
+    setStep("confirmed");
+  }
 
   async function handleSubmit(card: CollectedCard) {
     setTopError(null);
@@ -274,45 +305,23 @@ function toPublicPlanOption(o: PreviewResult["options"][number]): PublicPlanOpti
   };
 }
 
-function ctaLabel(
-  hasDeposit: boolean,
-  depositCents: number,
-  option: PublicPlanOption,
-  totalCents: number,
-): string {
-  if (hasDeposit) {
-    const remaining = totalCents - depositCents;
-    const cadence = option.frequency === "biweekly" ? "bi-weekly" : "monthly";
-    return `Pay ${formatDollarsCompact(depositCents)} today, schedule ${formatDollarsCompact(remaining)} ${cadence}`;
-  }
-  return "Continue to payment";
-}
-
-function cardCta(
-  hasDeposit: boolean,
-  depositCents: number,
-  option: PublicPlanOption,
-): string {
-  if (hasDeposit) return `Confirm and pay ${formatDollarsCompact(depositCents)} deposit today`;
-  return `Confirm and pay ${formatDollarsCompact(option.perPaymentAmountCents)} today`;
-}
-
 function disclosureCopy(
   hasDeposit: boolean,
-  depositCents: number,
+  todayCents: number,
+  perPaymentCents: number,
   option: PublicPlanOption,
 ): string {
   const cadence = option.frequency === "biweekly" ? "bi-weekly" : "monthly";
   if (hasDeposit) {
     return (
-      `Your card will be charged ${formatDollarsCompact(depositCents)} today as a deposit. ` +
+      `Your card will be charged ${formatDollarsCompact(todayCents)} today as a deposit. ` +
       `${option.numPayments} ${cadence} payment${option.numPayments === 1 ? "" : "s"} ` +
-      `of ${formatDollarsCompact(option.perPaymentAmountCents)} will be charged automatically on the schedule above. ` +
+      `of ${formatDollarsCompact(perPaymentCents)} will be charged automatically on the schedule above. ` +
       `You can cancel anytime.`
     );
   }
   return (
-    `Your card will be charged ${formatDollarsCompact(option.perPaymentAmountCents)} today. ` +
+    `Your card will be charged ${formatDollarsCompact(perPaymentCents)} today. ` +
     `${option.numPayments - 1} more ${cadence} payments will follow on the schedule above. ` +
     `You can cancel anytime.`
   );
@@ -372,6 +381,7 @@ function syntheticPlanFromCheckout(r: CheckoutResponse) {
   return {
     planId: r.planId,
     bookingId: r.bookingId,
+    bookingToken: r.bookingToken,
     frequency: r.frequency,
     numPayments: r.numPayments,
     totalAmountCents: r.totalAmountCents,
@@ -381,17 +391,6 @@ function syntheticPlanFromCheckout(r: CheckoutResponse) {
     firstChargeIntentId: r.firstChargeIntentId,
     firstChargeStatus: r.firstChargeStatus,
   };
-}
-
-function ReturnToMerchantCta({ href, merchantName }: { href: string; merchantName: string }) {
-  return (
-    <a
-      href={href}
-      className="mt-4 flex w-full items-center justify-center rounded-md bg-lavender-500 px-4 py-3 text-[14px] font-medium text-white no-underline hover:bg-lavender-600"
-    >
-      Return to {merchantName}
-    </a>
-  );
 }
 
 // Suppress unused: computeDepositCents is exported by eligibility.ts but

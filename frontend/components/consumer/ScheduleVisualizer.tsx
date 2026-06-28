@@ -11,29 +11,41 @@ type Pill = {
   isFinal: boolean;
 };
 
+/**
+ * Renders the horizontal schedule strip (DEPOSIT / JUN 1 / JUL 1 / ...).
+ *
+ * Amounts are passed in pre-redistributed: `todayCents` from
+ * deriveDisplayAmounts, `perPaymentCents`/`finalPaymentCents` from
+ * distributeInstallments. The component itself doesn't know about the
+ * processing fee; it just renders what it's given.
+ */
 export function ScheduleVisualizer({
   option,
-  depositAmountCents = 0,
+  todayCents,
+  perPaymentCents,
+  finalPaymentCents,
 }: {
   option: PublicPlanOption;
-  depositAmountCents?: number;
+  todayCents: number;
+  perPaymentCents: number;
+  finalPaymentCents: number;
 }) {
   const installmentPills: Pill[] = option.dueDates.map((d, i) => {
     const isFinal = i === option.dueDates.length - 1;
     return {
       kind: "installment",
       dateLabel: formatScheduleDatePill(d),
-      amount: isFinal ? option.finalPaymentAmountCents : option.perPaymentAmountCents,
+      amount: isFinal ? finalPaymentCents : perPaymentCents,
       isFinal,
     };
   });
 
-  const pills: Pill[] = depositAmountCents > 0
+  const pills: Pill[] = todayCents > 0
     ? [
         {
           kind: "deposit",
           dateLabel: "TODAY",
-          amount: depositAmountCents,
+          amount: todayCents,
           isFinal: false,
         },
         ...installmentPills,
@@ -53,7 +65,7 @@ export function ScheduleVisualizer({
       <div className="flex items-baseline justify-between">
         <SectionLabel>Your schedule</SectionLabel>
         {showFinalNote ? (
-          <span className="text-[10px] text-ink-soft">
+          <span className="text-[10px] text-ink-muted">
             Final payment: {formatDollarsCompact(finalInstallment.amount)}
           </span>
         ) : null}
@@ -80,9 +92,9 @@ function PillView({ pill, grow }: { pill: Pill; grow: boolean }) {
     return (
       <div
         role="listitem"
-        className={`min-w-0 ${grow ? "flex-1" : "min-w-[58px]"} rounded-sm border border-navy/30 bg-navy px-1 py-[9px] text-center text-white`}
+        className={`min-w-0 ${grow ? "flex-1" : "min-w-[58px]"} rounded-sm border border-brand-purple/30 bg-brand-purple px-1 py-[9px] text-center text-white`}
       >
-        <div className="text-[9px] font-medium uppercase tracking-[0.5px] text-dusty-blue">
+        <div className="text-[9px] font-medium uppercase tracking-[0.5px] text-white/80">
           Deposit
         </div>
         <div className="mt-0.5 text-[11px] font-medium tabular-nums">
@@ -94,22 +106,12 @@ function PillView({ pill, grow }: { pill: Pill; grow: boolean }) {
   return (
     <div
       role="listitem"
-      className={`min-w-0 ${grow ? "flex-1" : "min-w-[58px]"} rounded-sm px-1 py-[9px] text-center ${
-        pill.isFinal ? "bg-lavender-100" : "bg-cream-dark"
-      }`}
+      className={`min-w-0 ${grow ? "flex-1" : "min-w-[58px]"} rounded-sm bg-brand-lavender px-1 py-[9px] text-center`}
     >
-      <div
-        className={`text-[9px] font-medium uppercase tracking-[0.5px] ${
-          pill.isFinal ? "text-lavender-700" : "text-ink-soft"
-        }`}
-      >
+      <div className="text-[9px] font-medium uppercase tracking-[0.5px] text-white">
         {pill.dateLabel}
       </div>
-      <div
-        className={`mt-0.5 text-[11px] font-medium tabular-nums ${
-          pill.isFinal ? "text-navy" : "text-lavender-700"
-        }`}
-      >
+      <div className="mt-0.5 text-[11px] font-medium tabular-nums text-white">
         {formatDollarsCompact(pill.amount)}
       </div>
     </div>

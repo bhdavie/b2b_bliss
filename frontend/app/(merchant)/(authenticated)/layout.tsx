@@ -16,7 +16,7 @@ export default async function AuthenticatedLayout({
   }
 
   return (
-    <div className="min-h-screen bg-surface-subtle">
+    <div className="min-h-screen bg-white font-body">
       <Sidebar email={session.email} />
       <main className="md:pl-60">
         <div className="max-w-4xl mx-auto px-6 py-8">{children}</div>

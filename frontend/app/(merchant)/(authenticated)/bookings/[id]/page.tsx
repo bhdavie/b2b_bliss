@@ -28,7 +28,7 @@ export default async function BookingDetailPage({
             <h1 className="text-2xl font-medium">{booking.serviceName}</h1>
             {booking.source === "customer_initiated" ? (
               <span
-                className="inline-flex items-center rounded-full bg-lavender-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-lavender-700"
+                className="inline-flex items-center rounded-full bg-brand-lavender px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white"
                 title="Created by the customer from this merchant's checkout link"
               >
                 From checkout link
@@ -49,12 +49,12 @@ export default async function BookingDetailPage({
       <section className="mt-8 card p-5">
         <div className="text-xs text-ink-muted">Shareable link</div>
         <div className="mt-2 flex items-center gap-3">
-          <code className="flex-1 truncate rounded-md bg-surface-subtle border border-surface-border px-3 py-2 text-xs font-mono">
+          <code className="flex-1 truncate rounded-md bg-brand-cream/60 border border-brand-neutral px-3 py-2 text-xs font-mono">
             {booking.hostedUrl}
           </code>
           <CopyLinkButton url={booking.hostedUrl} />
         </div>
-        <p className="mt-3 text-xs text-ink-soft">
+        <p className="mt-3 text-xs text-ink-muted">
           Send this to your customer in your own channel (email, contract,
           Instagram DM). They will land on a hosted plan setup page.
         </p>
@@ -111,7 +111,7 @@ function DetailCard({
       <div className="text-xs text-ink-muted">{label}</div>
       <div className="mt-1 text-sm whitespace-pre-line">{value}</div>
       {subline ? (
-        <div className="mt-1 text-xs text-ink-soft">{subline}</div>
+        <div className="mt-1 text-xs text-ink-muted">{subline}</div>
       ) : null}
     </div>
   );
@@ -177,8 +177,8 @@ function PlanOptionCard({ option }: { option: PlanOption }) {
 }
 
 const STATUS_STYLES: Record<BookingStatus, { label: string; className: string }> = {
-  draft: { label: "Draft", className: "bg-surface-subtle text-ink-muted" },
-  sent: { label: "Sent", className: "bg-lavender-100 text-lavender-700" },
+  draft: { label: "Draft", className: "bg-brand-cream/60 text-ink-muted" },
+  sent: { label: "Sent", className: "bg-brand-lavender text-white" },
   accepted: { label: "Accepted", className: "bg-emerald-50 text-emerald-700" },
   in_progress: { label: "In progress", className: "bg-emerald-100 text-emerald-700" },
   completed: { label: "Completed", className: "bg-emerald-100 text-emerald-700" },

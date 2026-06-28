@@ -76,4 +76,18 @@ public interface PaymentScheduleDao {
             @Bind("retryDelta") int retryDelta,
             @Bind("attemptedAt") Instant attemptedAt
     );
+
+    @SqlUpdate("""
+            UPDATE payment_schedule
+            SET status = 'paid',
+                stripe_payment_intent_id = :paymentIntentId,
+                attempted_at = :now,
+                paid_at = :now
+            WHERE id = :id
+            """)
+    int markPaidNow(
+            @Bind("id") UUID id,
+            @Bind("paymentIntentId") String paymentIntentId,
+            @Bind("now") Instant now
+    );
 }

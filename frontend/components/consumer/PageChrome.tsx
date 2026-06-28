@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
+import { BlissWordmark } from "@/components/BlissWordmark";
 
 export function PageChrome({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-cream text-ink">
+    <div className="min-h-screen bg-white text-ink font-body">
       <Header />
       <main className="mx-auto w-full max-w-[480px] px-5 pb-16 pt-4 sm:pt-6">
         {children}
@@ -13,11 +14,9 @@ export function PageChrome({ children }: { children: ReactNode }) {
 
 function Header() {
   return (
-    <header className="sticky top-0 z-10 border-b border-surface-border bg-cream/95 backdrop-blur supports-[backdrop-filter]:bg-cream/80">
+    <header className="sticky top-0 z-10 border-b border-brand-neutral bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
       <div className="mx-auto flex max-w-[480px] items-center justify-between px-5 py-3">
-        <div className="text-[20px] font-medium leading-none tracking-[-0.5px] text-navy">
-          bliss
-        </div>
+        <BlissWordmark className="text-[20px] leading-none tracking-[-0.5px] text-brand-navy" />
         <div className="flex items-center gap-1.5 text-[11px] text-ink-muted">
           <LockIcon />
           <span>Secure checkout</span>

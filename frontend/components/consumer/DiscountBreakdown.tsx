@@ -24,8 +24,8 @@ export function DiscountBreakdown({
   if (variant === "rows") {
     return (
       <>
-        <div className="text-[11px] text-ink-soft">Subtotal</div>
-        <div className="text-right text-[11px] text-ink-soft line-through tabular-nums">
+        <div className="text-[11px] text-ink-muted">Subtotal</div>
+        <div className="text-right text-[11px] text-ink-muted line-through tabular-nums">
           {formatDollarsCompact(originalTotalCents)}
         </div>
         <div className="text-[11px] text-emerald-700">Plan discount ({percent}%)</div>
@@ -47,8 +47,8 @@ export function DiscountBreakdown({
         Save {formatDollarsCompact(savings)} ({percent}%) with this plan
       </div>
       <dl className="grid grid-cols-2 gap-y-1 border-t border-emerald-200 bg-white px-4 py-3">
-        <dt className="text-[12px] text-ink-soft">Subtotal</dt>
-        <dd className="text-right text-[12px] text-ink-soft line-through tabular-nums">
+        <dt className="text-[12px] text-ink-muted">Subtotal</dt>
+        <dd className="text-right text-[12px] text-ink-muted line-through tabular-nums">
           {formatDollarsCompact(originalTotalCents)}
         </dd>
         <dt className="text-[12px] text-emerald-700">Plan discount ({percent}%)</dt>

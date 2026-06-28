@@ -17,6 +17,7 @@ public record PaymentPlan(
         LocalDate endDate,
         PaymentPlanStatus status,
         long depositAmountCents,
+        long processingFeeCents,
         Instant canceledAt,
         String canceledReason,
         Instant createdAt,

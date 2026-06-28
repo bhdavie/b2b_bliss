@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 public class StripeConnectResource {
 
     private static final Logger log = LoggerFactory.getLogger(StripeConnectResource.class);
+    private static final java.security.SecureRandom RNG = new java.security.SecureRandom();
 
     private final StripeConnectService stripe;
     private final MerchantDao merchantDao;
@@ -77,6 +78,40 @@ public class StripeConnectResource {
                     .entity(Map.of("error", "stripe_error", "message", e.getMessage()))
                     .build();
         }
+    }
+
+    /**
+     * Demo-only Connect completion. When real Stripe is not configured there is
+     * no Stripe-hosted onboarding to send the merchant through, so this marks
+     * the merchant {@code charges_enabled} with a synthetic {@code acct_demo_*}
+     * id — mirroring the {@code cus_demo_*}/{@code pm_demo_*} convention the
+     * plan-creation demo path already uses. Refuses when real Stripe IS
+     * configured so production never fakes a connected account.
+     */
+    @POST
+    @Path("/stripe/connect/demo-complete")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response demoComplete(@Auth MerchantPrincipal principal) {
+        if (stripe.isConfigured()) {
+            return Response.status(409)
+                    .entity(Map.of(
+                            "error", "stripe_configured",
+                            "message", "Real Stripe is configured; use the Connect onboarding flow instead."))
+                    .build();
+        }
+        Merchant merchant = principal.merchant();
+        String accountId = merchant.stripeConnectAccountId();
+        if (accountId == null || accountId.isBlank()) {
+            accountId = "acct_demo_" + shortHex();
+            merchantDao.setStripeAccountId(merchant.id(), accountId);
+        }
+        merchantDao.updateStripeConnectStatus(merchant.id(), ConnectStatus.CHARGES_ENABLED.wire());
+        log.info("Demo Stripe Connect completed for merchant {} (account {})", merchant.id(), accountId);
+        return Response.ok(Map.of(
+                "status", ConnectStatus.CHARGES_ENABLED.wire(),
+                "accountId", accountId,
+                "configured", false,
+                "demo", true)).build();
     }
 
     /**
@@ -136,6 +171,11 @@ public class StripeConnectResource {
         } catch (Exception e) {
             log.warn("Failed to send Stripe onboarding email to {}: {}", merchant.email(), e.getMessage());
         }
+    }
+
+    private static String shortHex() {
+        long n = RNG.nextLong();
+        return String.format("%012x", n & 0xFFFFFFFFFFFFL);
     }
 
     private static Response notConfigured() {

@@ -6,9 +6,11 @@ import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.PaymentMethod;
 import com.stripe.net.RequestOptions;
+import com.stripe.model.SetupIntent;
 import com.stripe.param.CustomerCreateParams;
 import com.stripe.param.PaymentIntentCreateParams;
 import com.stripe.param.PaymentMethodAttachParams;
+import com.stripe.param.SetupIntentCreateParams;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -120,6 +122,21 @@ public class StripePaymentsService {
                 .setIdempotencyKey(idempotencyKey)
                 .build();
         return PaymentIntent.create(params, opts);
+    }
+
+    /**
+     * Creates a SetupIntent the frontend can confirm with Stripe Elements to
+     * vault a new card for off-session future charges. Used by the portal's
+     * Update-card flow. Demo mode never calls this — see PlanPortalService.
+     */
+    public SetupIntent createSetupIntent(String stripeCustomerId) throws StripeException {
+        requireConfigured();
+        SetupIntentCreateParams params = SetupIntentCreateParams.builder()
+                .setCustomer(stripeCustomerId)
+                .setUsage(SetupIntentCreateParams.Usage.OFF_SESSION)
+                .addPaymentMethodType("card")
+                .build();
+        return SetupIntent.create(params);
     }
 
     public static CardSummary summarize(PaymentMethod pm) {

@@ -40,4 +40,19 @@ public interface CustomerCardDao {
             @Bind("brand") String brand,
             @Bind("isDefault") boolean isDefault
     );
+
+    @SqlUpdate("""
+            UPDATE customer_cards
+            SET is_default = FALSE
+            WHERE customer_id = :customerId AND is_default = TRUE
+            """)
+    int markAllNonDefaultForCustomer(@Bind("customerId") UUID customerId);
+
+    @SqlQuery("""
+            SELECT * FROM customer_cards
+            WHERE customer_id = :customerId AND is_default = TRUE
+            ORDER BY created_at DESC
+            LIMIT 1
+            """)
+    Optional<CustomerCard> findDefaultForCustomer(@Bind("customerId") UUID customerId);
 }

@@ -68,7 +68,11 @@ public final class EmailTemplates {
         }
         sb.append("\nYour first payment is processing. Subsequent payments will be charged");
         sb.append(" automatically to the card on file.\n\n");
-        sb.append("Manage your plan anytime by visiting bliss.com/account.\n");
+        // TODO: thread a consumer base URL from BlissConfiguration when one
+        // exists. Hardcoding the dev URL is fine for the demo.
+        sb.append("Manage your plan: http://localhost:3000/plan/")
+                .append(booking.bookingToken())
+                .append('\n');
         return new EmailMessage(to, "Your plan with " + merchant.businessName() + " is set", sb.toString());
     }
 

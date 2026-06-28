@@ -1,5 +1,6 @@
 "use client";
 
+import { BlissWordmark } from "@/components/BlissWordmark";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { verifyMagicLinkToken } from "@/lib/api";
@@ -36,9 +37,9 @@ export function VerifyClient() {
   }, [router, token]);
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-6">
+    <main className="min-h-screen flex items-center justify-center px-6 font-body">
       <div className="w-full max-w-sm text-center">
-        <div className="text-xl font-medium tracking-tight">bliss</div>
+        <BlissWordmark className="text-xl tracking-tight text-brand-navy" />
         {status === "verifying" && (
           <p className="mt-6 text-ink-muted">Signing you in</p>
         )}

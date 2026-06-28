@@ -60,7 +60,7 @@ export function StripeConnectCard({
 
       <div className="mt-4">
         {status.status === "charges_enabled" ? (
-          <div className="text-xs text-ink-soft">
+          <div className="text-xs text-ink-muted">
             You can create bookings and accept payment plans.
           </div>
         ) : (
@@ -82,7 +82,7 @@ export function StripeConnectCard({
       </div>
 
       {status.accountId ? (
-        <div className="mt-3 text-[11px] text-ink-soft font-mono">
+        <div className="mt-3 text-[11px] text-ink-muted font-mono">
           {status.accountId}
         </div>
       ) : null}
@@ -97,11 +97,11 @@ function StatusPill({ status }: { status: StripeStatus["status"] }) {
   > = {
     not_started: {
       label: "Not started",
-      className: "bg-surface-subtle text-ink-muted",
+      className: "bg-brand-cream/60 text-ink-muted",
     },
     in_progress: {
       label: "In progress",
-      className: "bg-lavender-100 text-lavender-700",
+      className: "bg-brand-lavender text-white",
     },
     charges_enabled: {
       label: "Active",

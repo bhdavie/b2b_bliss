@@ -1,5 +1,7 @@
 "use client";
 
+import { BlissWordmark } from "@/components/BlissWordmark";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignOutButton } from "./SignOutButton";
@@ -17,10 +19,10 @@ export function Sidebar({ email }: { email: string }) {
   const pathname = usePathname();
 
   return (
-    <aside className="md:fixed md:inset-y-0 md:left-0 md:w-60 md:border-r md:border-surface-border md:bg-white flex flex-col">
+    <aside className="md:fixed md:inset-y-0 md:left-0 md:w-60 md:border-r md:border-brand-neutral md:bg-white flex flex-col">
       <div className="px-5 py-5 flex items-center justify-between md:block">
-        <div className="text-lg font-medium tracking-tight">bliss</div>
-        <div className="text-xs text-ink-soft mt-0.5 hidden md:block">
+        <BlissWordmark className="text-lg tracking-tight text-brand-navy" />
+        <div className="text-xs text-ink-muted mt-0.5 hidden md:block">
           Merchant dashboard
         </div>
       </div>
@@ -35,8 +37,8 @@ export function Sidebar({ email }: { email: string }) {
               href={item.href}
               className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
                 active
-                  ? "bg-lavender-100 text-lavender-700 font-medium"
-                  : "text-ink-muted hover:bg-surface-subtle hover:text-ink"
+                  ? "bg-brand-lavender text-white font-medium"
+                  : "text-ink-muted hover:bg-brand-cream/60 hover:text-ink"
               }`}
             >
               {item.label}
@@ -45,8 +47,8 @@ export function Sidebar({ email }: { email: string }) {
         })}
       </nav>
 
-      <div className="mt-auto px-4 py-4 border-t border-surface-border hidden md:block">
-        <div className="text-xs text-ink-soft truncate" title={email}>
+      <div className="mt-auto px-4 py-4 border-t border-brand-neutral hidden md:block">
+        <div className="text-xs text-ink-muted truncate" title={email}>
           {email}
         </div>
         <div className="mt-2">

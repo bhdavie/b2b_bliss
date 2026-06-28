@@ -70,7 +70,7 @@ export function PlanDetailActions({ plan }: { plan: PlanDetail }) {
         </button>
       </div>
 
-      <details className="border-t border-surface-border pt-3">
+      <details className="border-t border-brand-neutral pt-3">
         <summary className="cursor-pointer text-xs text-ink-muted">
           Override state (admin)
         </summary>
@@ -80,7 +80,7 @@ export function PlanDetailActions({ plan }: { plan: PlanDetail }) {
               key={status}
               type="button"
               className={`btn-ghost text-[11px] ${
-                plan.status === status ? "border-lavender-500 text-lavender-700" : ""
+                plan.status === status ? "border-brand-purple text-brand-purple" : ""
               }`}
               disabled={busy !== null || plan.status === status}
               onClick={() => runAction("override", () => overridePlanState(plan.id, status))}
@@ -91,7 +91,7 @@ export function PlanDetailActions({ plan }: { plan: PlanDetail }) {
         </div>
       </details>
 
-      <details className="border-t border-surface-border pt-3">
+      <details className="border-t border-brand-neutral pt-3">
         <summary className="cursor-pointer text-xs text-ink-muted">
           Dev-mode failure simulation
         </summary>

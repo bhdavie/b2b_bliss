@@ -5,6 +5,7 @@ import com.bliss.b2b.service.PlanCreationException;
 import com.bliss.b2b.service.PlanCreationException.Reason;
 import com.bliss.b2b.service.PlanCreationService;
 import com.bliss.b2b.service.PlanCreationService.CustomerCheckoutInput;
+import com.bliss.b2b.service.PlanCreationService.DemoCard;
 import com.bliss.b2b.service.PlanCreationService.PlanCreationResult;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.ws.rs.Consumes;
@@ -84,7 +85,8 @@ public class PublicCheckoutResource {
                             req.customerEmail(),
                             req.customerPhone(),
                             req.paymentMethodId(),
-                            frequency));
+                            frequency,
+                            toDemoCard(req)));
             return Response.status(201).entity(toView(result)).build();
         } catch (PlanCreationException e) {
             return mapError(e);
@@ -143,6 +145,15 @@ public class PublicCheckoutResource {
                 result.firstChargeStatus());
     }
 
+    private static DemoCard toDemoCard(CheckoutRequest req) {
+        if (req.demoCardLastFour() == null && req.demoCardExpMonth() == null
+                && req.demoCardExpYear() == null && req.demoCardBrand() == null) {
+            return null;
+        }
+        return new DemoCard(req.demoCardLastFour(), req.demoCardExpMonth(),
+                req.demoCardExpYear(), req.demoCardBrand());
+    }
+
     public record CheckoutRequest(
             @JsonProperty("merchantSlug") String merchantSlug,
             @JsonProperty("totalAmountCents") Long totalAmountCents,
@@ -153,7 +164,11 @@ public class PublicCheckoutResource {
             @JsonProperty("customerEmail") String customerEmail,
             @JsonProperty("customerPhone") String customerPhone,
             @JsonProperty("paymentMethodId") String paymentMethodId,
-            @JsonProperty("frequency") String frequency
+            @JsonProperty("frequency") String frequency,
+            @JsonProperty("demoCardLastFour") String demoCardLastFour,
+            @JsonProperty("demoCardExpMonth") Integer demoCardExpMonth,
+            @JsonProperty("demoCardExpYear") Integer demoCardExpYear,
+            @JsonProperty("demoCardBrand") String demoCardBrand
     ) {}
 
     public record CheckoutResponse(

@@ -11,11 +11,15 @@ package com.bliss.b2b.domain;
  *       {@code /checkout/{slug}} from the merchant's own checkout page,
  *       with the cart details in the URL. The merchant manually mirrors
  *       the booking into their own back-office system off-platform.
+ *   <li>{@code MEWS_IMPORT} — pulled from the Mews Connector API by
+ *       {@code POST /api/v1/mews/sync} and minted as a Bliss booking + plan
+ *       for eligible reservations. Demo-only (Mews is a v2-list integration).
  * </ul>
  */
 public enum BookingSource {
     MERCHANT_INITIATED("merchant_initiated"),
-    CUSTOMER_INITIATED("customer_initiated");
+    CUSTOMER_INITIATED("customer_initiated"),
+    MEWS_IMPORT("mews_import");
 
     private final String wire;
 

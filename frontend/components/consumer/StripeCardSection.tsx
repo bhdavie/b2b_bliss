@@ -4,7 +4,7 @@ import { CardElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import type { StripeCardElementOptions } from "@stripe/stripe-js";
 import { useState } from "react";
 
-// Styles mirror the lavender token system so the Stripe iframe blends in
+// Styles mirror the brand token system so the Stripe iframe blends in
 // with the rest of the hosted page.
 const CARD_OPTIONS: StripeCardElementOptions = {
   style: {
@@ -13,8 +13,8 @@ const CARD_OPTIONS: StripeCardElementOptions = {
       color: "#111111",
       fontFamily:
         "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-      "::placeholder": { color: "#888888" },
-      iconColor: "#534AB7",
+      "::placeholder": { color: "#6B6B6B" },
+      iconColor: "#51576A",
     },
     invalid: {
       color: "#b91c1c",
@@ -102,14 +102,14 @@ export function StripeCardSection({
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1.5 w-full rounded-md border border-surface-border bg-white px-3 py-2.5 text-[15px] placeholder:text-ink-soft focus:border-lavender-500 focus:outline-none focus:ring-2 focus:ring-lavender-100"
+          className="mt-1.5 w-full rounded-md border border-brand-neutral bg-white px-3 py-2.5 text-[15px] placeholder:text-ink-muted focus:border-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-lavender/60"
           placeholder="you@example.com"
           autoComplete="email"
         />
       </label>
       <label className="block">
         <span className="text-[12px] text-ink-muted">Card</span>
-        <div className="mt-1.5 rounded-md border border-surface-border bg-white px-3 py-3.5 focus-within:border-lavender-500 focus-within:ring-2 focus-within:ring-lavender-100">
+        <div className="mt-1.5 rounded-md border border-brand-neutral bg-white px-3 py-3.5 focus-within:border-brand-navy focus-within:ring-2 focus-within:ring-brand-lavender/60">
           <CardElement
             options={CARD_OPTIONS}
             onChange={(event) => {
@@ -126,13 +126,13 @@ export function StripeCardSection({
         </div>
       ) : null}
 
-      <p className="text-[11px] leading-relaxed text-ink-soft">{disclosure}</p>
+      <p className="text-[11px] leading-relaxed text-ink-muted">{disclosure}</p>
 
       <div className="flex flex-col gap-2 pt-1">
         <button
           type="submit"
           disabled={disabled}
-          className="w-full rounded-md bg-lavender-500 px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-lavender-600 disabled:opacity-60"
+          className="w-full rounded-md bg-brand-purple px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-purple-dark disabled:opacity-60"
         >
           {submitting || busy ? "Setting up plan..." : ctaLabel}
         </button>

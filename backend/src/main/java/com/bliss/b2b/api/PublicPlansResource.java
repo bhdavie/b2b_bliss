@@ -5,6 +5,7 @@ import com.bliss.b2b.service.PlanCreationException;
 import com.bliss.b2b.service.PlanCreationException.Reason;
 import com.bliss.b2b.service.PlanCreationService;
 import com.bliss.b2b.service.PlanCreationService.CreatePlanInput;
+import com.bliss.b2b.service.PlanCreationService.DemoCard;
 import com.bliss.b2b.service.PlanCreationService.PlanCreationResult;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.ws.rs.Consumes;
@@ -54,7 +55,8 @@ public class PublicPlansResource {
                     req.customerFirstName(),
                     req.customerLastName(),
                     req.paymentMethodId(),
-                    frequency));
+                    frequency,
+                    toDemoCard(req)));
             return Response.status(201).entity(toView(result)).build();
         } catch (PlanCreationException e) {
             return mapError(e);
@@ -93,6 +95,7 @@ public class PublicPlansResource {
         return new CreatePlanResponse(
                 result.planId().toString(),
                 result.booking().id().toString(),
+                result.booking().bookingToken(),
                 result.plan().frequency().wire(),
                 result.plan().numPayments(),
                 result.plan().totalAmountCents(),
@@ -103,6 +106,15 @@ public class PublicPlansResource {
                 result.firstChargeStatus());
     }
 
+    private static DemoCard toDemoCard(CreatePlanRequest req) {
+        if (req.demoCardLastFour() == null && req.demoCardExpMonth() == null
+                && req.demoCardExpYear() == null && req.demoCardBrand() == null) {
+            return null;
+        }
+        return new DemoCard(req.demoCardLastFour(), req.demoCardExpMonth(),
+                req.demoCardExpYear(), req.demoCardBrand());
+    }
+
     public record CreatePlanRequest(
             @JsonProperty("merchantSlug") String merchantSlug,
             @JsonProperty("bookingToken") String bookingToken,
@@ -110,12 +122,17 @@ public class PublicPlansResource {
             @JsonProperty("customerFirstName") String customerFirstName,
             @JsonProperty("customerLastName") String customerLastName,
             @JsonProperty("paymentMethodId") String paymentMethodId,
-            @JsonProperty("frequency") String frequency
+            @JsonProperty("frequency") String frequency,
+            @JsonProperty("demoCardLastFour") String demoCardLastFour,
+            @JsonProperty("demoCardExpMonth") Integer demoCardExpMonth,
+            @JsonProperty("demoCardExpYear") Integer demoCardExpYear,
+            @JsonProperty("demoCardBrand") String demoCardBrand
     ) {}
 
     public record CreatePlanResponse(
             String planId,
             String bookingId,
+            String bookingToken,
             String frequency,
             int numPayments,
             long totalAmountCents,

@@ -1,7 +1,8 @@
 import type { Config } from "tailwindcss";
 
-// Bliss design tokens. Hex values mirror docs/hosted-page-spec.md so the
-// hosted consumer page and the merchant dashboard stay visually coherent.
+// Bliss brand palette. Role-keyed tokens — utility classes elsewhere should
+// reference these by role (brand-navy, brand-purple, brand-lavender, etc.)
+// rather than introducing new hex values.
 const config: Config = {
   content: [
     "./app/**/*.{ts,tsx}",
@@ -11,43 +12,30 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Lavender ramp: primary brand.
-        lavender: {
-          50: "#f6f5fd",
-          100: "#eeedfe",
-          200: "#dedcfc",
-          300: "#bcb8f7",
-          400: "#8d86ec",
-          500: "#534ab7",
-          600: "#4640a3",
-          700: "#3c3489",
-          800: "#312a6e",
-          900: "#26215c",
-        },
-        navy: {
-          DEFAULT: "#26215c",
-          dark: "#1a1745",
-        },
-        cream: {
-          DEFAULT: "#fbf8f3",
-          dark: "#f3ede1",
-        },
-        "dusty-blue": {
-          DEFAULT: "#b9c8db",
-          dark: "#8aa1bd",
+        brand: {
+          // Primary: headers, primary buttons, nav, primary UI chrome.
+          navy: "#51576A",
+          "navy-dark": "#3F4453",
+          // Secondary surfaces, borders, hover states, data fills.
+          dusty: "#97ACC8",
+          // Interactive text on light backgrounds: links, accents.
+          purple: "#6A629E",
+          "purple-dark": "#564E89",
+          // Fill-only highlight: active-state fills, badges, selected pills,
+          // progress fills. Never use as text on a light background.
+          lavender: "#C9AFFA",
+          // Warm page/card background.
+          cream: "#E0DACD",
+          // Neutral dividers and secondary background.
+          neutral: "#D9D9D9",
         },
         ink: {
           DEFAULT: "#111111",
-          muted: "#555555",
-          soft: "#888888",
-        },
-        surface: {
-          DEFAULT: "#ffffff",
-          subtle: "#f6f6f9",
-          border: "#e3e3ec",
+          muted: "#6B6B6B",
         },
       },
       fontFamily: {
+        // UNCHANGED — system stack. Hawthorn body uses this; do not repoint.
         sans: [
           "-apple-system",
           "BlinkMacSystemFont",
@@ -57,6 +45,30 @@ const config: Config = {
           "Arial",
           "sans-serif",
         ],
+        // Bliss body face (Inter, via next/font). Opt-in on Bliss wrappers.
+        body: [
+          "var(--font-body)",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "Roboto",
+          "Helvetica",
+          "Arial",
+          "sans-serif",
+        ],
+        // Bliss heading face (DM Serif Display).
+        display: ["var(--font-display)", "ui-serif", "Georgia", "serif"],
+        // Bliss editorial accent (Fraunces italic 600). Pair with `italic`.
+        editorial: ["var(--font-editorial)", "ui-serif", "Georgia", "serif"],
+        // Hotel-chrome serif. Resolves to Playfair Display ONLY where
+        // `--font-playfair` is in scope (the Marbrook funnel sets it on its
+        // route layout). Everywhere else the variable is undefined, so the
+        // var() fallback keeps the prior default serif stack — Hawthorn stays
+        // visually unchanged. Single-element array so the comma-bearing
+        // fallback survives Tailwind's join.
+        serif: [
+          'var(--font-playfair, ui-serif, Georgia, Cambria, "Times New Roman", Times, serif)',
+        ],
       },
       borderRadius: {
         sm: "6px",
@@ -64,7 +76,7 @@ const config: Config = {
         lg: "14px",
       },
       boxShadow: {
-        card: "0 1px 2px rgba(38, 33, 92, 0.04), 0 1px 1px rgba(38, 33, 92, 0.03)",
+        card: "0 1px 2px rgba(81, 87, 106, 0.06), 0 1px 1px rgba(81, 87, 106, 0.04)",
       },
     },
   },

@@ -65,7 +65,7 @@ export default async function BookingsPage() {
         <div className="mt-8 card overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-ink-muted bg-surface-subtle border-b border-surface-border">
+              <tr className="text-left text-xs text-ink-muted bg-brand-cream/60 border-b border-brand-neutral">
                 <th className="px-4 py-2.5 font-medium">Service</th>
                 <th className="px-4 py-2.5 font-medium">Customer</th>
                 <th className="px-4 py-2.5 font-medium">Appointment</th>
@@ -87,7 +87,7 @@ export default async function BookingsPage() {
 
 function BookingRow({ booking }: { booking: Booking }) {
   return (
-    <tr className="border-b last:border-b-0 border-surface-border hover:bg-surface-subtle/50">
+    <tr className="border-b last:border-b-0 border-brand-neutral hover:bg-brand-cream/40">
       <td className="px-4 py-3">
         <Link
           href={`/bookings/${booking.id}`}
@@ -97,31 +97,39 @@ function BookingRow({ booking }: { booking: Booking }) {
         </Link>
         {booking.source === "customer_initiated" ? (
           <span
-            className="ml-2 inline-flex items-center rounded-full bg-lavender-100 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-lavender-700"
+            className="ml-2 inline-flex items-center rounded-full bg-brand-lavender px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white"
             title="Created by the customer from this merchant's checkout link"
           >
             From checkout link
+          </span>
+        ) : booking.source === "mews_import" ? (
+          <span
+            className="ml-2 inline-flex items-center rounded-full bg-brand-navy px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white"
+            title="Imported from Mews"
+          >
+            From Mews
           </span>
         ) : null}
       </td>
       <td className="px-4 py-3 text-ink-muted">
         {booking.customerNameHint ?? booking.customerEmailHint ?? (
-          <span className="text-ink-soft">—</span>
+          <span className="text-ink-muted">—</span>
         )}
       </td>
       <td className="px-4 py-3 text-ink-muted">
         {formatScheduleDate(booking.appointmentDate)}
         {booking.checkoutDate ? (
-          <span className="text-ink-soft"> → {formatScheduleDate(booking.checkoutDate)}</span>
+          <span className="text-ink-muted"> → {formatScheduleDate(booking.checkoutDate)}</span>
         ) : null}
       </td>
+
       <td className="px-4 py-3 text-right tabular-nums">
         {booking.originalTotalAmountCents != null
         && booking.originalTotalAmountCents > booking.totalAmountCents ? (
           <div className="flex flex-col items-end leading-tight">
             <span>{formatCents(booking.totalAmountCents)}</span>
             <span
-              className="text-[10px] text-ink-soft line-through"
+              className="text-[10px] text-ink-muted line-through"
               title="Pre-discount price"
             >
               {formatCents(booking.originalTotalAmountCents)}
@@ -139,8 +147,8 @@ function BookingRow({ booking }: { booking: Booking }) {
 }
 
 const STATUS_STYLES: Record<BookingStatus, { label: string; className: string }> = {
-  draft: { label: "Draft", className: "bg-surface-subtle text-ink-muted" },
-  sent: { label: "Sent", className: "bg-lavender-100 text-lavender-700" },
+  draft: { label: "Draft", className: "bg-brand-cream/60 text-ink-muted" },
+  sent: { label: "Sent", className: "bg-brand-lavender text-white" },
   accepted: { label: "Accepted", className: "bg-emerald-50 text-emerald-700" },
   in_progress: { label: "In progress", className: "bg-emerald-100 text-emerald-700" },
   completed: { label: "Completed", className: "bg-emerald-100 text-emerald-700" },

@@ -1,8 +1,22 @@
 "use client";
 
+import { BlissWordmark } from "@/components/BlissWordmark";
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { fetchPublicMerchant } from "@/lib/publicApi";
+import {
+  deriveDisplayAmounts,
+  distributeInstallments,
+  fetchPublicMerchant,
+  formatDollarsCompact,
+  type PublicMerchant,
+} from "@/lib/publicApi";
+import { DEFAULT_PLAN_RULES, type PlanRules } from "@/lib/api";
+import { previewEligibility, type PlanFrequency } from "@/lib/eligibility";
+
+// Combined lodging tax + resort fees. Single rate so the displayed "Taxes & fees"
+// line is one number — Maine state lodging tax is ~9%, the rest is house fees.
+const TAXES_FEES_RATE = 0.12;
 
 type Room = {
   id: string;
@@ -69,17 +83,18 @@ export default function HawthornInnPage() {
   const [name, setName] = useState("John Doe");
   const [email, setEmail] = useState("john@example.com");
   const [phone, setPhone] = useState("");
-  const [discountBasisPoints, setDiscountBasisPoints] = useState(0);
+  const [merchant, setMerchant] = useState<PublicMerchant | null>(null);
+  const discountBasisPoints = merchant?.policies.discountBasisPoints ?? 0;
 
   useEffect(() => {
     let cancelled = false;
     fetchPublicMerchant("hawthorn-camden")
       .then((m) => {
         if (cancelled || m == null) return;
-        setDiscountBasisPoints(m.policies.discountBasisPoints);
+        setMerchant(m);
       })
       .catch(() => {
-        // Leave default 0; the inn page is a demo asset and a backend hiccup
+        // Leave merchant null; the inn page is a demo asset and a backend hiccup
         // shouldn't break the rest of the checkout mockup.
       });
     return () => {
@@ -89,8 +104,66 @@ export default function HawthornInnPage() {
 
   const room = ROOMS.find((r) => r.id === roomId) ?? ROOMS[0]!;
   const nights = nightsBetween(checkin, checkout);
-  const totalCents = nights > 0 ? nights * room.nightlyCents : 0;
+  const roomSubtotalCents = nights > 0 ? nights * room.nightlyCents : 0;
+  const taxesAndFeesCents = Math.round(roomSubtotalCents * TAXES_FEES_RATE);
+  const totalCents = roomSubtotalCents + taxesAndFeesCents;
+  const blissDiscountCents = Math.round((totalCents * discountBasisPoints) / 10_000);
+  const blissDiscountedTotalCents = totalCents - blissDiscountCents;
   const canBook = nights > 0 && name.trim().length > 0 && email.trim().length > 0;
+
+  // Run the exact same helper chain /checkout uses (previewEligibility →
+  // deriveDisplayAmounts → distributeInstallments) so the inn card quotes
+  // identical numbers to the checkout page and to what the backend will
+  // actually charge: deposit (with the flat fee folded in) plus N clean
+  // installments dividing the post-deposit balance.
+  const planEstimate = useMemo<{
+    frequency: PlanFrequency;
+    numPayments: number;
+    depositCents: number;
+    perPaymentCents: number;
+    finalPaymentCents: number;
+    dueDates: string[];
+  } | null>(() => {
+    if (!merchant || totalCents <= 0) return null;
+    const [ay, am, ad] = parseIso(checkin);
+    const [ty, tm, td] = parseIso(today);
+    const appt = new Date(ay, am - 1, ad);
+    const todayDt = new Date(ty, tm - 1, td);
+    const rules: PlanRules = {
+      ...DEFAULT_PLAN_RULES,
+      minLeadTimeWeeks: merchant.policies.minLeadTimeWeeks,
+      maxLeadTimeWeeks: merchant.policies.maxLeadTimeWeeks,
+      allowedFrequencies: merchant.policies.allowedFrequencies,
+      minBookingAmountCents: merchant.policies.minBookingAmountCents,
+      maxBookingAmountCents: merchant.policies.maxBookingAmountCents,
+      recommendedFrequency: merchant.policies.recommendedFrequency,
+      depositRequired: merchant.policies.depositRequired,
+      depositType: merchant.policies.depositType,
+      depositValue: merchant.policies.depositValue,
+      depositMaxCents: merchant.policies.depositMaxCents,
+      discountBasisPoints: merchant.policies.discountBasisPoints,
+    };
+    const preview = previewEligibility(todayDt, appt, totalCents, rules);
+    if (!preview.eligible || preview.options.length === 0) return null;
+    const option =
+      preview.options.find((o) => o.frequency === "monthly") ?? preview.options[0]!;
+    const display = deriveDisplayAmounts({
+      discountedTotalCents: preview.discountedTotalAmountCents,
+      originalDepositCents: preview.depositAmountCents,
+    });
+    const distribution = distributeInstallments({
+      remainingCents: display.remainingCents,
+      numPayments: option.numPayments,
+    });
+    return {
+      frequency: option.frequency,
+      numPayments: option.numPayments,
+      depositCents: display.todayCents,
+      perPaymentCents: distribution.perPaymentCents,
+      finalPaymentCents: distribution.finalPaymentCents,
+      dueDates: option.dueDates,
+    };
+  }, [merchant, totalCents, checkin, today]);
 
   function onCheckinChange(value: string) {
     setCheckin(value);
@@ -123,7 +196,13 @@ export default function HawthornInnPage() {
 
   return (
     <div className="min-h-screen bg-[#f7f1e6] text-[#1e2a3a] font-sans">
-      <header className="border-b border-[#1e2a3a]/15 bg-gradient-to-b from-[#e9efe8] to-[#f7f1e6]">
+      <header className="relative border-b border-[#1e2a3a]/15 bg-gradient-to-b from-[#e9efe8] to-[#f7f1e6]">
+        <a
+          href="/account"
+          className="absolute right-6 top-5 text-xs font-medium uppercase tracking-[0.18em] text-[#2a4131]/75 underline-offset-2 hover:underline"
+        >
+          <BlissWordmark /> · Log in
+        </a>
         <div className="mx-auto max-w-3xl px-6 py-10 text-center">
           <div className="mx-auto mb-4 h-12 w-12 text-[#2a4131]" aria-hidden="true">
             <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -181,11 +260,73 @@ export default function HawthornInnPage() {
             <Field label="Nights">
               <ReadOnly value={nights > 0 ? String(nights) : "—"} />
             </Field>
-            <Field label="Total">
-              <ReadOnly value={nights > 0 ? formatUsd(totalCents) : "—"} emphasis />
+            <Field label="Subtotal (before taxes & fees)">
+              <ReadOnly value={nights > 0 ? formatUsd(roomSubtotalCents) : "—"} emphasis />
             </Field>
           </div>
         </Card>
+
+        <button
+          type="button"
+          onClick={onBookWithBliss}
+          disabled={!canBook}
+          className="block w-full rounded-lg border-2 border-brand-purple bg-white p-6 text-left shadow-sm transition hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-display text-xl text-brand-navy">Pay over time</h2>
+            {discountBasisPoints > 0 ? (
+              <span className="inline-flex items-center rounded-full bg-brand-lavender px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-white">
+                Save {Math.round(discountBasisPoints / 100)}%
+              </span>
+            ) : null}
+          </div>
+
+          {planEstimate ? (
+            <div className="mt-4 rounded-md bg-brand-purple px-4 py-3 text-white">
+              <div className="font-serif text-4xl leading-none">
+                {formatDollarsCompact(planEstimate.perPaymentCents)}
+                <span className="ml-1 font-sans text-base text-white/80">
+                  {planEstimate.frequency === "monthly" ? "/month" : " every 2 weeks"}
+                </span>
+              </div>
+              <div className="mt-1 text-xs uppercase tracking-[0.18em] text-white/80">
+                {planEstimate.numPayments}{" "}
+                {planEstimate.frequency === "monthly" ? "monthly" : "bi-weekly"} installment
+                {planEstimate.numPayments === 1 ? "" : "s"}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm leading-relaxed text-brand-navy">
+              Pay in equal installments charged automatically through your check-in date.
+            </p>
+          )}
+
+          {discountBasisPoints > 0 && totalCents > 0 ? (
+            <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-brand-neutral pt-3 text-sm">
+              <span className="text-brand-navy/50 line-through">
+                {formatUsd(totalCents)}
+              </span>
+              <span className="text-brand-navy">
+                {formatUsd(blissDiscountedTotalCents)} total
+              </span>
+              <span className="ml-auto font-semibold text-brand-purple">
+                You save {formatUsd(blissDiscountCents)} ({Math.round(discountBasisPoints / 100)}%)
+              </span>
+            </div>
+          ) : null}
+
+          <div className="mt-5 flex items-center justify-between border-t border-brand-neutral pt-3 text-xs text-brand-navy/70">
+            <span>
+              Powered by{" "}
+              <span className="text-brand-navy">
+                <Bliss />
+              </span>
+            </span>
+            <span aria-hidden="true" className="font-medium text-brand-purple">
+              Continue →
+            </span>
+          </div>
+        </button>
 
         <Card title="Guest details">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -271,33 +412,40 @@ export default function HawthornInnPage() {
             </Field>
           </div>
 
+          {totalCents > 0 ? (
+            <div className="mt-6 border-t border-[#1e2a3a]/10 pt-4">
+              <div className="mb-3 text-xs uppercase tracking-[0.18em] text-[#1e2a3a]/60">
+                Price details
+              </div>
+              <div className="space-y-2 text-sm text-[#1e2a3a]/85">
+                <div className="flex items-baseline justify-between">
+                  <span>
+                    {formatUsd(room.nightlyCents)} × {nights} {nights === 1 ? "night" : "nights"}
+                  </span>
+                  <span>{formatUsd(roomSubtotalCents)}</span>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span>Taxes &amp; fees</span>
+                  <span>{formatUsd(taxesAndFeesCents)}</span>
+                </div>
+              </div>
+              <div className="mt-3 flex items-baseline justify-between border-t border-[#1e2a3a]/10 pt-3">
+                <span className="font-serif text-lg text-[#2a4131]">Total</span>
+                <span className="font-serif text-2xl font-semibold text-[#2a4131]">
+                  {formatUsd(totalCents)}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
           <button
             type="button"
             onClick={onBookNow}
             disabled={!canBook}
-            className="mt-6 w-full rounded bg-[#2a4131] px-4 py-4 text-center font-medium text-[#f7f1e6] shadow-sm transition hover:bg-[#1f3024] disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-4 w-full rounded bg-[#2a4131] px-4 py-4 text-center font-medium text-[#f7f1e6] shadow-sm transition hover:bg-[#1f3024] disabled:cursor-not-allowed disabled:opacity-50"
           >
             Book now
           </button>
-
-          <div className="mt-3 text-center">
-            <button
-              type="button"
-              onClick={onBookWithBliss}
-              disabled={!canBook}
-              className="text-lg text-slate-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Or pay in installments with <Bliss />
-              {discountBasisPoints > 0 ? (
-                <>
-                  {" and "}
-                  <span className="font-bold text-emerald-700">
-                    save {Math.round(discountBasisPoints / 100)}%
-                  </span>
-                </>
-              ) : null}
-            </button>
-          </div>
         </Card>
 
         <footer className="pt-4 pb-12 text-center text-xs text-[#1e2a3a]/45">
@@ -329,9 +477,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function Bliss() {
-  return (
-    <span style={{ fontFamily: "Georgia, serif", fontWeight: "bold" }}>Bliss</span>
-  );
+  return <BlissWordmark />;
 }
 
 function ReadOnly({ value, emphasis = false }: { value: string; emphasis?: boolean }) {
@@ -345,3 +491,4 @@ function ReadOnly({ value, emphasis = false }: { value: string; emphasis?: boole
     </div>
   );
 }
+

@@ -24,7 +24,13 @@ type FormState = {
   discountPercent: string;
 };
 
-export function PlanRulesCard({ initial }: { initial: PlanRules }) {
+export function PlanRulesCard({
+  initial,
+  saveButtonClassName = "btn-primary",
+}: {
+  initial: PlanRules;
+  saveButtonClassName?: string;
+}) {
   const [form, setForm] = useState<FormState>(toForm(initial));
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -251,7 +257,7 @@ export function PlanRulesCard({ initial }: { initial: PlanRules }) {
                 }
               }}
               className={`relative inline-flex h-5 w-9 flex-none rounded-full transition-colors ${
-                form.depositRequired ? "bg-lavender-500" : "bg-surface-border"
+                form.depositRequired ? "bg-[#C9AFFA]" : "bg-brand-neutral"
               }`}
             >
               <span
@@ -266,7 +272,7 @@ export function PlanRulesCard({ initial }: { initial: PlanRules }) {
           </label>
 
           {form.depositRequired ? (
-            <div className="space-y-3 rounded-md bg-lavender-50/40 p-3">
+            <div className="space-y-3 rounded-md bg-brand-lavender/20 p-3">
               <div className="grid grid-cols-2 gap-2 max-w-md">
                 {(
                   [
@@ -307,7 +313,7 @@ export function PlanRulesCard({ initial }: { initial: PlanRules }) {
                 />
               </div>
 
-              <p className="text-[11px] text-ink-soft leading-snug">
+              <p className="text-[11px] text-ink-muted leading-snug">
                 {form.depositType === "percentage"
                   ? "A percentage of the booking total is charged at signup. The optional cap protects against runaway deposits on big-ticket bookings."
                   : "A fixed dollar amount is charged at signup. If the booking total is smaller than the deposit, the plan flow rejects so you don't accidentally charge above the booking price."}
@@ -339,14 +345,14 @@ export function PlanRulesCard({ initial }: { initial: PlanRules }) {
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between border-t border-surface-border pt-4">
-        <div className="text-xs text-ink-soft">
+      <div className="flex items-center justify-between border-t border-brand-neutral pt-4">
+        <div className="text-xs text-ink-muted">
           {savedAt ? "Rules saved" : "Customers see these on their hosted page."}
         </div>
         <button
           type="submit"
           disabled={saving}
-          className="btn-primary"
+          className={saveButtonClassName}
         >
           {saving ? "Saving" : "Save rules"}
         </button>
@@ -414,7 +420,7 @@ function Row({
       <div>
         <div className="text-sm font-medium text-ink">{label}</div>
         {hint ? (
-          <div className="mt-1 text-xs text-ink-soft leading-snug">{hint}</div>
+          <div className="mt-1 text-xs text-ink-muted leading-snug">{hint}</div>
         ) : null}
       </div>
       <div>{children}</div>
@@ -467,7 +473,7 @@ function DollarInput({
       <span className="text-xs text-ink-muted">{label}</span>
       <div className="relative mt-1.5">
         <span
-          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-ink-soft"
+          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-ink-muted"
           aria-hidden="true"
         >
           $
@@ -515,7 +521,7 @@ function PercentInput({
           placeholder={placeholder}
         />
         <span
-          className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-ink-soft"
+          className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-ink-muted"
           aria-hidden="true"
         >
           %
@@ -545,14 +551,14 @@ function FrequencyOption({
       aria-pressed={selected}
       className={`text-left rounded-md p-3 transition-colors ${
         selected
-          ? "border-2 border-lavender-500 bg-lavender-50"
-          : "border border-surface-border bg-white hover:border-lavender-300"
+          ? "border-2 border-[#97ACC8] bg-[#97ACC8]/20"
+          : "border border-brand-neutral bg-white hover:border-brand-dusty"
       }`}
     >
-      <div className={`text-sm font-medium ${selected ? "text-lavender-700" : "text-ink"}`}>
+      <div className={`text-sm font-medium ${selected ? "text-[#51576A]" : "text-ink"}`}>
         {label}
       </div>
-      <div className="mt-0.5 text-xs text-ink-soft leading-snug">{body}</div>
+      <div className="mt-0.5 text-xs text-ink-muted leading-snug">{body}</div>
       <input
         type="radio"
         name="allowed_frequencies"
@@ -582,8 +588,8 @@ function PillToggle({
       aria-pressed={selected}
       className={`rounded-md py-2 text-sm transition-colors ${
         selected
-          ? "bg-lavender-500 text-white"
-          : "border border-surface-border bg-white text-ink hover:border-lavender-300"
+          ? "bg-[#C9AFFA] text-white"
+          : "border border-brand-neutral bg-white text-ink hover:border-brand-dusty"
       }`}
     >
       {label}

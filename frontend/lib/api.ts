@@ -153,6 +153,45 @@ export async function createStripeAccountLink(): Promise<
   return unwrap<StripeAccountLink>(res);
 }
 
+export type DemoStripeConnectResult = {
+  status: "charges_enabled";
+  accountId: string;
+  configured: boolean;
+  demo: boolean;
+};
+
+/**
+ * Demo-only: marks the current merchant Stripe-connected without a real
+ * Connect account. Backend refuses (409) if real Stripe is configured.
+ */
+export async function completeStripeConnectDemo(): Promise<DemoStripeConnectResult> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/stripe/connect/demo-complete`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  return unwrap<DemoStripeConnectResult>(res);
+}
+
+export type MewsConnection = {
+  connected: boolean;
+  enterpriseName?: string;
+  city?: string;
+  countryCode?: string;
+};
+
+/** Read-only probe confirming the .env Mews credentials resolve to a live property. */
+export async function fetchMewsConnection(): Promise<MewsConnection> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/mews/marketplace/connection`,
+    { cache: "no-store" },
+  );
+  return unwrap<MewsConnection>(res);
+}
+
 export type BookingStatus =
   | "draft"
   | "sent"
@@ -178,7 +217,10 @@ export type Eligibility = {
   depositAmountCents: number;
 };
 
-export type BookingSource = "merchant_initiated" | "customer_initiated";
+export type BookingSource =
+  | "merchant_initiated"
+  | "customer_initiated"
+  | "mews_import";
 
 export type Booking = {
   id: string;

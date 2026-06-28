@@ -7,8 +7,12 @@ public final class SessionCookies {
     private SessionCookies() {}
 
     public static String buildSetCookie(String token, int maxAgeSeconds, boolean secure) {
+        return buildSetCookie(COOKIE_NAME, token, maxAgeSeconds, secure);
+    }
+
+    public static String buildSetCookie(String name, String token, int maxAgeSeconds, boolean secure) {
         StringBuilder sb = new StringBuilder()
-                .append(COOKIE_NAME).append('=').append(token)
+                .append(name).append('=').append(token)
                 .append("; Path=/")
                 .append("; HttpOnly")
                 .append("; SameSite=Lax")
@@ -18,8 +22,12 @@ public final class SessionCookies {
     }
 
     public static String buildClearCookie(boolean secure) {
+        return buildClearCookie(COOKIE_NAME, secure);
+    }
+
+    public static String buildClearCookie(String name, boolean secure) {
         StringBuilder sb = new StringBuilder()
-                .append(COOKIE_NAME).append('=')
+                .append(name).append('=')
                 .append("; Path=/")
                 .append("; HttpOnly")
                 .append("; SameSite=Lax")

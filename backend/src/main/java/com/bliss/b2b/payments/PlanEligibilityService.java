@@ -116,9 +116,9 @@ public class PlanEligibilityService {
         List<LocalDate> dueDates;
         if (frequency == PlanFrequency.MONTHLY && hasDeposit) {
             // Anchor monthly installments to the 1st of each calendar month so
-            // they line up with typical pay cycles. Skip the first 1st if it
-            // lands within 7 days of the deposit charge to avoid stacking two
-            // charges in the same week.
+            // they line up with typical pay cycles. The helper itself enforces
+            // "first 1st strictly after today" so the deposit and the first
+            // installment never collide.
             dueDates = monthlyFirstOfMonthDueDates(today, appointmentDate.minusDays(effectiveBuffer));
         } else {
             long intervals = usableDays / frequency.days();
@@ -152,10 +152,13 @@ public class PlanEligibilityService {
     }
 
     private static List<LocalDate> monthlyFirstOfMonthDueDates(LocalDate today, LocalDate cutoff) {
-        LocalDate earliest = today.plusDays(7);
-        LocalDate cursor = earliest.getDayOfMonth() == 1
-                ? earliest
-                : earliest.withDayOfMonth(1).plusMonths(1);
+        // First 1st-of-month strictly after today, so the deposit (which fires
+        // today) and the first installment never collide. The only other
+        // constraint is the pre-check-in cutoff. A customer who books in the
+        // last few days of a month gets their first installment a few days
+        // after the deposit — accepted as the cost of consistent payday
+        // anchoring across the rest of the plan.
+        LocalDate cursor = today.withDayOfMonth(1).plusMonths(1);
         List<LocalDate> dates = new ArrayList<>();
         while (!cursor.isAfter(cutoff)) {
             dates.add(cursor);

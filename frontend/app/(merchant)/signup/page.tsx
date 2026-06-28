@@ -1,5 +1,6 @@
 "use client";
 
+import { BlissWordmark } from "@/components/BlissWordmark";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -25,10 +26,10 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-6">
+    <main className="min-h-screen flex items-center justify-center px-6 font-body">
       <form onSubmit={handleSubmit} className="w-full max-w-sm flex flex-col gap-4">
         <header>
-          <div className="text-xl font-medium tracking-tight">bliss</div>
+          <BlissWordmark className="text-xl tracking-tight text-brand-navy" />
           <h1 className="mt-4 text-lg font-medium">Create your merchant account</h1>
           <p className="mt-1 text-ink-muted">
             We will email you a link to confirm your address.
@@ -58,9 +59,9 @@ export default function SignupPage() {
           {submitting ? "Sending" : "Continue"}
         </button>
 
-        <p className="text-xs text-ink-soft text-center">
+        <p className="text-xs text-ink-muted text-center">
           Already have an account?{" "}
-          <Link href="/login" className="text-lavender-500">
+          <Link href="/login" className="text-brand-purple">
             Sign in
           </Link>
         </p>

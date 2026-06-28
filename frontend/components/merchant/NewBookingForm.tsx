@@ -207,7 +207,7 @@ function EligibilityPreview({
 }) {
   if (!appointmentDate || totalCents === null) {
     return (
-      <p className="text-xs text-ink-soft">
+      <p className="text-xs text-ink-muted">
         Pick a date and total to see the eligible plans.
       </p>
     );
@@ -226,8 +226,8 @@ function EligibilityPreview({
           : "Two plan options offered."}
       </p>
       {preview.depositAmountCents > 0 ? (
-        <div className="rounded-md border border-navy/20 bg-navy text-white px-3 py-2 text-xs">
-          <div className="text-[10px] uppercase tracking-wide text-dusty-blue">
+        <div className="rounded-md border border-brand-purple/20 bg-brand-purple text-white px-3 py-2 text-xs">
+          <div className="text-[10px] uppercase tracking-wide text-white/80">
             Deposit today
           </div>
           <div className="mt-0.5 text-[14px] font-medium tabular-nums">
@@ -240,24 +240,24 @@ function EligibilityPreview({
           key={opt.frequency}
           className={`relative rounded-md border p-3 text-xs ${
             opt.recommended
-              ? "border-lavender-500 bg-lavender-50"
-              : "border-surface-border bg-white"
+              ? "border-brand-purple bg-brand-lavender/20"
+              : "border-brand-neutral bg-white"
           }`}
         >
           {opt.recommended ? (
-            <span className="absolute -top-2 left-2 rounded-full bg-lavender-500 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white">
+            <span className="absolute -top-2 left-2 rounded-full bg-brand-lavender px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white">
               Recommended
             </span>
           ) : null}
           <div className="flex items-baseline justify-between">
             <div
               className={`font-medium capitalize ${
-                opt.recommended ? "text-lavender-700" : ""
+                opt.recommended ? "text-brand-purple" : ""
               }`}
             >
               {opt.frequency}
             </div>
-            <div className="text-ink-soft">{opt.numPayments} payments</div>
+            <div className="text-ink-muted">{opt.numPayments} payments</div>
           </div>
           <div className="mt-1 text-ink-muted">
             {opt.numPayments - 1} of {formatCents(opt.perPaymentAmountCents)}
@@ -265,13 +265,13 @@ function EligibilityPreview({
               ? ` then ${formatCents(opt.finalPaymentAmountCents)}`
               : ""}
           </div>
-          <div className="mt-2 text-[11px] text-ink-soft">
+          <div className="mt-2 text-[11px] text-ink-muted">
             First: {formatScheduleDate(opt.dueDates[0] ?? "")} · Last:{" "}
             {formatScheduleDate(opt.dueDates[opt.dueDates.length - 1] ?? "")}
           </div>
         </div>
       ))}
-      <p className="text-[11px] text-ink-soft">
+      <p className="text-[11px] text-ink-muted">
         Final payment lands at least 3 days before the appointment so any retry
         clears before your date.
       </p>
@@ -332,7 +332,7 @@ function IneligibleHint({
     case "ok":
     default:
       return (
-        <p className="text-xs text-ink-soft">
+        <p className="text-xs text-ink-muted">
           Pick a date in the future to preview the plan.
         </p>
       );

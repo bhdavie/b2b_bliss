@@ -92,7 +92,7 @@ function Row({ label, value }: { label: string; value: string | null }) {
     <div className="grid grid-cols-3 gap-4 text-sm">
       <div className="text-ink-muted">{label}</div>
       <div className="col-span-2 whitespace-pre-line">
-        {value ?? <span className="text-ink-soft">Not set</span>}
+        {value ?? <span className="text-ink-muted">Not set</span>}
       </div>
     </div>
   );
