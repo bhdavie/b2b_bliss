@@ -1077,8 +1077,8 @@ function RoomStep({
                     : "border-[#1A56DB] bg-white"
                 }`}
               >
-                <div className="min-w-0">
-                  <div className="font-serif text-xl text-[#23262e]">{r.name}</div>
+                <div className="min-w-0 sm:self-start">
+                  <div className="font-serif text-4xl text-[#23262e]">{r.name}</div>
                   <p className="mt-0.5 text-base text-[#23262e]/60">{r.detail}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-5 sm:flex-col sm:items-end sm:gap-1">
