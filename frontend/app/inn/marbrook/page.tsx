@@ -285,6 +285,22 @@ export default function MarbrookHousePage() {
     return biweekly ? biweekly.numPayments : null;
   }, [checkinIso, nights, planRules]);
 
+  // Whether the stay qualifies for ANY plan, independent of cadence. Drives
+  // Bliss visibility (rate-card line + checkout tile): hidden when the booking
+  // is out of the merchant's lead-time range (too_close or too_far) or fails
+  // another eligibility rule. Distinct from biweeklyInstallments, which is also
+  // null in the eligible-but-monthly-only case where Bliss should stay visible.
+  const planEligible = useMemo<boolean>(
+    () =>
+      previewEligibility(
+        new Date(),
+        parseIso(checkinIso),
+        RATES[0]!.nightlyCents * nights,
+        planRules,
+      ).eligible,
+    [checkinIso, nights, planRules],
+  );
+
   const pricing = useMemo(() => {
     if (!rate || nights <= 0) return null;
     const roomSubtotalCents = rate.nightlyCents * nights;
@@ -489,6 +505,7 @@ export default function MarbrookHousePage() {
                 onSelectRate={selectRate}
                 selectedRateId={rateId}
                 installmentCount={biweeklyInstallments}
+                planEligible={planEligible}
               />
             ) : null}
 
@@ -540,6 +557,7 @@ export default function MarbrookHousePage() {
                   frequency={frequency}
                   setFrequency={setFrequency}
                   planPreview={planPreview}
+                  planEligible={planEligible}
                   policies={policies}
                   cardFields={{
                     cardNumber,
@@ -1074,10 +1092,12 @@ function RoomStep({
   onSelectRate,
   selectedRateId,
   installmentCount,
+  planEligible,
 }: {
   onSelectRate: (id: string) => void;
   selectedRateId: string | null;
   installmentCount: number | null;
+  planEligible: boolean;
 }) {
   return (
     <section>
@@ -1128,11 +1148,11 @@ function RoomStep({
                           no credit check · excluding taxes
                         </div>
                       </div>
-                    ) : (
+                    ) : planEligible ? (
                       <div className="mt-0.5 text-[11px] text-[#23262e]/60">
                         or pay over time with Bliss
                       </div>
-                    )}
+                    ) : null}
                   </div>
                   <button
                     type="button"
@@ -1270,6 +1290,7 @@ function CheckoutStep(props: {
   frequency: PublicPlanFrequency;
   setFrequency: (v: PublicPlanFrequency) => void;
   planPreview: PlanPreview | null;
+  planEligible: boolean;
   policies: MerchantPolicies | null;
   cardFields: CardFieldState;
   onBack: () => void;
@@ -1302,6 +1323,7 @@ function CheckoutStep(props: {
     frequency,
     setFrequency,
     planPreview,
+    planEligible,
     policies,
     cardFields,
     onBack,
@@ -1447,38 +1469,42 @@ function CheckoutStep(props: {
           {/* Card option expands inline with the card fields. Pays in full. */}
           {paymentMethod === "card" ? <CardFields fields={cardFields} /> : null}
 
-          {/* Pay in installments over time — the only place Bliss brand appears. */}
-          <PaymentOption
-            selected={paymentMethod === "bliss"}
-            onSelect={() => setPaymentMethod("bliss")}
-            accent="bliss"
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="font-medium text-[#51576A]">
-                  Pay installments over time
+          {/* Pay in installments over time — the only place Bliss brand
+              appears. Hidden entirely when the stay is out of the merchant's
+              lead-time range (or otherwise ineligible for any plan). */}
+          {planEligible ? (
+            <PaymentOption
+              selected={paymentMethod === "bliss"}
+              onSelect={() => setPaymentMethod("bliss")}
+              accent="bliss"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-medium text-[#51576A]">
+                    Pay installments over time
+                  </div>
+                  <div className="text-sm text-[#51576A]/70">
+                    Split your stay into smaller payments on your debit or credit
+                    card. No interest, no credit check.
+                  </div>
                 </div>
-                <div className="text-sm text-[#51576A]/70">
-                  Split your stay into smaller payments on your debit or credit
-                  card. No interest, no credit check.
+                <div className="shrink-0 text-right">
+                  <BlissWordmark className="text-base text-[#6A629E]" />
+                  {biweeklyTeaser ? (
+                    <>
+                      <div className="mt-1 text-sm font-medium text-[#51576A]">
+                        {biweeklyTeaser.numPayments} installments of{" "}
+                        {formatUsd(biweeklyTeaser.perPaymentCents)}
+                      </div>
+                      <div className="text-[10px] text-[#23262e]/45">
+                        no credit check
+                      </div>
+                    </>
+                  ) : null}
                 </div>
               </div>
-              <div className="shrink-0 text-right">
-                <BlissWordmark className="text-base text-[#6A629E]" />
-                {biweeklyTeaser ? (
-                  <>
-                    <div className="mt-1 text-sm font-medium text-[#51576A]">
-                      {biweeklyTeaser.numPayments} installments of{" "}
-                      {formatUsd(biweeklyTeaser.perPaymentCents)}
-                    </div>
-                    <div className="text-[10px] text-[#23262e]/45">
-                      no credit check
-                    </div>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          </PaymentOption>
+            </PaymentOption>
+          ) : null}
 
           {/* Installments expansion: plan choices, schedule, plan policy, and
               the card the installments run on. All computed client-side; no
