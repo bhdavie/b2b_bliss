@@ -448,11 +448,10 @@ public class PlanCreationService {
             PlanFrequency requestedFrequency,
             DemoCard demoCard
     ) {
-        ConnectStatus connectStatus = ConnectStatus.fromWire(merchant.stripeConnectStatus());
-        if (connectStatus != ConnectStatus.CHARGES_ENABLED) {
-            throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
-                    "merchant has not completed Stripe onboarding");
-        }
+        // Demo / simulated mode (reached only when Stripe is not configured):
+        // this path skips every Stripe network call and synthesizes ids, so it
+        // does NOT require the merchant to be Stripe-connected. The real-Stripe
+        // path in acceptForBooking keeps the charges_enabled gate for production.
 
         MerchantPlanRules rules = handle.attach(MerchantPlanRulesDao.class)
                 .findByMerchantId(merchant.id())
