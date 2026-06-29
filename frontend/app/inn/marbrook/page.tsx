@@ -1078,7 +1078,7 @@ function RoomStep({
                 }`}
               >
                 <div className="min-w-0">
-                  <div className="font-serif text-lg text-[#23262e]">{r.name}</div>
+                  <div className="font-serif text-xl text-[#23262e]">{r.name}</div>
                   <p className="mt-0.5 text-base text-[#23262e]/60">{r.detail}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-5 sm:flex-col sm:items-end sm:gap-1">
