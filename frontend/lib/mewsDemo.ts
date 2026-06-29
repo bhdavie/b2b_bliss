@@ -9,7 +9,10 @@
 // demo dataset is a test string, so it isn't shown as the brand.
 
 export const DEMO_HOTEL = {
-  email: "frontdesk@marbrookhouse.test",
+  // Unified Marbrook merchant: the funnel and the merchant dashboard now resolve
+  // to the same account (dev-login is find-or-create by email). The retired test
+  // copy was frontdesk@marbrookhouse.test.
+  email: "demo@marbrookhouse.com",
   businessName: "Marbrook House",
   businessType: "hotel",
   addressLine1: "118 Greenwich Avenue",

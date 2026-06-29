@@ -31,6 +31,8 @@ public class PaymentPlanRowMapper implements RowMapper<PaymentPlan> {
                 rs.getLong("processing_fee_cents"),
                 toInstant(rs.getTimestamp("canceled_at")),
                 rs.getString("canceled_reason"),
+                toInstant(rs.getTimestamp("refunded_at")),
+                (Long) rs.getObject("refund_amount_cents"),
                 toInstant(rs.getTimestamp("created_at")),
                 toInstant(rs.getTimestamp("updated_at"))
         );

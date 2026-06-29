@@ -22,10 +22,11 @@ public record BookingView(
         String customerEmailHint,
         String customerPhoneHint,
         Instant createdAt,
+        String derivedStatus,
         EligibilityView eligibility,
         List<PlanOptionView> planOptions
 ) {
-    public static BookingView summary(Booking b, String hostedUrl) {
+    public static BookingView summary(Booking b, String hostedUrl, String derivedStatus) {
         return new BookingView(
                 b.id().toString(),
                 b.bookingToken(),
@@ -43,6 +44,7 @@ public record BookingView(
                 b.customerEmailHint(),
                 b.customerPhoneHint(),
                 b.createdAt(),
+                derivedStatus,
                 null,
                 null
         );
@@ -71,6 +73,7 @@ public record BookingView(
                 b.customerEmailHint(),
                 b.customerPhoneHint(),
                 b.createdAt(),
+                null,
                 eligibility,
                 planOptions
         );

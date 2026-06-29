@@ -220,16 +220,17 @@ function buildInstallments(
 }
 
 // Mirrors PlanEligibilityService.monthlyDueDates. Payment 1 is the immediate
-// charge on the booking date itself (no anchor logic, NOT weekend-shifted),
-// included only when there is no separate deposit. Installments collect on a
-// fixed monthly anchor (the 2nd or the 16th, chosen by booking day); payment 2
-// is the first anchor occurrence at least MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS
-// days after the booking, and payments 3..N advance one month at a time on the
-// same anchor. Each anchor date is resolved through the weekend roll-forward.
+// charge on the booking date (no anchor logic) but rolled forward off weekends
+// like every charge, included only when there is no separate deposit.
+// Installments collect on a fixed monthly anchor (the 2nd or the 16th, chosen by
+// booking day); payment 2 is the first anchor occurrence at least
+// MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS days after the booking, and payments
+// 3..N advance one month at a time on the same anchor. Each anchor date is
+// resolved through the weekend roll-forward.
 function monthlyDueDates(today: Date, cutoff: Date, hasDeposit: boolean): string[] {
   const dates: string[] = [];
   if (!hasDeposit) {
-    dates.push(formatDate(today));
+    dates.push(formatDate(rollForwardToWeekday(today)));
   }
   const anchorDay = monthlyAnchorDay(today.getDate());
   let cursor = new Date(today.getFullYear(), today.getMonth(), anchorDay);

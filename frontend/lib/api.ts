@@ -239,9 +239,20 @@ export type Booking = {
   customerEmailHint: string | null;
   customerPhoneHint: string | null;
   createdAt: string;
+  // Derived table status from the merchant bookings list endpoint (real
+  // plan/schedule data, as-of today). Null on the booking-detail endpoint.
+  derivedStatus: DerivedBookingStatus | null;
   eligibility: Eligibility | null;
   planOptions: PlanOption[] | null;
 };
+
+export type DerivedBookingStatus =
+  | "cancelled"
+  | "trip_complete"
+  | "payments_complete"
+  | "late"
+  | "active"
+  | "other";
 
 export type CreateBookingPayload = {
   serviceName: string;
@@ -464,6 +475,12 @@ export async function retryPlan(id: string): Promise<void> {
 
 export async function cancelPlan(id: string): Promise<void> {
   return planAction(id, "cancel");
+}
+
+// Manager refund override. Independent of cancel, not policy-gated; simulated
+// (no real money movement) and recorded as state on the shared plan record.
+export async function refundPlan(id: string): Promise<void> {
+  return planAction(id, "refund");
 }
 
 export async function resolvePlan(id: string): Promise<void> {

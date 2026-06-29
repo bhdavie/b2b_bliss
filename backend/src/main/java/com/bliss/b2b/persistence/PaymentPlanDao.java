@@ -65,6 +65,21 @@ public interface PaymentPlanDao {
             @Bind("reason") String reason
     );
 
+    // Manager refund override: records the refund as state on the plan. Does not
+    // change plan status (refund is independent of cancel) and is not gated by
+    // policy — the merchant is overriding the default rules.
+    @SqlUpdate("""
+            UPDATE payment_plans
+            SET refunded_at = :refundedAt,
+                refund_amount_cents = :amountCents
+            WHERE id = :id
+            """)
+    int markRefunded(
+            @Bind("id") UUID id,
+            @Bind("refundedAt") java.time.Instant refundedAt,
+            @Bind("amountCents") long amountCents
+    );
+
     @SqlQuery("""
             SELECT * FROM payment_plans
             WHERE booking_id = :bookingId
@@ -72,6 +87,17 @@ public interface PaymentPlanDao {
             LIMIT 1
             """)
     Optional<PaymentPlan> findActiveForBooking(@Bind("bookingId") UUID bookingId);
+
+    // Latest plan for a booking regardless of status, so the read-only portal
+    // view still resolves a cancelled/defaulted plan (the guest and the merchant
+    // detail page need to see the cancelled state, not a "not found").
+    @SqlQuery("""
+            SELECT * FROM payment_plans
+            WHERE booking_id = :bookingId
+            ORDER BY created_at DESC
+            LIMIT 1
+            """)
+    Optional<PaymentPlan> findLatestForBooking(@Bind("bookingId") UUID bookingId);
 
     @SqlUpdate("""
             INSERT INTO payment_plans (
@@ -113,6 +139,8 @@ public interface PaymentPlanDao {
                 pp.deposit_amount_cents AS depositAmountCents,
                 pp.processing_fee_cents AS processingFeeCents,
                 pp.status AS status,
+                pp.refunded_at AS refundedAt,
+                pp.refund_amount_cents AS refundAmountCents,
                 pp.created_at AS createdAt,
                 m.slug AS merchantSlug,
                 m.business_name AS merchantBusinessName,
@@ -172,6 +200,52 @@ public interface PaymentPlanDao {
             long amountCents
     ) {}
 
+    /**
+     * Per-booking inputs for the merchant Bookings table's derived status. One
+     * row per booking for the merchant, joined to its LATEST plan (any status)
+     * and that plan's schedule, with paid / overdue counts resolved as-of the
+     * given date. Plan columns are null when a booking has no plan yet.
+     */
+    @SqlQuery("""
+            SELECT b.id                AS bookingId,
+                   b.status            AS bookingStatus,
+                   b.appointment_date  AS checkInDate,
+                   latest.plan_status  AS planStatus,
+                   latest.num_payments AS numPayments,
+                   latest.paid_count   AS paidCount,
+                   latest.overdue_count AS overdueCount
+            FROM bookings b
+            LEFT JOIN LATERAL (
+                SELECT pp.status AS plan_status,
+                       pp.num_payments AS num_payments,
+                       (SELECT count(*) FROM payment_schedule ps
+                          WHERE ps.payment_plan_id = pp.id AND ps.status = 'paid') AS paid_count,
+                       (SELECT count(*) FROM payment_schedule ps
+                          WHERE ps.payment_plan_id = pp.id
+                            AND ps.status <> 'paid' AND ps.due_date < :today) AS overdue_count
+                FROM payment_plans pp
+                WHERE pp.booking_id = b.id
+                ORDER BY pp.created_at DESC
+                LIMIT 1
+            ) latest ON TRUE
+            WHERE b.merchant_id = :merchantId
+            """)
+    @RegisterConstructorMapper(BookingStatusInputs.class)
+    List<BookingStatusInputs> statusInputsForMerchant(
+            @Bind("merchantId") UUID merchantId,
+            @Bind("today") LocalDate today
+    );
+
+    record BookingStatusInputs(
+            UUID bookingId,
+            String bookingStatus,
+            LocalDate checkInDate,
+            String planStatus,      // null when the booking has no plan
+            Integer numPayments,    // null when no plan
+            Long paidCount,         // null when no plan
+            Long overdueCount       // null when no plan
+    ) {}
+
     record PaymentPlanListItem(
             UUID id,
             UUID bookingId,
@@ -181,6 +255,8 @@ public interface PaymentPlanDao {
             long depositAmountCents,
             long processingFeeCents,
             String status,
+            Instant refundedAt,
+            Long refundAmountCents,
             Instant createdAt,
             String merchantSlug,
             String merchantBusinessName,

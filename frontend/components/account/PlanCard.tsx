@@ -38,7 +38,14 @@ export function PlanCard({
         >
           {plan.merchantBusinessName}
         </h2>
-        <StatusBadge status={badgeStatus} />
+        <div className="flex items-center gap-2">
+          {plan.refunded ? (
+            <span className="inline-flex items-center rounded-full bg-brand-purple px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
+              Refunded
+            </span>
+          ) : null}
+          <StatusBadge status={badgeStatus} />
+        </div>
       </div>
 
       <p className="mt-1 text-sm text-ink-muted">{plan.serviceName}</p>

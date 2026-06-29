@@ -56,7 +56,9 @@ public record PublicAccountPlansView(
             int paidCount,
             int scheduledCount,
             LocalDate nextDueDate,
-            Long nextDueAmountCents
+            Long nextDueAmountCents,
+            boolean refunded,
+            Long refundAmountCents
     ) {
         static PlanCardView from(
                 PaymentPlanListItem item,
@@ -92,7 +94,9 @@ public record PublicAccountPlansView(
                     paidCount,
                     upcomingCount,
                     nextDate,
-                    nextAmount);
+                    nextAmount,
+                    item.refundedAt() != null,
+                    item.refundAmountCents());
         }
     }
 }

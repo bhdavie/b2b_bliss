@@ -83,7 +83,9 @@ public class PlanPortalService {
             if (booking == null) return Optional.<PortalSnapshot>empty();
             Merchant merchant = handle.attach(MerchantDao.class).findById(booking.merchantId()).orElse(null);
             if (merchant == null) return Optional.<PortalSnapshot>empty();
-            PaymentPlan plan = handle.attach(PaymentPlanDao.class).findActiveForBooking(booking.id()).orElse(null);
+            // Read path: resolve the latest plan regardless of status so a
+            // cancelled plan still renders (as cancelled) instead of 404'ing.
+            PaymentPlan plan = handle.attach(PaymentPlanDao.class).findLatestForBooking(booking.id()).orElse(null);
             if (plan == null) return Optional.<PortalSnapshot>empty();
             List<PaymentScheduleEntry> schedule = handle.attach(PaymentScheduleDao.class).listForPlan(plan.id());
             Customer customer = handle.attach(CustomerDao.class).findById(plan.customerId()).orElse(null);

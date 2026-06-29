@@ -74,6 +74,17 @@ export function PlanPortal({
       </div>
 
       <div className="space-y-6">
+        {portal.plan.refundedAt ? (
+          <section className="flex items-center gap-3 rounded-none border border-brand-purple/40 bg-brand-lavender/15 px-4 py-3">
+            <span className="inline-flex items-center bg-brand-purple px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-white">
+              Refunded
+            </span>
+            <span className="text-sm text-brand-navy">
+              {formatDollars(portal.plan.refundAmountCents ?? 0)} has been refunded to you.
+            </span>
+          </section>
+        ) : null}
+
         {planComplete ? (
           <section className="text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-none bg-brand-lavender text-white">

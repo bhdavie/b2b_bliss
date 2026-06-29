@@ -100,7 +100,9 @@ public record PublicPlanPortalView(
             long depositAmountCents,
             String status,
             LocalDate startDate,
-            LocalDate endDate
+            LocalDate endDate,
+            Instant refundedAt,
+            Long refundAmountCents
     ) {
         static PlanView from(PaymentPlan p) {
             return new PlanView(
@@ -111,7 +113,9 @@ public record PublicPlanPortalView(
                     p.depositAmountCents(),
                     p.status().wire(),
                     p.startDate(),
-                    p.endDate());
+                    p.endDate(),
+                    p.refundedAt(),
+                    p.refundAmountCents());
         }
     }
 

@@ -122,12 +122,11 @@ public class PlanEligibilityService {
 
         List<LocalDate> dueDates;
         if (frequency == PlanFrequency.MONTHLY) {
-            // Monthly: payment 1 is the immediate charge on the booking date
-            // itself and is deliberately NOT business-day shifted (it fires the
-            // day the booking is made, even on a weekend). Payments 2..N collect
-            // on a fixed monthly anchor (the 2nd or 16th, chosen by booking
-            // date), each resolved through the weekend roll-forward. See
-            // monthlyDueDates for the anchor-selection / spacing rule.
+            // Monthly: payment 1 is the immediate charge on the booking date,
+            // rolled forward off weekends to the next business day. Payments
+            // 2..N collect on a fixed monthly anchor (the 2nd or 16th, chosen by
+            // booking date), each resolved through the same weekend roll-forward.
+            // See monthlyDueDates for the anchor-selection / spacing rule.
             dueDates = monthlyDueDates(today, appointmentDate.minusDays(effectiveBuffer), hasDeposit);
             if (dueDates.isEmpty()) return null;
             // Without a deposit, payment 1 (today) counts toward the schedule, so
@@ -183,13 +182,14 @@ public class PlanEligibilityService {
     }
 
     private static List<LocalDate> monthlyDueDates(LocalDate today, LocalDate cutoff, boolean hasDeposit) {
-        // Payment 1 is the immediate charge on the booking date itself — no
-        // anchor logic and no weekend shift. Included here only when there is no
-        // separate deposit; when a deposit is configured it fires today via the
-        // deposit row, so dueDates holds installments only.
+        // Payment 1 is the immediate charge on the booking date — no anchor
+        // logic, but it still rolls forward off weekends (we can't collect on a
+        // Sat/Sun), so a Sunday booking collects Monday. Included here only when
+        // there is no separate deposit; when a deposit is configured it fires
+        // today via the deposit row, so dueDates holds installments only.
         List<LocalDate> dates = new ArrayList<>();
         if (!hasDeposit) {
-            dates.add(today);
+            dates.add(rollForwardToWeekday(today));
         }
         // Installments collect on a fixed monthly anchor (the 2nd or the 16th),
         // chosen by the booking day. Payment 2 is the first anchor occurrence at

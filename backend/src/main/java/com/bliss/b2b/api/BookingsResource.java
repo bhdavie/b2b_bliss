@@ -10,8 +10,11 @@ import com.bliss.b2b.payments.EligibilityResult;
 import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.payments.PlanEligibilityService;
 import com.bliss.b2b.payments.PlanOption;
+import com.bliss.b2b.persistence.PaymentPlanDao;
+import com.bliss.b2b.persistence.PaymentPlanDao.BookingStatusInputs;
 import com.bliss.b2b.service.BookingService;
 import com.bliss.b2b.service.BookingService.CreateBookingInput;
+import com.bliss.b2b.service.BookingStatusDeriver;
 import com.bliss.b2b.service.MerchantPlanRulesService;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.dropwizard.auth.Auth;
@@ -39,6 +42,7 @@ public class BookingsResource {
     private final PlanEligibilityService eligibilityService;
     private final MerchantPlanRulesService planRulesService;
     private final StripeConnectService stripeService;
+    private final PaymentPlanDao paymentPlanDao;
     private final AppConfig appConfig;
     private final Clock clock;
 
@@ -47,6 +51,7 @@ public class BookingsResource {
             PlanEligibilityService eligibilityService,
             MerchantPlanRulesService planRulesService,
             StripeConnectService stripeService,
+            PaymentPlanDao paymentPlanDao,
             AppConfig appConfig,
             Clock clock
     ) {
@@ -54,6 +59,7 @@ public class BookingsResource {
         this.eligibilityService = eligibilityService;
         this.planRulesService = planRulesService;
         this.stripeService = stripeService;
+        this.paymentPlanDao = paymentPlanDao;
         this.appConfig = appConfig;
         this.clock = clock;
     }
@@ -100,8 +106,19 @@ public class BookingsResource {
         int safeOffset = Math.max(offset == null ? 0 : offset, 0);
         List<Booking> bookings = bookingService.list(merchant.id(), safeLimit, safeOffset);
         long total = bookingService.count(merchant.id());
+        // Derive each booking's table status from its latest plan + schedule,
+        // as-of today (single query for the whole merchant).
+        LocalDate today = LocalDate.now(clock);
+        Map<UUID, String> statusByBooking = paymentPlanDao
+                .statusInputsForMerchant(merchant.id(), today).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        BookingStatusInputs::bookingId,
+                        in -> BookingStatusDeriver.derive(in, today)));
         List<BookingView> views = bookings.stream()
-                .map(b -> BookingView.summary(b, hostedUrlFor(merchant, b)))
+                .map(b -> BookingView.summary(
+                        b,
+                        hostedUrlFor(merchant, b),
+                        statusByBooking.getOrDefault(b.id(), "other")))
                 .toList();
         return new ListResponse(views, total, safeLimit, safeOffset);
     }

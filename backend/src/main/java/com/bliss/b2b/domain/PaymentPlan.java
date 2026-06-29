@@ -20,6 +20,8 @@ public record PaymentPlan(
         long processingFeeCents,
         Instant canceledAt,
         String canceledReason,
+        Instant refundedAt,
+        Long refundAmountCents,
         Instant createdAt,
         Instant updatedAt
 ) {}

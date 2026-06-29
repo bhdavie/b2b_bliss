@@ -382,6 +382,8 @@ export type PublicPlanPortal = {
     status: string;
     startDate: string;
     endDate: string;
+    refundedAt: string | null;
+    refundAmountCents: number | null;
   };
   schedule: {
     sequence: number;
@@ -530,6 +532,8 @@ export type AccountPlanCard = {
   scheduledCount: number;
   nextDueDate: string | null;
   nextDueAmountCents: number | null;
+  refunded: boolean;
+  refundAmountCents: number | null;
 };
 
 export type AccountPlansResponse = {

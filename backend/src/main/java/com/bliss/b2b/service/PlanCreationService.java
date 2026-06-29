@@ -110,13 +110,10 @@ public class PlanCreationService {
             PlanOption option) {
         int seq = 1;
         if (hasDeposit) {
-            // The deposit fires immediately on plan creation. For biweekly the
-            // weekday-only rule rolls it off the weekend like the installments;
-            // for monthly, payment 1 fires on the booking date itself (no shift,
-            // even on a weekend).
-            LocalDate depositDate = option.frequency() == PlanFrequency.MONTHLY
-                    ? today
-                    : PlanEligibilityService.rollForwardToWeekday(today);
+            // The deposit fires immediately on plan creation, but we can't
+            // collect on a weekend — roll it forward to the next business day
+            // for every frequency (booked Sun -> deposit Mon).
+            LocalDate depositDate = PlanEligibilityService.rollForwardToWeekday(today);
             scheduleDao.insert(planId, seq, depositDate, depositAmount + feeCents,
                     PaymentScheduleStatus.SCHEDULED.wire(), ScheduleKind.DEPOSIT.wire());
             seq++;

@@ -132,6 +132,31 @@ public class PlansResource {
         )).build();
     }
 
+    /**
+     * Manager refund override. Independent of cancel and NOT gated by the refund
+     * window / cancellation policy — the manager is overriding the default rules.
+     * Execution is simulated (no Stripe money movement): we record the refunded
+     * amount (paid-to-date) as state on the plan so the merchant detail page and
+     * the guest portal both reflect it from the same record.
+     */
+    @POST
+    @Path("/{id}/refund")
+    public Response refund(@Auth MerchantPrincipal principal, @PathParam("id") String idString) {
+        UUID id = parseUuid(idString);
+        if (id == null) return notFound();
+        PaymentPlan plan = planDao.findByIdForMerchant(id, principal.merchant().id()).orElse(null);
+        if (plan == null) return notFound();
+        long paidToDate = scheduleDao.listForPlan(plan.id()).stream()
+                .filter(e -> e.status() == PaymentScheduleStatus.PAID)
+                .mapToLong(PaymentScheduleEntry::amountCents)
+                .sum();
+        planDao.markRefunded(plan.id(), Instant.now(), paidToDate);
+        return Response.ok(Map.of(
+                "status", "ok",
+                "refundAmountCents", paidToDate
+        )).build();
+    }
+
     @POST
     @Path("/{id}/resolve")
     public Response resolve(@Auth MerchantPrincipal principal, @PathParam("id") String idString) {
