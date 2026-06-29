@@ -23,7 +23,7 @@ export default async function AccountSettingsPage() {
   const name = portal?.booking.customerNameHint ?? null;
 
   return (
-    <PortalShell active="settings">
+    <PortalShell active="settings" email={data.email}>
       <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
         Settings
       </h1>

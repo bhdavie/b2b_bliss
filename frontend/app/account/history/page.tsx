@@ -33,7 +33,7 @@ export default async function AccountHistoryPage({
     });
 
   return (
-    <PortalShell active="history">
+    <PortalShell active="history" email={data.email}>
       {canceledToken ? (
         <div className="mb-6 rounded-none border border-brand-lavender bg-brand-lavender/15 px-5 py-4">
           <div className="text-base font-bold text-brand-navy">

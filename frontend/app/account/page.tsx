@@ -39,7 +39,7 @@ export default async function AccountPage() {
     (nameHint ? (nameHint.trim().split(/\s+/)[0] ?? "") : "");
 
   return (
-    <PortalShell active="home">
+    <PortalShell active="home" email={data.email}>
       <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
         {firstName ? `Welcome back, ${firstName}` : "Welcome back"}
       </h1>

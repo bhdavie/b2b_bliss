@@ -20,7 +20,7 @@ export default async function AccountPlansPage() {
   );
 
   return (
-    <PortalShell active="plans">
+    <PortalShell active="plans" email={data.email}>
       <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
         Active plans
       </h1>

@@ -25,7 +25,7 @@ export default async function PlanPortalPage(props: { params: Promise<Params> })
   }
 
   return (
-    <PortalShell active="plans">
+    <PortalShell active="plans" email={portal.booking.customerEmailHint}>
       <PlanPortal token={token} initial={portal} />
     </PortalShell>
   );
