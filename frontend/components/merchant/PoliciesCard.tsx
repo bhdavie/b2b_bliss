@@ -55,7 +55,7 @@ const DUE_POLICY_OPTIONS: { value: PaymentDuePolicy; label: string; body: string
   { value: "at_appointment", label: "At check-in", body: "All payments due by the check-in date." },
   { value: "one_week_before", label: "1 week before", body: "All payments cleared 7 days before." },
   { value: "one_month_before", label: "1 month before", body: "All payments cleared 30 days before." },
-  { value: "custom_months", label: "Custom", body: "Pick N months before check-in." },
+  { value: "custom_months", label: "Custom", body: "Pick N days before check-in." },
 ];
 
 const AFTER_RETRIES_OPTIONS: { value: AfterRetriesAction; label: string; body: string }[] = [
@@ -138,8 +138,8 @@ export function PoliciesCard({
     let customMonths: number | null = null;
     if (form.paymentDuePolicy === "custom_months") {
       const m = parseInt(form.paymentDueCustomMonths, 10);
-      if (!Number.isFinite(m) || m < 1 || m > 24) {
-        setError("Custom months must be 1-24.");
+      if (!Number.isFinite(m) || m < 1 || m > 365) {
+        setError("Custom days must be 1-365.");
         return;
       }
       customMonths = m;
@@ -311,11 +311,11 @@ export function PoliciesCard({
           {form.paymentDuePolicy === "custom_months" ? (
             <div className="mt-3 max-w-xs">
               <NumberInput
-                label="Months before check-in"
+                label="Days before check-in"
                 value={form.paymentDueCustomMonths}
                 onChange={(v) => update("paymentDueCustomMonths", v)}
                 min={1}
-                placeholder="2"
+                placeholder="30"
               />
             </div>
           ) : null}

@@ -90,7 +90,7 @@ export function dueDateCopy(policies: PublicPolicies): string {
       return "All payments due 1 month before your appointment.";
     case "custom_months": {
       const m = policies.paymentDueCustomMonths ?? 0;
-      return `All payments due ${m} ${m === 1 ? "month" : "months"} before your appointment.`;
+      return `All payments due ${m} ${m === 1 ? "day" : "days"} before check-in.`;
     }
   }
 }

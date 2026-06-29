@@ -176,7 +176,8 @@ function paymentDueOffsetDays(rules: PlanRules): number {
     case "one_month_before":
       return 30;
     case "custom_months":
-      return (rules.paymentDueCustomMonths ?? 0) * 30;
+      // Stored value is days before check-in (field name kept for wire compat).
+      return rules.paymentDueCustomMonths ?? 0;
   }
 }
 

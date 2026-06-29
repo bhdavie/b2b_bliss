@@ -31,7 +31,10 @@ public class PlanRulesResource {
     private static final long MAX_AMOUNT_CENTS = 1_000_000_000L;
     private static final long MIN_PERCENT = 1L;
     private static final long MAX_PERCENT = 99L;
-    private static final int MAX_CUSTOM_MONTHS = 24;
+    // Custom payment-due deadline is stored in days before check-in (field name
+    // kept for wire compatibility). Must match the DB CHECK constraint and the
+    // frontend validation (both 1-365).
+    private static final int MAX_CUSTOM_MONTHS = 365;
     private static final int MAX_DISCOUNT_BASIS_POINTS = 5_000;
 
     private final MerchantPlanRulesService service;
@@ -193,7 +196,7 @@ public class PlanRulesResource {
         Integer customMonths = req.paymentDueCustomMonths();
         if (paymentDuePolicy == PaymentDuePolicy.CUSTOM_MONTHS) {
             if (customMonths == null || customMonths < 1 || customMonths > MAX_CUSTOM_MONTHS) {
-                return badRequest("paymentDueCustomMonths must be 1-" + MAX_CUSTOM_MONTHS + " when paymentDuePolicy is custom_months");
+                return badRequest("paymentDueCustomMonths must be 1-" + MAX_CUSTOM_MONTHS + " days when paymentDuePolicy is custom_months");
             }
         } else {
             customMonths = null;

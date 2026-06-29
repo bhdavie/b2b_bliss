@@ -550,12 +550,12 @@ class PlanEligibilityServiceTest {
 
     @Test
     void dueDeadline_tooTight_returnsExceedsPaymentDeadline() {
-        // 6-week (42-day) booking with custom "3 months before" deadline.
-        // 3 months = 90 days, which is more than the lead time → usable
-        // becomes negative → no plan fits, reason = exceeds_payment_deadline.
+        // 6-week (42-day) booking with custom "90 days before" deadline.
+        // 90 days is more than the lead time → usable becomes negative → no
+        // plan fits, reason = exceeds_payment_deadline.
         EligibilityResult result = service.evaluate(
                 TODAY, TODAY.plusDays(42), PRICE_CENTS,
-                withDueDeadline(6, AllowedFrequencies.BOTH, PaymentDuePolicy.CUSTOM_MONTHS, 3));
+                withDueDeadline(6, AllowedFrequencies.BOTH, PaymentDuePolicy.CUSTOM_MONTHS, 90));
 
         assertThat(result.eligible()).isFalse();
         assertThat(result.reason()).isEqualTo("exceeds_payment_deadline");
@@ -563,11 +563,11 @@ class PlanEligibilityServiceTest {
 
     @Test
     void dueDeadline_customMonths_appliedCorrectly() {
-        // 16-week (112-day) booking, custom "2 months before" deadline (60
-        // days). Usable = 52 days. Monthly: 1 + 52/30 = 2 payments.
+        // 16-week (112-day) booking, custom "60 days before" deadline. Usable =
+        // 52 days. Monthly: 1 + 52/30 = 2 payments.
         EligibilityResult result = service.evaluate(
                 TODAY, TODAY.plusDays(112), PRICE_CENTS,
-                withDueDeadline(6, AllowedFrequencies.MONTHLY, PaymentDuePolicy.CUSTOM_MONTHS, 2));
+                withDueDeadline(6, AllowedFrequencies.MONTHLY, PaymentDuePolicy.CUSTOM_MONTHS, 60));
 
         assertThat(result.eligible()).isTrue();
         assertThat(result.options().get(0).numPayments()).isEqualTo(2);

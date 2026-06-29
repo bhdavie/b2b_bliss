@@ -26,12 +26,15 @@ public enum PaymentDuePolicy {
 
     /**
      * Resolves the offset days for this policy. For {@code CUSTOM_MONTHS}
-     * the caller must pass the merchant-configured month count; for the
-     * fixed policies the parameter is ignored.
+     * the caller must pass the merchant-configured day count (the stored
+     * value is days before check-in); for the fixed policies the parameter
+     * is ignored.
      */
     public int offsetDays(Integer customMonths) {
         if (this == CUSTOM_MONTHS) {
-            return customMonths == null ? 0 : customMonths * 30;
+            // The stored value is days before check-in (field name kept for wire
+            // compatibility), used directly as the offset.
+            return customMonths == null ? 0 : customMonths;
         }
         return fixedOffsetDays;
     }
