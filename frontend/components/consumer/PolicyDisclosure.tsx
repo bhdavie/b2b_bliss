@@ -52,7 +52,7 @@ function PolicyLine({
   );
 }
 
-function refundCopy(policies: PublicPolicies): string {
+export function refundCopy(policies: PublicPolicies): string {
   switch (policies.refundPolicy) {
     case "full":
       return "Full refund anytime before your check-in.";
@@ -80,7 +80,7 @@ function cancellationFeeCopy(policies: PublicPolicies): string | null {
   return `${amount} cancellation fee applies.`;
 }
 
-function dueDateCopy(policies: PublicPolicies): string {
+export function dueDateCopy(policies: PublicPolicies): string {
   switch (policies.paymentDuePolicy) {
     case "at_appointment":
       return "All payments due by check-in.";
@@ -95,7 +95,7 @@ function dueDateCopy(policies: PublicPolicies): string {
   }
 }
 
-function failedPaymentCopy(policies: PublicPolicies): string {
+export function failedPaymentCopy(policies: PublicPolicies): string {
   const attempts = policies.retryAttempts;
   const spacing = policies.retrySpacingDays;
   const retryClause = attempts === 1

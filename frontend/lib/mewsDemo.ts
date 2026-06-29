@@ -13,6 +13,9 @@ export const DEMO_HOTEL = {
   // to the same account (dev-login is find-or-create by email). The retired test
   // copy was frontdesk@marbrookhouse.test.
   email: "demo@marbrookhouse.com",
+  // Stable slug for the unified demo merchant, so the funnel can read its saved
+  // policies via the public merchants endpoint without a merchant-session call.
+  slug: "j9l29fke",
   businessName: "Marbrook House",
   businessType: "hotel",
   addressLine1: "118 Greenwich Avenue",

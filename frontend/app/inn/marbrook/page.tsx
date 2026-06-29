@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -14,9 +14,16 @@ import { calcInstallmentPlan } from "@/lib/blissFee";
 import {
   attemptCustomerLogin,
   createPlan,
+  fetchPublicMerchant,
+  type MerchantPolicies,
   type PublicPlanFrequency,
   type CreatePlanResponse,
 } from "@/lib/publicApi";
+import {
+  refundCopy,
+  dueDateCopy,
+  failedPaymentCopy,
+} from "@/components/consumer/PolicyDisclosure";
 import { DEMO_HOTEL } from "@/lib/mewsDemo";
 import { BlissWordmark } from "@/components/BlissWordmark";
 
@@ -1283,6 +1290,24 @@ function CheckoutStep(props: {
     frequency === "monthly" ? planPreview?.monthly : planPreview?.biweekly;
   const biweeklyTeaser = planPreview?.biweekly ?? null;
 
+  // The Bliss plan-policy block is driven by the merchant's saved policy
+  // settings (refund policy, payment deadline, failed-payment handling), read
+  // from the public merchants endpoint. Falls back to static copy until loaded.
+  const [policies, setPolicies] = useState<MerchantPolicies | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchPublicMerchant(DEMO_HOTEL.slug)
+      .then((m) => {
+        if (!cancelled && m) setPolicies(m.policies);
+      })
+      .catch(() => {
+        // leave policies null -> static fallback copy renders
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const bookLabel = submitting ? "Booking…" : "Book now";
 
   return (
@@ -1479,12 +1504,22 @@ function CheckoutStep(props: {
                   Plan policy
                 </div>
                 <ul className="mt-2 space-y-1.5 text-sm text-brand-navy/85">
-                  <li>Full refund anytime before your check-in.</li>
-                  <li>Each payment runs automatically on the date shown.</li>
-                  <li>
-                    If a payment does not go through, we retry it before your
-                    check-in.
-                  </li>
+                  {policies ? (
+                    <>
+                      <li>{refundCopy(policies)}</li>
+                      <li>{dueDateCopy(policies)}</li>
+                      <li>{failedPaymentCopy(policies)}</li>
+                    </>
+                  ) : (
+                    <>
+                      <li>Full refund anytime before your check-in.</li>
+                      <li>Each payment runs automatically on the date shown.</li>
+                      <li>
+                        If a payment does not go through, we retry it before your
+                        check-in.
+                      </li>
+                    </>
+                  )}
                 </ul>
               </div>
 
