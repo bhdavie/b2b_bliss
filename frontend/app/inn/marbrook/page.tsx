@@ -1078,12 +1078,12 @@ function RoomStep({
                 }`}
               >
                 <div className="min-w-0">
-                  <div className="font-medium text-[#23262e]">{r.name}</div>
-                  <p className="mt-0.5 text-sm text-[#23262e]/60">{r.detail}</p>
+                  <div className="font-serif text-lg text-[#23262e]">{r.name}</div>
+                  <p className="mt-0.5 text-base text-[#23262e]/60">{r.detail}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-5 sm:flex-col sm:items-end sm:gap-1">
                   <div className="text-right">
-                    <div className="font-serif text-2xl text-[#23262e]">
+                    <div className="font-serif text-3xl text-[#23262e]">
                       {formatUsd(r.nightlyCents)}
                     </div>
                     <div className="text-[11px] uppercase tracking-[0.14em] text-[#23262e]/50">
@@ -1091,7 +1091,7 @@ function RoomStep({
                     </div>
                     {installmentCount ? (
                       <div className="mt-1">
-                        <div className="text-[11px] text-[#23262e]/70">
+                        <div className="text-[11px] font-bold text-[#6A629E]">
                           or pay {perNightInstallmentLabel(r.nightlyCents, installmentCount)}/night over{" "}
                           {installmentCount} installments
                         </div>
