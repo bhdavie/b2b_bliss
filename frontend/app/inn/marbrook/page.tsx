@@ -243,6 +243,27 @@ export default function MarbrookHousePage() {
   // Set once Book now completes. Drives the inline confirmation; no /pay nav.
   const [booked, setBooked] = useState<BookedState | null>(null);
 
+  // The merchant's saved plan rules (eligibility + policy), read once from the
+  // public merchants endpoint and shared by the schedule preview and the Bliss
+  // plan-policy block. Falls back to DEFAULT_PLAN_RULES until loaded / on error
+  // so SSR and the offline case still render. MerchantPolicies is a structural
+  // superset of PlanRules, so it feeds previewEligibility directly.
+  const [policies, setPolicies] = useState<MerchantPolicies | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchPublicMerchant(DEMO_HOTEL.slug)
+      .then((m) => {
+        if (!cancelled && m) setPolicies(m.policies);
+      })
+      .catch(() => {
+        // leave policies null -> DEFAULT_PLAN_RULES fallback
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const planRules = policies ?? DEFAULT_PLAN_RULES;
+
   const rate = useMemo(
     () => RATES.find((r) => r.id === rateId) ?? null,
     [rateId],
@@ -257,12 +278,12 @@ export default function MarbrookHousePage() {
       new Date(),
       parseIso(checkinIso),
       RATES[0]!.nightlyCents * nights,
-      DEFAULT_PLAN_RULES,
+      planRules,
     );
     if (!preview.eligible) return null;
     const biweekly = preview.options.find((o) => o.frequency === "biweekly");
     return biweekly ? biweekly.numPayments : null;
-  }, [checkinIso, nights]);
+  }, [checkinIso, nights, planRules]);
 
   const pricing = useMemo(() => {
     if (!rate || nights <= 0) return null;
@@ -289,7 +310,7 @@ export default function MarbrookHousePage() {
       new Date(),
       parseIso(checkinIso),
       pricing.totalCents,
-      DEFAULT_PLAN_RULES,
+      planRules,
     );
     if (!preview.eligible) return null;
     const forFrequency = (f: PublicPlanFrequency): PlanOptionPreview | null => {
@@ -307,7 +328,7 @@ export default function MarbrookHousePage() {
       };
     };
     return { biweekly: forFrequency("biweekly"), monthly: forFrequency("monthly") };
-  }, [pricing, checkinIso]);
+  }, [pricing, checkinIso, planRules]);
 
   function selectRate(id: string) {
     setRateId(id);
@@ -519,6 +540,7 @@ export default function MarbrookHousePage() {
                   frequency={frequency}
                   setFrequency={setFrequency}
                   planPreview={planPreview}
+                  policies={policies}
                   cardFields={{
                     cardNumber,
                     setCardNumber,
@@ -1248,6 +1270,7 @@ function CheckoutStep(props: {
   frequency: PublicPlanFrequency;
   setFrequency: (v: PublicPlanFrequency) => void;
   planPreview: PlanPreview | null;
+  policies: MerchantPolicies | null;
   cardFields: CardFieldState;
   onBack: () => void;
   onBookNow: () => void;
@@ -1279,6 +1302,7 @@ function CheckoutStep(props: {
     frequency,
     setFrequency,
     planPreview,
+    policies,
     cardFields,
     onBack,
     onBookNow,
@@ -1291,22 +1315,8 @@ function CheckoutStep(props: {
   const biweeklyTeaser = planPreview?.biweekly ?? null;
 
   // The Bliss plan-policy block is driven by the merchant's saved policy
-  // settings (refund policy, payment deadline, failed-payment handling), read
-  // from the public merchants endpoint. Falls back to static copy until loaded.
-  const [policies, setPolicies] = useState<MerchantPolicies | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    fetchPublicMerchant(DEMO_HOTEL.slug)
-      .then((m) => {
-        if (!cancelled && m) setPolicies(m.policies);
-      })
-      .catch(() => {
-        // leave policies null -> static fallback copy renders
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // settings (refund policy, payment deadline, failed-payment handling), passed
+  // down from the parent. Falls back to static copy until loaded.
 
   const bookLabel = submitting ? "Booking…" : "Book now";
 

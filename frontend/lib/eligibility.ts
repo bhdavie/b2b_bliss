@@ -105,9 +105,10 @@ export function previewEligibility(
         : ["biweekly", "monthly"];
 
   const recommended = resolveRecommended(rules);
+  const dueOffsetDays = paymentDueOffsetDays(rules);
 
   const options = allowedFrequencies
-    .map((f) => buildInstallments(today, appointmentDate, installmentTotal, hasDeposit, f))
+    .map((f) => buildInstallments(today, appointmentDate, installmentTotal, hasDeposit, f, dueOffsetDays))
     .filter((o): o is Omit<PreviewOption, "recommended"> => o !== null)
     .map((o) => ({ ...o, recommended: recommended != null && o.frequency === recommended }));
 
@@ -162,6 +163,23 @@ export function computeDepositCents(totalCents: number, rules: PlanRules): numbe
   return Math.max(0, Math.min(raw, totalCents));
 }
 
+// How many days before the appointment all installments must clear by.
+// Returns 0 for the default "due at appointment" policy. Mirrors
+// PaymentDuePolicy.offsetDays / MerchantPlanRules.paymentDueOffsetDays on the
+// backend. The eligibility math combines this with the 3-day retry buffer.
+function paymentDueOffsetDays(rules: PlanRules): number {
+  switch (rules.paymentDuePolicy) {
+    case "at_appointment":
+      return 0;
+    case "one_week_before":
+      return 7;
+    case "one_month_before":
+      return 30;
+    case "custom_months":
+      return (rules.paymentDueCustomMonths ?? 0) * 30;
+  }
+}
+
 function resolveRecommended(rules: PlanRules): PlanFrequency | null {
   if (rules.allowedFrequencies !== "both") return null;
   if (rules.recommendedFrequency != null) return rules.recommendedFrequency;
@@ -174,10 +192,15 @@ function buildInstallments(
   installmentTotalCents: number,
   hasDeposit: boolean,
   frequency: PlanFrequency,
+  paymentDueOffsetDays: number,
 ): Omit<PreviewOption, "recommended"> | null {
   const days = daysBetween(today, appointmentDate);
   const intervalDays = FREQUENCY_DAYS[frequency];
-  const usable = days - MIN_FINAL_PAYMENT_BUFFER_DAYS;
+  // The merchant's "all payments due by X days before appointment" rule is a
+  // tighter version of the system 3-day retry buffer. Whichever is larger
+  // wins. Mirrors PlanEligibilityService.buildInstallments.
+  const effectiveBuffer = Math.max(MIN_FINAL_PAYMENT_BUFFER_DAYS, paymentDueOffsetDays);
+  const usable = days - effectiveBuffer;
   if (usable < 0) return null;
 
   let dueDates: string[];
@@ -186,7 +209,7 @@ function buildInstallments(
     // (NOT business-day shifted). Payments 2..N collect on a fixed monthly
     // anchor (the 2nd or 16th, chosen by booking date), each resolved through
     // the weekend roll-forward. See monthlyDueDates for the anchor rule.
-    const cutoff = addDays(appointmentDate, -MIN_FINAL_PAYMENT_BUFFER_DAYS);
+    const cutoff = addDays(appointmentDate, -effectiveBuffer);
     dueDates = monthlyDueDates(today, cutoff, hasDeposit);
     if (dueDates.length === 0) return null;
     if (!hasDeposit && dueDates.length < 2) return null;
