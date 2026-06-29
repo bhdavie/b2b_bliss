@@ -9,7 +9,7 @@ import java.time.LocalDate;
  *
  * <ol>
  *   <li>cancelled — booking or its plan was cancelled/defaulted.</li>
- *   <li>trip_complete — check-in has passed (terminal; beats payments).</li>
+ *   <li>booking_complete — check-in has passed (terminal; beats payments).</li>
  *   <li>payments_complete — all installments paid, trip still in the future.</li>
  *   <li>late — plan in progress with an overdue (past-due, unpaid) payment.</li>
  *   <li>active — plan in progress, on track, trip in the future.</li>
@@ -27,7 +27,7 @@ public final class BookingStatusDeriver {
             return "cancelled";
         }
         if (in.checkInDate() != null && today.isAfter(in.checkInDate())) {
-            return "trip_complete";
+            return "booking_complete";
         }
         boolean hasPlan = planStatus != null;
         if (hasPlan) {

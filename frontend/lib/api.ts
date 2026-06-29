@@ -248,7 +248,7 @@ export type Booking = {
 
 export type DerivedBookingStatus =
   | "cancelled"
-  | "trip_complete"
+  | "booking_complete"
   | "payments_complete"
   | "late"
   | "active"

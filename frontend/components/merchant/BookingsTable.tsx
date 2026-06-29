@@ -13,7 +13,7 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: "active", label: "Active" },
   { value: "late", label: "Late" },
   { value: "payments_complete", label: "Payments complete" },
-  { value: "trip_complete", label: "Trip complete" },
+  { value: "booking_complete", label: "Booking complete" },
   { value: "cancelled", label: "Cancelled" },
   { value: "other", label: "Other" },
 ];
@@ -28,7 +28,7 @@ const DATE_OPTIONS: { value: DateFilter; label: string }[] = [
 // Status badge styling — Bliss palette only (navy / purple / lavender / cream /
 // dusty / neutral). Each state is visually distinct: active = solid lavender,
 // late = warm cream "attention", payments complete = soft purple (done, not
-// closed), trip complete = solid navy (closed/terminal), cancelled/other = muted.
+// closed), booking complete = solid navy (closed/terminal), cancelled/other = muted.
 const STATUS_BADGE: Record<DerivedBookingStatus, { label: string; className: string; dot: string }> = {
   active: { label: "Active", className: "bg-brand-lavender text-white", dot: "bg-white" },
   late: {
@@ -41,12 +41,23 @@ const STATUS_BADGE: Record<DerivedBookingStatus, { label: string; className: str
     className: "bg-brand-lavender/25 text-brand-purple ring-1 ring-inset ring-brand-purple/30",
     dot: "bg-brand-purple",
   },
-  trip_complete: { label: "Trip complete", className: "bg-brand-navy text-white", dot: "bg-white" },
+  booking_complete: { label: "Booking complete", className: "bg-brand-navy text-white", dot: "bg-white" },
   cancelled: { label: "Cancelled", className: "bg-brand-neutral/50 text-ink-muted", dot: "bg-ink-muted" },
   other: { label: "Other", className: "bg-brand-neutral/25 text-ink-muted", dot: "bg-ink-muted" },
 };
 
+// Tab membership is driven entirely by the live derived status — no stored
+// field — so a status change (e.g. a manager cancels, or a check-in passes)
+// moves a booking between tabs automatically. Active = in-progress; Archive =
+// terminal. "other" (rare: no plan yet) stays in Active since it isn't terminal.
+type Tab = "active" | "archive";
+const ARCHIVE_STATUSES = new Set<DerivedBookingStatus>(["cancelled", "booking_complete"]);
+function tabFor(status: DerivedBookingStatus): Tab {
+  return ARCHIVE_STATUSES.has(status) ? "archive" : "active";
+}
+
 export function BookingsTable({ bookings }: { bookings: Booking[] }) {
+  const [tab, setTab] = useState<Tab>("active");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [dateRange, setDateRange] = useState<DateFilter>("all");
@@ -60,6 +71,16 @@ export function BookingsTable({ bookings }: { bookings: Booking[] }) {
     [bookings],
   );
 
+  const counts = useMemo(() => {
+    let active = 0;
+    let archive = 0;
+    for (const b of sorted) {
+      if (tabFor(b.derivedStatus ?? "other") === "archive") archive += 1;
+      else active += 1;
+    }
+    return { active, archive };
+  }, [sorted]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const now = new Date();
@@ -70,6 +91,8 @@ export function BookingsTable({ bookings }: { bookings: Booking[] }) {
           ? daysAgo(now, 30)
           : null;
     return sorted.filter((b) => {
+      // Scope to the current tab first (derived-status driven), then the filters.
+      if (tabFor(b.derivedStatus ?? "other") !== tab) return false;
       if (status !== "all" && (b.derivedStatus ?? "other") !== status) return false;
       if (q) {
         const hay = `${b.serviceName} ${b.customerNameHint ?? ""} ${b.customerEmailHint ?? ""}`.toLowerCase();
@@ -90,11 +113,20 @@ export function BookingsTable({ bookings }: { bookings: Booking[] }) {
       }
       return true;
     });
-  }, [sorted, search, status, dateRange]);
+  }, [sorted, tab, search, status, dateRange]);
 
   return (
     <div className="mt-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="inline-flex rounded-md border border-brand-neutral bg-brand-cream/40 p-1">
+        <TabButton active={tab === "active"} onClick={() => setTab("active")} count={counts.active}>
+          Active
+        </TabButton>
+        <TabButton active={tab === "archive"} onClick={() => setTab("archive")} count={counts.archive}>
+          Archive
+        </TabButton>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-navy/40" />
           <input
@@ -127,7 +159,9 @@ export function BookingsTable({ bookings }: { bookings: Booking[] }) {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-12 text-center text-sm text-brand-navy/55">
-                  No bookings match these filters. Clear the search or filters to see them all.
+                  {tab === "active"
+                    ? "No active bookings match these filters."
+                    : "Nothing in the archive yet. Cancelled and completed bookings land here."}
                 </td>
               </tr>
             ) : null}
@@ -188,6 +222,40 @@ function Th({ children, className = "" }: { children: React.ReactNode; className
     >
       {children}
     </th>
+  );
+}
+
+function TabButton({
+  active,
+  count,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  count: number;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`inline-flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-semibold transition-colors ${
+        active
+          ? "bg-brand-lavender text-white shadow-sm"
+          : "text-brand-navy/70 hover:text-brand-navy"
+      }`}
+    >
+      {children}
+      <span
+        className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+          active ? "bg-white/25 text-white" : "bg-brand-neutral/50 text-brand-navy/70"
+        }`}
+      >
+        {count}
+      </span>
+    </button>
   );
 }
 
