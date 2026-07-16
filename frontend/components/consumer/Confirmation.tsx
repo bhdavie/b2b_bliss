@@ -148,7 +148,7 @@ export function Confirmation({
           </Link>
         ) : (
           <p className="text-center text-[11px] text-ink-muted">
-            Manage your plan anytime at bliss.com/account
+            Manage your plan anytime at guest.bliss-payments.com/account
           </p>
         )}
       </div>

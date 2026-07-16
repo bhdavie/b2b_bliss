@@ -15,6 +15,7 @@ import com.bliss.b2b.api.PublicMerchantsResource;
 import com.bliss.b2b.api.PublicPlansPortalResource;
 import com.bliss.b2b.api.PublicPlansResource;
 import com.bliss.b2b.api.StripeConnectResource;
+import com.bliss.b2b.auth.CookieOptions;
 import com.bliss.b2b.auth.JwtCookieAuthFilter;
 import com.bliss.b2b.auth.JwtService;
 import com.bliss.b2b.auth.MerchantAuthenticator;
@@ -28,6 +29,7 @@ import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.observability.SentryBootstrap;
 import com.bliss.b2b.payments.PlanEligibilityService;
 import com.bliss.b2b.persistence.BookingDao;
+import com.bliss.b2b.persistence.DatabaseUrlResolver;
 import com.bliss.b2b.persistence.JdbiBootstrap;
 import com.bliss.b2b.persistence.MagicLinkTokenDao;
 import com.bliss.b2b.persistence.MerchantDao;
@@ -66,6 +68,9 @@ public class BlissApplication extends Application<BlissConfiguration> {
 
     private static final Logger log = LoggerFactory.getLogger(BlissApplication.class);
 
+    /** Must stay in sync with the jwt.secret default in config.yml. */
+    private static final String DEV_JWT_SECRET = "dev-secret-change-me-dev-secret-change-me";
+
     public static void main(String[] args) throws Exception {
         new BlissApplication().run(args);
     }
@@ -85,6 +90,12 @@ public class BlissApplication extends Application<BlissConfiguration> {
 
     @Override
     public void run(BlissConfiguration config, Environment environment) {
+        // Before anything reads the database or issues a token: fail fast on a
+        // production deploy that is still carrying the dev signing key, and let
+        // a platform-supplied DATABASE_URL replace the local-dev credentials.
+        requireProductionJwtSecret(config);
+        DatabaseUrlResolver.applyFromEnvironment(config.getDatabase());
+
         SentryBootstrap.init(config.getSentry());
         runMigrationsIfEnabled(config);
         registerCors(config, environment);
@@ -129,7 +140,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         MerchantPlanRulesService planRulesService = new MerchantPlanRulesService(planRulesDao);
         Clock clock = Clock.systemUTC();
         PlanCreationService planCreationService = new PlanCreationService(
-                jdbi, eligibilityService, stripePaymentsService, emailService, clock);
+                jdbi, eligibilityService, stripePaymentsService, emailService, clock, config.getApp());
         MewsSyncService mewsSyncService = new MewsSyncService(
                 mewsApiClient, jdbi, eligibilityService, planCreationService, clock);
         CancellationService cancellationService = new CancellationService(
@@ -154,8 +165,19 @@ public class BlissApplication extends Application<BlissConfiguration> {
         // signed session immediately. Production deploys must set
         // BLISS_ENV=production.
         boolean devLoginEnabled = !config.isProduction();
+        // One CookieOptions for both session cookies (merchant and customer) so
+        // their scope cannot drift apart. Secure tracks production; SameSite and
+        // Domain come from config because they depend on whether the frontend
+        // shares an origin with the API.
+        CookieOptions cookieOptions = new CookieOptions(
+                config.isProduction(),
+                config.getCookies().getSameSite(),
+                config.getCookies().getDomain());
+        log.info("Session cookies: secure={} sameSite={} domain={}",
+                cookieOptions.secure(), cookieOptions.sameSite(),
+                cookieOptions.domain() == null ? "(host-only)" : cookieOptions.domain());
         environment.jersey().register(new AuthResource(
-                magicLinkService, jwtService, config.isProduction(),
+                magicLinkService, jwtService, cookieOptions,
                 devLoginEnabled, sessionTtlMinutes));
         environment.jersey().register(new MerchantsResource(merchantDao, stripeService, emailService));
         environment.jersey().register(new StripeConnectResource(
@@ -173,7 +195,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new PublicPlansPortalResource(
                 planPortalService, stripePaymentsService));
         environment.jersey().register(new PublicAccountResource(
-                customerAuthService, paymentPlanDao, customerDao, clock));
+                customerAuthService, paymentPlanDao, customerDao, clock, cookieOptions));
         environment.jersey().register(new PlanRulesResource(planRulesService));
         environment.jersey().register(new PlansResource(
                 paymentPlanDao, paymentScheduleDao, bookingDao, cancellationService));
@@ -191,6 +213,22 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new AuthValueFactoryProvider.Binder<>(MerchantPrincipal.class));
 
         log.info("Bliss B2B backend started env={}", config.getEnv());
+    }
+
+    /**
+     * Refuses to boot a production deploy still using the dev JWT secret. The
+     * secret is env-overridable but nothing forced the override, so a forgotten
+     * BLISS_JWT_SECRET would come up healthy while every session cookie it
+     * issued was forgeable by anyone who has read config.yml.
+     */
+    private void requireProductionJwtSecret(BlissConfiguration config) {
+        if (config.isProduction() && DEV_JWT_SECRET.equals(config.getJwt().getSecret())) {
+            throw new IllegalStateException(
+                    "BLISS_ENV=production but the JWT secret is still the development default from "
+                            + "config.yml. Anyone who has seen the repo could forge a session. Set "
+                            + "BLISS_JWT_SECRET to a unique random value of at least 32 characters "
+                            + "(e.g. `openssl rand -base64 48`) and redeploy.");
+        }
     }
 
     private void registerCors(BlissConfiguration config, Environment environment) {

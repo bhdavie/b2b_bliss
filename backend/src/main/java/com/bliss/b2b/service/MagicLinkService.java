@@ -60,8 +60,23 @@ public class MagicLinkService {
         String hash = sha256Hex(rawToken);
         Instant expiresAt = Instant.now().plus(linkTtl);
         tokenDao.insert(merchant.id(), hash, expiresAt);
-        String link = appConfig.getFrontendBaseUrl() + "/verify?token=" + rawToken;
-        emailService.send(EmailTemplates.magicLink(merchant.email(), link, linkTtl));
+        // /verify is a merchant-dashboard route, so this is the merchant host.
+        String link = appConfig.getMerchantBaseUrl() + "/verify?token=" + rawToken;
+        try {
+            emailService.send(EmailTemplates.magicLink(merchant.email(), link, linkTtl));
+        } catch (Exception e) {
+            // The token row was written before the send, so drop it rather than
+            // leave a live credential nobody received. Best-effort: if the
+            // delete also fails the row still expires on its own.
+            try {
+                tokenDao.deleteByHash(hash);
+            } catch (Exception cleanupFailure) {
+                log.warn("Could not delete undelivered magic-link token for {}: {}",
+                        merchant.email(), cleanupFailure.getMessage());
+            }
+            log.warn("Failed to send magic link to {}: {}", merchant.email(), e.getMessage());
+            throw new MagicLinkDeliveryException("Could not deliver magic link to " + merchant.email(), e);
+        }
     }
 
     /**

@@ -2,11 +2,15 @@
 
 server:
   applicationConnectors:
+    # Heroku injects $PORT and routes only that port. Locally it is unset and
+    # the 8080 default stands.
     - type: http
-      port: 8080
+      port: ${PORT:-8080}
   adminConnectors:
+    # Not routed on Heroku (only $PORT is), but still bound inside the dyno for
+    # healthchecks and metrics. Override if it ever collides with $PORT.
     - type: http
-      port: 8081
+      port: ${BLISS_ADMIN_PORT:-8081}
   rootPath: /
 
 logging:
@@ -24,9 +28,16 @@ logging:
 env: ${BLISS_ENV:-development}
 
 app:
-  frontendBaseUrl: ${BLISS_FRONTEND_BASE_URL:-http://localhost:3000}
+  # Merchant dashboard (property.bliss-payments.com in prod): magic-link sign-in
+  # and the Stripe Connect return url.
+  merchantBaseUrl: ${BLISS_MERCHANT_BASE_URL:-http://localhost:3000}
+  # Consumer portal and checkout (guest.bliss-payments.com in prod): hosted pay
+  # links and the manage-your-plan link in confirmation email.
+  consumerBaseUrl: ${BLISS_CONSUMER_BASE_URL:-http://localhost:3000}
 
 database:
+  # DATABASE_URL, when the platform sets it, overrides all three of these at
+  # startup — see DatabaseUrlResolver. These are the local-dev fallback.
   url: ${BLISS_DB_URL:-jdbc:postgresql://localhost:5432/bliss}
   user: ${BLISS_DB_USER:-bliss}
   password: ${BLISS_DB_PASSWORD:-bliss_dev}
@@ -45,7 +56,18 @@ sentry:
 
 cors:
   # Comma-separated list of origins permitted to call the API.
+  # Prod: https://property.bliss-payments.com,https://guest.bliss-payments.com
   allowedOrigins: ${BLISS_CORS_ORIGINS:-http://localhost:3000}
+
+cookies:
+  # Session cookie scope. Local dev is same-origin, so Lax + host-only works.
+  # Prod serves the frontend from property./guest.bliss-payments.com and the API
+  # from api.bliss-payments.com — cross-site, so it needs None (which forces
+  # Secure) plus a Domain on the shared parent:
+  #   BLISS_COOKIE_SAMESITE=None
+  #   BLISS_COOKIE_DOMAIN=.bliss-payments.com
+  sameSite: ${BLISS_COOKIE_SAMESITE:-Lax}
+  domain: ${BLISS_COOKIE_DOMAIN:-}
 
 email:
   # Blank Postmark token routes mail to the logging service (dev default).

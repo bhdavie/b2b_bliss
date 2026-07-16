@@ -1,5 +1,6 @@
 package com.bliss.b2b.api;
 
+import com.bliss.b2b.auth.CookieOptions;
 import com.bliss.b2b.auth.SessionCookies;
 import com.bliss.b2b.domain.Customer;
 import com.bliss.b2b.persistence.CustomerDao;
@@ -52,16 +53,19 @@ public class PublicAccountResource {
     private final PaymentPlanDao planDao;
     private final CustomerDao customerDao;
     private final Clock clock;
+    private final CookieOptions cookieOptions;
 
     public PublicAccountResource(
             CustomerAuthService authService,
             PaymentPlanDao planDao,
             CustomerDao customerDao,
-            Clock clock) {
+            Clock clock,
+            CookieOptions cookieOptions) {
         this.authService = authService;
         this.planDao = planDao;
         this.customerDao = customerDao;
         this.clock = clock;
+        this.cookieOptions = cookieOptions;
     }
 
     @POST
@@ -77,10 +81,8 @@ public class PublicAccountResource {
                     "message", "We could not find an account for that email.")).build();
         }
         LoginResult.Ok ok = (LoginResult.Ok) result;
-        // secure=false for dev. Production should pass true behind TLS; threading
-        // an isProduction flag through here is left for the prod-auth rewrite.
         String setCookie = SessionCookies.buildSetCookie(
-                COOKIE_NAME, ok.token(), COOKIE_MAX_AGE_SECONDS, false);
+                COOKIE_NAME, ok.token(), COOKIE_MAX_AGE_SECONDS, cookieOptions);
         return Response.ok(Map.of("status", "ok", "email", ok.email()))
                 .header(HttpHeaders.SET_COOKIE, setCookie)
                 .build();
@@ -89,7 +91,7 @@ public class PublicAccountResource {
     @POST
     @Path("/logout")
     public Response logout() {
-        String clearCookie = SessionCookies.buildClearCookie(COOKIE_NAME, false);
+        String clearCookie = SessionCookies.buildClearCookie(COOKIE_NAME, cookieOptions);
         return Response.ok(Map.of("status", "ok"))
                 .header(HttpHeaders.SET_COOKIE, clearCookie)
                 .build();

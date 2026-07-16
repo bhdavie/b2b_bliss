@@ -1,9 +1,11 @@
 package com.bliss.b2b.api;
 
+import com.bliss.b2b.auth.CookieOptions;
 import com.bliss.b2b.auth.JwtService;
 import com.bliss.b2b.auth.MerchantPrincipal;
 import com.bliss.b2b.auth.SessionCookies;
 import com.bliss.b2b.domain.Merchant;
+import com.bliss.b2b.service.MagicLinkDeliveryException;
 import com.bliss.b2b.service.MagicLinkService;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.dropwizard.auth.Auth;
@@ -29,20 +31,20 @@ public class AuthResource {
 
     private final MagicLinkService magicLinkService;
     private final JwtService jwtService;
-    private final boolean secureCookies;
+    private final CookieOptions cookieOptions;
     private final boolean devLoginEnabled;
     private final int cookieMaxAgeSeconds;
 
     public AuthResource(
             MagicLinkService magicLinkService,
             JwtService jwtService,
-            boolean secureCookies,
+            CookieOptions cookieOptions,
             boolean devLoginEnabled,
             int jwtTtlMinutes
     ) {
         this.magicLinkService = magicLinkService;
         this.jwtService = jwtService;
-        this.secureCookies = secureCookies;
+        this.cookieOptions = cookieOptions;
         this.devLoginEnabled = devLoginEnabled;
         this.cookieMaxAgeSeconds = jwtTtlMinutes * 60;
     }
@@ -53,7 +55,17 @@ public class AuthResource {
         if (req == null || req.email() == null || req.email().isBlank()) {
             return Response.status(400).entity(Map.of("error", "email required")).build();
         }
-        magicLinkService.requestLink(req.email());
+        try {
+            magicLinkService.requestLink(req.email());
+        } catch (MagicLinkDeliveryException e) {
+            // The link is the only way in, so a delivery failure has to be
+            // visible. Silently 204-ing would leave the merchant watching an
+            // inbox that will never receive anything.
+            return Response.status(502).entity(Map.of(
+                    "error", "email_delivery_failed",
+                    "message", "We could not send the sign-in email just now. Try again in a moment."))
+                    .build();
+        }
         return Response.noContent().build();
     }
 
@@ -73,7 +85,7 @@ public class AuthResource {
         String jwt = jwtService.issue(m.email(), m.id().toString());
         return Response.ok(MerchantView.from(m))
                 .header(HttpHeaders.SET_COOKIE,
-                        SessionCookies.buildSetCookie(jwt, cookieMaxAgeSeconds, secureCookies))
+                        SessionCookies.buildSetCookie(jwt, cookieMaxAgeSeconds, cookieOptions))
                 .build();
     }
 
@@ -98,7 +110,7 @@ public class AuthResource {
         String jwt = jwtService.issue(merchant.email(), merchant.id().toString());
         return Response.ok(MerchantView.from(merchant))
                 .header(HttpHeaders.SET_COOKIE,
-                        SessionCookies.buildSetCookie(jwt, cookieMaxAgeSeconds, secureCookies))
+                        SessionCookies.buildSetCookie(jwt, cookieMaxAgeSeconds, cookieOptions))
                 .build();
     }
 
@@ -118,7 +130,7 @@ public class AuthResource {
     @Path("/sign-out")
     public Response signOut(@Auth Optional<MerchantPrincipal> _principal) {
         return Response.noContent()
-                .header(HttpHeaders.SET_COOKIE, SessionCookies.buildClearCookie(secureCookies))
+                .header(HttpHeaders.SET_COOKIE, SessionCookies.buildClearCookie(cookieOptions))
                 .build();
     }
 

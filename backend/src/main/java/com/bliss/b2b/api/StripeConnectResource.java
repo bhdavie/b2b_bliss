@@ -66,8 +66,9 @@ public class StripeConnectResource {
                 merchantDao.setStripeAccountId(merchant.id(), stripeAccountId);
                 merchantDao.updateStripeConnectStatus(merchant.id(), ConnectStatus.IN_PROGRESS.wire());
             }
-            String returnUrl = appConfig.getFrontendBaseUrl() + "/onboarding/stripe-return";
-            String refreshUrl = appConfig.getFrontendBaseUrl() + "/onboarding/stripe-return?refresh=1";
+            // Stripe returns the merchant to their dashboard, not the consumer portal.
+            String returnUrl = appConfig.getMerchantBaseUrl() + "/onboarding/stripe-return";
+            String refreshUrl = appConfig.getMerchantBaseUrl() + "/onboarding/stripe-return?refresh=1";
             AccountLinkResponse link = stripe.createAccountLink(stripeAccountId, returnUrl, refreshUrl);
             return Response.ok(new StripeAccountLinkView(link.url(), link.expiresAtEpochSeconds())).build();
         } catch (StripeNotConfiguredException e) {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BlissWordmark } from "@/components/BlissWordmark";
+import { API_BASE_URL } from "@/lib/api";
 
 // Left-sidebar shell for the customer portal, mirroring the merchant dashboard
 // shell (white sidebar, Georgia-purple wordmark, navy nav with a lavender
@@ -22,10 +23,7 @@ async function signOut() {
   const store = await cookies();
   store.delete("bliss_customer_session");
   try {
-    await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080"}/api/v1/public/account/logout`,
-      { method: "POST" },
-    );
+    await fetch(`${API_BASE_URL}/api/v1/public/account/logout`, { method: "POST" });
   } catch {
     // local cookie already cleared
   }

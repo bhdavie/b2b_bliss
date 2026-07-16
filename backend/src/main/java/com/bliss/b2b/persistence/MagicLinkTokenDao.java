@@ -44,4 +44,11 @@ public interface MagicLinkTokenDao {
             WHERE expires_at < :cutoff
             """)
     int deleteExpired(@Bind("cutoff") Instant cutoff);
+
+    /** Used to drop a token whose email could not be delivered. */
+    @SqlUpdate("""
+            DELETE FROM magic_link_tokens
+            WHERE token_hash = :tokenHash
+            """)
+    int deleteByHash(@Bind("tokenHash") String tokenHash);
 }

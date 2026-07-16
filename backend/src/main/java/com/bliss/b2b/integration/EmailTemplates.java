@@ -45,12 +45,17 @@ public final class EmailTemplates {
         return mins + " minutes";
     }
 
+    /**
+     * @param consumerBaseUrl base url of the consumer portal, which hosts the
+     *                        manage-your-plan route this links to
+     */
     public static EmailMessage customerPlanConfirmation(
             String to,
             Merchant merchant,
             Booking booking,
             PaymentPlan plan,
-            List<PaymentScheduleEntry> schedule
+            List<PaymentScheduleEntry> schedule,
+            String consumerBaseUrl
     ) {
         StringBuilder sb = new StringBuilder();
         sb.append("Your plan with ").append(merchant.businessName()).append(" is set.\n\n");
@@ -68,9 +73,7 @@ public final class EmailTemplates {
         }
         sb.append("\nYour first payment is processing. Subsequent payments will be charged");
         sb.append(" automatically to the card on file.\n\n");
-        // TODO: thread a consumer base URL from BlissConfiguration when one
-        // exists. Hardcoding the dev URL is fine for the demo.
-        sb.append("Manage your plan: http://localhost:3000/plan/")
+        sb.append("Manage your plan: ").append(consumerBaseUrl).append("/plan/")
                 .append(booking.bookingToken())
                 .append('\n');
         return new EmailMessage(to, "Your plan with " + merchant.businessName() + " is set", sb.toString());

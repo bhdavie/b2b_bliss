@@ -34,6 +34,10 @@ public class BlissConfiguration extends Configuration {
 
     @Valid
     @NotNull
+    private CookieConfig cookies = new CookieConfig();
+
+    @Valid
+    @NotNull
     private EmailConfig email = new EmailConfig();
 
     @Valid
@@ -52,6 +56,8 @@ public class BlissConfiguration extends Configuration {
     @JsonProperty public void setSentry(SentryConfig sentry) { this.sentry = sentry; }
     @JsonProperty public CorsConfig getCors() { return cors; }
     @JsonProperty public void setCors(CorsConfig cors) { this.cors = cors; }
+    @JsonProperty public CookieConfig getCookies() { return cookies; }
+    @JsonProperty public void setCookies(CookieConfig cookies) { this.cookies = cookies; }
     @JsonProperty public EmailConfig getEmail() { return email; }
     @JsonProperty public void setEmail(EmailConfig email) { this.email = email; }
     @JsonProperty public StripeConfig getStripe() { return stripe; }
@@ -61,12 +67,34 @@ public class BlissConfiguration extends Configuration {
         return "production".equalsIgnoreCase(env);
     }
 
+    /**
+     * Base urls for the two frontend surfaces. Production serves them from
+     * separate hostnames — the merchant dashboard on property.bliss-payments.com
+     * and the consumer portal on guest.bliss-payments.com — so a link's audience
+     * decides which value builds it. Local dev points both at the one Next dev
+     * server, where every route is served from a single origin.
+     */
     public static class AppConfig {
         @NotBlank
-        private String frontendBaseUrl = "http://localhost:3000";
+        private String merchantBaseUrl = "http://localhost:3000";
 
-        @JsonProperty public String getFrontendBaseUrl() { return frontendBaseUrl; }
-        @JsonProperty public void setFrontendBaseUrl(String frontendBaseUrl) { this.frontendBaseUrl = frontendBaseUrl; }
+        @NotBlank
+        private String consumerBaseUrl = "http://localhost:3000";
+
+        @JsonProperty public String getMerchantBaseUrl() { return merchantBaseUrl; }
+        @JsonProperty public void setMerchantBaseUrl(String merchantBaseUrl) { this.merchantBaseUrl = merchantBaseUrl; }
+        @JsonProperty public String getConsumerBaseUrl() { return consumerBaseUrl; }
+        @JsonProperty public void setConsumerBaseUrl(String consumerBaseUrl) { this.consumerBaseUrl = consumerBaseUrl; }
+    }
+
+    public static class CookieConfig {
+        private String sameSite = "Lax";
+        private String domain = "";
+
+        @JsonProperty public String getSameSite() { return sameSite; }
+        @JsonProperty public void setSameSite(String sameSite) { this.sameSite = sameSite; }
+        @JsonProperty public String getDomain() { return domain; }
+        @JsonProperty public void setDomain(String domain) { this.domain = domain; }
     }
 
     public static class DatabaseConfig {

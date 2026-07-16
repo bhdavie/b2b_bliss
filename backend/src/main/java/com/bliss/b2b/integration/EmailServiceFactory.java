@@ -11,12 +11,14 @@ public final class EmailServiceFactory {
     private EmailServiceFactory() {}
 
     public static EmailService build(EmailConfig config) {
-        EmailService logging = new LoggingEmailService();
         if (config == null || config.getPostmarkToken() == null || config.getPostmarkToken().isBlank()) {
             log.info("Postmark token not configured; using logging email service");
-            return logging;
+            return new LoggingEmailService();
         }
+        // No logging fallback behind Postmark: a send that fails has to throw so
+        // the caller can react. Quietly logging the body instead would report
+        // success for mail that was never delivered.
         log.info("Postmark token detected; using PostmarkEmailService (from={})", config.getFromAddress());
-        return new PostmarkEmailService(config.getPostmarkToken(), config.getFromAddress(), logging);
+        return new PostmarkEmailService(config.getPostmarkToken(), config.getFromAddress());
     }
 }

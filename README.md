@@ -102,17 +102,23 @@ Backend reads from env vars with sensible local defaults (see [backend/src/main/
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `BLISS_ENV` | `development` | label only |
-| `BLISS_DB_URL` | `jdbc:postgresql://localhost:5432/bliss` | |
-| `BLISS_DB_USER` | `bliss` | |
-| `BLISS_DB_PASSWORD` | `bliss_dev` | |
-| `BLISS_JWT_SECRET` | dev placeholder | must be ≥ 32 bytes |
+| `DATABASE_URL` | unset | platform-supplied `postgres://user:pass@host:port/db`. When set it overrides the three `BLISS_DB_*` vars below and adds `sslmode=require` |
+| `BLISS_DB_URL` | `jdbc:postgresql://localhost:5432/bliss` | ignored when `DATABASE_URL` is set |
+| `BLISS_DB_USER` | `bliss` | ignored when `DATABASE_URL` is set |
+| `BLISS_DB_PASSWORD` | `bliss_dev` | ignored when `DATABASE_URL` is set |
+| `PORT` | `8080` | application connector. Heroku injects this |
+| `BLISS_ADMIN_PORT` | `8081` | admin connector |
+| `BLISS_JWT_SECRET` | dev placeholder | must be ≥ 32 bytes. **Boot fails when `BLISS_ENV=production` and this is still the dev default** |
 | `BLISS_JWT_TTL_MINUTES` | `60` | |
 | `BLISS_SENTRY_DSN` | empty | Sentry disabled when empty |
 | `BLISS_RUN_MIGRATIONS` | `true` | set `false` in tests |
 | `BLISS_CORS_ORIGINS` | `http://localhost:3000` | comma-separated origins permitted to call the API |
-| `BLISS_FRONTEND_BASE_URL` | `http://localhost:3000` | used to build magic-link URLs and Stripe return URLs |
-| `BLISS_POSTMARK_TOKEN` | empty | activates Postmark (falls back to log when empty) |
-| `BLISS_EMAIL_FROM` | `no-reply@bliss.com` | |
+| `BLISS_MERCHANT_BASE_URL` | `http://localhost:3000` | merchant dashboard base. Builds magic-link and Stripe return URLs |
+| `BLISS_CONSUMER_BASE_URL` | `http://localhost:3000` | consumer portal base. Builds hosted pay links and the manage-your-plan link |
+| `BLISS_COOKIE_SAMESITE` | `Lax` | `Lax`, `Strict` or `None`. `None` requires secure cookies, which are on only when `BLISS_ENV=production` |
+| `BLISS_COOKIE_DOMAIN` | empty | empty = host-only. Set to a shared parent (e.g. `.bliss-payments.com`) when the frontend and API are on different subdomains |
+| `BLISS_POSTMARK_TOKEN` | empty | activates Postmark (logs instead of sending when empty) |
+| `BLISS_EMAIL_FROM` | `no-reply@bliss.com` | must be a Postmark-verified sender once a token is set |
 | `STRIPE_SECRET_KEY` | empty | `sk_test_...` to activate Stripe Connect endpoints |
 | `STRIPE_PUBLISHABLE_KEY` | empty | optional, used client-side later |
 | `STRIPE_WEBHOOK_SECRET` | empty | `whsec_...` from `stripe listen` |

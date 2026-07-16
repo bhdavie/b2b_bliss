@@ -186,10 +186,9 @@ public class BookingsResource {
     }
 
     private String hostedUrlFor(Merchant merchant, Booking booking) {
-        // pay.bliss.com lives at the frontend root in the (consumer)
-        // /pay/[slug]/[token] route. For local dev the frontend base URL is
-        // http://localhost:3000.
-        return appConfig.getFrontendBaseUrl()
+        // The hosted pay page is a consumer route, served from the consumer
+        // host in prod and from the single Next dev server locally.
+        return appConfig.getConsumerBaseUrl()
                 + "/pay/" + merchant.slug() + "/" + booking.bookingToken();
     }
 

@@ -1,5 +1,6 @@
 package com.bliss.b2b.service;
 
+import com.bliss.b2b.BlissConfiguration.AppConfig;
 import com.bliss.b2b.domain.Booking;
 import com.bliss.b2b.domain.BookingSource;
 import com.bliss.b2b.domain.ConnectStatus;
@@ -144,19 +145,22 @@ public class PlanCreationService {
     private final StripePaymentsService stripeService;
     private final EmailService emailService;
     private final Clock clock;
+    private final AppConfig appConfig;
 
     public PlanCreationService(
             Jdbi jdbi,
             PlanEligibilityService eligibilityService,
             StripePaymentsService stripeService,
             EmailService emailService,
-            Clock clock
+            Clock clock,
+            AppConfig appConfig
     ) {
         this.jdbi = jdbi;
         this.eligibilityService = eligibilityService;
         this.stripeService = stripeService;
         this.emailService = emailService;
         this.clock = clock;
+        this.appConfig = appConfig;
     }
 
     public PlanCreationResult createPlan(CreatePlanInput input) {
@@ -617,7 +621,8 @@ public class PlanCreationService {
     private void sendNotifications(Outcome o) {
         try {
             emailService.send(EmailTemplates.customerPlanConfirmation(
-                    o.customer().email(), o.merchant(), o.booking(), o.plan(), o.schedule()));
+                    o.customer().email(), o.merchant(), o.booking(), o.plan(), o.schedule(),
+                    appConfig.getConsumerBaseUrl()));
         } catch (Exception e) {
             log.warn("Failed to send plan confirmation to {}: {}", o.customer().email(), e.getMessage());
         }
