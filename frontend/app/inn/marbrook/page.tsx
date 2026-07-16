@@ -130,14 +130,14 @@ const RATES: Rate[] = [
     // Temporary alignment with the Bliss installment policy so the page never
     // shows two contradicting cancellation statements. Per-hotel policies come
     // later.
-    cancellationPolicy: "Full refund anytime before your check-in.",
+    cancellationPolicy: "Free cancellation up to 48 hours before check-in.",
   },
   {
     id: "flexible",
     name: "Best flexible rate",
     detail: "Free cancellation up to 48 hours before arrival.",
     nightlyCents: 42900,
-    cancellationPolicy: "Full refund anytime before your check-in.",
+    cancellationPolicy: "Free cancellation up to 48 hours before check-in.",
   },
 ];
 
