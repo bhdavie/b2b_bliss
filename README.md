@@ -131,6 +131,37 @@ Frontend reads from `NEXT_PUBLIC_*` (see [frontend/.env.example](./frontend/.env
 | `NEXT_PUBLIC_SENTRY_DSN` | empty | Sentry disabled when empty |
 | `NEXT_PUBLIC_ENV` | `development` | |
 
+## Seeding the demo merchant
+
+`seed-demo` creates the Marbrook House demo merchant (slug `j9l29fke`, sign in as
+`demo@marbrookhouse.com`) plus its saved plan rules. It is idempotent: existence
+is checked by slug, so a second run is a no-op and never duplicates rows.
+
+It is a command, not a Flyway migration, so it never runs implicitly on boot —
+demo data only appears when someone asks for it. It is also not a Dropwizard
+task, because tasks are served from the admin connector and Heroku routes only
+`$PORT`.
+
+The merchant is seeded with a synthetic `acct_demo_*` Connect account at
+`charges_enabled`, so the dashboard renders fully while Stripe stays in demo
+mode (blank `STRIPE_SECRET_KEY`).
+
+Locally:
+
+```sh
+java -jar backend/target/bliss-b2b-backend.jar \
+    seed-demo backend/src/main/resources/config.yml
+```
+
+On Heroku, as a one-off dyno (paths match the Procfile's):
+
+```sh
+heroku run "java -jar backend/target/bliss-b2b-backend.jar seed-demo backend/src/main/resources/config.yml" -a bliss-b2b-api
+```
+
+Scope is the merchant and its plan rules only. No bookings are seeded, so the
+dashboard opens with an empty bookings list.
+
 ## Stripe Connect setup
 
 Phase 2 scaffolds Stripe Connect Express. The integration is inert until you provide keys.

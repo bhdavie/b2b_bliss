@@ -20,6 +20,7 @@ import com.bliss.b2b.auth.JwtCookieAuthFilter;
 import com.bliss.b2b.auth.JwtService;
 import com.bliss.b2b.auth.MerchantAuthenticator;
 import com.bliss.b2b.auth.MerchantPrincipal;
+import com.bliss.b2b.cli.SeedDemoCommand;
 import com.bliss.b2b.integration.EmailService;
 import com.bliss.b2b.integration.EmailServiceFactory;
 import com.bliss.b2b.integration.MewsApiClient;
@@ -86,6 +87,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 bootstrap.getConfigurationSourceProvider(),
                 new EnvironmentVariableSubstitutor(false)
         ));
+        // Run explicitly via `java -jar <jar> seed-demo <config.yml>`; never on boot.
+        bootstrap.addCommand(new SeedDemoCommand());
     }
 
     @Override
