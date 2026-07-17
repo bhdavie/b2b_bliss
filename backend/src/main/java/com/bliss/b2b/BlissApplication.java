@@ -163,11 +163,24 @@ public class BlissApplication extends Application<BlissConfiguration> {
 
         environment.jersey().register(new HelloResource());
         environment.jersey().register(new MewsController(mewsSyncService, mewsApiClient));
-        // Dev-login bypass is on whenever the env is not production. It
-        // accepts any email at POST /api/v1/auth/dev-login and returns a
-        // signed session immediately. Production deploys must set
-        // BLISS_ENV=production.
-        boolean devLoginEnabled = !config.isProduction();
+        // Two separate gates, deliberately not one flag.
+        //
+        // Demo sign-in (POST /api/v1/auth/dev-login) accepts any email and
+        // returns a signed session with no password. It is on outside
+        // production, and BLISS_DEMO_LOGIN keeps it on in production for the
+        // hosted demo — which is also what keeps the Marbrook funnel and the
+        // Mews authorize simulation working, since both call it.
+        boolean demoLoginEnabled = !config.isProduction() || config.isDemoLogin();
+        // Everything else dev-only stays keyed to the environment alone.
+        // DevPlansResource fabricates card declines and rewrites plan state, so
+        // BLISS_DEMO_LOGIN must not reopen it: a demo needs a way to sign in,
+        // not a way to forge payment failures.
+        boolean devEndpointsEnabled = !config.isProduction();
+        if (config.isProduction() && config.isDemoLogin()) {
+            log.warn("BLISS_DEMO_LOGIN=true in production: POST /api/v1/auth/dev-login will issue a "
+                    + "merchant session for any email, with no password. Intended for the hosted demo. "
+                    + "Set BLISS_DEMO_LOGIN=false to make magic-link sign-in the only way in.");
+        }
         // One CookieOptions for both session cookies (merchant and customer) so
         // their scope cannot drift apart. Secure tracks production; SameSite and
         // Domain come from config because they depend on whether the frontend
@@ -181,7 +194,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 cookieOptions.domain() == null ? "(host-only)" : cookieOptions.domain());
         environment.jersey().register(new AuthResource(
                 magicLinkService, jwtService, cookieOptions,
-                devLoginEnabled, sessionTtlMinutes));
+                demoLoginEnabled, sessionTtlMinutes));
         environment.jersey().register(new MerchantsResource(merchantDao, stripeService, emailService));
         environment.jersey().register(new StripeConnectResource(
                 stripeService, merchantDao, emailService, config.getApp()));
@@ -203,7 +216,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new PlansResource(
                 paymentPlanDao, paymentScheduleDao, bookingDao, cancellationService));
         environment.jersey().register(new DevPlansResource(
-                devLoginEnabled, paymentPlanDao, paymentScheduleDao, planRulesDao,
+                devEndpointsEnabled, paymentPlanDao, paymentScheduleDao, planRulesDao,
                 bookingDao, cancellationService));
 
         environment.jersey().register(new AuthDynamicFeature(

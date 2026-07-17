@@ -108,6 +108,7 @@ Backend reads from env vars with sensible local defaults (see [backend/src/main/
 | `BLISS_DB_PASSWORD` | `bliss_dev` | ignored when `DATABASE_URL` is set |
 | `PORT` | `8080` | application connector. Heroku injects this |
 | `BLISS_ADMIN_PORT` | `8081` | admin connector |
+| `BLISS_DEMO_LOGIN` | `false` | keeps the password-less demo sign-in (`POST /auth/dev-login`) available under `BLISS_ENV=production`, and with it the Marbrook funnel and Mews authorize simulation. Auth only — it does not reopen the dev plan endpoints. Set `false` once Postmark is configured to make magic link the only way in |
 | `BLISS_JWT_SECRET` | dev placeholder | must be ≥ 32 bytes. **Boot fails when `BLISS_ENV=production` and this is still the dev default** |
 | `BLISS_JWT_TTL_MINUTES` | `60` | |
 | `BLISS_SENTRY_DSN` | empty | Sentry disabled when empty |
@@ -130,6 +131,31 @@ Frontend reads from `NEXT_PUBLIC_*` (see [frontend/.env.example](./frontend/.env
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080` | |
 | `NEXT_PUBLIC_SENTRY_DSN` | empty | Sentry disabled when empty |
 | `NEXT_PUBLIC_ENV` | `development` | |
+
+## Merchant sign-in
+
+Two paths, and the backend decides which is live. The sign-in page reads
+`GET /api/v1/auth/dev-status` at runtime and renders whichever one is on, so
+switching between them is an env var, not a deploy.
+
+**Magic link** is the real path: `/signup` (find-or-create, so it works for an
+existing merchant too) posts to `/api/v1/auth/magic-link`, the email carries
+`BLISS_MERCHANT_BASE_URL/verify?token=…`, and `/verify` exchanges it for the
+session cookie. It needs `BLISS_POSTMARK_TOKEN` set and the sender verified —
+without a token the link is only written to the log, so nothing arrives.
+
+**Demo sign-in** (`POST /api/v1/auth/dev-login`) takes any email and issues a
+merchant session with no password. It is always on outside production, and stays
+on in production only when `BLISS_DEMO_LOGIN=true`. The Marbrook funnel's
+`provisionBooking` and the Mews authorize simulation both call it, so they are
+live or dead with it.
+
+`BLISS_DEMO_LOGIN` covers auth and nothing else. The dev plan endpoints
+(`/api/v1/dev/*`, which fabricate card declines) stay shut in production
+regardless — a demo needs a way to sign in, not a way to forge payment failures.
+
+To hand the demo over to real auth: set `BLISS_POSTMARK_TOKEN`, then set
+`BLISS_DEMO_LOGIN=false`. The sign-in page follows on its own.
 
 ## Seeding the demo merchant
 

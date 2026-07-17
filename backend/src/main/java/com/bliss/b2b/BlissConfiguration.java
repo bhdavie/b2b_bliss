@@ -12,6 +12,21 @@ public class BlissConfiguration extends Configuration {
     @NotBlank
     private String env = "development";
 
+    /**
+     * Keeps the password-less demo sign-in available under
+     * {@code BLISS_ENV=production}. Scoped to auth: it re-opens
+     * {@code POST /api/v1/auth/dev-login} (and so the funnel and Mews demo
+     * flows that call it) and nothing else. Every other production rule —
+     * secure cookies, the JWT secret guard, short expiries, dev plan endpoints
+     * staying shut — is unaffected.
+     *
+     * <p>Off by default, so a deploy is strict unless it opts in. Turning it off
+     * once Postmark is configured leaves magic link as the only way in, with no
+     * code change: the sign-in page reads {@code GET /api/v1/auth/dev-status}
+     * and renders whichever path is live.
+     */
+    private boolean demoLogin = false;
+
     @Valid
     @NotNull
     private AppConfig app = new AppConfig();
@@ -46,6 +61,8 @@ public class BlissConfiguration extends Configuration {
 
     @JsonProperty public String getEnv() { return env; }
     @JsonProperty public void setEnv(String env) { this.env = env; }
+    @JsonProperty public boolean isDemoLogin() { return demoLogin; }
+    @JsonProperty public void setDemoLogin(boolean demoLogin) { this.demoLogin = demoLogin; }
     @JsonProperty public AppConfig getApp() { return app; }
     @JsonProperty public void setApp(AppConfig app) { this.app = app; }
     @JsonProperty public DatabaseConfig getDatabase() { return database; }

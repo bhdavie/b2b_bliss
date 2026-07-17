@@ -27,6 +27,17 @@ logging:
 
 env: ${BLISS_ENV:-development}
 
+# Password-less demo sign-in. Outside production it is always on. Set true to
+# keep it on under BLISS_ENV=production for the hosted demo: POST
+# /api/v1/auth/dev-login then issues a merchant session for any email, which is
+# also what the Marbrook funnel and the Mews authorize simulation rely on.
+#
+# Scoped to auth only — it does not reopen the dev plan endpoints or soften any
+# other production rule. Set false once BLISS_POSTMARK_TOKEN is configured and
+# magic link should be the only way in; the sign-in page follows this flag with
+# no code change.
+demoLogin: ${BLISS_DEMO_LOGIN:-false}
+
 app:
   # Merchant dashboard (property.bliss-payments.com in prod): magic-link sign-in
   # and the Stripe Connect return url.

@@ -90,10 +90,13 @@ public class AuthResource {
     }
 
     /**
-     * Dev-only login bypass. Skips the magic-link round trip entirely: a
-     * merchant is found-or-created for the email, marked verified, and a
-     * session cookie is set. Returns 404 in production so the route does
-     * not exist there.
+     * Demo login bypass. Skips the magic-link round trip entirely: a merchant
+     * is found-or-created for the email, marked verified, and a session cookie
+     * is set. No password is involved.
+     *
+     * <p>On outside production, and in production only when BLISS_DEMO_LOGIN is
+     * set — the hosted demo needs a sign-in that works without deliverable
+     * email. Otherwise 404, so the route does not exist.
      */
     @POST
     @Path("/dev-login")
@@ -115,10 +118,13 @@ public class AuthResource {
     }
 
     /**
-     * Public probe used by the /login UI to decide whether to show the
-     * dev-mode shortcut. {@code enabled: true} means {@code POST /dev-login}
-     * will accept any email; {@code false} means stick to the magic-link
-     * flow.
+     * Public probe the sign-in page reads to decide which path to render.
+     * {@code devLoginEnabled: true} means {@code POST /dev-login} will accept
+     * any email; {@code false} means magic link is the only way in. True
+     * outside production, and in production when BLISS_DEMO_LOGIN is set.
+     *
+     * <p>This is what lets BLISS_DEMO_LOGIN be flipped without a frontend
+     * change, so keep it in step with the gate on {@link #devLogin}.
      */
     @GET
     @Path("/dev-status")
