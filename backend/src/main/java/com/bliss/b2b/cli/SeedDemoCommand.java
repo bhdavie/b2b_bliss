@@ -4,15 +4,26 @@ import com.bliss.b2b.BlissConfiguration;
 import com.bliss.b2b.persistence.DatabaseUrlResolver;
 import io.dropwizard.core.cli.ConfiguredCommand;
 import io.dropwizard.core.setup.Bootstrap;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.sql.Statement;
 import java.util.Optional;
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Creates the Marbrook House demo merchant. Idempotent: existence is checked by
- * slug, and a second run is a no-op.
+ * Creates the Marbrook House demo merchant and its five fixture bookings, so a
+ * fresh production database can be brought to a demoable state.
+ *
+ * <p>Idempotent: every statement in the script is ON CONFLICT DO NOTHING, keyed
+ * on the natural identifier (merchant slug, booking token, customer email), so a
+ * re-run adds only what is missing and never duplicates. It is also safe to run
+ * against a database seeded by an earlier version of this command — anything
+ * added since simply lands.
  *
  * <p>A command rather than a Dropwizard task, for two reasons. Tasks are served
  * from the admin connector, and Heroku routes only {@code $PORT} — the admin
@@ -29,75 +40,18 @@ import org.slf4j.LoggerFactory;
  * as a migration it would run implicitly on every boot in every environment.
  * This only ever runs when a human invokes it.
  *
- * <p>Scope is the merchant plus its plan rules — the state the dashboard needs
- * to render. Bookings are not seeded; the {@code seed-*} bookings in the local
- * database were created ad hoc and have no committed source to replicate.
+ * @see /demo-seed-marbrook.sql for the data itself
  */
 public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
 
     private static final Logger log = LoggerFactory.getLogger(SeedDemoCommand.class);
 
-    // Fixed identifiers, matching the local demo merchant so the seeded row is a
-    // faithful copy and re-runs stay deterministic.
-    private static final String MERCHANT_ID = "9b54a488-b308-4a6d-91cc-38983ff982ac";
-    private static final String PLAN_RULES_ID = "d7f3e4c4-f3eb-44bd-9540-d696acd28326";
+    private static final String SCRIPT = "/demo-seed-marbrook.sql";
     private static final String SLUG = "j9l29fke";
     private static final String EMAIL = "demo@marbrookhouse.com";
 
-    /**
-     * Synthetic Connect account, mirroring what the demo-complete onboarding
-     * path mints. Leaving Stripe blank keeps the platform in demo mode, and
-     * charges_enabled against an acct_demo_* id is what lets the dashboard
-     * render fully without live keys.
-     */
-    private static final String STRIPE_ACCOUNT_ID = "acct_demo_8d0f801440de";
-
-    private static final String INSERT_MERCHANT = """
-            INSERT INTO merchants (
-                id, slug, email, business_name, business_type,
-                address_line1, address_city, address_state, address_zip, address_country,
-                stripe_connect_account_id, stripe_connect_status,
-                status, email_verified_at
-            ) VALUES (
-                CAST(:id AS uuid), :slug, :email, 'Marbrook House', 'hotel',
-                '118 Greenwich Avenue', 'Hudson', 'NY', '12534', 'US',
-                :stripeAccountId, 'charges_enabled',
-                'active', now()
-            )
-            ON CONFLICT (slug) DO NOTHING
-            """;
-
-    /**
-     * Only the settings that differ from the schema defaults are set explicitly;
-     * the rest (6-week lead time, both frequencies, no deposit, 3 retries every
-     * 3 days, treat-as-cancellation, no discount) already match Marbrook.
-     *
-     * <p>payment_due_custom_months is a stale name: V15 widened its range and
-     * the value now means days, so 2 here is 2 days before check-in.
-     */
-    private static final String INSERT_PLAN_RULES = """
-            INSERT INTO merchant_plan_rules (
-                id, merchant_id,
-                min_lead_time_weeks, allowed_frequencies,
-                deposit_required, discount_basis_points,
-                refund_policy,
-                payment_due_policy, payment_due_custom_months,
-                retry_attempts, retry_spacing_days,
-                after_retries_action
-            ) VALUES (
-                CAST(:id AS uuid), CAST(:merchantId AS uuid),
-                6, 'both',
-                FALSE, 0,
-                'credit_only',
-                'custom_months', 2,
-                3, 3,
-                'treat_as_cancellation'
-            )
-            ON CONFLICT (merchant_id) DO NOTHING
-            """;
-
     public SeedDemoCommand() {
-        super("seed-demo", "Idempotently create the Marbrook House demo merchant");
+        super("seed-demo", "Idempotently create the Marbrook House demo merchant and fixture bookings");
     }
 
     @Override
@@ -113,38 +67,89 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
         DatabaseUrlResolver.applyFromEnvironment(configuration.getDatabase());
         BlissConfiguration.DatabaseConfig db = configuration.getDatabase();
 
-        // No connection pool: this is a single short-lived process doing a
-        // handful of statements.
+        String script = readScript();
+
+        // No connection pool: this is a single short-lived process running one
+        // script.
         Jdbi jdbi = Jdbi.create(db.getUrl(), db.getUser(), db.getPassword());
 
         jdbi.useTransaction(handle -> {
-            Optional<String> existing = handle
-                    .createQuery("SELECT id::text FROM merchants WHERE slug = :slug")
-                    .bind("slug", SLUG)
-                    .mapTo(String.class)
-                    .findOne();
+            Optional<String> existing = findMerchantId(handle);
+            existing.ifPresent(id ->
+                    log.info("Demo merchant '{}' already present (id={}); filling in anything missing", SLUG, id));
 
-            if (existing.isPresent()) {
-                log.info("Demo merchant '{}' already exists (id={}); nothing to do", SLUG, existing.get());
-                return;
+            Counts before = Counts.read(handle);
+            execute(handle, script);
+            Counts after = Counts.read(handle);
+
+            if (after.equals(before)) {
+                log.info("Nothing to do — demo data already complete ({})", after);
+            } else {
+                log.info("Seeded demo data. Before: {} | after: {}", before, after);
             }
-
-            int merchants = handle.createUpdate(INSERT_MERCHANT)
-                    .bind("id", MERCHANT_ID)
-                    .bind("slug", SLUG)
-                    .bind("email", EMAIL)
-                    .bind("stripeAccountId", STRIPE_ACCOUNT_ID)
-                    .execute();
-
-            int planRules = handle.createUpdate(INSERT_PLAN_RULES)
-                    .bind("id", PLAN_RULES_ID)
-                    .bind("merchantId", MERCHANT_ID)
-                    .execute();
-
-            log.info("Seeded demo merchant '{}' ({}) id={} stripe={} — {} merchant row, {} plan rules row",
-                    SLUG, EMAIL, MERCHANT_ID, STRIPE_ACCOUNT_ID, merchants, planRules);
         });
 
-        log.info("seed-demo complete. Sign in at the merchant dashboard as {}", EMAIL);
+        log.info("seed-demo complete. Merchant dashboard: sign in as {}. Consumer portal: sign in as any "
+                + "of the +seed@example.com addresses (demo auth accepts any password).", EMAIL);
+    }
+
+    /**
+     * Runs the whole script through one JDBC statement rather than Jdbi's script
+     * splitter: the SQL is static, has no bind parameters, and contains
+     * colon-bearing timestamp literals that a parameter-parsing path could
+     * misread.
+     */
+    private static void execute(Handle handle, String script) {
+        try (Statement statement = handle.getConnection().createStatement()) {
+            statement.execute(script);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed executing " + SCRIPT + ": " + e.getMessage(), e);
+        }
+    }
+
+    private static Optional<String> findMerchantId(Handle handle) {
+        return handle.createQuery("SELECT id::text FROM merchants WHERE slug = :slug")
+                .bind("slug", SLUG)
+                .mapTo(String.class)
+                .findOne();
+    }
+
+    private String readScript() throws IOException {
+        try (InputStream in = getClass().getResourceAsStream(SCRIPT)) {
+            if (in == null) {
+                throw new IllegalStateException(SCRIPT + " not found on the classpath");
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    /** Row counts scoped to the demo merchant, used to report what the run changed. */
+    private record Counts(int merchants, int planRules, int customers, int bookings, int plans, int schedule) {
+
+        private static final String MERCHANT = "(SELECT id FROM merchants WHERE slug = 'j9l29fke')";
+
+        static Counts read(Handle handle) {
+            return new Counts(
+                    count(handle, "SELECT count(*) FROM merchants WHERE slug = 'j9l29fke'"),
+                    count(handle, "SELECT count(*) FROM merchant_plan_rules WHERE merchant_id = " + MERCHANT),
+                    count(handle, "SELECT count(*) FROM customers WHERE email LIKE '%+seed@example.com'"),
+                    count(handle, "SELECT count(*) FROM bookings WHERE merchant_id = " + MERCHANT),
+                    count(handle, "SELECT count(*) FROM payment_plans WHERE booking_id IN "
+                            + "(SELECT id FROM bookings WHERE merchant_id = " + MERCHANT + ")"),
+                    count(handle, "SELECT count(*) FROM payment_schedule WHERE payment_plan_id IN "
+                            + "(SELECT id FROM payment_plans WHERE booking_id IN "
+                            + "(SELECT id FROM bookings WHERE merchant_id = " + MERCHANT + "))"));
+        }
+
+        private static int count(Handle handle, String sql) {
+            return handle.createQuery(sql).mapTo(Integer.class).one();
+        }
+
+        @Override
+        public String toString() {
+            return String.format(
+                    "merchants=%d planRules=%d customers=%d bookings=%d plans=%d scheduleRows=%d",
+                    merchants, planRules, customers, bookings, plans, schedule);
+        }
     }
 }

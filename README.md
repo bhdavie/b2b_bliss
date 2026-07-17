@@ -134,8 +134,14 @@ Frontend reads from `NEXT_PUBLIC_*` (see [frontend/.env.example](./frontend/.env
 ## Seeding the demo merchant
 
 `seed-demo` creates the Marbrook House demo merchant (slug `j9l29fke`, sign in as
-`demo@marbrookhouse.com`) plus its saved plan rules. It is idempotent: existence
-is checked by slug, so a second run is a no-op and never duplicates rows.
+`demo@marbrookhouse.com`), its saved plan rules, and five fixture bookings with
+their customers, plans and payment schedules — one per plan state, so the
+dashboard and the consumer portal both have something to render.
+
+It is idempotent. Every insert keys on a natural identifier — merchant slug,
+booking token, customer email — so a second run is a no-op and a run against a
+partially-seeded database adds only what is missing. The data lives in
+[backend/src/main/resources/demo-seed-marbrook.sql](./backend/src/main/resources/demo-seed-marbrook.sql).
 
 It is a command, not a Flyway migration, so it never runs implicitly on boot —
 demo data only appears when someone asks for it. It is also not a Dropwizard
@@ -159,8 +165,24 @@ On Heroku, as a one-off dyno (paths match the Procfile's):
 heroku run "java -jar backend/target/bliss-b2b-backend.jar seed-demo backend/src/main/resources/config.yml" -a bliss-b2b-api
 ```
 
-Scope is the merchant and its plan rules only. No bookings are seeded, so the
-dashboard opens with an empty bookings list.
+The five fixtures, and the customer who owns each:
+
+| Booking token | Booking status | Plan | Customer |
+| --- | --- | --- | --- |
+| `seed-active-001` | accepted | active, 1 of 4 paid | saoirse.byrne+seed@example.com |
+| `seed-late-001` | in_progress | active, installment 2 past due | hugo.vance+seed@example.com |
+| `seed-paid-001` | completed | completed, 3 of 3 paid | lena.okonkwo+seed@example.com |
+| `seed-cancelled-001` | canceled | canceled after 1 payment | marcus.bellweather+seed@example.com |
+| `seed-trip-001` | completed | completed, stay in the past | priya.raman+seed@example.com |
+
+Consumer portal sign-in is demo-mode — it checks only that the email exists and
+accepts any password — so any of those addresses opens `/account`.
+
+Note that `seed-late-001` reads as late only on the merchant side, via its
+`in_progress` booking status. `PlanProgress` derives portal figures by treating
+every installment due on or before today as paid, so the consumer portal shows
+its overdue installment as paid. That is existing behaviour, not a property of
+the seed.
 
 ## Stripe Connect setup
 
