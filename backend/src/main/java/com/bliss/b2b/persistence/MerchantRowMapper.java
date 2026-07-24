@@ -2,6 +2,8 @@ package com.bliss.b2b.persistence;
 
 import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.domain.MerchantStatus;
+import com.bliss.b2b.domain.OnboardingState;
+import com.bliss.b2b.domain.PmsType;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -27,6 +29,8 @@ public class MerchantRowMapper implements RowMapper<Merchant> {
                 rs.getString("stripe_connect_account_id"),
                 rs.getString("stripe_connect_status"),
                 MerchantStatus.fromWire(rs.getString("status")),
+                PmsType.fromWire(rs.getString("pms_type")),
+                OnboardingState.fromWire(rs.getString("onboarding_state")),
                 toInstant(rs.getTimestamp("email_verified_at")),
                 toInstant(rs.getTimestamp("created_at")),
                 toInstant(rs.getTimestamp("updated_at"))

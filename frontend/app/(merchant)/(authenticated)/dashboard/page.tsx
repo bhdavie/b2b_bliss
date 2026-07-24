@@ -1,11 +1,14 @@
 import { AccountSettings } from "@/components/merchant/AccountSettings";
-import { fetchMerchantSession } from "@/lib/auth";
+import { fetchMerchantSession, fetchOnboardingServer } from "@/lib/auth";
 
 // URL stays /dashboard (lower-risk for the demo), but the tab is now
-// "Account settings" — property details + tool connections.
+// "Account settings" - property details + tool connections. Connection status
+// comes from the same real onboarding/pms data the Overview uses, not a
+// simulated store.
 export default async function AccountSettingsPage() {
   const session = await fetchMerchantSession();
   if (!session) return null;
+  const onboarding = await fetchOnboardingServer();
 
   return (
     <AccountSettings
@@ -18,6 +21,12 @@ export default async function AccountSettingsPage() {
         addressCity: session.address.city ?? "",
         addressState: session.address.state ?? "",
         addressZip: session.address.zip ?? "",
+      }}
+      connections={{
+        pmsType: session.pmsType,
+        onboardingState: session.onboardingState,
+        mews: onboarding?.mews ?? null,
+        stripeConnectStatus: session.stripeConnectStatus,
       }}
     />
   );

@@ -1,13 +1,22 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   CheckIcon,
+  PAYMENT_PROVIDERS,
+  PMS_PROVIDERS,
   ProviderLogo,
   Spinner,
-  useConnections,
-  type Connection,
 } from "./ConnectionsContext";
+import {
+  completeStripeConnectDemo,
+  disconnectMews,
+  type OnboardingMews,
+  type OnboardingStateWire,
+  type PmsType,
+} from "@/lib/api";
 
 export type AccountInitial = {
   hotelName: string;
@@ -20,9 +29,20 @@ export type AccountInitial = {
   addressZip: string;
 };
 
-export function AccountSettings({ initial }: { initial: AccountInitial }) {
-  const { payments, pms } = useConnections();
+export type AccountConnections = {
+  pmsType: PmsType;
+  onboardingState: OnboardingStateWire;
+  mews: OnboardingMews | null;
+  stripeConnectStatus: string | null;
+};
 
+export function AccountSettings({
+  initial,
+  connections,
+}: {
+  initial: AccountInitial;
+  connections: AccountConnections;
+}) {
   return (
     <div>
       <header>
@@ -39,20 +59,14 @@ export function AccountSettings({ initial }: { initial: AccountInitial }) {
           title="Property management connection"
           helper="Sync rooms, rates, and bookings from your property system."
         >
-          <ConnectionPanel
-            conn={pms}
-            prompt="Connect your property system to sync rooms, rates, and bookings."
-          />
+          <PropertyManagementSection connections={connections} />
         </StackedSection>
 
         <StackedSection
           title="Payment processor connection"
           helper="Accept payments and installments, and route payouts to your bank."
         >
-          <ConnectionPanel
-            conn={payments}
-            prompt="Connect a processor to start accepting payments and installments."
-          />
+          <PaymentProcessorSection connections={connections} />
         </StackedSection>
       </div>
     </div>
@@ -401,85 +415,200 @@ function LockIcon({ className = "" }: { className?: string }) {
   );
 }
 
-// Connected vs disconnected connection row. Logos sit inline at a fixed height,
-// no box. Disconnected uses underline-selection for the picker.
-function ConnectionPanel({ conn, prompt }: { conn: Connection; prompt: string }) {
-  const connecting = conn.state === "connecting";
+const MEWS = PMS_PROVIDERS.find((p) => p.name === "Mews")!;
+const CLOUDBEDS = PMS_PROVIDERS.find((p) => p.name === "Cloudbeds")!;
+const STRIPE = PAYMENT_PROVIDERS.find((p) => p.name === "Stripe")!;
 
-  if (conn.state === "connected") {
+// Property management (PMS) connection, driven by real onboarding state. Only
+// Mews is connectable today; Cloudbeds is coming soon; Stripe-only properties
+// have no PMS.
+function PropertyManagementSection({ connections }: { connections: AccountConnections }) {
+  const router = useRouter();
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { pmsType, mews } = connections;
+  const mewsConnected = pmsType === "mews" && Boolean(mews?.connected);
+
+  async function handleDisconnect() {
+    setError(null);
+    setDisconnecting(true);
+    try {
+      await disconnectMews();
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not disconnect. Try again.");
+      setDisconnecting(false);
+    }
+  }
+
+  if (mewsConnected) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <ProviderLogo provider={conn.selected} className="h-10" />
-          <div>
-            <div className="flex items-center gap-2 text-lg font-semibold text-brand-navy">
-              {conn.selected.name}
-              <span className="inline-flex items-center gap-1 text-brand-purple">
-                <CheckIcon className="h-3.5 w-3.5" />
-                Connected
-              </span>
-            </div>
-            <div className="mt-0.5 text-sm text-brand-navy/65">
-              Connected as {conn.account}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <button type="button" className="btn-ghost">
+      <div>
+        <ConnectedHeader
+          provider={MEWS}
+          subtext={
+            mews?.currency
+              ? `Connected to ${mews?.enterpriseName}, charging in ${mews.currency}`
+              : `Connected to ${mews?.enterpriseName}`
+          }
+        />
+        {error ? (
+          <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        ) : null}
+        <div className="mt-5 flex items-center gap-4">
+          <Link href="/onboarding/connect-mews" className="btn-ghost">
             Manage
-          </button>
+          </Link>
           <button
             type="button"
-            onClick={conn.disconnect}
-            className="text-xs font-medium text-brand-navy/60 transition-colors hover:text-brand-purple"
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+            className="text-xs font-medium text-brand-navy/60 transition-colors hover:text-brand-purple disabled:opacity-60"
           >
-            Disconnect
+            {disconnecting ? "Disconnecting" : "Disconnect"}
           </button>
         </div>
       </div>
     );
   }
 
+  if (pmsType === "mews") {
+    return (
+      <ConnectPrompt
+        text="Reconnect your Mews property to charge cards through Mews."
+        href="/onboarding/connect-mews"
+        label="Connect Mews"
+      />
+    );
+  }
+
+  if (pmsType === "cloudbeds") {
+    return (
+      <div>
+        <div className="flex items-center gap-3">
+          <ProviderLogo provider={CLOUDBEDS} className="h-9" />
+          <span className="rounded-full bg-brand-cream px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+            Coming soon
+          </span>
+        </div>
+        <p className="mt-3 text-sm text-brand-navy/65">
+          Cloudbeds support is coming soon. Choose Mews or Stripe to finish setup now.
+        </p>
+        <Link href="/onboarding/pms" className="btn-ghost mt-5 inline-block">
+          Choose a different PMS
+        </Link>
+      </div>
+    );
+  }
+
+  // Stripe-only property: no PMS connected.
+  return (
+    <ConnectPrompt
+      text="No property system connected. Connect a PMS to sync rooms, rates, and bookings."
+      href="/onboarding/pms"
+      label="Connect a PMS"
+    />
+  );
+}
+
+// Payment processor connection. For a Mews-rail property, payments run through
+// Mews, so there is no separate processor. For a Stripe-rail property, this is
+// the real Stripe connect flow.
+function PaymentProcessorSection({ connections }: { connections: AccountConnections }) {
+  const router = useRouter();
+  const { pmsType, mews, stripeConnectStatus } = connections;
+  const mewsConnected = pmsType === "mews" && Boolean(mews?.connected);
+  const [phase, setPhase] = useState<"idle" | "connecting" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  if (mewsConnected) {
+    return (
+      <p className="text-sm text-brand-navy/65">
+        Payments run through your Mews connection. Cards are charged in Mews, so there is no
+        separate processor to connect.
+      </p>
+    );
+  }
+
+  const stripeConnected = stripeConnectStatus === "charges_enabled";
+
+  if (stripeConnected) {
+    return (
+      <div>
+        <ConnectedHeader provider={STRIPE} subtext="Payouts are set up. You can take payment plans and get paid out on arrival." />
+      </div>
+    );
+  }
+
+  async function handleConnectStripe() {
+    setError(null);
+    setPhase("connecting");
+    try {
+      await completeStripeConnectDemo();
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not connect Stripe. Try again.");
+      setPhase("error");
+    }
+  }
+
   return (
     <div>
-      <p className="text-sm text-brand-navy/65">{prompt}</p>
-      <div className="mt-4 flex flex-col gap-1">
-        {conn.providers.map((p) => {
-          const isSelected = conn.selected.name === p.name;
-          return (
-            <button
-              key={p.name}
-              type="button"
-              onClick={() => conn.select(p)}
-              disabled={connecting}
-              aria-pressed={isSelected}
-              className={`flex w-full items-center gap-4 border-b-2 py-3 text-left transition ${
-                isSelected
-                  ? "border-brand-lavender opacity-100"
-                  : "border-transparent opacity-45 hover:opacity-100"
-              } ${connecting ? "cursor-not-allowed" : ""}`}
-            >
-              <ProviderLogo provider={p} className="h-12 w-32 shrink-0 object-left" />
-              <span className="text-lg font-semibold text-brand-navy">{p.name}</span>
-            </button>
-          );
-        })}
+      <div className="flex items-center gap-3">
+        <ProviderLogo provider={STRIPE} className="h-8" />
       </div>
+      <p className="mt-3 text-sm text-brand-navy/65">
+        Connect Stripe to accept payments and installments, and route payouts to your bank.
+      </p>
+      {error ? (
+        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+      ) : null}
       <button
         type="button"
-        onClick={conn.connect}
-        disabled={connecting}
-        className="btn-primary-merchant mt-6"
+        onClick={handleConnectStripe}
+        disabled={phase === "connecting"}
+        className="btn-primary-merchant mt-5"
       >
-        {connecting ? (
+        {phase === "connecting" ? (
           <span className="flex items-center gap-2">
             <Spinner className="h-4 w-4" />
-            Connecting…
+            Connecting
           </span>
         ) : (
-          `Connect ${conn.selected.name}`
+          "Connect Stripe"
         )}
       </button>
+    </div>
+  );
+}
+
+// Shared: connected header with a logo, a "Connected" tag, and a subtext line.
+function ConnectedHeader({ provider, subtext }: { provider: { name: string; logo: string }; subtext: string }) {
+  return (
+    <div className="flex items-center gap-4">
+      <ProviderLogo provider={provider} className="h-10" />
+      <div>
+        <div className="flex items-center gap-2 text-lg font-semibold text-brand-navy">
+          {provider.name}
+          <span className="inline-flex items-center gap-1 text-brand-purple">
+            <CheckIcon className="h-3.5 w-3.5" />
+            Connected
+          </span>
+        </div>
+        <div className="mt-0.5 text-sm text-brand-navy/65">{subtext}</div>
+      </div>
+    </div>
+  );
+}
+
+// Shared: a prompt line plus a primary link-button for an unconnected tool.
+function ConnectPrompt({ text, href, label }: { text: string; href: string; label: string }) {
+  return (
+    <div>
+      <p className="text-sm text-brand-navy/65">{text}</p>
+      <Link href={href} className="btn-primary-merchant mt-5 inline-block">
+        {label}
+      </Link>
     </div>
   );
 }

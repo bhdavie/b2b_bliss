@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/merchant/Sidebar";
-import { ConnectionsProvider } from "@/components/merchant/ConnectionsContext";
 import { fetchMerchantSession } from "@/lib/auth";
 
 export default async function AuthenticatedLayout({
@@ -12,18 +11,15 @@ export default async function AuthenticatedLayout({
   if (!session) {
     redirect("/login");
   }
-  if (!session.onboardingComplete) {
-    redirect("/onboarding");
-  }
+  // Incomplete properties are NOT bounced out: they land on the dashboard and
+  // see a setup checklist (rendered on /home) until they go live.
 
   return (
-    <ConnectionsProvider>
-      <div className="min-h-screen bg-white font-body">
-        <Sidebar email={session.email} />
-        <main className="md:pl-60">
-          <div className="max-w-4xl mx-auto px-6 py-8">{children}</div>
-        </main>
-      </div>
-    </ConnectionsProvider>
+    <div className="min-h-screen bg-white font-body">
+      <Sidebar email={session.email} />
+      <main className="md:pl-60">
+        <div className="max-w-4xl mx-auto px-6 py-8">{children}</div>
+      </main>
+    </div>
   );
 }

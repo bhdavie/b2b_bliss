@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { ConnectionGlance } from "@/components/merchant/ConnectionGlance";
+import { OverviewConnections } from "@/components/merchant/OverviewConnections";
+import { OnboardingChecklist } from "@/components/merchant/OnboardingChecklist";
 import {
   fetchAttentionPlansServer,
   fetchBookingsServer,
   fetchMerchantSession,
+  fetchOnboardingServer,
 } from "@/lib/auth";
 import { formatCents, formatScheduleDate } from "@/lib/eligibility";
 import type { Booking } from "@/lib/api";
@@ -11,14 +13,16 @@ import type { Booking } from "@/lib/api";
 export default async function HomePage() {
   const session = await fetchMerchantSession();
   if (!session) return null;
-  const [list, attention] = await Promise.all([
+  const [list, attention, onboarding] = await Promise.all([
     fetchBookingsServer(),
     fetchAttentionPlansServer(),
+    fetchOnboardingServer(),
   ]);
   const bookings = list?.bookings ?? [];
   const recent = bookings.slice(0, 4);
   const bookingsTotal = list?.total ?? bookings.length;
   const needsAttention = attention?.plans?.length ?? 0;
+  const showChecklist = onboarding != null && !onboarding.complete;
 
   return (
     <>
@@ -28,6 +32,12 @@ export default async function HomePage() {
           A quick look at {session.businessName || "your property"} today.
         </p>
       </header>
+
+      {showChecklist ? (
+        <div className="mt-8">
+          <OnboardingChecklist status={onboarding} />
+        </div>
+      ) : null}
 
       <div className="mt-8 grid gap-10 lg:grid-cols-[1.5fr_1fr]">
         <section>
@@ -63,7 +73,12 @@ export default async function HomePage() {
           <section>
             <SectionLabel>Connections</SectionLabel>
             <div className="mt-3">
-              <ConnectionGlance />
+              <OverviewConnections
+                pmsType={session.pmsType}
+                onboardingState={session.onboardingState}
+                mews={onboarding?.mews ?? null}
+                stripeConnectStatus={session.stripeConnectStatus}
+              />
             </div>
           </section>
 

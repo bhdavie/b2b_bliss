@@ -14,6 +14,8 @@ public record MerchantView(
         String stripeConnectStatus,
         String status,
         boolean onboardingComplete,
+        String onboardingState,
+        String pmsType,
         Instant emailVerifiedAt
 ) {
     public static MerchantView from(Merchant m) {
@@ -35,6 +37,8 @@ public record MerchantView(
                 m.stripeConnectStatus(),
                 m.status().wire(),
                 m.onboardingComplete(),
+                m.onboardingState().wire(),
+                m.pmsType().wire(),
                 m.emailVerifiedAt()
         );
     }

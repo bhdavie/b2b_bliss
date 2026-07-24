@@ -11,6 +11,7 @@ import com.bliss.b2b.payments.PaymentDuePolicy;
 import com.bliss.b2b.payments.PlanFrequency;
 import com.bliss.b2b.payments.RefundPolicy;
 import com.bliss.b2b.service.MerchantPlanRulesService;
+import com.bliss.b2b.service.PropertyOnboardingService;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.dropwizard.auth.Auth;
 import jakarta.ws.rs.Consumes;
@@ -38,9 +39,12 @@ public class PlanRulesResource {
     private static final int MAX_DISCOUNT_BASIS_POINTS = 5_000;
 
     private final MerchantPlanRulesService service;
+    private final PropertyOnboardingService onboardingService;
 
-    public PlanRulesResource(MerchantPlanRulesService service) {
+    public PlanRulesResource(
+            MerchantPlanRulesService service, PropertyOnboardingService onboardingService) {
         this.service = service;
+        this.onboardingService = onboardingService;
     }
 
     @GET
@@ -270,6 +274,9 @@ public class PlanRulesResource {
                 afterRetries,
                 discountBasisPoints);
         service.save(principal.merchant().id(), rules);
+        // Saving policies satisfies the POLICY_SET onboarding step (no-op unless
+        // the property is exactly at PMS_CONNECTED).
+        onboardingService.markPolicySet(principal.merchant().id());
         return Response.ok(PlanRulesView.from(rules)).build();
     }
 

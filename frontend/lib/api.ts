@@ -14,6 +14,15 @@ export type Address = {
   country: string | null;
 };
 
+export type PmsType = "stripe" | "mews" | "cloudbeds";
+
+export type OnboardingStateWire =
+  | "created"
+  | "pms_selected"
+  | "pms_connected"
+  | "policy_set"
+  | "active";
+
 export type MerchantView = {
   id: string;
   email: string;
@@ -25,6 +34,8 @@ export type MerchantView = {
   stripeConnectStatus: string | null;
   status: string;
   onboardingComplete: boolean;
+  onboardingState: OnboardingStateWire;
+  pmsType: PmsType;
   emailVerifiedAt: string | null;
 };
 
@@ -109,6 +120,97 @@ export async function updateMerchant(
     body: JSON.stringify(payload),
   });
   return unwrap<MerchantView>(res);
+}
+
+// --- Property onboarding (PMS selection + Mews connection) ---
+
+export type OnboardingStep = { key: string; done: boolean };
+
+export type OnboardingMews = {
+  connected: boolean;
+  enterpriseName: string | null;
+  currency: string | null;
+};
+
+export type OnboardingStatus = {
+  onboardingState: OnboardingStateWire;
+  pmsType: PmsType;
+  complete: boolean;
+  mews: OnboardingMews | null;
+  steps: OnboardingStep[];
+};
+
+export async function fetchOnboardingStatus(): Promise<OnboardingStatus> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/onboarding`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  return unwrap<OnboardingStatus>(res);
+}
+
+export async function selectPms(pmsType: PmsType): Promise<OnboardingStatus> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/onboarding/pms`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pmsType }),
+  });
+  return unwrap<OnboardingStatus>(res);
+}
+
+export type MewsConnectPayload = {
+  platformUrl?: string;
+  clientToken: string;
+  accessToken: string;
+};
+
+export type MewsConnectResult = { enterpriseName: string; currency: string };
+
+/**
+ * Validates and stores the property's Mews Connector tokens. On a failed
+ * validation the backend returns 400 with `{error, message}`; we surface the
+ * message so the form can show why it failed.
+ */
+export async function connectMews(
+  payload: MewsConnectPayload,
+): Promise<MewsConnectResult> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/merchants/me/onboarding/pms/mews/connect`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!res.ok) {
+    let message = `Could not connect (${res.status}).`;
+    try {
+      const body = (await res.json()) as { message?: string; error?: string };
+      message = body.message ?? body.error ?? message;
+    } catch {
+      /* keep default */
+    }
+    throw new Error(message);
+  }
+  return (await res.json()) as MewsConnectResult;
+}
+
+export async function activateOnboarding(): Promise<OnboardingStatus> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/merchants/me/onboarding/activate`,
+    { method: "POST", credentials: "include" },
+  );
+  return unwrap<OnboardingStatus>(res);
+}
+
+/** Clears the stored Mews connection and reverts onboarding to pms_selected. */
+export async function disconnectMews(): Promise<OnboardingStatus> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/merchants/me/onboarding/pms/mews/disconnect`,
+    { method: "POST", credentials: "include" },
+  );
+  return unwrap<OnboardingStatus>(res);
 }
 
 export type StripeStatus = {

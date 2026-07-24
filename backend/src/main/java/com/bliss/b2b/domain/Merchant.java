@@ -19,12 +19,19 @@ public record Merchant(
         String stripeConnectAccountId,
         String stripeConnectStatus,
         MerchantStatus status,
+        PmsType pmsType,
+        OnboardingState onboardingState,
         Instant emailVerifiedAt,
         Instant createdAt,
         Instant updatedAt
 ) {
+    /**
+     * Setup is complete once the property reaches {@link OnboardingState#ACTIVE}.
+     * (Previously derived from business profile fields; onboarding state is now
+     * the source of truth, and pre-existing properties were backfilled to
+     * active in V17 so they are unaffected.)
+     */
     public boolean onboardingComplete() {
-        return businessName != null && !businessName.isBlank()
-                && businessType != null && !businessType.isBlank();
+        return onboardingState == OnboardingState.ACTIVE;
     }
 }

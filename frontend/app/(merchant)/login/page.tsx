@@ -38,8 +38,10 @@ export default function LoginPage() {
       if (mode === "demo") {
         // Demo sign-in: the password is decorative and not validated.
         // devLogin establishes the merchant session so the dashboard loads.
-        const merchant = await devLogin(email);
-        router.push(merchant.onboardingComplete ? "/home" : "/onboarding");
+        await devLogin(email);
+        // Always land on the dashboard; incomplete properties see the setup
+        // checklist there until they go live.
+        router.push("/home");
         router.refresh();
         return;
       }

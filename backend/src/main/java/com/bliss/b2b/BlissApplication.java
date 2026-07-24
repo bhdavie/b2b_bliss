@@ -7,6 +7,7 @@ import com.bliss.b2b.api.HelloResource;
 import com.bliss.b2b.api.MerchantsResource;
 import com.bliss.b2b.api.MewsController;
 import com.bliss.b2b.api.PlanRulesResource;
+import com.bliss.b2b.api.PropertyOnboardingResource;
 import com.bliss.b2b.api.PlansResource;
 import com.bliss.b2b.api.PublicBookingsResource;
 import com.bliss.b2b.api.PublicAccountResource;
@@ -42,6 +43,7 @@ import com.bliss.b2b.service.CancellationService;
 import com.bliss.b2b.service.MagicLinkService;
 import com.bliss.b2b.service.MewsSyncService;
 import com.bliss.b2b.service.MerchantPlanRulesService;
+import com.bliss.b2b.service.PropertyOnboardingService;
 import com.bliss.b2b.service.CustomerAuthService;
 import com.bliss.b2b.service.PlanCreationService;
 import com.bliss.b2b.service.PlanPortalService;
@@ -150,6 +152,14 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 paymentPlanDao, paymentScheduleDao, bookingDao, planRulesService);
         PlanPortalService planPortalService = new PlanPortalService(
                 jdbi, stripePaymentsService, cancellationService, clock);
+        // Property onboarding + per-property Mews connection. The factory both
+        // validates connections and resolves each property's charge credentials.
+        com.bliss.b2b.persistence.MerchantMewsConnectionDao mewsConnectionDao =
+                jdbi.onDemand(com.bliss.b2b.persistence.MerchantMewsConnectionDao.class);
+        com.bliss.b2b.integration.pms.MewsAdapterFactory mewsAdapterFactory =
+                new com.bliss.b2b.integration.pms.MewsAdapterFactory(jdbi);
+        PropertyOnboardingService onboardingService = new PropertyOnboardingService(
+                merchantDao, mewsConnectionDao, mewsAdapterFactory, clock);
         com.bliss.b2b.persistence.CustomerDao customerDao =
                 jdbi.onDemand(com.bliss.b2b.persistence.CustomerDao.class);
 
@@ -212,7 +222,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 planPortalService, stripePaymentsService));
         environment.jersey().register(new PublicAccountResource(
                 customerAuthService, paymentPlanDao, customerDao, clock, cookieOptions));
-        environment.jersey().register(new PlanRulesResource(planRulesService));
+        environment.jersey().register(new PlanRulesResource(planRulesService, onboardingService));
+        environment.jersey().register(new PropertyOnboardingResource(onboardingService));
         environment.jersey().register(new PlansResource(
                 paymentPlanDao, paymentScheduleDao, bookingDao, cancellationService));
         environment.jersey().register(new DevPlansResource(

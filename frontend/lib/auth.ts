@@ -8,6 +8,7 @@ import {
   type Booking,
   type BookingListResponse,
   type MerchantView,
+  type OnboardingStatus,
   type PlanDetail,
   type PlanRules,
   type StripeStatus,
@@ -34,6 +35,20 @@ export async function fetchMerchantSession(): Promise<MerchantView | null> {
     throw new Error(`fetchMerchantSession failed: ${res.status}`);
   }
   return (await res.json()) as MerchantView;
+}
+
+export async function fetchOnboardingServer(): Promise<OnboardingStatus | null> {
+  const headers = await sessionHeader();
+  if (!headers) return null;
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/onboarding`, {
+    headers,
+    cache: "no-store",
+  });
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    throw new Error(`fetchOnboardingServer failed: ${res.status}`);
+  }
+  return (await res.json()) as OnboardingStatus;
 }
 
 export async function fetchStripeStatusServer(): Promise<StripeStatus | null> {

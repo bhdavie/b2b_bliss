@@ -74,4 +74,18 @@ public interface MerchantDao {
             WHERE id = :id
             """)
     int updateStripeConnectStatus(@Bind("id") UUID id, @Bind("status") String status);
+
+    @SqlUpdate("""
+            UPDATE merchants
+            SET pms_type = :pmsType
+            WHERE id = :id
+            """)
+    int updatePmsType(@Bind("id") UUID id, @Bind("pmsType") String pmsType);
+
+    @SqlUpdate("""
+            UPDATE merchants
+            SET onboarding_state = :state
+            WHERE id = :id
+            """)
+    int updateOnboardingState(@Bind("id") UUID id, @Bind("state") String state);
 }
