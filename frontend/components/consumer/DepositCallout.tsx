@@ -13,7 +13,7 @@ export function DepositCallout({
 
   return (
     <section
-      className="mt-6 rounded-md border-2 border-brand-purple/10 bg-brand-purple text-white px-4 py-4"
+      className="mt-6 rounded-none border-2 border-brand-purple/10 bg-brand-purple text-white px-4 py-4"
       aria-label="Deposit required today"
     >
       <div className="flex items-baseline justify-between gap-3">

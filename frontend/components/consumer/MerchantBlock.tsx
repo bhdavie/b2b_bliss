@@ -10,14 +10,14 @@ export function MerchantBlock({
   return (
     <section className="flex items-center gap-3">
       <div
-        className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-brand-lavender text-[13px] font-medium text-white"
+        className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-none bg-brand-lavender text-[13px] font-medium text-white"
         aria-hidden="true"
       >
         {initials}
       </div>
       <div className="min-w-0">
-        <div className="text-[12px] text-ink-muted">Reserving with</div>
-        <div className="truncate text-[14px] font-medium text-ink">
+        <div className="text-[12px] text-brand-navy/60">Reserving with</div>
+        <div className="truncate text-[14px] font-medium text-brand-navy">
           {merchant.businessName}
         </div>
       </div>

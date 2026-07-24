@@ -166,13 +166,13 @@ export function MewsCardSection({
       {phase === "form" ? (
         <form onSubmit={handleStart} className="space-y-4">
           <label className="block">
-            <span className="text-[12px] text-ink-muted">Email</span>
+            <span className="text-[12px] text-brand-navy/60">Email</span>
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 w-full rounded-md border border-brand-neutral bg-white px-3 py-2.5 text-[15px] placeholder:text-ink-muted focus:border-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-lavender/60"
+              className="mt-1.5 w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 text-[15px] placeholder:text-brand-navy/40 focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/40"
               placeholder="you@example.com"
               autoComplete="email"
             />
@@ -182,11 +182,11 @@ export function MewsCardSection({
               {error}
             </div>
           ) : null}
-          <p className="text-[11px] leading-relaxed text-ink-muted">{disclosure}</p>
+          <p className="text-[11px] leading-relaxed text-brand-navy/60">{disclosure}</p>
           <div className="flex flex-col gap-2 pt-1">
             <button
               type="submit"
-              className="w-full rounded-md bg-brand-purple px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-purple-dark disabled:opacity-60"
+              className="w-full rounded-none bg-[#C9AFFA] px-6 py-3.5 text-[15px] font-medium text-white transition hover:bg-[#BBA0F4] disabled:opacity-60"
             >
               {ctaLabel}
             </button>
@@ -199,20 +199,20 @@ export function MewsCardSection({
         <>
           <div
             id={CONTAINER_ID}
-            className="min-h-[180px] rounded-md border border-brand-neutral bg-white px-3 py-3.5"
+            className="min-h-[180px] rounded-none border border-brand-neutral bg-white px-3 py-3.5"
           />
           {phase === "loading" ? (
-            <p className="text-[12px] text-ink-muted">Loading the secure card form...</p>
+            <p className="text-[12px] text-brand-navy/60">Loading the secure card form...</p>
           ) : null}
           {phase === "processing" ? (
-            <p className="text-[12px] text-ink-muted">Confirming your card...</p>
+            <p className="text-[12px] text-brand-navy/60">Confirming your card...</p>
           ) : null}
           {error ? (
             <div className="text-[12px] text-red-600" role="alert">
               {error}
             </div>
           ) : null}
-          <p className="text-[11px] leading-relaxed text-ink-muted">{disclosure}</p>
+          <p className="text-[11px] leading-relaxed text-brand-navy/60">{disclosure}</p>
           <BackRow onCancel={onCancel} disabled={busy} returnUrl={returnUrl} merchantName={merchantName} />
         </>
       ) : null}
@@ -232,8 +232,8 @@ function BackRow({
   merchantName?: string;
 }) {
   return (
-    <div className="flex items-center justify-center gap-3 text-[12px] text-ink-muted">
-      <button type="button" onClick={onCancel} disabled={disabled} className="hover:underline disabled:opacity-60">
+    <div className="flex items-center justify-center gap-3 text-[12px] text-brand-navy/60">
+      <button type="button" onClick={onCancel} disabled={disabled} className="text-brand-navy/60 hover:text-brand-purple hover:underline disabled:opacity-60">
         Back to plan options
       </button>
       {returnUrl && merchantName ? (
@@ -250,7 +250,7 @@ function BackRow({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-ink-muted">
+    <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-brand-navy/60">
       {children}
     </div>
   );

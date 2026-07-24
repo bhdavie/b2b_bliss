@@ -96,20 +96,20 @@ export function StripeCardSection({
     <form onSubmit={handleSubmit} className="mt-6 space-y-4">
       <SectionLabel>Payment method</SectionLabel>
       <label className="block">
-        <span className="text-[12px] text-ink-muted">Email</span>
+        <span className="text-[12px] text-brand-navy/60">Email</span>
         <input
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1.5 w-full rounded-md border border-brand-neutral bg-white px-3 py-2.5 text-[15px] placeholder:text-ink-muted focus:border-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-lavender/60"
+          className="mt-1.5 w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 text-[15px] placeholder:text-brand-navy/40 focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/40"
           placeholder="you@example.com"
           autoComplete="email"
         />
       </label>
       <label className="block">
-        <span className="text-[12px] text-ink-muted">Card</span>
-        <div className="mt-1.5 rounded-md border border-brand-neutral bg-white px-3 py-3.5 focus-within:border-brand-navy focus-within:ring-2 focus-within:ring-brand-lavender/60">
+        <span className="text-[12px] text-brand-navy/60">Card</span>
+        <div className="mt-1.5 rounded-none border border-brand-neutral bg-white px-3 py-3.5 focus-within:border-brand-purple focus-within:ring-2 focus-within:ring-brand-lavender/40">
           <CardElement
             options={CARD_OPTIONS}
             onChange={(event) => {
@@ -126,17 +126,17 @@ export function StripeCardSection({
         </div>
       ) : null}
 
-      <p className="text-[11px] leading-relaxed text-ink-muted">{disclosure}</p>
+      <p className="text-[11px] leading-relaxed text-brand-navy/60">{disclosure}</p>
 
       <div className="flex flex-col gap-2 pt-1">
         <button
           type="submit"
           disabled={disabled}
-          className="w-full rounded-md bg-brand-purple px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-purple-dark disabled:opacity-60"
+          className="w-full rounded-none bg-[#C9AFFA] px-6 py-3.5 text-[15px] font-medium text-white transition hover:bg-[#BBA0F4] disabled:opacity-60"
         >
           {submitting || busy ? "Setting up plan..." : ctaLabel}
         </button>
-        <div className="flex items-center justify-center gap-3 text-[12px] text-ink-muted">
+        <div className="flex items-center justify-center gap-3 text-[12px] text-brand-navy/60">
           <button
             type="button"
             onClick={onCancel}
@@ -161,7 +161,7 @@ export function StripeCardSection({
 
 export function StripeNotConfiguredCard() {
   return (
-    <section className="mt-6 rounded-md border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-900">
+    <section className="mt-6 rounded-none border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-900">
       <div className="font-medium">Stripe is not configured</div>
       <p className="mt-1 text-[12px] leading-relaxed text-amber-800">
         The merchant has not finished wiring payments yet. Reach out to them
@@ -173,7 +173,7 @@ export function StripeNotConfiguredCard() {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-ink-muted">
+    <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-brand-navy/60">
       {children}
     </div>
   );

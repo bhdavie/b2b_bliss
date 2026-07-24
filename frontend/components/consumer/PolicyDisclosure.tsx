@@ -17,11 +17,11 @@ export function PolicyDisclosure({ policies }: { policies: PublicPolicies }) {
   const lateFeeLine = lateFeeCopy(policies);
 
   return (
-    <section className="mt-6 rounded-md border border-brand-neutral bg-white p-4">
-      <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-ink-muted">
+    <section className="mt-6 rounded-none border border-brand-neutral bg-white p-4">
+      <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-brand-navy/60">
         Cancellation policy
       </div>
-      <ul className="mt-3 space-y-2 text-[13px] text-ink">
+      <ul className="mt-3 space-y-2 text-[13px] text-brand-navy">
         <PolicyLine>{refundLine}</PolicyLine>
         {cancelFeeLine ? <PolicyLine>{cancelFeeLine}</PolicyLine> : null}
         <PolicyLine>{dueLine}</PolicyLine>
@@ -43,11 +43,11 @@ function PolicyLine({
     <li className="flex items-start gap-2.5">
       <span
         className={`mt-1.5 inline-block h-1 w-1 flex-none rounded-full ${
-          subtle ? "bg-ink-muted" : "bg-brand-purple"
+          subtle ? "bg-brand-navy/40" : "bg-brand-purple"
         }`}
         aria-hidden="true"
       />
-      <span className={subtle ? "text-ink-muted text-[12px]" : ""}>{children}</span>
+      <span className={subtle ? "text-brand-navy/60 text-[12px]" : ""}>{children}</span>
     </li>
   );
 }

@@ -1,18 +1,20 @@
+"use client";
+
+import { useState } from "react";
 import {
   formatDollarsCompact,
-  formatScheduleDatePill,
+  formatScheduleDateLong,
   type PublicPlanOption,
 } from "@/lib/publicApi";
 
-type Pill = {
-  kind: "deposit" | "installment";
-  dateLabel: string;
+type Row = {
+  label: string;
   amount: number;
-  isFinal: boolean;
 };
 
 /**
- * Renders the horizontal schedule strip (DEPOSIT / JUN 1 / JUL 1 / ...).
+ * Condensed dated schedule (funnel treatment): the first payment is shown, the
+ * rest sit behind a "see all" expander instead of a flat pill row.
  *
  * Amounts are passed in pre-redistributed: `todayCents` from
  * deriveDisplayAmounts, `perPaymentCents`/`finalPaymentCents` from
@@ -30,97 +32,57 @@ export function ScheduleVisualizer({
   perPaymentCents: number;
   finalPaymentCents: number;
 }) {
-  const installmentPills: Pill[] = option.dueDates.map((d, i) => {
+  const [expanded, setExpanded] = useState(false);
+
+  const installmentRows: Row[] = option.dueDates.map((d, i) => {
     const isFinal = i === option.dueDates.length - 1;
     return {
-      kind: "installment",
-      dateLabel: formatScheduleDatePill(d),
+      label: formatScheduleDateLong(d),
       amount: isFinal ? finalPaymentCents : perPaymentCents,
-      isFinal,
     };
   });
 
-  const pills: Pill[] = todayCents > 0
-    ? [
-        {
-          kind: "deposit",
-          dateLabel: "TODAY",
-          amount: todayCents,
-          isFinal: false,
-        },
-        ...installmentPills,
-      ]
-    : installmentPills;
+  const rows: Row[] =
+    todayCents > 0
+      ? [{ label: "Today", amount: todayCents }, ...installmentRows]
+      : installmentRows;
 
-  const wrapToTwoRows = pills.length > 8;
-  const finalInstallment = installmentPills[installmentPills.length - 1];
-  const firstInstallment = installmentPills[0];
-  const showFinalNote =
-    finalInstallment != null
-    && firstInstallment != null
-    && finalInstallment.amount !== firstInstallment.amount;
+  const visible = expanded ? rows : rows.slice(0, 1);
 
   return (
     <section className="mt-6">
-      <div className="flex items-baseline justify-between">
-        <SectionLabel>Your schedule</SectionLabel>
-        {showFinalNote ? (
-          <span className="text-[10px] text-ink-muted">
-            Final payment: {formatDollarsCompact(finalInstallment.amount)}
-          </span>
-        ) : null}
-      </div>
-      <div
-        className={`mt-2.5 flex gap-[5px] ${wrapToTwoRows ? "flex-wrap" : ""}`}
-        role="list"
-        aria-label="Payment schedule"
-      >
-        {pills.map((pill, i) => (
-          <PillView
-            key={`${pill.kind}-${pill.dateLabel}-${i}`}
-            pill={pill}
-            grow={!wrapToTwoRows}
-          />
+      <SectionLabel>Your schedule</SectionLabel>
+      <div className="mt-2 space-y-1.5" role="list" aria-label="Payment schedule">
+        {visible.map((r, i) => (
+          <div
+            key={`${r.label}-${i}`}
+            role="listitem"
+            className="flex items-center justify-between rounded-none bg-brand-lavender/20 px-3 py-2 text-sm"
+          >
+            <span className="text-brand-navy/80">{r.label}</span>
+            <span className="font-medium tabular-nums text-brand-navy">
+              {formatDollarsCompact(r.amount)}
+            </span>
+          </div>
         ))}
       </div>
+      {rows.length > 1 ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="mt-2 text-xs font-medium text-brand-purple hover:underline"
+        >
+          {expanded ? "Hide schedule" : `See all ${rows.length} payments`}
+        </button>
+      ) : null}
     </section>
-  );
-}
-
-function PillView({ pill, grow }: { pill: Pill; grow: boolean }) {
-  if (pill.kind === "deposit") {
-    return (
-      <div
-        role="listitem"
-        className={`min-w-0 ${grow ? "flex-1" : "min-w-[58px]"} rounded-sm border border-brand-purple/30 bg-brand-purple px-1 py-[9px] text-center text-white`}
-      >
-        <div className="text-[9px] font-medium uppercase tracking-[0.5px] text-white/80">
-          Deposit
-        </div>
-        <div className="mt-0.5 text-[11px] font-medium tabular-nums">
-          {formatDollarsCompact(pill.amount)}
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div
-      role="listitem"
-      className={`min-w-0 ${grow ? "flex-1" : "min-w-[58px]"} rounded-sm bg-brand-lavender px-1 py-[9px] text-center`}
-    >
-      <div className="text-[9px] font-medium uppercase tracking-[0.5px] text-white">
-        {pill.dateLabel}
-      </div>
-      <div className="mt-0.5 text-[11px] font-medium tabular-nums text-white">
-        {formatDollarsCompact(pill.amount)}
-      </div>
-    </div>
   );
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-ink-muted">
+    <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-brand-navy/60">
       {children}
     </div>
   );

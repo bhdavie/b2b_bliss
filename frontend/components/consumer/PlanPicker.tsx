@@ -62,15 +62,15 @@ function PlanCard({
       type="button"
       onClick={onSelect}
       aria-pressed={visuallySelected}
-      className={`relative w-full rounded-md px-4 py-3.5 text-left transition-colors ${
+      className={`relative w-full rounded-none px-4 py-3.5 text-left transition-colors ${
         visuallySelected
-          ? "border-2 border-brand-purple bg-brand-lavender/20"
+          ? "border-2 border-[#C9AFFA] bg-brand-lavender/20"
           : "border-[0.5px] border-brand-neutral bg-white hover:border-brand-dusty"
       }`}
     >
       {option.recommended ? (
         <span
-          className="absolute -top-[9px] left-[14px] rounded-[10px] bg-brand-lavender px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.3px] text-white"
+          className="absolute -top-[9px] left-[14px] rounded-none bg-brand-lavender px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.3px] text-white"
           aria-label="Recommended option"
         >
           Recommended
@@ -80,25 +80,25 @@ function PlanCard({
         <div>
           <div
             className={`text-[14px] font-medium ${
-              visuallySelected ? "text-brand-purple" : "text-ink"
+              visuallySelected ? "text-brand-purple" : "text-brand-navy"
             }`}
           >
             {option.frequency === "biweekly" ? "Every 2 weeks" : "Monthly"}
           </div>
-          <div className="mt-0.5 text-[12px] text-ink-muted">
+          <div className="mt-0.5 text-[12px] text-brand-navy/60">
             {option.numPayments} payments through{" "}
             {formatScheduleDateShort(finalDate)}
           </div>
         </div>
         <div className="flex-none text-right">
           <div
-            className={`text-[16px] font-medium tabular-nums ${
-              visuallySelected ? "text-brand-purple" : "text-ink"
+            className={`text-[16px] font-semibold tabular-nums ${
+              visuallySelected ? "text-brand-purple" : "text-brand-navy"
             }`}
           >
             {formatDollarsCompact(perPaymentCents)}
           </div>
-          <div className="text-[11px] text-ink-muted">/payment</div>
+          <div className="text-[11px] text-brand-navy/60">/payment</div>
         </div>
       </div>
     </button>
@@ -107,7 +107,7 @@ function PlanCard({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-ink-muted">
+    <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-brand-navy/60">
       {children}
     </div>
   );

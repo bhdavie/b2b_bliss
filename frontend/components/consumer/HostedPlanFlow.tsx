@@ -68,7 +68,7 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
   });
 
   return (
-    <>
+    <div className="font-sans">
       <MerchantBlock merchant={booking.merchant} />
       <ServiceCard
         service={booking.service}
@@ -104,7 +104,7 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
           <button
             type="button"
             onClick={() => setStep("card")}
-            className="mt-6 w-full rounded-md bg-brand-purple px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-purple-dark disabled:opacity-60"
+            className="mt-6 w-full rounded-none bg-[#C9AFFA] px-6 py-3.5 text-[15px] font-medium text-white transition hover:bg-[#BBA0F4] disabled:opacity-60"
           >
             Book now
           </button>
@@ -162,7 +162,7 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
           />
         )
       ) : null}
-    </>
+    </div>
   );
 
   function handleDemoSubmit() {
