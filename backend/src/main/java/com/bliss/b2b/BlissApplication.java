@@ -2,6 +2,7 @@ package com.bliss.b2b;
 
 import com.bliss.b2b.api.AuthResource;
 import com.bliss.b2b.api.BookingsResource;
+import com.bliss.b2b.api.DemoResetResource;
 import com.bliss.b2b.api.DevPlansResource;
 import com.bliss.b2b.api.HelloResource;
 import com.bliss.b2b.api.MerchantsResource;
@@ -43,6 +44,7 @@ import com.bliss.b2b.service.CancellationService;
 import com.bliss.b2b.service.MagicLinkService;
 import com.bliss.b2b.service.MewsSyncService;
 import com.bliss.b2b.service.MerchantPlanRulesService;
+import com.bliss.b2b.service.DemoResetService;
 import com.bliss.b2b.service.PropertyOnboardingService;
 import com.bliss.b2b.service.CustomerAuthService;
 import com.bliss.b2b.service.PlanCreationService;
@@ -136,7 +138,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
 
         EmailService emailService = EmailServiceFactory.build(config.getEmail());
         MagicLinkService magicLinkService = new MagicLinkService(
-                merchantDao, tokenDao, emailService, config.getApp(), magicLinkTtl);
+                merchantDao, tokenDao, emailService, config.getApp(), magicLinkTtl,
+                config.isDemoLogin());
         StripeConnectService stripeService = new StripeConnectService(config.getStripe());
         StripePaymentsService stripePaymentsService = new StripePaymentsService(config.getStripe());
         MewsApiClient mewsApiClient = new MewsApiClient(MewsConfig.load());
@@ -229,6 +232,11 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new DevPlansResource(
                 devEndpointsEnabled, paymentPlanDao, paymentScheduleDao, planRulesDao,
                 bookingDao, cancellationService));
+
+        // Demo reset kill switch, gated strictly on the demo flag (BLISS_DEMO_LOGIN):
+        // 404 in every environment when off, so it cannot run outside demo mode.
+        DemoResetService demoResetService = new DemoResetService(jdbi);
+        environment.jersey().register(new DemoResetResource(config.isDemoLogin(), demoResetService));
 
         environment.jersey().register(new AuthDynamicFeature(
                 new JwtCookieAuthFilter.Builder()

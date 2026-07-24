@@ -29,19 +29,27 @@ public class MagicLinkService {
     private final EmailService emailService;
     private final AppConfig appConfig;
     private final Duration linkTtl;
+    /**
+     * When true, merchants created here are flagged {@code is_demo=true} so the
+     * dev reset kill switch can purge them. Set from {@code BLISS_DEMO_LOGIN}:
+     * while the instance is in demo mode, every new signup is a demo account.
+     */
+    private final boolean demoSignups;
 
     public MagicLinkService(
             MerchantDao merchantDao,
             MagicLinkTokenDao tokenDao,
             EmailService emailService,
             AppConfig appConfig,
-            Duration linkTtl
+            Duration linkTtl,
+            boolean demoSignups
     ) {
         this.merchantDao = merchantDao;
         this.tokenDao = tokenDao;
         this.emailService = emailService;
         this.appConfig = appConfig;
         this.linkTtl = linkTtl;
+        this.demoSignups = demoSignups;
     }
 
     /**
@@ -52,8 +60,8 @@ public class MagicLinkService {
         String normalized = email.trim().toLowerCase();
         Merchant merchant = merchantDao.findByEmail(normalized).orElseGet(() -> {
             String slug = generateSlug();
-            merchantDao.insertPending(slug, normalized);
-            log.info("Created merchant slug={} email={}", slug, normalized);
+            merchantDao.insertPending(slug, normalized, demoSignups);
+            log.info("Created merchant slug={} email={} demo={}", slug, normalized, demoSignups);
             return merchantDao.findByEmail(normalized).orElseThrow();
         });
         String rawToken = randomToken();
@@ -89,8 +97,8 @@ public class MagicLinkService {
         String normalized = email.trim().toLowerCase();
         Merchant merchant = merchantDao.findByEmail(normalized).orElseGet(() -> {
             String slug = generateSlug();
-            merchantDao.insertPending(slug, normalized);
-            log.info("Dev-login created merchant slug={} email={}", slug, normalized);
+            merchantDao.insertPending(slug, normalized, demoSignups);
+            log.info("Dev-login created merchant slug={} email={} demo={}", slug, normalized, demoSignups);
             return merchantDao.findByEmail(normalized).orElseThrow();
         });
         if (merchant.emailVerifiedAt() == null) {

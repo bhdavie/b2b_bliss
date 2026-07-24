@@ -22,10 +22,13 @@ public interface MerchantDao {
     Optional<Merchant> findBySlug(@Bind("slug") String slug);
 
     @SqlUpdate("""
-            INSERT INTO merchants (slug, email, status)
-            VALUES (:slug, :email, 'pending_verification')
+            INSERT INTO merchants (slug, email, status, is_demo)
+            VALUES (:slug, :email, 'pending_verification', :isDemo)
             """)
-    void insertPending(@Bind("slug") String slug, @Bind("email") String email);
+    void insertPending(
+            @Bind("slug") String slug,
+            @Bind("email") String email,
+            @Bind("isDemo") boolean isDemo);
 
     @SqlUpdate("""
             UPDATE merchants
