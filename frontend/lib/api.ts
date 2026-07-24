@@ -500,6 +500,7 @@ export async function updatePlanRules(payload: PlanRules): Promise<PlanRules> {
 }
 
 export type PaymentPlanStatus =
+  | "pending_card"
   | "active"
   | "payment_failed_in_retry"
   | "payment_failed_exhausted"

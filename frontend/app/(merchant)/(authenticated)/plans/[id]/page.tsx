@@ -5,6 +5,7 @@ import { fetchPlanServer } from "@/lib/auth";
 import type { PaymentPlanStatus } from "@/lib/api";
 
 const STATUS_LABEL: Record<PaymentPlanStatus, string> = {
+  pending_card: "Awaiting card",
   active: "Active",
   payment_failed_in_retry: "Payment failed · retrying",
   payment_failed_exhausted: "Retries exhausted",
@@ -15,6 +16,7 @@ const STATUS_LABEL: Record<PaymentPlanStatus, string> = {
 };
 
 const STATUS_PILL: Record<PaymentPlanStatus, string> = {
+  pending_card: "bg-brand-cream/60 text-ink-muted",
   active: "bg-emerald-100 text-emerald-700",
   payment_failed_in_retry: "bg-amber-100 text-amber-800",
   payment_failed_exhausted: "bg-red-100 text-red-700",

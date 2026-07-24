@@ -49,8 +49,6 @@ function PlanDetail({ booking, portal }: { booking: Booking; portal: PublicPlanP
   const totalDue = portal.plan.totalAmountCents + portal.processingFeeCents;
   const refunded = portal.plan.refundedAt != null;
   const displayStatus = portal.complete ? "completed" : portal.plan.status;
-  const now = new Date();
-  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   return (
     <div className="mt-6 space-y-5">
@@ -101,12 +99,11 @@ function PlanDetail({ booking, portal }: { booking: Booking; portal: PublicPlanP
       <Card title="Schedule">
         <ol className="divide-y divide-brand-neutral">
           {labelSchedule(portal.schedule).map(({ entry, label }) => {
-            const rowStatus =
-              entry.status === "canceled"
-                ? "canceled"
-                : entry.dueDate <= todayIso
-                  ? "paid"
-                  : "scheduled";
+            // Drive the pill from the row's REAL status (rail-agnostic), not the
+            // due date. A Mews installment captures asynchronously, so it can sit
+            // in "processing" on its due date; a date-only rule would mislabel
+            // that as paid. Same statuses apply to the Stripe rail.
+            const rowStatus = scheduleDisplayStatus(entry.status);
             return (
               <li key={entry.sequence} className="flex items-center justify-between gap-4 py-3 text-sm">
                 <div className="flex items-center gap-3">
@@ -114,7 +111,7 @@ function PlanDetail({ booking, portal }: { booking: Booking; portal: PublicPlanP
                   <div>
                     <div className="text-ink">{label}</div>
                     <div className="text-xs text-brand-navy/55">
-                      {rowStatus === "paid" ? "Due " : ""}
+                      {SCHEDULE_DATE_PREFIX[rowStatus]}
                       {formatScheduleDateShort(entry.dueDate)}
                     </div>
                   </div>
@@ -229,16 +226,49 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function SchedulePill({ status }: { status: string }) {
-  const cls =
-    status === "paid"
-      ? "bg-brand-purple text-white"
-      : status === "canceled"
-        ? "bg-brand-neutral/60 text-ink-muted"
-        : "border border-brand-lavender bg-white text-brand-purple";
+// Display buckets for a schedule row, derived from the real payment status of
+// the installment (both rails share this vocabulary). "retrying" folds into
+// "failed" for the pill; "processing" is its own state so an in-flight Mews
+// capture never reads as paid or scheduled.
+type ScheduleDisplayStatus = "paid" | "processing" | "failed" | "canceled" | "scheduled";
+
+function scheduleDisplayStatus(status: string): ScheduleDisplayStatus {
+  switch (status) {
+    case "paid":
+      return "paid";
+    case "processing":
+      return "processing";
+    case "failed":
+    case "retrying":
+      return "failed";
+    case "canceled":
+      return "canceled";
+    default:
+      return "scheduled";
+  }
+}
+
+const SCHEDULE_PILL: Record<ScheduleDisplayStatus, { label: string; cls: string }> = {
+  paid: { label: "Paid", cls: "bg-brand-purple text-white" },
+  processing: { label: "Processing", cls: "bg-amber-100 text-amber-800" },
+  failed: { label: "Failed", cls: "bg-red-100 text-red-700" },
+  canceled: { label: "Canceled", cls: "bg-brand-neutral/60 text-ink-muted" },
+  scheduled: { label: "Scheduled", cls: "border border-brand-lavender bg-white text-brand-purple" },
+};
+
+const SCHEDULE_DATE_PREFIX: Record<ScheduleDisplayStatus, string> = {
+  paid: "Paid ",
+  processing: "In progress · due ",
+  failed: "Failed ",
+  canceled: "Canceled ",
+  scheduled: "Due ",
+};
+
+function SchedulePill({ status }: { status: ScheduleDisplayStatus }) {
+  const { label, cls } = SCHEDULE_PILL[status];
   return (
     <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls}`}>
-      {status}
+      {label}
     </span>
   );
 }
