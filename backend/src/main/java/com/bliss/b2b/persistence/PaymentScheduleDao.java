@@ -92,6 +92,48 @@ public interface PaymentScheduleDao {
     );
 
     /**
+     * Mews-rail equivalent of {@link #markPaidNow}: marks the row paid and
+     * records the Mews {@code PaymentId} in its own column, leaving the
+     * stripe-named column null. Used when a Mews charge settles to Charged.
+     */
+    @SqlUpdate("""
+            UPDATE payment_schedule
+            SET status = 'paid',
+                mews_payment_id = :mewsPaymentId,
+                attempted_at = :now,
+                paid_at = :now
+            WHERE id = :id
+            """)
+    int markPaidMews(
+            @Bind("id") UUID id,
+            @Bind("mewsPaymentId") String mewsPaymentId,
+            @Bind("now") Instant now
+    );
+
+    /**
+     * Records a Mews charge that the PMS accepted but has not yet settled
+     * (Pending/Verifying, or a state we could not read back). The row moves to
+     * {@code processing} with the Mews {@code PaymentId} stored; it is
+     * deliberately not marked paid and its retry count is untouched. Because
+     * {@code processing} is excluded from the due-charge selection, the row is
+     * never re-charged while in flight; a later reconciliation pass settles it.
+     */
+    @SqlUpdate("""
+            UPDATE payment_schedule
+            SET status = 'processing',
+                mews_payment_id = :mewsPaymentId,
+                last_error = :note,
+                attempted_at = :attemptedAt
+            WHERE id = :id
+            """)
+    int recordMewsProcessing(
+            @Bind("id") UUID id,
+            @Bind("mewsPaymentId") String mewsPaymentId,
+            @Bind("note") String note,
+            @Bind("attemptedAt") Instant attemptedAt
+    );
+
+    /**
      * Cancel every not-yet-terminal row for a plan so no further charges fire.
      * Paid rows are left untouched (they stay part of the paid history).
      */
