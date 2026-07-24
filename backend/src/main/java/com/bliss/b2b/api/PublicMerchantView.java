@@ -53,6 +53,9 @@ public record PublicMerchantView(
     public record Stripe(
             boolean configured,
             String publishableKey,
-            boolean chargesEnabled
+            boolean chargesEnabled,
+            // Connected Standard account for direct charges (null = platform).
+            // The frontend passes it to Stripe.js as {@code stripeAccount}.
+            String connectedAccountId
     ) {}
 }

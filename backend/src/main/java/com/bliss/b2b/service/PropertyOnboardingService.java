@@ -5,12 +5,14 @@ import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.domain.MewsConnection;
 import com.bliss.b2b.domain.OnboardingState;
 import com.bliss.b2b.domain.PmsType;
+import com.bliss.b2b.domain.StripeConnection;
 import com.bliss.b2b.integration.pms.MewsAdapter;
 import com.bliss.b2b.integration.pms.MewsAdapterFactory;
 import com.bliss.b2b.integration.pms.PmsAdapterException;
 import com.bliss.b2b.integration.pms.PmsPropertyConfiguration;
 import com.bliss.b2b.persistence.MerchantDao;
 import com.bliss.b2b.persistence.MerchantMewsConnectionDao;
+import com.bliss.b2b.persistence.MerchantStripeConnectionDao;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -34,16 +36,19 @@ public class PropertyOnboardingService {
 
     private final MerchantDao merchantDao;
     private final MerchantMewsConnectionDao connectionDao;
+    private final MerchantStripeConnectionDao stripeConnectionDao;
     private final MewsAdapterFactory mewsFactory;
     private final Clock clock;
 
     public PropertyOnboardingService(
             MerchantDao merchantDao,
             MerchantMewsConnectionDao connectionDao,
+            MerchantStripeConnectionDao stripeConnectionDao,
             MewsAdapterFactory mewsFactory,
             Clock clock) {
         this.merchantDao = merchantDao;
         this.connectionDao = connectionDao;
+        this.stripeConnectionDao = stripeConnectionDao;
         this.mewsFactory = mewsFactory;
         this.clock = clock;
     }
@@ -59,12 +64,41 @@ public class PropertyOnboardingService {
                     conn == null ? null : conn.enterpriseName(),
                     conn == null ? null : conn.currency());
         }
+        StripeInfo stripe = null;
+        if (merchant.pmsType() == PmsType.STRIPE) {
+            StripeConnection conn = stripeConnectionDao.findByMerchant(merchant.id()).orElse(null);
+            stripe = new StripeInfo(
+                    conn != null && conn.isChargesEnabled(),
+                    conn == null ? null : conn.connectStatus(),
+                    conn == null ? null : conn.stripeAccountId());
+        }
         return new OnboardingStatus(
                 state.wire(),
                 merchant.pmsType().wire(),
                 state == OnboardingState.ACTIVE,
                 mews,
+                stripe,
                 steps(state));
+    }
+
+    /**
+     * Advances a Stripe-rail property PMS_SELECTED -> PMS_CONNECTED once its
+     * Standard connection can take charges. This is the Stripe equivalent of the
+     * Mews "connect" step: a Stripe-rail property routes through Connect before
+     * it can set policies. No-op if the property is not on the Stripe rail, has
+     * no charges-enabled connection, or is already further along. Idempotent.
+     */
+    public void markStripeConnected(UUID merchantId) {
+        Merchant merchant = reload(merchantId);
+        if (merchant.pmsType() != PmsType.STRIPE) {
+            return;
+        }
+        boolean chargesEnabled = stripeConnectionDao.findByMerchant(merchantId)
+                .filter(StripeConnection::isChargesEnabled)
+                .isPresent();
+        if (chargesEnabled) {
+            advanceTo(merchant, OnboardingState.PMS_CONNECTED);
+        }
     }
 
     /**
@@ -190,10 +224,14 @@ public class PropertyOnboardingService {
             String pmsType,
             boolean complete,
             MewsInfo mews,
+            StripeInfo stripe,
             List<ChecklistItem> steps) {
     }
 
     public record MewsInfo(boolean connected, String enterpriseName, String currency) {
+    }
+
+    public record StripeInfo(boolean connected, String connectStatus, String stripeAccountId) {
     }
 
     public record ChecklistItem(String key, boolean done) {

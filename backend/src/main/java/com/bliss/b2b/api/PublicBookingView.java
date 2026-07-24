@@ -75,7 +75,12 @@ public record PublicBookingView(
 
     public record Stripe(
             boolean configured,
-            String publishableKey
+            String publishableKey,
+            // Connected Standard account for direct charges. Non-null once the
+            // property finishes Connect onboarding; the frontend passes it to
+            // Stripe.js as {@code stripeAccount} so card capture and the charge
+            // land on the property's own account. Null = platform (current).
+            String connectedAccountId
     ) {}
 
     /**
@@ -108,7 +113,8 @@ public record PublicBookingView(
             EligibilityResult eligibility,
             MerchantPlanRules rules,
             boolean stripeConfigured,
-            String stripePublishableKey
+            String stripePublishableKey,
+            String connectedAccountId
     ) {
         PlanFrequency recommended = rules.resolveRecommended();
         List<Plan> options = eligibility.options().stream()
@@ -166,7 +172,10 @@ public record PublicBookingView(
                         eligibility.originalTotalAmountCents(),
                         eligibility.discountedTotalAmountCents()),
                 options,
-                new Stripe(stripeConfigured, stripeConfigured ? stripePublishableKey : null),
+                new Stripe(
+                        stripeConfigured,
+                        stripeConfigured ? stripePublishableKey : null,
+                        stripeConfigured ? connectedAccountId : null),
                 policies,
                 booking.status().wire(),
                 railOf(merchant, stripeConfigured)

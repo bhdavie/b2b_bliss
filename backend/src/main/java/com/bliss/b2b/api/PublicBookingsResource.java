@@ -2,6 +2,7 @@ package com.bliss.b2b.api;
 
 import com.bliss.b2b.domain.Booking;
 import com.bliss.b2b.domain.Merchant;
+import com.bliss.b2b.integration.StripeConnectResolver;
 import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.payments.EligibilityResult;
 import com.bliss.b2b.payments.MerchantPlanRules;
@@ -29,6 +30,7 @@ public class PublicBookingsResource {
     private final PlanEligibilityService eligibilityService;
     private final MerchantPlanRulesService planRulesService;
     private final StripePaymentsService stripeService;
+    private final StripeConnectResolver stripeConnectResolver;
     private final Clock clock;
 
     public PublicBookingsResource(
@@ -37,6 +39,7 @@ public class PublicBookingsResource {
             PlanEligibilityService eligibilityService,
             MerchantPlanRulesService planRulesService,
             StripePaymentsService stripeService,
+            StripeConnectResolver stripeConnectResolver,
             Clock clock
     ) {
         this.bookingDao = bookingDao;
@@ -44,6 +47,7 @@ public class PublicBookingsResource {
         this.eligibilityService = eligibilityService;
         this.planRulesService = planRulesService;
         this.stripeService = stripeService;
+        this.stripeConnectResolver = stripeConnectResolver;
         this.clock = clock;
     }
 
@@ -70,7 +74,8 @@ public class PublicBookingsResource {
                 LocalDate.now(clock), booking.appointmentDate(), evaluateInput, rules);
         PublicBookingView view = PublicBookingView.build(
                 merchant, booking, eligibility, rules,
-                stripeService.isConfigured(), stripeService.publishableKey());
+                stripeService.isConfigured(), stripeService.publishableKey(),
+                stripeConnectResolver.resolveOrNull(merchant.id()));
         return Response.ok(view).build();
     }
 

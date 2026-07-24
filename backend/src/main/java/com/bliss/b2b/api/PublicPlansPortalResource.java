@@ -1,5 +1,6 @@
 package com.bliss.b2b.api;
 
+import com.bliss.b2b.integration.StripeConnectResolver;
 import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.service.MewsCheckoutService;
 import com.bliss.b2b.service.MewsCheckoutService.CardConfirmResult;
@@ -40,14 +41,17 @@ public class PublicPlansPortalResource {
 
     private final PlanPortalService portalService;
     private final StripePaymentsService stripeService;
+    private final StripeConnectResolver stripeConnectResolver;
     private final MewsCheckoutService mewsCheckoutService;
 
     public PublicPlansPortalResource(
             PlanPortalService portalService,
             StripePaymentsService stripeService,
+            StripeConnectResolver stripeConnectResolver,
             MewsCheckoutService mewsCheckoutService) {
         this.portalService = portalService;
         this.stripeService = stripeService;
+        this.stripeConnectResolver = stripeConnectResolver;
         this.mewsCheckoutService = mewsCheckoutService;
     }
 
@@ -57,7 +61,8 @@ public class PublicPlansPortalResource {
         if (token == null || token.isBlank()) return notFound();
         Optional<PortalSnapshot> maybe = portalService.getPortal(token);
         if (maybe.isEmpty()) return notFound();
-        return Response.ok(PublicPlanPortalView.from(maybe.get(), stripeService)).build();
+        return Response.ok(
+                PublicPlanPortalView.from(maybe.get(), stripeService, stripeConnectResolver)).build();
     }
 
     @POST

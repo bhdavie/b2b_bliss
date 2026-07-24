@@ -4,12 +4,16 @@ import com.bliss.b2b.BlissConfiguration.AppConfig;
 import com.bliss.b2b.auth.MerchantPrincipal;
 import com.bliss.b2b.domain.ConnectStatus;
 import com.bliss.b2b.domain.Merchant;
+import com.bliss.b2b.domain.StripeConnection;
 import com.bliss.b2b.integration.EmailService;
 import com.bliss.b2b.integration.EmailTemplates;
 import com.bliss.b2b.integration.StripeConnectService;
 import com.bliss.b2b.integration.StripeConnectService.AccountLinkResponse;
+import com.bliss.b2b.integration.StripeConnectStandardService;
 import com.bliss.b2b.integration.StripeNotConfiguredException;
 import com.bliss.b2b.persistence.MerchantDao;
+import com.bliss.b2b.persistence.MerchantStripeConnectionDao;
+import com.bliss.b2b.service.PropertyOnboardingService;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Account;
@@ -38,17 +42,26 @@ public class StripeConnectResource {
     private final MerchantDao merchantDao;
     private final EmailService emailService;
     private final AppConfig appConfig;
+    private final MerchantStripeConnectionDao stripeConnectionDao;
+    private final PropertyOnboardingService onboardingService;
+    private final java.time.Clock clock;
 
     public StripeConnectResource(
             StripeConnectService stripe,
             MerchantDao merchantDao,
             EmailService emailService,
-            AppConfig appConfig
+            AppConfig appConfig,
+            MerchantStripeConnectionDao stripeConnectionDao,
+            PropertyOnboardingService onboardingService,
+            java.time.Clock clock
     ) {
         this.stripe = stripe;
         this.merchantDao = merchantDao;
         this.emailService = emailService;
         this.appConfig = appConfig;
+        this.stripeConnectionDao = stripeConnectionDao;
+        this.onboardingService = onboardingService;
+        this.clock = clock;
     }
 
     @POST
@@ -152,6 +165,11 @@ public class StripeConnectResource {
         }
         Optional<Merchant> maybeMerchant = merchantDao.findByStripeAccountId(account.getId());
         if (maybeMerchant.isEmpty()) {
+            // Not an Express account on a merchant row; it may be a per-property
+            // Standard account in merchant_stripe_connections.
+            if (handleStandardAccountUpdated(account)) {
+                return;
+            }
             log.warn("account.updated for unknown stripe account {}", account.getId());
             return;
         }
@@ -164,6 +182,36 @@ public class StripeConnectResource {
         if (oldStatus != ConnectStatus.CHARGES_ENABLED && newStatus == ConnectStatus.CHARGES_ENABLED) {
             sendChargesEnabledEmail(merchant);
         }
+    }
+
+    /**
+     * Standard-account counterpart of {@link #handleAccountUpdated}: syncs
+     * {@code merchant_stripe_connections} from the account snapshot and, on the
+     * transition into charges-enabled, advances the property's onboarding
+     * checklist (PMS_SELECTED -> PMS_CONNECTED). Returns true when the account
+     * matched a stored Standard connection.
+     */
+    private boolean handleStandardAccountUpdated(Account account) {
+        Optional<StripeConnection> maybe = stripeConnectionDao.findByStripeAccountId(account.getId());
+        if (maybe.isEmpty()) {
+            return false;
+        }
+        StripeConnection conn = maybe.get();
+        ConnectStatus newStatus = StripeConnectStandardService.statusOf(account);
+        boolean chargesEnabled = StripeConnectStandardService.chargesEnabled(account);
+        boolean was = conn.isChargesEnabled();
+        if (newStatus.wire().equals(conn.connectStatus()) && was == chargesEnabled) {
+            return true;
+        }
+        stripeConnectionDao.updateStatus(
+                conn.merchantId(), newStatus.wire(), chargesEnabled, java.time.Instant.now(clock));
+        log.info("Merchant {} Stripe Standard status: {} -> {}",
+                conn.merchantId(), conn.connectStatus(), newStatus.wire());
+        if (!was && chargesEnabled) {
+            onboardingService.markStripeConnected(conn.merchantId());
+            merchantDao.findById(conn.merchantId()).ifPresent(this::sendChargesEnabledEmail);
+        }
+        return true;
     }
 
     private void sendChargesEnabledEmail(Merchant merchant) {

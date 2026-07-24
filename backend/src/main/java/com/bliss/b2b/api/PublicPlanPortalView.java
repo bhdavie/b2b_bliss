@@ -6,6 +6,7 @@ import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.domain.PaymentPlan;
 import com.bliss.b2b.domain.PaymentScheduleEntry;
 import com.bliss.b2b.domain.PmsType;
+import com.bliss.b2b.integration.StripeConnectResolver;
 import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.service.PlanPortalService.PortalSnapshot;
 import java.time.Instant;
@@ -34,13 +35,19 @@ public record PublicPlanPortalView(
         String rail
 ) {
 
-    public static PublicPlanPortalView from(PortalSnapshot s, StripePaymentsService stripeService) {
+    public static PublicPlanPortalView from(
+            PortalSnapshot s,
+            StripePaymentsService stripeService,
+            StripeConnectResolver stripeConnectResolver) {
         // As-of-today derivation (single source of truth, see PlanProgress).
         var progress = s.progress();
         boolean stripeConfigured = stripeService.isConfigured();
         String rail = s.merchant().pmsType() == PmsType.MEWS
                 ? "mews"
                 : (stripeConfigured ? "stripe" : "demo");
+        String connectedAccountId = stripeConfigured
+                ? stripeConnectResolver.resolveOrNull(s.merchant().id())
+                : null;
         return new PublicPlanPortalView(
                 MerchantView.from(s.merchant()),
                 BookingView.from(s.booking()),
@@ -53,7 +60,7 @@ public record PublicPlanPortalView(
                 progress.nextDueDate(),
                 progress.nextDueAmountCents(),
                 progress.complete(),
-                new StripeStateView(stripeConfigured, stripeService.publishableKey()),
+                new StripeStateView(stripeConfigured, stripeService.publishableKey(), connectedAccountId),
                 rail);
     }
 
@@ -159,5 +166,9 @@ public record PublicPlanPortalView(
         }
     }
 
-    public record StripeStateView(boolean configured, String publishableKey) {}
+    public record StripeStateView(
+            boolean configured,
+            String publishableKey,
+            // Connected Standard account for direct charges (null = platform).
+            String connectedAccountId) {}
 }

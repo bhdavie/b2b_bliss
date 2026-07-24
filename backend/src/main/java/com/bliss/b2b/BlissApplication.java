@@ -17,6 +17,7 @@ import com.bliss.b2b.api.PublicMerchantsResource;
 import com.bliss.b2b.api.PublicPlansPortalResource;
 import com.bliss.b2b.api.PublicPlansResource;
 import com.bliss.b2b.api.StripeConnectResource;
+import com.bliss.b2b.api.StripeStandardConnectResource;
 import com.bliss.b2b.auth.CookieOptions;
 import com.bliss.b2b.auth.JwtCookieAuthFilter;
 import com.bliss.b2b.auth.JwtService;
@@ -27,7 +28,9 @@ import com.bliss.b2b.integration.EmailService;
 import com.bliss.b2b.integration.EmailServiceFactory;
 import com.bliss.b2b.integration.MewsApiClient;
 import com.bliss.b2b.integration.MewsConfig;
+import com.bliss.b2b.integration.StripeConnectResolver;
 import com.bliss.b2b.integration.StripeConnectService;
+import com.bliss.b2b.integration.StripeConnectStandardService;
 import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.observability.SentryBootstrap;
 import com.bliss.b2b.payments.PlanEligibilityService;
@@ -145,19 +148,28 @@ public class BlissApplication extends Application<BlissConfiguration> {
         long chargeCapCents = config.getChargeCapCents();
         StripePaymentsService stripePaymentsService =
                 new StripePaymentsService(config.getStripe(), chargeCapCents);
+        // Per-property Stripe Connect Standard: onboarding service, connection
+        // store, and the resolver that threads each property's connected account
+        // into charges as a direct charge (empty -> platform key, current path).
+        StripeConnectStandardService stripeConnectStandardService =
+                new StripeConnectStandardService(config.getStripe());
+        com.bliss.b2b.persistence.MerchantStripeConnectionDao stripeConnectionDao =
+                jdbi.onDemand(com.bliss.b2b.persistence.MerchantStripeConnectionDao.class);
+        StripeConnectResolver stripeConnectResolver = new StripeConnectResolver(jdbi);
         MewsApiClient mewsApiClient = new MewsApiClient(MewsConfig.load());
         BookingService bookingService = new BookingService(bookingDao);
         PlanEligibilityService eligibilityService = new PlanEligibilityService();
         MerchantPlanRulesService planRulesService = new MerchantPlanRulesService(planRulesDao);
         Clock clock = Clock.systemUTC();
         PlanCreationService planCreationService = new PlanCreationService(
-                jdbi, eligibilityService, stripePaymentsService, emailService, clock, config.getApp());
+                jdbi, eligibilityService, stripePaymentsService, stripeConnectResolver,
+                emailService, clock, config.getApp());
         MewsSyncService mewsSyncService = new MewsSyncService(
                 mewsApiClient, jdbi, eligibilityService, planCreationService, clock);
         CancellationService cancellationService = new CancellationService(
                 paymentPlanDao, paymentScheduleDao, bookingDao, planRulesService);
         PlanPortalService planPortalService = new PlanPortalService(
-                jdbi, stripePaymentsService, cancellationService, clock);
+                jdbi, stripePaymentsService, stripeConnectResolver, cancellationService, clock);
         // Property onboarding + per-property Mews connection. The factory both
         // validates connections and resolves each property's charge credentials.
         com.bliss.b2b.persistence.MerchantMewsConnectionDao mewsConnectionDao =
@@ -165,7 +177,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         com.bliss.b2b.integration.pms.MewsAdapterFactory mewsAdapterFactory =
                 new com.bliss.b2b.integration.pms.MewsAdapterFactory(jdbi, chargeCapCents);
         PropertyOnboardingService onboardingService = new PropertyOnboardingService(
-                merchantDao, mewsConnectionDao, mewsAdapterFactory, clock);
+                merchantDao, mewsConnectionDao, stripeConnectionDao, mewsAdapterFactory, clock);
         // Mews guest card-capture seam (per-property credentials via the factory).
         com.bliss.b2b.service.MewsCheckoutService mewsCheckoutService =
                 new com.bliss.b2b.service.MewsCheckoutService(jdbi, mewsAdapterFactory, clock);
@@ -216,19 +228,23 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 demoLoginEnabled, sessionTtlMinutes));
         environment.jersey().register(new MerchantsResource(merchantDao, stripeService, emailService));
         environment.jersey().register(new StripeConnectResource(
-                stripeService, merchantDao, emailService, config.getApp()));
+                stripeService, merchantDao, emailService, config.getApp(),
+                stripeConnectionDao, onboardingService, clock));
+        environment.jersey().register(new StripeStandardConnectResource(
+                stripeConnectStandardService, stripeConnectionDao, onboardingService,
+                config.getApp(), clock));
         environment.jersey().register(new BookingsResource(
                 bookingService, eligibilityService, planRulesService, stripeService,
                 paymentPlanDao, config.getApp(), clock));
         environment.jersey().register(new PublicBookingsResource(
                 bookingDao, merchantDao, eligibilityService, planRulesService,
-                stripePaymentsService, clock));
+                stripePaymentsService, stripeConnectResolver, clock));
         environment.jersey().register(new PublicPlansResource(planCreationService));
         environment.jersey().register(new PublicMerchantsResource(
-                merchantDao, planRulesService, stripePaymentsService));
+                merchantDao, planRulesService, stripePaymentsService, stripeConnectResolver));
         environment.jersey().register(new PublicCheckoutResource(planCreationService));
         environment.jersey().register(new PublicPlansPortalResource(
-                planPortalService, stripePaymentsService, mewsCheckoutService));
+                planPortalService, stripePaymentsService, stripeConnectResolver, mewsCheckoutService));
         environment.jersey().register(new PublicAccountResource(
                 customerAuthService, paymentPlanDao, customerDao, clock, cookieOptions));
         environment.jersey().register(new PlanRulesResource(planRulesService, onboardingService));

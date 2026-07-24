@@ -9,6 +9,7 @@ import com.bliss.b2b.domain.PaymentPlanStatus;
 import com.bliss.b2b.domain.PaymentScheduleEntry;
 import com.bliss.b2b.domain.PaymentScheduleStatus;
 import com.bliss.b2b.domain.ScheduleKind;
+import com.bliss.b2b.integration.StripeConnectResolver;
 import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.integration.StripePaymentsService.CardSummary;
 import com.bliss.b2b.persistence.BookingDao;
@@ -45,16 +46,19 @@ public class PlanPortalService {
 
     private final Jdbi jdbi;
     private final StripePaymentsService stripeService;
+    private final StripeConnectResolver stripeConnectResolver;
     private final CancellationService cancellationService;
     private final Clock clock;
 
     public PlanPortalService(
             Jdbi jdbi,
             StripePaymentsService stripeService,
+            StripeConnectResolver stripeConnectResolver,
             CancellationService cancellationService,
             Clock clock) {
         this.jdbi = jdbi;
         this.stripeService = stripeService;
+        this.stripeConnectResolver = stripeConnectResolver;
         this.cancellationService = cancellationService;
         this.clock = clock;
     }
@@ -130,6 +134,7 @@ public class PlanPortalService {
                     .orElseThrow(() -> new PortalException(PortalErrorCode.NO_CARD_ON_FILE,
                             "no card on file for this plan"));
 
+            String connectedAccountId = stripeConnectResolver.resolveOrNull(look.booking.merchantId());
             PaymentIntent intent;
             try {
                 intent = stripeService.firePaymentOffSession(
@@ -142,7 +147,8 @@ public class PlanPortalService {
                                 "bliss_payment_plan_id", look.plan.id().toString(),
                                 "bliss_booking_id", look.booking.id().toString(),
                                 "bliss_kind", next.kind().wire(),
-                                "bliss_source", "portal_pay_early"));
+                                "bliss_source", "portal_pay_early"),
+                        connectedAccountId);
             } catch (CardException e) {
                 throw new PortalException(PortalErrorCode.CARD_DECLINED,
                         e.getStripeError() != null && e.getStripeError().getMessage() != null
@@ -209,9 +215,10 @@ public class PlanPortalService {
                 throw new PortalException(PortalErrorCode.INVALID_INPUT,
                         "customer has no stripe customer id");
             }
+            String connectedAccountId = stripeConnectResolver.resolveOrNull(look.booking.merchantId());
             PaymentMethod pm;
             try {
-                pm = stripeService.attachPaymentMethod(newPaymentMethodId, stripeCustomerId);
+                pm = stripeService.attachPaymentMethod(newPaymentMethodId, stripeCustomerId, connectedAccountId);
             } catch (StripeException e) {
                 log.warn("Stripe error attaching new PM in portal: {}", e.getMessage());
                 throw new PortalException(PortalErrorCode.STRIPE_ERROR, "payment processor error");
@@ -269,8 +276,9 @@ public class PlanPortalService {
                 throw new PortalException(PortalErrorCode.INVALID_INPUT,
                         "customer has no stripe customer id");
             }
+            String connectedAccountId = stripeConnectResolver.resolveOrNull(look.booking.merchantId());
             try {
-                SetupIntent si = stripeService.createSetupIntent(stripeCustomerId);
+                SetupIntent si = stripeService.createSetupIntent(stripeCustomerId, connectedAccountId);
                 return si.getClientSecret();
             } catch (StripeException e) {
                 log.warn("Stripe error creating SetupIntent: {}", e.getMessage());

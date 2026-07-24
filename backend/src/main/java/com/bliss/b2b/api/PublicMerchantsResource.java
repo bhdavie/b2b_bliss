@@ -2,6 +2,7 @@ package com.bliss.b2b.api;
 
 import com.bliss.b2b.domain.ConnectStatus;
 import com.bliss.b2b.domain.Merchant;
+import com.bliss.b2b.integration.StripeConnectResolver;
 import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.persistence.MerchantDao;
@@ -28,15 +29,18 @@ public class PublicMerchantsResource {
     private final MerchantDao merchantDao;
     private final MerchantPlanRulesService rulesService;
     private final StripePaymentsService stripeService;
+    private final StripeConnectResolver stripeConnectResolver;
 
     public PublicMerchantsResource(
             MerchantDao merchantDao,
             MerchantPlanRulesService rulesService,
-            StripePaymentsService stripeService
+            StripePaymentsService stripeService,
+            StripeConnectResolver stripeConnectResolver
     ) {
         this.merchantDao = merchantDao;
         this.rulesService = rulesService;
         this.stripeService = stripeService;
+        this.stripeConnectResolver = stripeConnectResolver;
     }
 
     @GET
@@ -88,7 +92,9 @@ public class PublicMerchantsResource {
                 new PublicMerchantView.Stripe(
                         stripeService.isConfigured(),
                         stripeService.isConfigured() ? stripeService.publishableKey() : null,
-                        chargesEnabled),
+                        chargesEnabled,
+                        stripeService.isConfigured()
+                                ? stripeConnectResolver.resolveOrNull(merchant.id()) : null),
                 merchant.pmsType() == com.bliss.b2b.domain.PmsType.MEWS
                         ? "mews"
                         : (stripeService.isConfigured() ? "stripe" : "demo")

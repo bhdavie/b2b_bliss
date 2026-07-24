@@ -16,6 +16,7 @@ import com.bliss.b2b.domain.MewsConnection;
 import com.bliss.b2b.domain.ScheduleKind;
 import com.bliss.b2b.integration.EmailService;
 import com.bliss.b2b.integration.EmailTemplates;
+import com.bliss.b2b.integration.StripeConnectResolver;
 import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.integration.StripePaymentsService.CardSummary;
 import com.bliss.b2b.payments.EligibilityResult;
@@ -147,6 +148,7 @@ public class PlanCreationService {
     private final Jdbi jdbi;
     private final PlanEligibilityService eligibilityService;
     private final StripePaymentsService stripeService;
+    private final StripeConnectResolver stripeConnectResolver;
     private final EmailService emailService;
     private final Clock clock;
     private final AppConfig appConfig;
@@ -155,6 +157,7 @@ public class PlanCreationService {
             Jdbi jdbi,
             PlanEligibilityService eligibilityService,
             StripePaymentsService stripeService,
+            StripeConnectResolver stripeConnectResolver,
             EmailService emailService,
             Clock clock,
             AppConfig appConfig
@@ -162,6 +165,7 @@ public class PlanCreationService {
         this.jdbi = jdbi;
         this.eligibilityService = eligibilityService;
         this.stripeService = stripeService;
+        this.stripeConnectResolver = stripeConnectResolver;
         this.emailService = emailService;
         this.clock = clock;
         this.appConfig = appConfig;
@@ -285,10 +289,18 @@ public class PlanCreationService {
                     customerEmail, customerFirstName, customerLastName,
                     customerPhone, paymentMethodId, requestedFrequency, demoCard);
         }
-        ConnectStatus connectStatus = ConnectStatus.fromWire(merchant.stripeConnectStatus());
-        if (connectStatus != ConnectStatus.CHARGES_ENABLED) {
-            throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
-                    "merchant has not completed Stripe onboarding");
+        // Per-property Connect Standard: when the property has finished Standard
+        // onboarding, every Stripe call below runs on its connected account
+        // (direct charge, property is merchant of record). When it has not, the
+        // account is null and we fall back to the existing Express gate + the
+        // platform key — unchanged behavior for merchants on the old rail.
+        String connectedAccountId = stripeConnectResolver.resolveOrNull(merchant.id());
+        if (connectedAccountId == null) {
+            ConnectStatus connectStatus = ConnectStatus.fromWire(merchant.stripeConnectStatus());
+            if (connectStatus != ConnectStatus.CHARGES_ENABLED) {
+                throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
+                        "merchant has not completed Stripe onboarding");
+            }
         }
 
         MerchantPlanRules rules = handle.attach(MerchantPlanRulesDao.class)
@@ -336,7 +348,7 @@ public class PlanCreationService {
         String stripeCustomerId = customer.stripeCustomerId();
         if (stripeCustomerId == null || stripeCustomerId.isBlank()) {
             try {
-                stripeCustomerId = stripeService.createStripeCustomer(customer);
+                stripeCustomerId = stripeService.createStripeCustomer(customer, connectedAccountId);
             } catch (StripeException e) {
                 throw stripeFailure(e);
             }
@@ -346,7 +358,7 @@ public class PlanCreationService {
 
         PaymentMethod pm;
         try {
-            pm = stripeService.attachPaymentMethod(paymentMethodId, stripeCustomerId);
+            pm = stripeService.attachPaymentMethod(paymentMethodId, stripeCustomerId, connectedAccountId);
         } catch (CardException e) {
             throw declined(e);
         } catch (StripeException e) {
@@ -411,7 +423,8 @@ public class PlanCreationService {
                             "bliss_payment_schedule_id", first.id().toString(),
                             "bliss_payment_plan_id", plan.id().toString(),
                             "bliss_booking_id", booking.id().toString(),
-                            "bliss_kind", first.kind().wire()));
+                            "bliss_kind", first.kind().wire()),
+                    connectedAccountId);
         } catch (CardException e) {
             throw declined(e);
         } catch (StripeException e) {

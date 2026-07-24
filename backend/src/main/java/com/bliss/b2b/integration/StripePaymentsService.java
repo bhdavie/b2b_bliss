@@ -16,10 +16,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Card vaulting and charging via Stripe (not Connect; this is the platform
- * side). Inert when STRIPE_SECRET_KEY is blank — every call throws
- * {@link StripeNotConfiguredException} and the public plans endpoint returns
- * 503 with an explanatory message. Same pattern as {@link StripeConnectService}.
+ * Card vaulting and charging via Stripe. Inert when STRIPE_SECRET_KEY is blank —
+ * every call throws {@link StripeNotConfiguredException} and the public plans
+ * endpoint returns 503 with an explanatory message. Same pattern as
+ * {@link StripeConnectService}.
+ *
+ * <p>Every operation optionally targets a Connect *Standard* connected account:
+ * pass a non-null {@code connectedAccountId} and the call runs on that account
+ * (Stripe-Account header), so it becomes a direct charge / account-scoped object
+ * with the property as merchant of record. Pass {@code null} (the legacy
+ * signatures do) and the call runs on the platform exactly as before. The
+ * connected account is resolved per property by {@link StripeConnectResolver}.
  */
 public class StripePaymentsService {
 
@@ -52,35 +59,60 @@ public class StripePaymentsService {
     }
 
     /**
-     * Creates a Stripe Customer for the given Bliss customer. Caller is
-     * responsible for persisting the returned id.
+     * Creates a Stripe Customer for the given Bliss customer on the platform.
+     * Caller is responsible for persisting the returned id.
      */
     public String createStripeCustomer(Customer customer) throws StripeException {
+        return createStripeCustomer(customer, null);
+    }
+
+    /**
+     * Creates a Stripe Customer for the given Bliss customer. When
+     * {@code connectedAccountId} is non-null the Customer is created on that
+     * connected Standard account (so it can be charged there via direct charges);
+     * otherwise it is created on the platform (legacy behavior).
+     */
+    public String createStripeCustomer(Customer customer, String connectedAccountId) throws StripeException {
         requireConfigured();
         CustomerCreateParams params = CustomerCreateParams.builder()
                 .setEmail(customer.email())
                 .setName(joinName(customer.firstName(), customer.lastName()))
                 .setMetadata(Map.of("bliss_customer_id", customer.id().toString()))
                 .build();
-        com.stripe.model.Customer stripeCustomer = com.stripe.model.Customer.create(params);
-        log.info("Created Stripe Customer {} for bliss customer {}",
-                stripeCustomer.getId(), customer.id());
+        com.stripe.model.Customer stripeCustomer =
+                com.stripe.model.Customer.create(params, accountOptions(connectedAccountId));
+        log.info("Created Stripe Customer {} for bliss customer {}{}",
+                stripeCustomer.getId(), customer.id(),
+                connectedAccountId == null ? "" : " on account " + connectedAccountId);
         return stripeCustomer.getId();
     }
 
     /**
      * Attaches a PaymentMethod (collected client-side via Stripe Elements) to
-     * the given Stripe Customer. Returns the up-to-date PaymentMethod so the
-     * caller can read brand/last4/exp.
+     * the given Stripe Customer on the platform. Returns the up-to-date
+     * PaymentMethod so the caller can read brand/last4/exp.
      */
     public PaymentMethod attachPaymentMethod(String paymentMethodId, String stripeCustomerId)
             throws StripeException {
+        return attachPaymentMethod(paymentMethodId, stripeCustomerId, null);
+    }
+
+    /**
+     * Attaches a PaymentMethod to the given Stripe Customer. When
+     * {@code connectedAccountId} is non-null both the retrieve and the attach run
+     * on that connected Standard account, so the PaymentMethod (collected against
+     * the same account client-side) is attached where it will be charged.
+     */
+    public PaymentMethod attachPaymentMethod(
+            String paymentMethodId, String stripeCustomerId, String connectedAccountId)
+            throws StripeException {
         requireConfigured();
-        PaymentMethod pm = PaymentMethod.retrieve(paymentMethodId);
+        RequestOptions opts = accountOptions(connectedAccountId);
+        PaymentMethod pm = PaymentMethod.retrieve(paymentMethodId, opts);
         if (pm.getCustomer() == null || !pm.getCustomer().equals(stripeCustomerId)) {
             pm = pm.attach(PaymentMethodAttachParams.builder()
                     .setCustomer(stripeCustomerId)
-                    .build());
+                    .build(), opts);
         }
         return pm;
     }
@@ -108,6 +140,24 @@ public class StripePaymentsService {
             String idempotencyKey,
             Map<String, String> metadata
     ) throws StripeException {
+        return firePaymentOffSession(amountCents, stripeCustomerId, paymentMethodId,
+                idempotencyKey, metadata, null);
+    }
+
+    /**
+     * Charges a payment against the saved PaymentMethod. When
+     * {@code connectedAccountId} is non-null the PaymentIntent is created on that
+     * connected Standard account, making it a direct charge with the property as
+     * merchant of record; otherwise it runs on the platform (legacy behavior).
+     */
+    public PaymentIntent firePaymentOffSession(
+            long amountCents,
+            String stripeCustomerId,
+            String paymentMethodId,
+            String idempotencyKey,
+            Map<String, String> metadata,
+            String connectedAccountId
+    ) throws StripeException {
         requireConfigured();
         // Demo cap: clamp only the amount sent to Stripe. The schedule row, plan
         // math, and the returned PaymentIntent metadata keep the real amount.
@@ -128,10 +178,12 @@ public class StripePaymentsService {
                                 .build())
                 .putAllMetadata(metadata)
                 .build();
-        RequestOptions opts = RequestOptions.builder()
-                .setIdempotencyKey(idempotencyKey)
-                .build();
-        return PaymentIntent.create(params, opts);
+        RequestOptions.RequestOptionsBuilder optsBuilder = RequestOptions.builder()
+                .setIdempotencyKey(idempotencyKey);
+        if (connectedAccountId != null && !connectedAccountId.isBlank()) {
+            optsBuilder.setStripeAccount(connectedAccountId);
+        }
+        return PaymentIntent.create(params, optsBuilder.build());
     }
 
     /**
@@ -140,13 +192,23 @@ public class StripePaymentsService {
      * Update-card flow. Demo mode never calls this — see PlanPortalService.
      */
     public SetupIntent createSetupIntent(String stripeCustomerId) throws StripeException {
+        return createSetupIntent(stripeCustomerId, null);
+    }
+
+    /**
+     * Creates a SetupIntent on the platform, or on {@code connectedAccountId}
+     * when non-null so the vaulted card lands on the account it will be charged
+     * against.
+     */
+    public SetupIntent createSetupIntent(String stripeCustomerId, String connectedAccountId)
+            throws StripeException {
         requireConfigured();
         SetupIntentCreateParams params = SetupIntentCreateParams.builder()
                 .setCustomer(stripeCustomerId)
                 .setUsage(SetupIntentCreateParams.Usage.OFF_SESSION)
                 .addPaymentMethodType("card")
                 .build();
-        return SetupIntent.create(params);
+        return SetupIntent.create(params, accountOptions(connectedAccountId));
     }
 
     public static CardSummary summarize(PaymentMethod pm) {
@@ -175,6 +237,19 @@ public class StripePaymentsService {
         if (!isConfigured()) {
             throw new StripeNotConfiguredException();
         }
+    }
+
+    /**
+     * RequestOptions targeting a connected Standard account, or null when
+     * {@code connectedAccountId} is null/blank (platform call). A null return
+     * makes Stripe's {@code (params)} and {@code (params, null)} calls identical,
+     * so the platform path is byte-for-byte the legacy behavior.
+     */
+    private static RequestOptions accountOptions(String connectedAccountId) {
+        if (connectedAccountId == null || connectedAccountId.isBlank()) {
+            return null;
+        }
+        return RequestOptions.builder().setStripeAccount(connectedAccountId).build();
     }
 
     /** Clamps to the demo charge cap when one is set; logs a single line on clamp. */
