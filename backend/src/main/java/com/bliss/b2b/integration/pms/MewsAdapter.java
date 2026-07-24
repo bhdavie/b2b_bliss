@@ -250,6 +250,41 @@ public class MewsAdapter implements PmsAdapter {
         return new PmsChargeResult(paymentId, status, rawState, amountMinorUnits, currency);
     }
 
+    /**
+     * Reads the current settlement state for a batch of Mews payments via
+     * payments/getAll, returning each found payment's id mapped to its
+     * {@link PmsChargeStatus}. Ids Mews does not return (unknown to the property)
+     * are omitted, so the caller can leave those rows in flight rather than
+     * guessing. States fold to the same enum {@link #chargeStoredCard} uses, so
+     * downstream mapping is shared: Charged -&gt; charged/paid, Failed/Canceled
+     * -&gt; failed, Pending/Verifying/unknown -&gt; still pending.
+     *
+     * <p>This is a read-only query; it moves no money. Pass at most
+     * {@value #PAGE_LIMIT} ids per call — the reconciliation service chunks
+     * larger sets.
+     */
+    public Map<String, PmsChargeStatus> getPayments(List<String> paymentIds) {
+        if (paymentIds == null || paymentIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> body = auth();
+        body.put("PaymentIds", List.copyOf(paymentIds));
+        body.put("Limitation", Map.of("Count", Math.max(paymentIds.size(), 1)));
+
+        JsonNode payments = post(PAYMENTS_GET_ALL, body).path("Payments");
+        Map<String, PmsChargeStatus> out = new LinkedHashMap<>();
+        if (payments.isArray()) {
+            for (JsonNode p : payments) {
+                String id = textOrNull(p, "Id");
+                if (id == null) {
+                    continue;
+                }
+                out.put(id, PmsChargeStatus.fromMewsState(textOrNull(p, "State")));
+            }
+        }
+        return out;
+    }
+
     /** Reads a single payment's {@code State} via payments/getAll, or null. */
     private String readPaymentState(String paymentId) {
         Map<String, Object> body = auth();

@@ -75,6 +75,20 @@ public class MewsAdapterFactory implements ChargeContextResolver {
                                 ? DEFAULT_CURRENCY : conn.currency()));
     }
 
+    /**
+     * Resolves a property's own {@link MewsAdapter} for the reconciliation pass.
+     * Same per-property credential lookup as {@link #resolve}, but hands back the
+     * concrete adapter (which exposes {@code payments/getAll} via
+     * {@link MewsAdapter#getPayments}) rather than a {@link ChargeContext}. Empty
+     * when the property has no validated connection, so the pass never queries
+     * one property against another's credentials.
+     */
+    public Optional<MewsAdapter> resolveMewsAdapter(UUID merchantId) {
+        return connectionDao.findByMerchant(merchantId)
+                .filter(MewsConnection::isValidated)
+                .map(this::adapterForConnection);
+    }
+
     private static MewsPmsConfig configOf(String platformUrl, String clientToken, String accessToken) {
         MewsPmsConfig config = new MewsPmsConfig();
         if (platformUrl != null && !platformUrl.isBlank()) {

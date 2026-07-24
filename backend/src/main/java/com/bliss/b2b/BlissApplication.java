@@ -265,10 +265,22 @@ public class BlissApplication extends Application<BlissConfiguration> {
         // excluded, exactly as InstallmentChargeService already guards. The
         // MewsAdapterFactory resolves each property's own credentials. The
         // executor is lifecycle-managed (stops on shutdown).
+        // One shared Ledger backs both Mews passes so the reconciliation pass
+        // settles rows through exactly the charge pass's persistence + completion
+        // machinery (markPaid / completePlanIfDone / markFailed), not a parallel one.
+        com.bliss.b2b.service.InstallmentChargeService.JdbiLedger installmentLedger =
+                new com.bliss.b2b.service.InstallmentChargeService.JdbiLedger(jdbi);
         com.bliss.b2b.service.InstallmentChargeService installmentChargeService =
                 new com.bliss.b2b.service.InstallmentChargeService(
-                        new com.bliss.b2b.service.InstallmentChargeService.JdbiLedger(jdbi),
-                        mewsAdapterFactory, clock);
+                        installmentLedger, mewsAdapterFactory, clock);
+        // Reconciliation pass: settles installments left in PROCESSING once their
+        // Mews payment resolves (payments/getAll, per-property credentials).
+        com.bliss.b2b.service.MewsReconciliationService mewsReconciliationService =
+                new com.bliss.b2b.service.MewsReconciliationService(
+                        jdbi, mewsAdapterFactory, installmentLedger, clock);
+        // Both Mews passes share one single-thread executor, so they never run
+        // concurrently; the initial delays offset them (charge at +60s, reconcile
+        // at +90s) so they also never fire in the same instant.
         java.util.concurrent.ScheduledExecutorService chargeScheduler =
                 environment.lifecycle().scheduledExecutorService("mews-charge-pass").threads(1).build();
         chargeScheduler.scheduleAtFixedRate(() -> {
@@ -278,6 +290,13 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 log.warn("Installment charge pass failed: {}", e.getMessage());
             }
         }, 60, 60, java.util.concurrent.TimeUnit.SECONDS);
+        chargeScheduler.scheduleAtFixedRate(() -> {
+            try {
+                mewsReconciliationService.runReconcilePass();
+            } catch (RuntimeException e) {
+                log.warn("Mews reconciliation pass failed: {}", e.getMessage());
+            }
+        }, 90, 60, java.util.concurrent.TimeUnit.SECONDS);
 
         environment.jersey().register(new AuthDynamicFeature(
                 new JwtCookieAuthFilter.Builder()
