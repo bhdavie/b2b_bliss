@@ -97,3 +97,17 @@ stripe:
   publishableKey: ${STRIPE_PUBLISHABLE_KEY:-}
   # Webhook signing secret from `stripe listen --forward-to localhost:8080/api/v1/stripe/webhooks`
   webhookSecret: ${STRIPE_WEBHOOK_SECRET:-}
+
+pms:
+  # Cloudbeds OAuth app. clientId/clientSecret from the registered app; blank
+  # leaves the Cloudbeds OAuth endpoints in not-configured (503) state.
+  # NOTE: CLOUDBEDS_CLIENT_SECRET must be added to backend/.env for the callback
+  # token exchange to succeed (only CLOUDBEDS_CLIENT_ID is currently set).
+  cloudbeds:
+    clientId: ${CLOUDBEDS_CLIENT_ID:-}
+    clientSecret: ${CLOUDBEDS_CLIENT_SECRET:-}
+    redirectUri: ${CLOUDBEDS_REDIRECT_URI:-http://localhost:8080/api/v1/cloudbeds/oauth/callback}
+    # Host/version differs across docs; override here if needed.
+    authorizeUrl: ${CLOUDBEDS_AUTHORIZE_URL:-https://hotels.cloudbeds.com/api/v1.3/oauth}
+    tokenUrl: ${CLOUDBEDS_TOKEN_URL:-https://hotels.cloudbeds.com/api/v1.3/access_token}
+    apiBaseUrl: ${CLOUDBEDS_API_BASE_URL:-https://hotels.cloudbeds.com/api/v1.3}

@@ -42,24 +42,34 @@ public class InstallmentChargeService {
 
     static final String RAIL_STRIPE = "stripe";
     static final String RAIL_MEWS = "mews";
+    static final String RAIL_CLOUDBEDS = "cloudbeds";
 
     private final Ledger ledger;
     private final ChargeContextResolver resolver;
     /** Charges due Stripe-rail rows. Null (e.g. in unit tests) preserves the original skip. */
     private final StripeInstallmentCharger stripeCharger;
+    /** Resolves a Cloudbeds-rail property's adapter. Null when the rail is not wired. */
+    private final ChargeContextResolver cloudbedsResolver;
     private final Clock clock;
 
     public InstallmentChargeService(
             Ledger ledger, ChargeContextResolver resolver, Clock clock) {
-        this(ledger, resolver, null, clock);
+        this(ledger, resolver, null, null, clock);
     }
 
     public InstallmentChargeService(
             Ledger ledger, ChargeContextResolver resolver,
             StripeInstallmentCharger stripeCharger, Clock clock) {
+        this(ledger, resolver, stripeCharger, null, clock);
+    }
+
+    public InstallmentChargeService(
+            Ledger ledger, ChargeContextResolver resolver,
+            StripeInstallmentCharger stripeCharger, ChargeContextResolver cloudbedsResolver, Clock clock) {
         this.ledger = ledger;
         this.resolver = resolver;
         this.stripeCharger = stripeCharger;
+        this.cloudbedsResolver = cloudbedsResolver;
         this.clock = clock;
     }
 
@@ -93,6 +103,22 @@ public class InstallmentChargeService {
                     case SKIPPED -> skippedStripe++;
                     case REQUIRES_ACTION, ERROR -> errors++;
                 }
+                continue;
+            }
+            if (RAIL_CLOUDBEDS.equalsIgnoreCase(rail)) {
+                // Third rail recognized and dispatched to its own resolver (proving
+                // the per-property token/refresh wiring). Charging a row still needs
+                // a vaulted Cloudbeds card token, which the guest-checkout
+                // tokenization seam provides; until that lands the row carries no
+                // card, so leave it scheduled (a config gap, not a decline).
+                if (cloudbedsResolver == null || cloudbedsResolver.resolve(d.merchantId()).isEmpty()) {
+                    log.warn("Cloudbeds-rail schedule {} has no property connection; leaving scheduled",
+                            d.scheduleId());
+                } else {
+                    log.warn("Cloudbeds-rail schedule {} connected but has no vaulted card "
+                            + "(guest checkout seam pending); leaving scheduled", d.scheduleId());
+                }
+                errors++;
                 continue;
             }
             if (!RAIL_MEWS.equalsIgnoreCase(rail)) {

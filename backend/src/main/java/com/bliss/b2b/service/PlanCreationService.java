@@ -284,6 +284,15 @@ public class PlanCreationService {
             return acceptForBookingMews(handle, booking, merchant,
                     customerEmail, customerFirstName, customerLastName, requestedFrequency);
         }
+        if (merchant.pmsType() == PmsType.CLOUDBEDS) {
+            // Third rail recognized. End-to-end plan acceptance needs a vaulted
+            // Cloudbeds card, which comes from the guest-checkout tokenization
+            // seam (not built — Cloudbeds has no server-issued hosted card-entry
+            // request). Fail clearly rather than create an unfulfillable plan.
+            throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
+                    "Cloudbeds is connected, but guest card capture is not yet available "
+                            + "(tokenization seam pending). Contact the merchant to book.");
+        }
         if (!stripeService.isConfigured()) {
             return acceptForBookingDemo(handle, booking, merchant,
                     customerEmail, customerFirstName, customerLastName,
@@ -702,7 +711,11 @@ public class PlanCreationService {
 
     /** payment_rail written at plan creation; only Mews is a non-Stripe rail. */
     private static String railFor(Merchant merchant) {
-        return merchant.pmsType() == PmsType.MEWS ? "mews" : "stripe";
+        return switch (merchant.pmsType()) {
+            case MEWS -> "mews";
+            case CLOUDBEDS -> "cloudbeds";
+            case STRIPE -> "stripe";
+        };
     }
 
     private PlanCreationResult finalize(Outcome outcome) {

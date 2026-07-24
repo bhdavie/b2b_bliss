@@ -224,8 +224,56 @@ public class BlissConfiguration extends Configuration {
         @NotNull
         private MewsPmsConfig mews = new MewsPmsConfig();
 
+        @Valid
+        @NotNull
+        private CloudbedsPmsConfig cloudbeds = new CloudbedsPmsConfig();
+
         @JsonProperty public MewsPmsConfig getMews() { return mews; }
         @JsonProperty public void setMews(MewsPmsConfig mews) { this.mews = mews; }
+        @JsonProperty public CloudbedsPmsConfig getCloudbeds() { return cloudbeds; }
+        @JsonProperty public void setCloudbeds(CloudbedsPmsConfig cloudbeds) { this.cloudbeds = cloudbeds; }
+
+        /**
+         * Cloudbeds OAuth app + API endpoints. clientId/clientSecret come from the
+         * registered app (CLOUDBEDS_CLIENT_ID / CLOUDBEDS_CLIENT_SECRET env). The
+         * URLs default to the current documented host/version but are overridable
+         * because the docs show both {@code hotels.cloudbeds.com/api/v1.3} and
+         * {@code api.cloudbeds.com/api/v1.3}; confirm against live docs and flip in
+         * config if needed. Scopes default to the granted set.
+         */
+        public static class CloudbedsPmsConfig {
+            private String clientId = "";
+            private String clientSecret = "";
+            private String redirectUri = "http://localhost:8080/api/v1/cloudbeds/oauth/callback";
+            private String authorizeUrl = "https://hotels.cloudbeds.com/api/v1.3/oauth";
+            private String tokenUrl = "https://hotels.cloudbeds.com/api/v1.3/access_token";
+            private String apiBaseUrl = "https://hotels.cloudbeds.com/api/v1.3";
+            private String scopes = "read:guest write:guest read:hotel write:hotel "
+                    + "read:payment write:payment read:reservation write:reservation "
+                    + "read:rate read:room read:taxesAndFees read:currency "
+                    + "read:houseAccount read:dataInsightsPayments";
+
+            @JsonProperty public String getClientId() { return clientId; }
+            @JsonProperty public void setClientId(String v) { this.clientId = v; }
+            @JsonProperty public String getClientSecret() { return clientSecret; }
+            @JsonProperty public void setClientSecret(String v) { this.clientSecret = v; }
+            @JsonProperty public String getRedirectUri() { return redirectUri; }
+            @JsonProperty public void setRedirectUri(String v) { this.redirectUri = v; }
+            @JsonProperty public String getAuthorizeUrl() { return authorizeUrl; }
+            @JsonProperty public void setAuthorizeUrl(String v) { this.authorizeUrl = v; }
+            @JsonProperty public String getTokenUrl() { return tokenUrl; }
+            @JsonProperty public void setTokenUrl(String v) { this.tokenUrl = v; }
+            @JsonProperty public String getApiBaseUrl() { return apiBaseUrl; }
+            @JsonProperty public void setApiBaseUrl(String v) { this.apiBaseUrl = v; }
+            @JsonProperty public String getScopes() { return scopes; }
+            @JsonProperty public void setScopes(String v) { this.scopes = v; }
+
+            /** True once the OAuth app credentials are present so endpoints can run. */
+            public boolean isConfigured() {
+                return clientId != null && !clientId.isBlank()
+                        && clientSecret != null && !clientSecret.isBlank();
+            }
+        }
 
         public static class MewsPmsConfig {
             // Public Mews demo credentials for the Gross pricing UK demo

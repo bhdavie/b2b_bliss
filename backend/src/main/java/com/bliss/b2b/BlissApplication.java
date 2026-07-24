@@ -176,8 +176,19 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 jdbi.onDemand(com.bliss.b2b.persistence.MerchantMewsConnectionDao.class);
         com.bliss.b2b.integration.pms.MewsAdapterFactory mewsAdapterFactory =
                 new com.bliss.b2b.integration.pms.MewsAdapterFactory(jdbi, chargeCapCents);
+        // Per-property Cloudbeds OAuth: connection store, OAuth client, and the
+        // factory that resolves each property's tokens (transparent single-flight
+        // refresh) and is the charge pass's Cloudbeds resolver.
+        com.bliss.b2b.persistence.MerchantCloudbedsConnectionDao cloudbedsConnectionDao =
+                jdbi.onDemand(com.bliss.b2b.persistence.MerchantCloudbedsConnectionDao.class);
+        com.bliss.b2b.integration.cloudbeds.CloudbedsOAuthClient cloudbedsOAuthClient =
+                new com.bliss.b2b.integration.cloudbeds.CloudbedsOAuthClient(config.getPms().getCloudbeds());
+        com.bliss.b2b.integration.pms.CloudbedsAdapterFactory cloudbedsAdapterFactory =
+                new com.bliss.b2b.integration.pms.CloudbedsAdapterFactory(
+                        jdbi, cloudbedsOAuthClient, config.getPms().getCloudbeds(), chargeCapCents, clock);
         PropertyOnboardingService onboardingService = new PropertyOnboardingService(
-                merchantDao, mewsConnectionDao, stripeConnectionDao, mewsAdapterFactory, clock);
+                merchantDao, mewsConnectionDao, stripeConnectionDao, cloudbedsConnectionDao,
+                mewsAdapterFactory, clock);
         // Mews guest card-capture seam (per-property credentials via the factory).
         com.bliss.b2b.service.MewsCheckoutService mewsCheckoutService =
                 new com.bliss.b2b.service.MewsCheckoutService(jdbi, mewsAdapterFactory, clock);
@@ -249,6 +260,9 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 customerAuthService, paymentPlanDao, customerDao, clock, cookieOptions));
         environment.jersey().register(new PlanRulesResource(planRulesService, onboardingService));
         environment.jersey().register(new PropertyOnboardingResource(onboardingService));
+        environment.jersey().register(new com.bliss.b2b.api.CloudbedsOAuthResource(
+                cloudbedsOAuthClient, cloudbedsAdapterFactory, cloudbedsConnectionDao,
+                onboardingService, config.getApp(), clock));
         environment.jersey().register(new PlansResource(
                 paymentPlanDao, paymentScheduleDao, bookingDao, cancellationService));
         environment.jersey().register(new DevPlansResource(
@@ -279,7 +293,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
                         jdbi, stripePaymentsService, stripeConnectResolver, clock);
         com.bliss.b2b.service.InstallmentChargeService installmentChargeService =
                 new com.bliss.b2b.service.InstallmentChargeService(
-                        installmentLedger, mewsAdapterFactory, stripeInstallmentCharger, clock);
+                        installmentLedger, mewsAdapterFactory, stripeInstallmentCharger,
+                        cloudbedsAdapterFactory, clock);
         // Reconciliation pass: settles installments left in PROCESSING once their
         // Mews payment resolves (payments/getAll, per-property credentials).
         com.bliss.b2b.service.MewsReconciliationService mewsReconciliationService =

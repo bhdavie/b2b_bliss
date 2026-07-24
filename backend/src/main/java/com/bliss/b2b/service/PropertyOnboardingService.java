@@ -5,11 +5,13 @@ import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.domain.MewsConnection;
 import com.bliss.b2b.domain.OnboardingState;
 import com.bliss.b2b.domain.PmsType;
+import com.bliss.b2b.domain.CloudbedsConnection;
 import com.bliss.b2b.domain.StripeConnection;
 import com.bliss.b2b.integration.pms.MewsAdapter;
 import com.bliss.b2b.integration.pms.MewsAdapterFactory;
 import com.bliss.b2b.integration.pms.PmsAdapterException;
 import com.bliss.b2b.integration.pms.PmsPropertyConfiguration;
+import com.bliss.b2b.persistence.MerchantCloudbedsConnectionDao;
 import com.bliss.b2b.persistence.MerchantDao;
 import com.bliss.b2b.persistence.MerchantMewsConnectionDao;
 import com.bliss.b2b.persistence.MerchantStripeConnectionDao;
@@ -37,6 +39,7 @@ public class PropertyOnboardingService {
     private final MerchantDao merchantDao;
     private final MerchantMewsConnectionDao connectionDao;
     private final MerchantStripeConnectionDao stripeConnectionDao;
+    private final MerchantCloudbedsConnectionDao cloudbedsConnectionDao;
     private final MewsAdapterFactory mewsFactory;
     private final Clock clock;
 
@@ -44,11 +47,13 @@ public class PropertyOnboardingService {
             MerchantDao merchantDao,
             MerchantMewsConnectionDao connectionDao,
             MerchantStripeConnectionDao stripeConnectionDao,
+            MerchantCloudbedsConnectionDao cloudbedsConnectionDao,
             MewsAdapterFactory mewsFactory,
             Clock clock) {
         this.merchantDao = merchantDao;
         this.connectionDao = connectionDao;
         this.stripeConnectionDao = stripeConnectionDao;
+        this.cloudbedsConnectionDao = cloudbedsConnectionDao;
         this.mewsFactory = mewsFactory;
         this.clock = clock;
     }
@@ -72,13 +77,41 @@ public class PropertyOnboardingService {
                     conn == null ? null : conn.connectStatus(),
                     conn == null ? null : conn.stripeAccountId());
         }
+        CloudbedsInfo cloudbeds = null;
+        if (merchant.pmsType() == PmsType.CLOUDBEDS) {
+            CloudbedsConnection conn = cloudbedsConnectionDao.findByMerchant(merchant.id()).orElse(null);
+            cloudbeds = new CloudbedsInfo(
+                    conn != null && conn.isConnected(),
+                    conn == null ? null : conn.propertyName(),
+                    conn == null ? null : conn.currency());
+        }
         return new OnboardingStatus(
                 state.wire(),
                 merchant.pmsType().wire(),
                 state == OnboardingState.ACTIVE,
                 mews,
                 stripe,
+                cloudbeds,
                 steps(state));
+    }
+
+    /**
+     * Advances a Cloudbeds-rail property PMS_SELECTED -> PMS_CONNECTED once its
+     * OAuth connection is stored. Called from the OAuth callback after a
+     * successful code exchange + property identification. Also (re)asserts
+     * pms_type=cloudbeds, mirroring {@link #connectMews}. Idempotent.
+     */
+    public void markCloudbedsConnected(UUID merchantId) {
+        Merchant merchant = reload(merchantId);
+        boolean connected = cloudbedsConnectionDao.findByMerchant(merchantId)
+                .filter(CloudbedsConnection::isConnected)
+                .isPresent();
+        if (!connected) {
+            return;
+        }
+        merchantDao.updatePmsType(merchantId, PmsType.CLOUDBEDS.wire());
+        advanceTo(merchant, OnboardingState.PMS_CONNECTED);
+        log.info("Property {} connected Cloudbeds", merchantId);
     }
 
     /**
@@ -225,7 +258,11 @@ public class PropertyOnboardingService {
             boolean complete,
             MewsInfo mews,
             StripeInfo stripe,
+            CloudbedsInfo cloudbeds,
             List<ChecklistItem> steps) {
+    }
+
+    public record CloudbedsInfo(boolean connected, String propertyName, String currency) {
     }
 
     public record MewsInfo(boolean connected, String enterpriseName, String currency) {
