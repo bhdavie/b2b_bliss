@@ -244,9 +244,12 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new StripeStandardConnectResource(
                 stripeConnectStandardService, stripeConnectionDao, onboardingService,
                 config.getApp(), clock));
+        // Booking modification + plan recalculation (rail-agnostic; schedule-level).
+        com.bliss.b2b.service.BookingModificationService bookingModificationService =
+                new com.bliss.b2b.service.BookingModificationService(jdbi, eligibilityService, clock);
         environment.jersey().register(new BookingsResource(
                 bookingService, eligibilityService, planRulesService, stripeService,
-                paymentPlanDao, config.getApp(), clock));
+                paymentPlanDao, bookingModificationService, config.getApp(), clock));
         environment.jersey().register(new PublicBookingsResource(
                 bookingDao, merchantDao, eligibilityService, planRulesService,
                 stripePaymentsService, stripeConnectResolver, clock));

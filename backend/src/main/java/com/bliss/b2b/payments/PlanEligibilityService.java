@@ -96,6 +96,29 @@ public class PlanEligibilityService {
                 totalAmountCents, discountedTotal, List.copyOf(options));
     }
 
+    /**
+     * Generates the installment schedule (dates + even amount split) for a single
+     * frequency, reusing the exact same date math as {@link #evaluate} but without
+     * the discount / deposit / amount-limit logic. Returns {@code null} when no
+     * installment fits before the payment deadline.
+     *
+     * <p>Used by the booking-modification recalc to rebuild the remaining
+     * schedule against new dates. {@code hasDeposit=true} means "no immediate
+     * day-0 charge" (installments start one cadence interval out), which the
+     * modification flow uses so an edit never fires a charge as a side effect.
+     */
+    public PlanOption installmentPlanFor(
+            LocalDate today,
+            LocalDate appointmentDate,
+            long amountCents,
+            PlanFrequency frequency,
+            int paymentDueOffsetDays,
+            boolean hasDeposit
+    ) {
+        return buildInstallments(
+                today, appointmentDate, amountCents, hasDeposit, frequency, paymentDueOffsetDays);
+    }
+
     private static EligibilityResult ineligible(
             String reason, long days, long deposit,
             long originalTotal, long discountedTotal

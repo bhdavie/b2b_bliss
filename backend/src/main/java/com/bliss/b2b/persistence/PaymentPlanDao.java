@@ -37,7 +37,8 @@ public interface PaymentPlanDao {
                 'payment_failed_in_retry',
                 'payment_failed_exhausted',
                 'defaulted',
-                'balance_due'
+                'balance_due',
+                'refund_due'
               )
             ORDER BY pp.updated_at DESC
             """)

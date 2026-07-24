@@ -68,7 +68,9 @@ public final class PaymentPlanStateMachine {
             case ACTIVE -> EnumSet.of(
                     PaymentPlanStatus.PAYMENT_FAILED_IN_RETRY,
                     PaymentPlanStatus.COMPLETED,
-                    PaymentPlanStatus.CANCELED);
+                    PaymentPlanStatus.CANCELED,
+                    // Booking modification reduced the total below what is collected.
+                    PaymentPlanStatus.REFUND_DUE);
             case PAYMENT_FAILED_IN_RETRY -> EnumSet.of(
                     PaymentPlanStatus.ACTIVE,
                     PaymentPlanStatus.PAYMENT_FAILED_EXHAUSTED,
@@ -79,6 +81,11 @@ public final class PaymentPlanStateMachine {
             case BALANCE_DUE -> EnumSet.of(
                     PaymentPlanStatus.COMPLETED,
                     PaymentPlanStatus.CANCELED);
+            // Merchant resolves a refund-due plan manually: cancel it, or re-modify
+            // the booking back up so there is a balance to collect again.
+            case REFUND_DUE -> EnumSet.of(
+                    PaymentPlanStatus.CANCELED,
+                    PaymentPlanStatus.ACTIVE);
             case DEFAULTED -> EnumSet.of(
                     PaymentPlanStatus.ACTIVE,
                     PaymentPlanStatus.CANCELED);

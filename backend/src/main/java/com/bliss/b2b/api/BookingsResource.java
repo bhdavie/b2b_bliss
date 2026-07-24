@@ -12,6 +12,10 @@ import com.bliss.b2b.payments.PlanEligibilityService;
 import com.bliss.b2b.payments.PlanOption;
 import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentPlanDao.BookingStatusInputs;
+import com.bliss.b2b.service.BookingModificationService;
+import com.bliss.b2b.service.BookingModificationService.ModificationException;
+import com.bliss.b2b.service.BookingModificationService.ModificationResult;
+import com.bliss.b2b.service.BookingModificationService.ModifyInput;
 import com.bliss.b2b.service.BookingService;
 import com.bliss.b2b.service.BookingService.CreateBookingInput;
 import com.bliss.b2b.service.BookingStatusDeriver;
@@ -43,6 +47,7 @@ public class BookingsResource {
     private final MerchantPlanRulesService planRulesService;
     private final StripeConnectService stripeService;
     private final PaymentPlanDao paymentPlanDao;
+    private final BookingModificationService modificationService;
     private final AppConfig appConfig;
     private final Clock clock;
 
@@ -52,6 +57,7 @@ public class BookingsResource {
             MerchantPlanRulesService planRulesService,
             StripeConnectService stripeService,
             PaymentPlanDao paymentPlanDao,
+            BookingModificationService modificationService,
             AppConfig appConfig,
             Clock clock
     ) {
@@ -60,6 +66,7 @@ public class BookingsResource {
         this.planRulesService = planRulesService;
         this.stripeService = stripeService;
         this.paymentPlanDao = paymentPlanDao;
+        this.modificationService = modificationService;
         this.appConfig = appConfig;
         this.clock = clock;
     }
@@ -136,6 +143,50 @@ public class BookingsResource {
         return bookingService.findById(merchant.id(), id)
                 .map(booking -> Response.ok(detailView(merchant, booking)).build())
                 .orElseGet(() -> Response.status(404).entity(Map.of("error", "not_found")).build());
+    }
+
+    /**
+     * Modify a booking's dates and/or total, recalculating the plan. Rail-agnostic;
+     * paid/processing installments are preserved and only the remaining schedule
+     * is rebuilt. Pass {@code "preview": true} for a dry run that computes the
+     * rebuilt schedule without persisting (used by the dashboard preview).
+     */
+    @POST
+    @Path("/{id}/modify")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response modify(
+            @Auth MerchantPrincipal principal,
+            @PathParam("id") String idString,
+            ModifyRequest req) {
+        UUID id;
+        try {
+            id = UUID.fromString(idString);
+        } catch (IllegalArgumentException e) {
+            return Response.status(404).entity(Map.of("error", "not_found")).build();
+        }
+        if (req == null) {
+            return Response.status(400).entity(Map.of("error", "body required")).build();
+        }
+        try {
+            ModificationResult result = modificationService.modify(new ModifyInput(
+                    id,
+                    principal.merchant().id(),
+                    req.appointmentDate(),
+                    req.checkoutDate(),
+                    req.newTotalAmountCents(),
+                    req.preview() != null && req.preview()));
+            return Response.ok(result).build();
+        } catch (ModificationException e) {
+            int status = switch (e.code()) {
+                case NOT_FOUND -> 404;
+                case NO_ACTIVE_PLAN, PLAN_NOT_ACTIVE -> 409;
+                case INVALID_INPUT -> 400;
+                case DEADLINE_IMPOSSIBLE -> 422;
+            };
+            return Response.status(status).entity(Map.of(
+                    "error", e.code().name().toLowerCase(),
+                    "message", e.getMessage())).build();
+        }
     }
 
     private Response enforceStripeGate(Merchant merchant) {
@@ -221,5 +272,12 @@ public class BookingsResource {
             long total,
             int limit,
             int offset
+    ) {}
+
+    public record ModifyRequest(
+            @JsonProperty("appointmentDate") LocalDate appointmentDate,
+            @JsonProperty("checkoutDate") LocalDate checkoutDate,
+            @JsonProperty("newTotalAmountCents") Long newTotalAmountCents,
+            @JsonProperty("preview") Boolean preview
     ) {}
 }

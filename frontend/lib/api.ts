@@ -521,6 +521,7 @@ export type PaymentPlanStatus =
   | "payment_failed_in_retry"
   | "payment_failed_exhausted"
   | "balance_due"
+  | "refund_due"
   | "completed"
   | "defaulted"
   | "canceled";
@@ -565,6 +566,70 @@ export async function fetchAttentionPlans(): Promise<AttentionResponse> {
     cache: "no-store",
   });
   return unwrap<AttentionResponse>(res);
+}
+
+// --- Booking modification / plan recalculation ---
+
+export type ModificationScheduleRow = {
+  sequence: number;
+  dueDate: string;
+  amountCents: number;
+  status: string;
+  kind: string;
+};
+
+export type ModificationResult = {
+  outcome: "REBUILT" | "REFUND_DUE";
+  preview: boolean;
+  appointmentDate: string;
+  checkoutDate: string | null;
+  totalAmountCents: number;
+  planStatus: string;
+  planTotalAmountCents: number;
+  numPayments: number;
+  collectedCents: number;
+  remainingToCollectCents: number;
+  overpaidCents: number;
+  schedule: ModificationScheduleRow[];
+  message: string;
+};
+
+export type ModifyBookingPayload = {
+  appointmentDate?: string;
+  checkoutDate?: string;
+  newTotalAmountCents?: number;
+  preview: boolean;
+};
+
+/**
+ * Modify a booking's dates/total and recalculate the plan. With `preview: true`
+ * the backend computes the rebuilt schedule without persisting. Errors (invalid
+ * input, impossible deadline) come back with a message the form can surface.
+ */
+export async function modifyBooking(
+  bookingId: string,
+  payload: ModifyBookingPayload,
+): Promise<
+  | { ok: true; data: ModificationResult }
+  | { ok: false; status: number; message: string }
+> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/bookings/${bookingId}/modify`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.ok) {
+    return { ok: true, data: (await res.json()) as ModificationResult };
+  }
+  let message = `Could not modify booking (${res.status}).`;
+  try {
+    const body = (await res.json()) as { message?: string; error?: string };
+    message = body.message ?? body.error ?? message;
+  } catch {
+    /* keep default */
+  }
+  return { ok: false, status: res.status, message };
 }
 
 export async function fetchPlan(id: string): Promise<PlanDetail> {

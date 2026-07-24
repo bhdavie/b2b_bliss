@@ -34,6 +34,13 @@ public enum PaymentPlanStatus {
     PAYMENT_FAILED_IN_RETRY("payment_failed_in_retry"),
     PAYMENT_FAILED_EXHAUSTED("payment_failed_exhausted"),
     BALANCE_DUE("balance_due"),
+    /**
+     * A booking modification reduced the new total below what has already been
+     * collected (paid + processing), so nothing remains to schedule and the
+     * merchant owes the guest a refund. Set by the modification flow; there is
+     * no auto-refund — the merchant handles it manually from the dashboard.
+     */
+    REFUND_DUE("refund_due"),
     COMPLETED("completed"),
     DEFAULTED("defaulted"),
     CANCELED("canceled");
@@ -60,7 +67,8 @@ public enum PaymentPlanStatus {
         return this == PAYMENT_FAILED_IN_RETRY
                 || this == PAYMENT_FAILED_EXHAUSTED
                 || this == DEFAULTED
-                || this == BALANCE_DUE;
+                || this == BALANCE_DUE
+                || this == REFUND_DUE;
     }
 
     /** Active = plan still consuming installment cadence (not yet final). */

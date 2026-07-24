@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyLinkButton } from "@/components/merchant/CopyLinkButton";
 import { ManagerActions } from "@/components/merchant/ManagerActions";
+import { ModifyBookingAction } from "@/components/merchant/ModifyBookingAction";
 import { fetchBookingServer } from "@/lib/auth";
 import {
   fetchPlanPortal,
@@ -139,6 +140,15 @@ function PlanDetail({ booking, portal }: { booking: Booking; portal: PublicPlanP
           <p className="text-sm text-brand-navy/55">No card on file.</p>
         )}
       </Card>
+
+      {portal.plan.status === "active" ? (
+        <ModifyBookingAction
+          bookingId={booking.id}
+          currentAppointmentDate={booking.appointmentDate}
+          currentCheckoutDate={booking.checkoutDate}
+          currentTotalCents={booking.totalAmountCents}
+        />
+      ) : null}
 
       <ManagerActions
         planId={portal.plan.id}
