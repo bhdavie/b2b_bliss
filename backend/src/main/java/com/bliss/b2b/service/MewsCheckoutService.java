@@ -60,9 +60,13 @@ public class MewsCheckoutService {
     private final MewsAdapterFactory mewsFactory;
     private final Clock clock;
 
-    public MewsCheckoutService(Jdbi jdbi, MewsAdapterFactory mewsFactory, Clock clock) {
+    private final PlanNotificationService notificationService;
+
+    public MewsCheckoutService(Jdbi jdbi, MewsAdapterFactory mewsFactory,
+            PlanNotificationService notificationService, Clock clock) {
         this.jdbi = jdbi;
         this.mewsFactory = mewsFactory;
+        this.notificationService = notificationService;
         this.clock = clock;
     }
 
@@ -167,6 +171,16 @@ public class MewsCheckoutService {
 
         log.info("Mews card confirmed for plan {} (payment {}, state {})",
                 ctx.plan.id(), result.paymentId(), result.rawState());
+
+        // Plan just activated (pending_card -> active). Guest lifecycle emails
+        // (idempotent, fire-and-forget). The receipt only fires when the first
+        // charge settled; an in-flight charge gets its receipt from reconciliation.
+        notificationService.onPlanActivated(ctx.plan.id());
+        if (charged) {
+            notificationService.onInstallmentPaid(ctx.plan.id(), first.id());
+            notificationService.onPlanCompleted(ctx.plan.id());
+        }
+
         return new CardConfirmResult(
                 result.paymentId(),
                 charged ? "paid" : "processing",

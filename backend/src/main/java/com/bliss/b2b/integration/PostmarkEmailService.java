@@ -74,7 +74,11 @@ public class PostmarkEmailService implements EmailService {
 
     private HttpRequest buildRequest(EmailMessage message) {
         ObjectNode payload = mapper.createObjectNode();
-        payload.put("From", fromAddress);
+        // Per-property sender display name when provided ("Property via Bliss"),
+        // else the bare configured address. Postmark accepts "Name <email>".
+        payload.put("From", message.hasFromName()
+                ? "\"" + message.fromName().replace("\"", "") + "\" <" + fromAddress + ">"
+                : fromAddress);
         payload.put("To", message.to());
         payload.put("Subject", message.subject());
         payload.put("TextBody", message.body());

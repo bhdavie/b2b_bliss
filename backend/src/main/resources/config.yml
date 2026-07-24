@@ -86,9 +86,10 @@ cookies:
   domain: ${BLISS_COOKIE_DOMAIN:-}
 
 email:
-  # Blank Postmark token routes mail to the logging service (dev default).
-  postmarkToken: ${BLISS_POSTMARK_TOKEN:-}
-  fromAddress: ${BLISS_EMAIL_FROM:-no-reply@bliss.com}
+  # Blank Postmark token routes mail to the logging service (dev default), so
+  # every environment keeps working without a provider. Set both to send for real.
+  postmarkToken: ${POSTMARK_SERVER_TOKEN:-}
+  fromAddress: ${POSTMARK_FROM_EMAIL:-no-reply@bliss.com}
 
 stripe:
   # Blank secretKey leaves Stripe endpoints in not-configured (503) state.

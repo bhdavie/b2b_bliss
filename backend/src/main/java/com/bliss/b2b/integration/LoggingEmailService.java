@@ -14,7 +14,9 @@ public class LoggingEmailService implements EmailService {
 
     @Override
     public void send(EmailMessage message) {
-        log.info("[email→{}] subject={}\n{}",
-                message.to(), message.subject(), message.body());
+        log.info("[email→{}] from={} subject={}\n{}",
+                message.to(),
+                message.hasFromName() ? message.fromName() : "(default)",
+                message.subject(), message.body());
     }
 }

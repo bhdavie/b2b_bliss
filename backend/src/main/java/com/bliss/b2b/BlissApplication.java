@@ -161,9 +161,15 @@ public class BlissApplication extends Application<BlissConfiguration> {
         PlanEligibilityService eligibilityService = new PlanEligibilityService();
         MerchantPlanRulesService planRulesService = new MerchantPlanRulesService(planRulesDao);
         Clock clock = Clock.systemUTC();
+        // Guest transactional emails at plan lifecycle transitions. Idempotent
+        // (email_log) and fire-and-forget; a blank Postmark token makes emailService
+        // the logging no-op, so every environment keeps working.
+        com.bliss.b2b.service.PlanNotificationService planNotificationService =
+                new com.bliss.b2b.service.PlanNotificationService(
+                        jdbi, emailService, config.getApp().getConsumerBaseUrl());
         PlanCreationService planCreationService = new PlanCreationService(
                 jdbi, eligibilityService, stripePaymentsService, stripeConnectResolver,
-                emailService, clock, config.getApp());
+                emailService, planNotificationService, clock, config.getApp());
         MewsSyncService mewsSyncService = new MewsSyncService(
                 mewsApiClient, jdbi, eligibilityService, planCreationService, clock);
         CancellationService cancellationService = new CancellationService(
@@ -191,7 +197,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 mewsAdapterFactory, clock);
         // Mews guest card-capture seam (per-property credentials via the factory).
         com.bliss.b2b.service.MewsCheckoutService mewsCheckoutService =
-                new com.bliss.b2b.service.MewsCheckoutService(jdbi, mewsAdapterFactory, clock);
+                new com.bliss.b2b.service.MewsCheckoutService(
+                        jdbi, mewsAdapterFactory, planNotificationService, clock);
         com.bliss.b2b.persistence.CustomerDao customerDao =
                 jdbi.onDemand(com.bliss.b2b.persistence.CustomerDao.class);
 
@@ -297,12 +304,12 @@ public class BlissApplication extends Application<BlissConfiguration> {
         com.bliss.b2b.service.InstallmentChargeService installmentChargeService =
                 new com.bliss.b2b.service.InstallmentChargeService(
                         installmentLedger, mewsAdapterFactory, stripeInstallmentCharger,
-                        cloudbedsAdapterFactory, clock);
+                        cloudbedsAdapterFactory, planNotificationService, clock);
         // Reconciliation pass: settles installments left in PROCESSING once their
         // Mews payment resolves (payments/getAll, per-property credentials).
         com.bliss.b2b.service.MewsReconciliationService mewsReconciliationService =
                 new com.bliss.b2b.service.MewsReconciliationService(
-                        jdbi, mewsAdapterFactory, installmentLedger, clock);
+                        jdbi, mewsAdapterFactory, installmentLedger, planNotificationService, clock);
         // Both Mews passes share one single-thread executor, so they never run
         // concurrently; the initial delays offset them (charge at +60s, reconcile
         // at +90s) so they also never fire in the same instant.

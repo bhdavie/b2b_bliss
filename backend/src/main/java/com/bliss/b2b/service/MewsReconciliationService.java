@@ -59,13 +59,16 @@ public class MewsReconciliationService {
     private final Jdbi jdbi;
     private final MewsAdapterFactory adapterFactory;
     private final Ledger ledger;
+    private final PlanNotificationService notificationService;
     private final Clock clock;
 
     public MewsReconciliationService(
-            Jdbi jdbi, MewsAdapterFactory adapterFactory, Ledger ledger, Clock clock) {
+            Jdbi jdbi, MewsAdapterFactory adapterFactory, Ledger ledger,
+            PlanNotificationService notificationService, Clock clock) {
         this.jdbi = jdbi;
         this.adapterFactory = adapterFactory;
         this.ledger = ledger;
+        this.notificationService = notificationService;
         this.clock = clock;
     }
 
@@ -131,6 +134,10 @@ public class MewsReconciliationService {
                         // Completion waits for settlement: flipping the final
                         // installment to paid here is what lets the plan complete.
                         ledger.completePlanIfDone(row.planId(), ScheduleKind.fromWire(row.kind()));
+                        // Receipt (and completion email) fire here, idempotently: a
+                        // charge left processing gets its receipt when it settles.
+                        notificationService.onInstallmentPaid(row.planId(), row.scheduleId());
+                        notificationService.onPlanCompleted(row.planId());
                         paid++;
                         log.info("Mews reconciliation: installment {} settled paid (payment {})",
                                 row.scheduleId(), row.mewsPaymentId());
@@ -140,6 +147,7 @@ public class MewsReconciliationService {
                         // pass: mark failed and bump retry_count, not a silent flip.
                         ledger.markFailed(row.scheduleId(),
                                 "mews payment settled failed (state=" + state + ")", now);
+                        notificationService.onInstallmentFailed(row.planId(), row.scheduleId());
                         failed++;
                         log.info("Mews reconciliation: installment {} settled failed "
                                 + "(payment {}, state {})", row.scheduleId(), row.mewsPaymentId(), state);

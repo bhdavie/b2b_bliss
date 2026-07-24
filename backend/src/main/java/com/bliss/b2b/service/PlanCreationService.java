@@ -153,12 +153,15 @@ public class PlanCreationService {
     private final Clock clock;
     private final AppConfig appConfig;
 
+    private final PlanNotificationService notificationService;
+
     public PlanCreationService(
             Jdbi jdbi,
             PlanEligibilityService eligibilityService,
             StripePaymentsService stripeService,
             StripeConnectResolver stripeConnectResolver,
             EmailService emailService,
+            PlanNotificationService notificationService,
             Clock clock,
             AppConfig appConfig
     ) {
@@ -167,6 +170,7 @@ public class PlanCreationService {
         this.stripeService = stripeService;
         this.stripeConnectResolver = stripeConnectResolver;
         this.emailService = emailService;
+        this.notificationService = notificationService;
         this.clock = clock;
         this.appConfig = appConfig;
     }
@@ -726,6 +730,14 @@ public class PlanCreationService {
         if (outcome.plan().status() == PaymentPlanStatus.ACTIVE) {
             emitPlanStartedWebhook(outcome);
             sendNotifications(outcome);
+            // Guest lifecycle emails (idempotent, fire-and-forget). Plan is active
+            // here, so the first schedule row has already been charged/paid.
+            notificationService.onPlanActivated(outcome.plan().id());
+            if (!outcome.schedule().isEmpty()) {
+                notificationService.onInstallmentPaid(
+                        outcome.plan().id(), outcome.schedule().get(0).id());
+            }
+            notificationService.onPlanCompleted(outcome.plan().id());
         }
         return new PlanCreationResult(
                 outcome.plan().id(),
@@ -774,13 +786,9 @@ public class PlanCreationService {
     }
 
     private void sendNotifications(Outcome o) {
-        try {
-            emailService.send(EmailTemplates.customerPlanConfirmation(
-                    o.customer().email(), o.merchant(), o.booking(), o.plan(), o.schedule(),
-                    appConfig.getConsumerBaseUrl()));
-        } catch (Exception e) {
-            log.warn("Failed to send plan confirmation to {}: {}", o.customer().email(), e.getMessage());
-        }
+        // The guest plan-confirmation email now goes through the idempotent
+        // PlanNotificationService (all rails, once). Only the merchant-facing
+        // notice remains here.
         try {
             emailService.send(EmailTemplates.merchantBookingAccepted(
                     o.merchant(), o.booking(), o.customer(), o.plan()));

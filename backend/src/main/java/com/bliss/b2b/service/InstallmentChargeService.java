@@ -50,26 +50,30 @@ public class InstallmentChargeService {
     private final StripeInstallmentCharger stripeCharger;
     /** Resolves a Cloudbeds-rail property's adapter. Null when the rail is not wired. */
     private final ChargeContextResolver cloudbedsResolver;
+    /** Guest lifecycle emails. Defaults to a no-op so tests need not wire it. */
+    private final PlanNotificationService notificationService;
     private final Clock clock;
 
     public InstallmentChargeService(
             Ledger ledger, ChargeContextResolver resolver, Clock clock) {
-        this(ledger, resolver, null, null, clock);
+        this(ledger, resolver, null, null, PlanNotificationService.disabled(), clock);
     }
 
     public InstallmentChargeService(
             Ledger ledger, ChargeContextResolver resolver,
             StripeInstallmentCharger stripeCharger, Clock clock) {
-        this(ledger, resolver, stripeCharger, null, clock);
+        this(ledger, resolver, stripeCharger, null, PlanNotificationService.disabled(), clock);
     }
 
     public InstallmentChargeService(
             Ledger ledger, ChargeContextResolver resolver,
-            StripeInstallmentCharger stripeCharger, ChargeContextResolver cloudbedsResolver, Clock clock) {
+            StripeInstallmentCharger stripeCharger, ChargeContextResolver cloudbedsResolver,
+            PlanNotificationService notificationService, Clock clock) {
         this.ledger = ledger;
         this.resolver = resolver;
         this.stripeCharger = stripeCharger;
         this.cloudbedsResolver = cloudbedsResolver;
+        this.notificationService = notificationService;
         this.clock = clock;
     }
 
@@ -96,10 +100,15 @@ public class InstallmentChargeService {
                 switch (stripeCharger.charge(d)) {
                     case PAID -> {
                         ledger.completePlanIfDone(d.planId(), ScheduleKind.fromWire(d.kind()));
+                        notificationService.onInstallmentPaid(d.planId(), d.scheduleId());
+                        notificationService.onPlanCompleted(d.planId());
                         charged++;
                     }
                     case PROCESSING -> processing++;
-                    case FAILED -> failed++;
+                    case FAILED -> {
+                        notificationService.onInstallmentFailed(d.planId(), d.scheduleId());
+                        failed++;
+                    }
                     case SKIPPED -> skippedStripe++;
                     case REQUIRES_ACTION, ERROR -> errors++;
                 }
@@ -160,6 +169,8 @@ public class InstallmentChargeService {
                     case PAID -> {
                         ledger.markPaid(d.scheduleId(), result.paymentId(), now);
                         ledger.completePlanIfDone(d.planId(), ScheduleKind.fromWire(d.kind()));
+                        notificationService.onInstallmentPaid(d.planId(), d.scheduleId());
+                        notificationService.onPlanCompleted(d.planId());
                         charged++;
                         log.info("Mews installment {} charged (payment {})",
                                 d.scheduleId(), result.paymentId());
@@ -174,6 +185,7 @@ public class InstallmentChargeService {
                     case FAILED -> {
                         ledger.markFailed(d.scheduleId(),
                                 "mews charge declined (state=" + result.rawState() + ")", now);
+                        notificationService.onInstallmentFailed(d.planId(), d.scheduleId());
                         failed++;
                         log.info("Mews installment {} declined (state {})",
                                 d.scheduleId(), result.rawState());
