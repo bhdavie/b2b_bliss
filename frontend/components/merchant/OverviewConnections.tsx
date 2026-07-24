@@ -8,7 +8,12 @@ import {
   ProviderLogo,
   type Provider,
 } from "./ConnectionsContext";
-import type { OnboardingMews, OnboardingStateWire, PmsType } from "@/lib/api";
+import type {
+  OnboardingCloudbeds,
+  OnboardingMews,
+  OnboardingStateWire,
+  PmsType,
+} from "@/lib/api";
 
 // At-a-glance connection status for the Overview, driven by the property's REAL
 // onboarding state (pmsType + Mews connection + Stripe status) rather than the
@@ -23,20 +28,23 @@ export function OverviewConnections({
   pmsType,
   onboardingState,
   mews,
+  cloudbeds,
   stripeConnectStatus,
 }: {
   pmsType: PmsType;
   onboardingState: OnboardingStateWire;
   mews: OnboardingMews | null;
+  cloudbeds: OnboardingCloudbeds | null;
   stripeConnectStatus: string | null;
 }) {
   const mewsConnected = pmsType === "mews" && Boolean(mews?.connected);
+  const cloudbedsConnected = pmsType === "cloudbeds" && Boolean(cloudbeds?.connected);
   const stripeConnected = stripeConnectStatus === "charges_enabled";
   const pmsChosen = onboardingState !== "created";
 
   return (
     <div className="border-y border-brand-neutral">
-      {/* Payments: reflect the Mews rail when connected, else Stripe payouts. */}
+      {/* Payments: reflect the PMS rail when connected, else Stripe payouts. */}
       {mewsConnected ? (
         <Row
           label="Payments"
@@ -46,10 +54,32 @@ export function OverviewConnections({
           logo={MEWS}
           right={<ConnectedTag />}
         />
+      ) : cloudbedsConnected ? (
+        <Row
+          label="Payments"
+          subtext={
+            cloudbeds?.currency
+              ? `Charged through Cloudbeds in ${cloudbeds.currency}`
+              : "Charged through Cloudbeds"
+          }
+          logo={CLOUDBEDS}
+          right={<ConnectedTag />}
+        />
       ) : stripeConnected ? (
         <Row label="Payments" logo={STRIPE} right={<ConnectedTag />} />
       ) : (
-        <Row label="Payments" right={<SetUp href="/onboarding/connect-stripe" />} />
+        <Row
+          label="Payments"
+          right={
+            <SetUp
+              href={
+                pmsType === "cloudbeds"
+                  ? "/onboarding/connect-cloudbeds"
+                  : "/onboarding/connect-stripe"
+              }
+            />
+          }
+        />
       )}
 
       <div className="border-t border-brand-neutral" />
@@ -62,10 +92,21 @@ export function OverviewConnections({
           logo={MEWS}
           right={<ConnectedTag />}
         />
+      ) : cloudbedsConnected ? (
+        <Row
+          label="Property system"
+          subtext={cloudbeds?.propertyName ?? undefined}
+          logo={CLOUDBEDS}
+          right={<ConnectedTag />}
+        />
       ) : pmsType === "mews" ? (
         <Row label="Property system" logo={MEWS} right={<SetUp href="/onboarding/connect-mews" />} />
       ) : pmsType === "cloudbeds" ? (
-        <Row label="Property system" logo={CLOUDBEDS} right={<InfoTag text="Coming soon" />} />
+        <Row
+          label="Property system"
+          logo={CLOUDBEDS}
+          right={<SetUp href="/onboarding/connect-cloudbeds" />}
+        />
       ) : pmsChosen ? (
         <Row label="Property system" right={<InfoTag text="Stripe only, no property system" />} />
       ) : (

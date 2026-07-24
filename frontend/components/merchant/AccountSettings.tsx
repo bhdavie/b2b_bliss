@@ -11,8 +11,10 @@ import {
   Spinner,
 } from "./ConnectionsContext";
 import {
+  cloudbedsOAuthStartUrl,
   completeStripeConnectDemo,
   disconnectMews,
+  type OnboardingCloudbeds,
   type OnboardingMews,
   type OnboardingStateWire,
   type PmsType,
@@ -33,6 +35,7 @@ export type AccountConnections = {
   pmsType: PmsType;
   onboardingState: OnboardingStateWire;
   mews: OnboardingMews | null;
+  cloudbeds: OnboardingCloudbeds | null;
   stripeConnectStatus: string | null;
 };
 
@@ -426,8 +429,9 @@ function PropertyManagementSection({ connections }: { connections: AccountConnec
   const router = useRouter();
   const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { pmsType, mews } = connections;
+  const { pmsType, mews, cloudbeds } = connections;
   const mewsConnected = pmsType === "mews" && Boolean(mews?.connected);
+  const cloudbedsConnected = pmsType === "cloudbeds" && Boolean(cloudbeds?.connected);
 
   async function handleDisconnect() {
     setError(null);
@@ -482,21 +486,37 @@ function PropertyManagementSection({ connections }: { connections: AccountConnec
     );
   }
 
+  if (cloudbedsConnected) {
+    return (
+      <div>
+        <ConnectedHeader
+          provider={CLOUDBEDS}
+          subtext={
+            cloudbeds?.currency
+              ? `Connected to ${cloudbeds?.propertyName ?? "your property"}, charging in ${cloudbeds.currency}`
+              : `Connected to ${cloudbeds?.propertyName ?? "your property"}`
+          }
+        />
+        <div className="mt-5 flex items-center gap-4">
+          {/* Reconnect re-runs OAuth: a real navigation, not a fetch. */}
+          <a href={cloudbedsOAuthStartUrl()} className="btn-ghost">
+            Reconnect
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   if (pmsType === "cloudbeds") {
     return (
       <div>
-        <div className="flex items-center gap-3">
-          <ProviderLogo provider={CLOUDBEDS} className="h-9" />
-          <span className="rounded-full bg-brand-cream px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-            Coming soon
-          </span>
-        </div>
-        <p className="mt-3 text-sm text-brand-navy/65">
-          Cloudbeds support is coming soon. Choose Mews or Stripe to finish setup now.
+        <p className="text-sm text-brand-navy/65">
+          Authorize Bliss in your Cloudbeds account to charge cards through Cloudbeds.
         </p>
-        <Link href="/onboarding/pms" className="btn-ghost mt-5 inline-block">
-          Choose a different PMS
-        </Link>
+        {/* OAuth start: full-page navigation to the backend endpoint. */}
+        <a href={cloudbedsOAuthStartUrl()} className="btn-primary-merchant mt-5 inline-block">
+          Connect Cloudbeds
+        </a>
       </div>
     );
   }

@@ -16,8 +16,8 @@ const PMS_LABEL: Record<PmsType, string> = {
 
 function connectHref(pms: PmsType): string | null {
   if (pms === "mews") return "/onboarding/connect-mews";
-  if (pms === "stripe") return "/onboarding/connect-stripe";
-  return null; // cloudbeds: coming soon, not connectable
+  if (pms === "cloudbeds") return "/onboarding/connect-cloudbeds";
+  return "/onboarding/connect-stripe";
 }
 
 export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
@@ -38,7 +38,9 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
       href: pmsChosen ? connectHref(status.pmsType) : "/onboarding/pms",
       hint:
         status.pmsType === "cloudbeds"
-          ? "Cloudbeds is coming soon"
+          ? status.cloudbeds?.connected
+            ? `${status.cloudbeds.propertyName ?? "Connected"} · ${status.cloudbeds.currency ?? ""}`
+            : "Authorize Cloudbeds with OAuth"
           : status.mews?.connected
             ? `${status.mews.enterpriseName ?? "Connected"} · ${status.mews.currency ?? ""}`
             : "Enter your credentials",

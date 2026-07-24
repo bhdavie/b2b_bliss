@@ -26,6 +26,7 @@ export default async function AccountSettingsPage() {
         pmsType: session.pmsType,
         onboardingState: session.onboardingState,
         mews: onboarding?.mews ?? null,
+        cloudbeds: onboarding?.cloudbeds ?? null,
         stripeConnectStatus: session.stripeConnectStatus,
       }}
     />

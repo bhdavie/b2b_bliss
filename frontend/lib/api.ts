@@ -132,13 +132,29 @@ export type OnboardingMews = {
   currency: string | null;
 };
 
+export type OnboardingCloudbeds = {
+  connected: boolean;
+  propertyName: string | null;
+  currency: string | null;
+};
+
 export type OnboardingStatus = {
   onboardingState: OnboardingStateWire;
   pmsType: PmsType;
   complete: boolean;
   mews: OnboardingMews | null;
+  cloudbeds: OnboardingCloudbeds | null;
   steps: OnboardingStep[];
 };
+
+/**
+ * Full-page navigation target that starts Cloudbeds OAuth. The backend endpoint
+ * 302s to the Cloudbeds authorize page; because it is an OAuth redirect it must
+ * be a real navigation (window.location / an anchor), never a fetch.
+ */
+export function cloudbedsOAuthStartUrl(): string {
+  return `${API_BASE_URL}/api/v1/cloudbeds/oauth/start`;
+}
 
 export async function fetchOnboardingStatus(): Promise<OnboardingStatus> {
   const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/onboarding`, {

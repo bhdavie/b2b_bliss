@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { selectPms, type PmsType } from "@/lib/api";
 
-// Property picks where it takes payments. Mews and Stripe are connectable now;
-// Cloudbeds is selectable but "coming soon" (no connection yet).
+// Property picks where it takes payments. Mews, Cloudbeds, and Stripe are all
+// connectable now.
 
 type Option = {
   key: PmsType;
@@ -23,8 +23,7 @@ const OPTIONS: Option[] = [
   {
     key: "cloudbeds",
     name: "Cloudbeds",
-    blurb: "Charge cards from your Cloudbeds property.",
-    comingSoon: true,
+    blurb: "Charge cards from your Cloudbeds property. Connect with OAuth.",
   },
   {
     key: "stripe",
@@ -47,11 +46,10 @@ export function PmsSelectStep({ currentPms }: { currentPms: PmsType }) {
       await selectPms(pms);
       if (pms === "mews") {
         router.push("/onboarding/connect-mews");
-      } else if (pms === "stripe") {
-        router.push("/onboarding/connect-stripe");
+      } else if (pms === "cloudbeds") {
+        router.push("/onboarding/connect-cloudbeds");
       } else {
-        // cloudbeds: recorded, but parked as coming soon.
-        setSubmitting(null);
+        router.push("/onboarding/connect-stripe");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save your choice. Try again.");
@@ -99,16 +97,6 @@ export function PmsSelectStep({ currentPms }: { currentPms: PmsType }) {
           );
         })}
       </div>
-
-      {choice === "cloudbeds" && submitting === null ? (
-        <div className="mt-5 rounded-md border border-brand-neutral bg-white p-4">
-          <p className="text-sm font-medium text-brand-navy">Cloudbeds is coming soon</p>
-          <p className="mt-1 text-sm text-brand-navy/65">
-            We saved Cloudbeds as your choice. You can connect it once support lands, or pick Mews or
-            Stripe to finish setup now.
-          </p>
-        </div>
-      ) : null}
     </div>
   );
 }
