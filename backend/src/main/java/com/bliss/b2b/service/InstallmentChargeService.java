@@ -45,12 +45,21 @@ public class InstallmentChargeService {
 
     private final Ledger ledger;
     private final ChargeContextResolver resolver;
+    /** Charges due Stripe-rail rows. Null (e.g. in unit tests) preserves the original skip. */
+    private final StripeInstallmentCharger stripeCharger;
     private final Clock clock;
 
     public InstallmentChargeService(
             Ledger ledger, ChargeContextResolver resolver, Clock clock) {
+        this(ledger, resolver, null, clock);
+    }
+
+    public InstallmentChargeService(
+            Ledger ledger, ChargeContextResolver resolver,
+            StripeInstallmentCharger stripeCharger, Clock clock) {
         this.ledger = ledger;
         this.resolver = resolver;
+        this.stripeCharger = stripeCharger;
         this.clock = clock;
     }
 
@@ -65,8 +74,25 @@ public class InstallmentChargeService {
         for (DueInstallment d : due) {
             String rail = d.paymentRail();
             if (RAIL_STRIPE.equalsIgnoreCase(rail)) {
-                // Untouched: Stripe plans charge via their existing paths.
-                skippedStripe++;
+                if (stripeCharger == null) {
+                    // No Stripe charger wired (e.g. unit tests): keep the original
+                    // skip so a Stripe row is never charged without one present.
+                    skippedStripe++;
+                    continue;
+                }
+                // Charge the due Stripe row off-session via the same path the
+                // inline first charge and pay-early use; completion is applied
+                // here through the shared ledger, exactly like the Mews branch.
+                switch (stripeCharger.charge(d)) {
+                    case PAID -> {
+                        ledger.completePlanIfDone(d.planId(), ScheduleKind.fromWire(d.kind()));
+                        charged++;
+                    }
+                    case PROCESSING -> processing++;
+                    case FAILED -> failed++;
+                    case SKIPPED -> skippedStripe++;
+                    case REQUIRES_ACTION, ERROR -> errors++;
+                }
                 continue;
             }
             if (!RAIL_MEWS.equalsIgnoreCase(rail)) {
@@ -173,6 +199,30 @@ public class InstallmentChargeService {
 
     /** A property-scoped adapter plus the currency it charges in. */
     public record ChargeContext(PmsAdapter adapter, String currency) {
+    }
+
+    /**
+     * Charges a single due Stripe-rail installment off-session and records the
+     * outcome, reusing the same {@code firePaymentOffSession} + {@code recordAttempt}
+     * machinery the inline first charge and pay-early use. Completion is NOT done
+     * here — {@link #runDuePass} applies it through the shared {@link Ledger}, so
+     * both rails complete plans identically. The real implementation is
+     * {@link JdbiStripeInstallmentCharger}; a null charger makes the pass skip
+     * Stripe rows (its original behavior), which unit tests rely on.
+     */
+    public interface StripeInstallmentCharger {
+        StripeChargeOutcome charge(DueInstallment due);
+    }
+
+    /**
+     * Outcome of charging one Stripe row. {@link #PAID} triggers the completion
+     * check in {@link #runDuePass}; {@link #REQUIRES_ACTION} (off-session 3DS) and
+     * {@link #ERROR} (processor/transport error, row left scheduled) are both
+     * counted as errors; {@link #SKIPPED} is a config gap (plan not active, no
+     * vaulted card) left for a later pass.
+     */
+    public enum StripeChargeOutcome {
+        PAID, PROCESSING, FAILED, REQUIRES_ACTION, SKIPPED, ERROR
     }
 
     /** Persistence boundary, kept narrow so it is trivial to fake in tests. */

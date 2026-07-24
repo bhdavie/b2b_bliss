@@ -270,9 +270,16 @@ public class BlissApplication extends Application<BlissConfiguration> {
         // machinery (markPaid / completePlanIfDone / markFailed), not a parallel one.
         com.bliss.b2b.service.InstallmentChargeService.JdbiLedger installmentLedger =
                 new com.bliss.b2b.service.InstallmentChargeService.JdbiLedger(jdbi);
+        // Stripe-rail installments auto-charge on the same timer, off-session,
+        // through the existing firePaymentOffSession + recordAttempt path (on the
+        // merchant's connected account when the resolver finds one, platform/demo
+        // otherwise).
+        com.bliss.b2b.service.JdbiStripeInstallmentCharger stripeInstallmentCharger =
+                new com.bliss.b2b.service.JdbiStripeInstallmentCharger(
+                        jdbi, stripePaymentsService, stripeConnectResolver, clock);
         com.bliss.b2b.service.InstallmentChargeService installmentChargeService =
                 new com.bliss.b2b.service.InstallmentChargeService(
-                        installmentLedger, mewsAdapterFactory, clock);
+                        installmentLedger, mewsAdapterFactory, stripeInstallmentCharger, clock);
         // Reconciliation pass: settles installments left in PROCESSING once their
         // Mews payment resolves (payments/getAll, per-property credentials).
         com.bliss.b2b.service.MewsReconciliationService mewsReconciliationService =
