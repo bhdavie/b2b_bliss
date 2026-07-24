@@ -59,6 +59,10 @@ public class BlissConfiguration extends Configuration {
     @NotNull
     private StripeConfig stripe = new StripeConfig();
 
+    @Valid
+    @NotNull
+    private PmsConfig pms = new PmsConfig();
+
     @JsonProperty public String getEnv() { return env; }
     @JsonProperty public void setEnv(String env) { this.env = env; }
     @JsonProperty public boolean isDemoLogin() { return demoLogin; }
@@ -79,6 +83,8 @@ public class BlissConfiguration extends Configuration {
     @JsonProperty public void setEmail(EmailConfig email) { this.email = email; }
     @JsonProperty public StripeConfig getStripe() { return stripe; }
     @JsonProperty public void setStripe(StripeConfig stripe) { this.stripe = stripe; }
+    @JsonProperty public PmsConfig getPms() { return pms; }
+    @JsonProperty public void setPms(PmsConfig pms) { this.pms = pms; }
 
     public boolean isProduction() {
         return "production".equalsIgnoreCase(env);
@@ -190,6 +196,47 @@ public class BlissConfiguration extends Configuration {
 
         public boolean isConfigured() {
             return secretKey != null && !secretKey.isBlank();
+        }
+    }
+
+    /**
+     * PMS-native rails. Distinct from the reservation-sync Mews integration
+     * (which loads its own credentials from {@code .env} via
+     * {@link com.bliss.b2b.integration.MewsConfig}); this block feeds the
+     * {@link com.bliss.b2b.integration.pms.PmsAdapter} and follows the same
+     * Dropwizard config pattern as {@link StripeConfig}. Nested per provider so
+     * a second PMS is a new sub-block, not more flat fields.
+     */
+    public static class PmsConfig {
+        @Valid
+        @NotNull
+        private MewsPmsConfig mews = new MewsPmsConfig();
+
+        @JsonProperty public MewsPmsConfig getMews() { return mews; }
+        @JsonProperty public void setMews(MewsPmsConfig mews) { this.mews = mews; }
+
+        public static class MewsPmsConfig {
+            // Public Mews demo credentials for the Gross pricing UK demo
+            // property (the "Are you ready to integrate with Mews?" client).
+            // docs.mews.com states demo environments are completely public and
+            // must never hold real data, so these are safe to commit as
+            // defaults. Override platformUrl/clientToken/accessToken via
+            // config.yml or MEWS_* environment for any real property.
+            private String platformUrl = "https://api.mews-demo.com";
+            private String clientToken = "E0D439EE522F44368DC78E1BFB03710C-D24FB11DBE31D4621C4817E028D9E1D";
+            private String accessToken = "C66EF7B239D24632943D115EDE9CB810-EA00F8FD8294692C940F6B5A8F9453D";
+
+            @JsonProperty public String getPlatformUrl() { return platformUrl; }
+            @JsonProperty public void setPlatformUrl(String platformUrl) { this.platformUrl = platformUrl; }
+            @JsonProperty public String getClientToken() { return clientToken; }
+            @JsonProperty public void setClientToken(String clientToken) { this.clientToken = clientToken; }
+            @JsonProperty public String getAccessToken() { return accessToken; }
+            @JsonProperty public void setAccessToken(String accessToken) { this.accessToken = accessToken; }
+
+            public boolean isConfigured() {
+                return clientToken != null && !clientToken.isBlank()
+                        && accessToken != null && !accessToken.isBlank();
+            }
         }
     }
 }
