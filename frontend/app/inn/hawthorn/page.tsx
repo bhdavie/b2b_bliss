@@ -258,10 +258,10 @@ export default function HawthornInnPage() {
               />
             </Field>
             <Field label="Nights">
-              <ReadOnly value={nights > 0 ? String(nights) : "—"} />
+              <ReadOnly value={nights > 0 ? String(nights) : "-"} />
             </Field>
             <Field label="Subtotal (before taxes & fees)">
-              <ReadOnly value={nights > 0 ? formatUsd(roomSubtotalCents) : "—"} emphasis />
+              <ReadOnly value={nights > 0 ? formatUsd(roomSubtotalCents) : "-"} emphasis />
             </Field>
           </div>
         </Card>

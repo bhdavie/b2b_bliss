@@ -31,7 +31,7 @@ export default async function OnboardingPlanRulesPage() {
           <h1 className="mt-4 text-2xl font-medium text-brand-navy">Set your plan rules</h1>
           <p className="mt-1 text-brand-navy">
             These control which stays can offer a plan and what your guests see.
-            The defaults are sensible — tweak anything and Save, or keep them and
+            The defaults are sensible. Tweak anything and Save, or keep them and
             finish.
           </p>
         </header>

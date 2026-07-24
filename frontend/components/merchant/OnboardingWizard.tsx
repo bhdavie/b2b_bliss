@@ -26,10 +26,10 @@ const BUSINESS_TYPES = [
 
 const ROOM_COUNTS = [
   { value: "under_25", label: "Under 25 rooms" },
-  { value: "25_75", label: "25–75 rooms" },
-  { value: "76_150", label: "76–150 rooms" },
-  { value: "151_300", label: "151–300 rooms" },
-  { value: "301_500", label: "301–500 rooms" },
+  { value: "25_75", label: "25 to 75 rooms" },
+  { value: "76_150", label: "76 to 150 rooms" },
+  { value: "151_300", label: "151 to 300 rooms" },
+  { value: "301_500", label: "301 to 500 rooms" },
   { value: "500_plus", label: "500+ rooms" },
 ];
 

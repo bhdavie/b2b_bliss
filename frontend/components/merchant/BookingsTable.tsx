@@ -186,7 +186,7 @@ function BookingRow({ booking }: { booking: Booking }) {
       </td>
       <td className="px-4 py-3.5 text-ink">
         {booking.customerNameHint ?? booking.customerEmailHint ?? (
-          <span className="text-brand-navy/40">—</span>
+          <span className="text-brand-navy/40">-</span>
         )}
       </td>
       <td className="px-4 py-3.5 text-ink tabular-nums">{formatBookingDate(booking.createdAt)}</td>

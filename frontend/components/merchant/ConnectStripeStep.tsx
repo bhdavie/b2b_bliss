@@ -107,7 +107,7 @@ export function ConnectStripeStep() {
         </button>
 
         <p className="mt-3 text-center text-[11px] text-ink-muted">
-          Demo mode — simulated Connect, no real charges or bank details.
+          Demo mode. Simulated Connect, no real charges or bank details.
         </p>
       </div>
     </div>
