@@ -141,7 +141,10 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 merchantDao, tokenDao, emailService, config.getApp(), magicLinkTtl,
                 config.isDemoLogin());
         StripeConnectService stripeService = new StripeConnectService(config.getStripe());
-        StripePaymentsService stripePaymentsService = new StripePaymentsService(config.getStripe());
+        // Demo charge cap threaded into both rails' execution points only.
+        long chargeCapCents = config.getChargeCapCents();
+        StripePaymentsService stripePaymentsService =
+                new StripePaymentsService(config.getStripe(), chargeCapCents);
         MewsApiClient mewsApiClient = new MewsApiClient(MewsConfig.load());
         BookingService bookingService = new BookingService(bookingDao);
         PlanEligibilityService eligibilityService = new PlanEligibilityService();
@@ -160,9 +163,12 @@ public class BlissApplication extends Application<BlissConfiguration> {
         com.bliss.b2b.persistence.MerchantMewsConnectionDao mewsConnectionDao =
                 jdbi.onDemand(com.bliss.b2b.persistence.MerchantMewsConnectionDao.class);
         com.bliss.b2b.integration.pms.MewsAdapterFactory mewsAdapterFactory =
-                new com.bliss.b2b.integration.pms.MewsAdapterFactory(jdbi);
+                new com.bliss.b2b.integration.pms.MewsAdapterFactory(jdbi, chargeCapCents);
         PropertyOnboardingService onboardingService = new PropertyOnboardingService(
                 merchantDao, mewsConnectionDao, mewsAdapterFactory, clock);
+        // Mews guest card-capture seam (per-property credentials via the factory).
+        com.bliss.b2b.service.MewsCheckoutService mewsCheckoutService =
+                new com.bliss.b2b.service.MewsCheckoutService(jdbi, mewsAdapterFactory, clock);
         com.bliss.b2b.persistence.CustomerDao customerDao =
                 jdbi.onDemand(com.bliss.b2b.persistence.CustomerDao.class);
 
@@ -222,7 +228,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 merchantDao, planRulesService, stripePaymentsService));
         environment.jersey().register(new PublicCheckoutResource(planCreationService));
         environment.jersey().register(new PublicPlansPortalResource(
-                planPortalService, stripePaymentsService));
+                planPortalService, stripePaymentsService, mewsCheckoutService));
         environment.jersey().register(new PublicAccountResource(
                 customerAuthService, paymentPlanDao, customerDao, clock, cookieOptions));
         environment.jersey().register(new PlanRulesResource(planRulesService, onboardingService));
@@ -237,6 +243,25 @@ public class BlissApplication extends Application<BlissConfiguration> {
         // 404 in every environment when off, so it cannot run outside demo mode.
         DemoResetService demoResetService = new DemoResetService(jdbi);
         environment.jersey().register(new DemoResetResource(config.isDemoLogin(), demoResetService));
+
+        // Scheduled installment charge pass. Charges Mews-rail installments that
+        // come due; Stripe rows are skipped and PROCESSING (in-flight) rows are
+        // excluded, exactly as InstallmentChargeService already guards. The
+        // MewsAdapterFactory resolves each property's own credentials. The
+        // executor is lifecycle-managed (stops on shutdown).
+        com.bliss.b2b.service.InstallmentChargeService installmentChargeService =
+                new com.bliss.b2b.service.InstallmentChargeService(
+                        new com.bliss.b2b.service.InstallmentChargeService.JdbiLedger(jdbi),
+                        mewsAdapterFactory, clock);
+        java.util.concurrent.ScheduledExecutorService chargeScheduler =
+                environment.lifecycle().scheduledExecutorService("mews-charge-pass").threads(1).build();
+        chargeScheduler.scheduleAtFixedRate(() -> {
+            try {
+                installmentChargeService.runDuePass(java.time.LocalDate.now(clock));
+            } catch (RuntimeException e) {
+                log.warn("Installment charge pass failed: {}", e.getMessage());
+            }
+        }, 60, 60, java.util.concurrent.TimeUnit.SECONDS);
 
         environment.jersey().register(new AuthDynamicFeature(
                 new JwtCookieAuthFilter.Builder()

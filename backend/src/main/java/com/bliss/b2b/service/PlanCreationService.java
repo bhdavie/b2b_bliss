@@ -8,8 +8,11 @@ import com.bliss.b2b.domain.Customer;
 import com.bliss.b2b.domain.CustomerCard;
 import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.domain.PaymentPlan;
+import com.bliss.b2b.domain.PaymentPlanStatus;
 import com.bliss.b2b.domain.PaymentScheduleEntry;
 import com.bliss.b2b.domain.PaymentScheduleStatus;
+import com.bliss.b2b.domain.PmsType;
+import com.bliss.b2b.domain.MewsConnection;
 import com.bliss.b2b.domain.ScheduleKind;
 import com.bliss.b2b.integration.EmailService;
 import com.bliss.b2b.integration.EmailTemplates;
@@ -24,6 +27,7 @@ import com.bliss.b2b.persistence.BookingDao;
 import com.bliss.b2b.persistence.CustomerCardDao;
 import com.bliss.b2b.persistence.CustomerDao;
 import com.bliss.b2b.persistence.MerchantDao;
+import com.bliss.b2b.persistence.MerchantMewsConnectionDao;
 import com.bliss.b2b.persistence.MerchantPlanRulesDao;
 import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentScheduleDao;
@@ -269,6 +273,13 @@ public class PlanCreationService {
             PlanFrequency requestedFrequency,
             DemoCard demoCard
     ) {
+        // Rail fork. A Mews-rail property creates a pending-card plan (no Stripe,
+        // no demo), whose card is captured out-of-band via the Mews checkout
+        // endpoints. It never reaches the Stripe demo branch below.
+        if (merchant.pmsType() == PmsType.MEWS) {
+            return acceptForBookingMews(handle, booking, merchant,
+                    customerEmail, customerFirstName, customerLastName, requestedFrequency);
+        }
         if (!stripeService.isConfigured()) {
             return acceptForBookingDemo(handle, booking, merchant,
                     customerEmail, customerFirstName, customerLastName,
@@ -372,7 +383,8 @@ public class PlanCreationService {
                 startDate,
                 endDate,
                 depositAmount,
-                feeCents);
+                feeCents,
+                railFor(merchant));
         PaymentPlan plan = planDao.findActiveForBooking(booking.id())
                 .orElseThrow(() -> new IllegalStateException("plan insert disappeared"));
 
@@ -536,7 +548,8 @@ public class PlanCreationService {
         planDao.insert(
                 booking.id(), customer.id(), storedCard.id(),
                 discountedTotal, installmentCount, option.frequency().wire(),
-                startDate, endDate, depositAmount, feeCents);
+                startDate, endDate, depositAmount, feeCents,
+                railFor(merchant));
         PaymentPlan plan = planDao.findActiveForBooking(booking.id())
                 .orElseThrow(() -> new IllegalStateException("plan insert disappeared"));
 
@@ -569,9 +582,125 @@ public class PlanCreationService {
                 demoIntentId, "succeeded");
     }
 
+    /**
+     * Mews-rail counterpart of {@link #acceptForBooking}: creates the plan and
+     * schedule in {@code pending_card} status and stops there. No Stripe calls,
+     * no first charge, no card yet — the card is captured out-of-band by the
+     * Mews checkout endpoints, which then charge the first installment and flip
+     * the plan to {@code active}. The property must have a validated Mews
+     * connection. A placeholder {@code customer_cards} row satisfies the plan's
+     * NOT NULL {@code customer_card_id}; card-confirm fills in its Mews id.
+     */
+    private Outcome acceptForBookingMews(
+            Handle handle,
+            Booking booking,
+            Merchant merchant,
+            String customerEmail,
+            String customerFirstName,
+            String customerLastName,
+            PlanFrequency requestedFrequency
+    ) {
+        boolean connected = handle.attach(MerchantMewsConnectionDao.class)
+                .findByMerchant(merchant.id())
+                .filter(MewsConnection::isValidated)
+                .isPresent();
+        if (!connected) {
+            throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
+                    "merchant has not connected Mews");
+        }
+
+        MerchantPlanRules rules = handle.attach(MerchantPlanRulesDao.class)
+                .findByMerchantId(merchant.id())
+                .orElse(MerchantPlanRules.DEFAULTS);
+
+        LocalDate today = LocalDate.now(clock);
+        long evaluateInput = booking.originalTotalAmountCents() != null
+                ? booking.originalTotalAmountCents()
+                : booking.totalAmountCents();
+        EligibilityResult eligibility = eligibilityService.evaluate(
+                today, booking.appointmentDate(), evaluateInput, rules);
+        if (!eligibility.eligible()) {
+            throw new PlanCreationException(Reason.ELIGIBILITY_FAILED,
+                    "booking does not satisfy this merchant's plan rules (" + eligibility.reason() + ")");
+        }
+        PlanOption option = eligibility.options().stream()
+                .filter(o -> o.frequency() == requestedFrequency)
+                .findFirst()
+                .orElseThrow(() -> new PlanCreationException(
+                        Reason.ELIGIBILITY_FAILED,
+                        requestedFrequency.wire() + " is not an eligible frequency for this booking"));
+
+        CustomerDao customerDao = handle.attach(CustomerDao.class);
+        CustomerCardDao cardDao = handle.attach(CustomerCardDao.class);
+        PaymentPlanDao planDao = handle.attach(PaymentPlanDao.class);
+        PaymentScheduleDao scheduleDao = handle.attach(PaymentScheduleDao.class);
+        BookingDao bookingDao = handle.attach(BookingDao.class);
+
+        String email = customerEmail.trim().toLowerCase();
+        Customer customer = customerDao.findByEmail(email).orElseGet(() -> {
+            customerDao.insert(email, trimToNull(customerFirstName), trimToNull(customerLastName));
+            return customerDao.findByEmail(email).orElseThrow();
+        });
+        customerDao.updateName(customer.id(), trimToNull(customerFirstName), trimToNull(customerLastName));
+        customer = customerDao.findById(customer.id()).orElseThrow();
+
+        // Placeholder card. stripe_payment_method_id is NOT NULL UNIQUE, so a
+        // synthetic value stands in until card-confirm writes mews_credit_card_id
+        // and the real masked metadata onto this same row.
+        String placeholderPm = "mews_pending_" + UUID.randomUUID();
+        cardDao.insert(customer.id(), placeholderPm, "0000", 1, 2099, "card", true);
+        CustomerCard storedCard = cardDao.findByPaymentMethodId(placeholderPm).orElseThrow();
+
+        long depositAmount = eligibility.depositAmountCents();
+        boolean hasDeposit = depositAmount > 0;
+        int installmentCount = option.numPayments();
+        LocalDate startDate = hasDeposit ? today : option.dueDates().get(0);
+        LocalDate endDate = option.dueDates().get(installmentCount - 1);
+
+        long discountedTotal = eligibility.discountedTotalAmountCents();
+        long originalTotal = eligibility.originalTotalAmountCents();
+        if (discountedTotal != originalTotal) {
+            bookingDao.applyPlanDiscount(booking.id(), discountedTotal, originalTotal);
+            booking = bookingDao.findById(booking.id()).orElseThrow();
+        }
+
+        long feeCents = feeFor(discountedTotal);
+        planDao.insertPendingMews(
+                booking.id(), customer.id(), storedCard.id(),
+                discountedTotal, installmentCount, option.frequency().wire(),
+                startDate, endDate, depositAmount, feeCents);
+        PaymentPlan plan = planDao.findLatestForBooking(booking.id())
+                .orElseThrow(() -> new IllegalStateException("plan insert disappeared"));
+
+        buildSchedule(scheduleDao, plan.id(), today, hasDeposit, depositAmount,
+                feeCents, discountedTotal, installmentCount, option);
+
+        int markedAccepted = bookingDao.markAccepted(booking.id(), customer.id());
+        if (markedAccepted != 1) {
+            throw new PlanCreationException(Reason.BOOKING_NOT_OPEN,
+                    "booking was just accepted by another session");
+        }
+
+        List<PaymentScheduleEntry> schedule = scheduleDao.listForPlan(plan.id());
+        // No charge, no intent id; the plan stays pending_card until card-confirm.
+        return new Outcome(merchant, customer, booking, plan, schedule,
+                null, PaymentPlanStatus.PENDING_CARD.wire());
+    }
+
+    /** payment_rail written at plan creation; only Mews is a non-Stripe rail. */
+    private static String railFor(Merchant merchant) {
+        return merchant.pmsType() == PmsType.MEWS ? "mews" : "stripe";
+    }
+
     private PlanCreationResult finalize(Outcome outcome) {
-        emitPlanStartedWebhook(outcome);
-        sendNotifications(outcome);
+        // Notifications + webhook only for an activated plan. A pending_card Mews
+        // plan has no card and no first charge yet, so it stays silent until
+        // card-confirm. Stripe/demo plans are ACTIVE here, so this is a no-op
+        // guard for them (behavior unchanged).
+        if (outcome.plan().status() == PaymentPlanStatus.ACTIVE) {
+            emitPlanStartedWebhook(outcome);
+            sendNotifications(outcome);
+        }
         return new PlanCreationResult(
                 outcome.plan().id(),
                 outcome.booking(),

@@ -26,9 +26,16 @@ public class StripePaymentsService {
     private static final Logger log = LoggerFactory.getLogger(StripePaymentsService.class);
 
     private final StripeConfig config;
+    /** Demo charge cap in cents; &lt;= 0 disables clamping. See BLISS_CHARGE_CAP_CENTS. */
+    private final long chargeCapCents;
 
     public StripePaymentsService(StripeConfig config) {
+        this(config, 0);
+    }
+
+    public StripePaymentsService(StripeConfig config, long chargeCapCents) {
         this.config = config;
+        this.chargeCapCents = chargeCapCents;
         if (config.isConfigured()) {
             // Stripe.apiKey is a static set in StripeConnectService too; the
             // last writer wins, but both services use the same key.
@@ -102,8 +109,11 @@ public class StripePaymentsService {
             Map<String, String> metadata
     ) throws StripeException {
         requireConfigured();
+        // Demo cap: clamp only the amount sent to Stripe. The schedule row, plan
+        // math, and the returned PaymentIntent metadata keep the real amount.
+        long chargeAmount = capCharge(amountCents);
         PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
-                .setAmount(amountCents)
+                .setAmount(chargeAmount)
                 .setCurrency("usd")
                 .setCustomer(stripeCustomerId)
                 .setPaymentMethod(paymentMethodId)
@@ -165,6 +175,15 @@ public class StripePaymentsService {
         if (!isConfigured()) {
             throw new StripeNotConfiguredException();
         }
+    }
+
+    /** Clamps to the demo charge cap when one is set; logs a single line on clamp. */
+    private long capCharge(long amountCents) {
+        if (chargeCapCents > 0 && amountCents > chargeCapCents) {
+            log.info("charge capped: {} -> {}", amountCents, chargeCapCents);
+            return chargeCapCents;
+        }
+        return amountCents;
     }
 
     public record CardSummary(String lastFour, int expMonth, int expYear, String brand) {}

@@ -61,6 +61,10 @@ public final class PaymentPlanStateMachine {
     public static boolean isAllowed(PaymentPlanStatus from, PaymentPlanStatus to) {
         if (from == to) return true;
         Set<PaymentPlanStatus> allowed = switch (from) {
+            // Mews card-confirm activates a pending plan; abandonment cancels it.
+            case PENDING_CARD -> EnumSet.of(
+                    PaymentPlanStatus.ACTIVE,
+                    PaymentPlanStatus.CANCELED);
             case ACTIVE -> EnumSet.of(
                     PaymentPlanStatus.PAYMENT_FAILED_IN_RETRY,
                     PaymentPlanStatus.COMPLETED,

@@ -60,17 +60,29 @@ public class MewsAdapter implements PmsAdapter {
     private final MewsPmsConfig config;
     private final HttpClient http;
     private final ObjectMapper mapper;
+    /** Demo charge cap in cents; &lt;= 0 disables clamping. See BLISS_CHARGE_CAP_CENTS. */
+    private final long chargeCapCents;
 
     public MewsAdapter(MewsPmsConfig config) {
+        this(config, 0);
+    }
+
+    public MewsAdapter(MewsPmsConfig config, long chargeCapCents) {
         this(config,
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(),
-                new ObjectMapper());
+                new ObjectMapper(),
+                chargeCapCents);
     }
 
     MewsAdapter(MewsPmsConfig config, HttpClient http, ObjectMapper mapper) {
+        this(config, http, mapper, 0);
+    }
+
+    MewsAdapter(MewsPmsConfig config, HttpClient http, ObjectMapper mapper, long chargeCapCents) {
         this.config = config;
         this.http = http;
         this.mapper = mapper;
+        this.chargeCapCents = chargeCapCents;
     }
 
     @Override
@@ -200,11 +212,19 @@ public class MewsAdapter implements PmsAdapter {
             throw new PmsAdapterException("chargeStoredCard requires a currency");
         }
 
+        // Demo cap: clamp only the amount actually charged. The returned
+        // PmsChargeResult echoes the real amountMinorUnits below.
+        long chargeAmount = amountMinorUnits;
+        if (chargeCapCents > 0 && chargeAmount > chargeCapCents) {
+            log.info("charge capped: {} -> {}", chargeAmount, chargeCapCents);
+            chargeAmount = chargeCapCents;
+        }
+
         Map<String, Object> body = auth();
         body.put("CreditCardId", pmsCardId);
         body.put("Amount", Map.of(
                 "Currency", currency,
-                "GrossValue", toGrossValue(amountMinorUnits)));
+                "GrossValue", toGrossValue(chargeAmount)));
         if (reservationRef != null && !reservationRef.isBlank()) {
             body.put("ReservationId", reservationRef);
         }

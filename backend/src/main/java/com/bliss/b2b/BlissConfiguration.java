@@ -27,6 +27,16 @@ public class BlissConfiguration extends Configuration {
      */
     private boolean demoLogin = false;
 
+    /**
+     * Demo safety valve: when &gt; 0, every outgoing charge amount is clamped to
+     * this ceiling at execution time only (in
+     * {@code MewsAdapter.chargeStoredCard} and
+     * {@code StripePaymentsService.firePaymentOffSession}). Plan math, schedule
+     * rows, and API responses always keep the real amount. Default 0 = no cap.
+     * Env-driven via {@code BLISS_CHARGE_CAP_CENTS}.
+     */
+    private long chargeCapCents = 0;
+
     @Valid
     @NotNull
     private AppConfig app = new AppConfig();
@@ -67,6 +77,8 @@ public class BlissConfiguration extends Configuration {
     @JsonProperty public void setEnv(String env) { this.env = env; }
     @JsonProperty public boolean isDemoLogin() { return demoLogin; }
     @JsonProperty public void setDemoLogin(boolean demoLogin) { this.demoLogin = demoLogin; }
+    @JsonProperty public long getChargeCapCents() { return chargeCapCents; }
+    @JsonProperty public void setChargeCapCents(long chargeCapCents) { this.chargeCapCents = chargeCapCents; }
     @JsonProperty public AppConfig getApp() { return app; }
     @JsonProperty public void setApp(AppConfig app) { this.app = app; }
     @JsonProperty public DatabaseConfig getDatabase() { return database; }

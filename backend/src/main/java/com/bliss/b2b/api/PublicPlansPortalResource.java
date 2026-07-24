@@ -1,6 +1,10 @@
 package com.bliss.b2b.api;
 
 import com.bliss.b2b.integration.StripePaymentsService;
+import com.bliss.b2b.service.MewsCheckoutService;
+import com.bliss.b2b.service.MewsCheckoutService.CardConfirmResult;
+import com.bliss.b2b.service.MewsCheckoutService.CardRequestResult;
+import com.bliss.b2b.service.MewsCheckoutService.MewsCheckoutException;
 import com.bliss.b2b.service.PlanCreationService.DemoCard;
 import com.bliss.b2b.service.PlanPortalService;
 import com.bliss.b2b.service.PlanPortalService.PayResult;
@@ -36,12 +40,15 @@ public class PublicPlansPortalResource {
 
     private final PlanPortalService portalService;
     private final StripePaymentsService stripeService;
+    private final MewsCheckoutService mewsCheckoutService;
 
     public PublicPlansPortalResource(
             PlanPortalService portalService,
-            StripePaymentsService stripeService) {
+            StripePaymentsService stripeService,
+            MewsCheckoutService mewsCheckoutService) {
         this.portalService = portalService;
         this.stripeService = stripeService;
+        this.mewsCheckoutService = mewsCheckoutService;
     }
 
     @GET
@@ -126,6 +133,63 @@ public class PublicPlansPortalResource {
         }
     }
 
+    /**
+     * Mews rail: open a card collection request for the plan. Returns the
+     * requestId + dataBaseUrl the client's Mews Payments Checkout embed needs.
+     */
+    @POST
+    @Path("/{token}/mews-card-request")
+    public Response mewsCardRequest(@PathParam("token") String token) {
+        try {
+            CardRequestResult result = mewsCheckoutService.cardRequest(token);
+            return Response.ok(Map.of(
+                    "requestId", result.requestId(),
+                    "dataBaseUrl", result.dataBaseUrl(),
+                    "mewsCustomerId", result.mewsCustomerId())).build();
+        } catch (MewsCheckoutException e) {
+            return mapMewsError(e);
+        } catch (RuntimeException e) {
+            log.error("Unexpected error in mews-card-request for token={}", token, e);
+            return Response.status(500).entity(Map.of("error", "internal_error")).build();
+        }
+    }
+
+    /**
+     * Mews rail: called after the embed's onSuccess. Server-verifies the vaulted
+     * card, charges the first installment, and activates the plan.
+     */
+    @POST
+    @Path("/{token}/mews-card-confirm")
+    public Response mewsCardConfirm(@PathParam("token") String token, MewsConfirmRequest req) {
+        try {
+            String pmId = req == null ? null : req.paymentMethodId();
+            CardConfirmResult result = mewsCheckoutService.cardConfirm(token, pmId);
+            return Response.ok(Map.of(
+                    "status", result.status(),
+                    "paymentId", result.paymentId(),
+                    "rawState", result.rawState())).build();
+        } catch (MewsCheckoutException e) {
+            return mapMewsError(e);
+        } catch (RuntimeException e) {
+            log.error("Unexpected error in mews-card-confirm for token={}", token, e);
+            return Response.status(500).entity(Map.of("error", "internal_error")).build();
+        }
+    }
+
+    private static Response mapMewsError(MewsCheckoutException e) {
+        int status = switch (e.code()) {
+            case "not_found" -> 404;
+            case "plan_not_pending", "not_mews_rail", "mews_not_connected", "card_request_first" -> 409;
+            case "card_not_found" -> 400;
+            case "charge_declined" -> 402;
+            case "charge_failed" -> 502;
+            default -> 400;
+        };
+        log.info("Mews checkout rejected code={} message={}", e.code(), e.getMessage());
+        return Response.status(status).entity(Map.of(
+                "error", e.code(), "message", e.getMessage())).build();
+    }
+
     private static DemoCard toDemoCard(ReplaceCardRequest req) {
         if (req.demoCardLastFour() == null && req.demoCardExpMonth() == null
                 && req.demoCardExpYear() == null && req.demoCardBrand() == null) {
@@ -162,5 +226,9 @@ public class PublicPlansPortalResource {
             @JsonProperty("demoCardExpMonth") Integer demoCardExpMonth,
             @JsonProperty("demoCardExpYear") Integer demoCardExpYear,
             @JsonProperty("demoCardBrand") String demoCardBrand
+    ) {}
+
+    public record MewsConfirmRequest(
+            @JsonProperty("paymentMethodId") String paymentMethodId
     ) {}
 }

@@ -38,6 +38,11 @@ env: ${BLISS_ENV:-development}
 # no code change.
 demoLogin: ${BLISS_DEMO_LOGIN:-false}
 
+# Demo safety valve. When > 0, outgoing charge amounts are clamped to this many
+# cents at execution time only (plan math and responses keep real amounts).
+# 0 (default) disables the cap.
+chargeCapCents: ${BLISS_CHARGE_CAP_CENTS:-0}
+
 app:
   # Merchant dashboard (property.bliss-payments.com in prod): magic-link sign-in
   # and the Stripe Connect return url.

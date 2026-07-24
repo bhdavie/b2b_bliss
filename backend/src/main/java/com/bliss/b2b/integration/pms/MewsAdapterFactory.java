@@ -32,13 +32,21 @@ public class MewsAdapterFactory implements ChargeContextResolver {
     private static final String DEFAULT_CURRENCY = "GBP";
 
     private final MerchantMewsConnectionDao connectionDao;
+    /** Demo charge cap in cents, threaded into every adapter this factory builds. */
+    private final long chargeCapCents;
 
     public MewsAdapterFactory(Jdbi jdbi) {
+        this(jdbi, 0);
+    }
+
+    public MewsAdapterFactory(Jdbi jdbi, long chargeCapCents) {
         this.connectionDao = jdbi.onDemand(MerchantMewsConnectionDao.class);
+        this.chargeCapCents = chargeCapCents;
     }
 
     MewsAdapterFactory(MerchantMewsConnectionDao connectionDao) {
         this.connectionDao = connectionDao;
+        this.chargeCapCents = 0;
     }
 
     /**
@@ -47,13 +55,14 @@ public class MewsAdapterFactory implements ChargeContextResolver {
      */
     public MewsAdapter adapterForCredentials(
             String platformUrl, String clientToken, String accessToken) {
-        return new MewsAdapter(configOf(platformUrl, clientToken, accessToken));
+        return new MewsAdapter(configOf(platformUrl, clientToken, accessToken), chargeCapCents);
     }
 
     /** A Mews adapter bound to a stored connection's credentials. */
     public MewsAdapter adapterForConnection(MewsConnection connection) {
         return new MewsAdapter(configOf(
-                connection.platformUrl(), connection.clientToken(), connection.accessToken()));
+                connection.platformUrl(), connection.clientToken(), connection.accessToken()),
+                chargeCapCents);
     }
 
     @Override

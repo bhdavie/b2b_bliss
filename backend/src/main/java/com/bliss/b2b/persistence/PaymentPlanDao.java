@@ -103,11 +103,11 @@ public interface PaymentPlanDao {
             INSERT INTO payment_plans (
                 booking_id, customer_id, customer_card_id, total_amount_cents,
                 num_payments, frequency, start_date, end_date, status,
-                deposit_amount_cents, processing_fee_cents
+                deposit_amount_cents, processing_fee_cents, payment_rail
             ) VALUES (
                 :bookingId, :customerId, :customerCardId, :totalAmountCents,
                 :numPayments, :frequency, :startDate, :endDate, 'active',
-                :depositAmountCents, :processingFeeCents
+                :depositAmountCents, :processingFeeCents, :paymentRail
             )
             """)
     void insert(
@@ -120,8 +120,49 @@ public interface PaymentPlanDao {
             @Bind("startDate") LocalDate startDate,
             @Bind("endDate") LocalDate endDate,
             @Bind("depositAmountCents") long depositAmountCents,
+            @Bind("processingFeeCents") long processingFeeCents,
+            @Bind("paymentRail") String paymentRail
+    );
+
+    /**
+     * Mews rail: insert a plan in {@code pending_card} status (no card captured
+     * yet) with {@code payment_rail = 'mews'}. Card-confirm later charges the
+     * first installment and flips the plan to {@code active}.
+     */
+    @SqlUpdate("""
+            INSERT INTO payment_plans (
+                booking_id, customer_id, customer_card_id, total_amount_cents,
+                num_payments, frequency, start_date, end_date, status,
+                deposit_amount_cents, processing_fee_cents, payment_rail
+            ) VALUES (
+                :bookingId, :customerId, :customerCardId, :totalAmountCents,
+                :numPayments, :frequency, :startDate, :endDate, 'pending_card',
+                :depositAmountCents, :processingFeeCents, 'mews'
+            )
+            """)
+    void insertPendingMews(
+            @Bind("bookingId") UUID bookingId,
+            @Bind("customerId") UUID customerId,
+            @Bind("customerCardId") UUID customerCardId,
+            @Bind("totalAmountCents") long totalAmountCents,
+            @Bind("numPayments") int numPayments,
+            @Bind("frequency") String frequency,
+            @Bind("startDate") LocalDate startDate,
+            @Bind("endDate") LocalDate endDate,
+            @Bind("depositAmountCents") long depositAmountCents,
             @Bind("processingFeeCents") long processingFeeCents
     );
+
+    /** Stores the pending Mews payment-method request id so confirm can validate it. */
+    @SqlUpdate("""
+            UPDATE payment_plans
+            SET pending_mews_request_id = :requestId
+            WHERE id = :id
+            """)
+    int setPendingMewsRequestId(@Bind("id") UUID id, @Bind("requestId") String requestId);
+
+    @SqlQuery("SELECT pending_mews_request_id FROM payment_plans WHERE id = :id")
+    Optional<String> findPendingMewsRequestId(@Bind("id") UUID id);
 
     /**
      * All plans tied to the given customer email, joined with the booking

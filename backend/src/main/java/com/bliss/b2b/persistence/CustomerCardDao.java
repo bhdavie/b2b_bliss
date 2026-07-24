@@ -48,6 +48,29 @@ public interface CustomerCardDao {
             """)
     int markAllNonDefaultForCustomer(@Bind("customerId") UUID customerId);
 
+    /**
+     * Mews rail: fill in a placeholder card row once the guest has vaulted a
+     * card in Mews. Writes the Mews CreditCardId and the masked card metadata
+     * read back from getStoredCards.
+     */
+    @SqlUpdate("""
+            UPDATE customer_cards
+            SET mews_credit_card_id = :mewsCreditCardId,
+                last_four = :lastFour,
+                exp_month = :expMonth,
+                exp_year = :expYear,
+                brand = :brand
+            WHERE id = :id
+            """)
+    int setMewsCard(
+            @Bind("id") UUID id,
+            @Bind("mewsCreditCardId") String mewsCreditCardId,
+            @Bind("lastFour") String lastFour,
+            @Bind("expMonth") int expMonth,
+            @Bind("expYear") int expYear,
+            @Bind("brand") String brand
+    );
+
     @SqlQuery("""
             SELECT * FROM customer_cards
             WHERE customer_id = :customerId AND is_default = TRUE

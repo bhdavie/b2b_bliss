@@ -39,6 +39,19 @@ public interface CustomerDao {
     );
 
     @SqlUpdate("""
+            UPDATE customers
+            SET mews_customer_id = :mewsCustomerId
+            WHERE id = :id
+            """)
+    int setMewsCustomerId(
+            @Bind("id") UUID id,
+            @Bind("mewsCustomerId") String mewsCustomerId
+    );
+
+    @SqlQuery("SELECT mews_customer_id FROM customers WHERE id = :id")
+    Optional<String> findMewsCustomerId(@Bind("id") UUID id);
+
+    @SqlUpdate("""
             UPDATE customers SET last_login_at = :at WHERE id = :id
             """)
     int touchLastLogin(@Bind("id") UUID id, @Bind("at") Instant at);

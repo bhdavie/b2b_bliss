@@ -22,6 +22,14 @@ package com.bliss.b2b.domain;
  * </ul>
  */
 public enum PaymentPlanStatus {
+    /**
+     * Mews rail only: the plan and schedule exist but the guest has not yet
+     * completed card entry through the Mews Payments Checkout embed. The plan
+     * is not chargeable and is not "one active plan per booking" yet. It moves
+     * to {@link #ACTIVE} once card-confirm captures a card and the first
+     * installment is accepted.
+     */
+    PENDING_CARD("pending_card"),
     ACTIVE("active"),
     PAYMENT_FAILED_IN_RETRY("payment_failed_in_retry"),
     PAYMENT_FAILED_EXHAUSTED("payment_failed_exhausted"),
