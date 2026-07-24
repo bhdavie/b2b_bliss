@@ -34,6 +34,7 @@ import {
 import { Confirmation } from "./Confirmation";
 import { CheckoutSummaryCard } from "./CheckoutSummaryCard";
 import { DemoCardSection } from "./DemoCardSection";
+import { MewsCardSection } from "./MewsCardSection";
 
 export type CheckoutCart = {
   totalCents: number;
@@ -182,7 +183,34 @@ export function CheckoutFlow({
       ) : null}
 
       {showCardStep ? (
-        stripePromise ? (
+        merchant.rail === "mews" ? (
+          <MewsCardSection
+            emailInitial={cart.email ?? ""}
+            onCancel={() => setStep("plan")}
+            ctaLabel="Book now"
+            disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, publicOption)}
+            returnUrl={returnUrl}
+            merchantName={merchant.merchant.businessName}
+            onCreatePlan={async (email) => {
+              const result = await submitCheckout({
+                merchantSlug: merchant.merchant.slug,
+                totalAmountCents: cart.totalCents,
+                appointmentDate: cart.checkin,
+                checkoutDate: cart.checkout,
+                description: cart.description,
+                customerName: cart.name ?? email.split("@")[0] ?? "",
+                customerEmail: email,
+                customerPhone: cart.phone,
+                paymentMethodId: "mews_placeholder",
+                frequency: publicOption.frequency,
+              });
+              if (!result.ok) return { ok: false, message: result.error.message };
+              setConfirmed(result.data);
+              return { ok: true, bookingToken: result.data.bookingToken };
+            }}
+            onConfirmed={() => setStep("confirmed")}
+          />
+        ) : stripePromise ? (
           <Elements stripe={stripePromise}>
             <StripeCardSection
               emailInitial={cart.email ?? ""}
@@ -374,6 +402,7 @@ function syntheticBookingFromCart(
     stripe: merchant.stripe,
     policies: merchant.policies,
     status: "sent",
+    rail: merchant.rail,
   };
 }
 

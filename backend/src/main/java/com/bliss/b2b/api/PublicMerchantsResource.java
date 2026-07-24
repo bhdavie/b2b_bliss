@@ -88,7 +88,10 @@ public class PublicMerchantsResource {
                 new PublicMerchantView.Stripe(
                         stripeService.isConfigured(),
                         stripeService.isConfigured() ? stripeService.publishableKey() : null,
-                        chargesEnabled)
+                        chargesEnabled),
+                merchant.pmsType() == com.bliss.b2b.domain.PmsType.MEWS
+                        ? "mews"
+                        : (stripeService.isConfigured() ? "stripe" : "demo")
         )).build();
     }
 

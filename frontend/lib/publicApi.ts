@@ -45,6 +45,13 @@ export function distributeInstallments(opts: {
 
 export type PublicPlanFrequency = "biweekly" | "monthly";
 
+/**
+ * Which card-capture rail the hosted page should use, sourced from the backend
+ * public payloads. "mews" -> Mews Payments Checkout embed; "stripe" -> Stripe
+ * Elements; "demo" -> the plain demo card form.
+ */
+export type PublicRail = "stripe" | "mews" | "demo";
+
 export type PublicPlanOption = {
   frequency: PublicPlanFrequency;
   numPayments: number;
@@ -114,6 +121,7 @@ export type PublicBooking = {
   };
   policies: PublicPolicies;
   status: string;
+  rail: PublicRail;
 };
 
 export async function fetchPublicBooking(
@@ -159,6 +167,7 @@ export type PublicMerchant = {
     publishableKey: string | null;
     chargesEnabled: boolean;
   };
+  rail: PublicRail;
 };
 
 export async function fetchPublicMerchant(
@@ -304,6 +313,76 @@ export async function createPlan(
   return { ok: true, data: body as CreatePlanResponse };
 }
 
+// --- Mews guest card capture ---
+
+export type MewsCardRequestResult = {
+  requestId: string;
+  dataBaseUrl: string;
+  mewsCustomerId: string;
+};
+
+/** Opens a Mews card collection request for a pending_card plan (by booking token). */
+export async function requestMewsCard(
+  token: string,
+): Promise<{ ok: true; data: MewsCardRequestResult } | { ok: false; error: CreatePlanError; status: number }> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/public/plans/${encodeURIComponent(token)}/mews-card-request`,
+    { method: "POST", headers: { "Content-Type": "application/json" } },
+  );
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return {
+      ok: false,
+      status: res.status,
+      error: {
+        error: (body as { error?: string }).error ?? "unknown_error",
+        message:
+          (body as { message?: string }).message ??
+          `Could not start card entry (${res.status})`,
+      },
+    };
+  }
+  return { ok: true, data: body as MewsCardRequestResult };
+}
+
+export type MewsCardConfirmResult = {
+  status: string;
+  paymentId: string;
+  rawState: string;
+};
+
+/**
+ * Confirms a Mews card after the embed's onSuccess. The backend re-verifies the
+ * vaulted card server-side, charges the first installment, and activates the plan.
+ */
+export async function confirmMewsCard(
+  token: string,
+  paymentMethodId: string,
+): Promise<{ ok: true; data: MewsCardConfirmResult } | { ok: false; error: CreatePlanError; status: number }> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/public/plans/${encodeURIComponent(token)}/mews-card-confirm`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentMethodId }),
+    },
+  );
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return {
+      ok: false,
+      status: res.status,
+      error: {
+        error: (body as { error?: string }).error ?? "unknown_error",
+        message:
+          (body as { message?: string }).message ??
+          `Could not confirm your card (${res.status})`,
+      },
+    };
+  }
+  return { ok: true, data: body as MewsCardConfirmResult };
+}
+
 export function formatScheduleDateLong(iso: string): string {
   const parts = iso.split("-").map(Number);
   const y = parts[0] ?? 0;
@@ -410,6 +489,7 @@ export type PublicPlanPortal = {
     configured: boolean;
     publishableKey: string | null;
   };
+  rail: PublicRail;
 };
 
 export async function fetchPlanPortal(token: string): Promise<PublicPlanPortal | null> {

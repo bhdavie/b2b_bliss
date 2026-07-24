@@ -26,6 +26,7 @@ import {
 import { TrustSignals } from "./TrustSignals";
 import { Confirmation } from "./Confirmation";
 import { DemoCardSection } from "./DemoCardSection";
+import { MewsCardSection } from "./MewsCardSection";
 
 type Step = "plan" | "card" | "confirmed";
 
@@ -112,7 +113,27 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
       ) : null}
 
       {showCardStep ? (
-        stripePromise ? (
+        booking.rail === "mews" ? (
+          <MewsCardSection
+            emailInitial={booking.service.customerEmailHint ?? ""}
+            onCancel={() => setStep("plan")}
+            ctaLabel="Book now"
+            disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, selectedOption)}
+            onCreatePlan={async (email) => {
+              const result = await createPlan({
+                merchantSlug: booking.merchant.slug,
+                bookingToken: extractTokenFromCurrentPath(),
+                customerEmail: email,
+                paymentMethodId: "mews_placeholder",
+                frequency: selectedOption.frequency,
+              });
+              if (!result.ok) return { ok: false, message: result.error.message };
+              setConfirmed(result.data);
+              return { ok: true, bookingToken: result.data.bookingToken };
+            }}
+            onConfirmed={() => setStep("confirmed")}
+          />
+        ) : stripePromise ? (
           <Elements stripe={stripePromise}>
             <StripeCardSection
               emailInitial={booking.service.customerEmailHint ?? ""}

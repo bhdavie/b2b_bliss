@@ -5,6 +5,7 @@ import com.bliss.b2b.domain.CustomerCard;
 import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.domain.PaymentPlan;
 import com.bliss.b2b.domain.PaymentScheduleEntry;
+import com.bliss.b2b.domain.PmsType;
 import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.service.PlanPortalService.PortalSnapshot;
 import java.time.Instant;
@@ -29,12 +30,17 @@ public record PublicPlanPortalView(
         LocalDate nextDueDate,
         Long nextDueAmountCents,
         boolean complete,
-        StripeStateView stripe
+        StripeStateView stripe,
+        String rail
 ) {
 
     public static PublicPlanPortalView from(PortalSnapshot s, StripePaymentsService stripeService) {
         // As-of-today derivation (single source of truth, see PlanProgress).
         var progress = s.progress();
+        boolean stripeConfigured = stripeService.isConfigured();
+        String rail = s.merchant().pmsType() == PmsType.MEWS
+                ? "mews"
+                : (stripeConfigured ? "stripe" : "demo");
         return new PublicPlanPortalView(
                 MerchantView.from(s.merchant()),
                 BookingView.from(s.booking()),
@@ -47,7 +53,8 @@ public record PublicPlanPortalView(
                 progress.nextDueDate(),
                 progress.nextDueAmountCents(),
                 progress.complete(),
-                new StripeStateView(stripeService.isConfigured(), stripeService.publishableKey()));
+                new StripeStateView(stripeConfigured, stripeService.publishableKey()),
+                rail);
     }
 
     public record MerchantView(

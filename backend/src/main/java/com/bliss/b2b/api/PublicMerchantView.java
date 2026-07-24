@@ -9,7 +9,8 @@ package com.bliss.b2b.api;
 public record PublicMerchantView(
         MerchantContext merchant,
         Policies policies,
-        Stripe stripe
+        Stripe stripe,
+        String rail
 ) {
     public record MerchantContext(
             String slug,

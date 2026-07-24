@@ -2,6 +2,7 @@ package com.bliss.b2b.api;
 
 import com.bliss.b2b.domain.Booking;
 import com.bliss.b2b.domain.Merchant;
+import com.bliss.b2b.domain.PmsType;
 import com.bliss.b2b.payments.EligibilityResult;
 import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.payments.PlanFrequency;
@@ -20,8 +21,21 @@ public record PublicBookingView(
         List<Plan> planOptions,
         Stripe stripe,
         Policies policies,
-        String status
+        String status,
+        String rail
 ) {
+    /**
+     * Which card-capture rail the hosted page should use: {@code "mews"} for a
+     * Mews-rail property, else {@code "stripe"} when Stripe is configured, else
+     * {@code "demo"}.
+     */
+    static String railOf(Merchant merchant, boolean stripeConfigured) {
+        if (merchant.pmsType() == PmsType.MEWS) {
+            return "mews";
+        }
+        return stripeConfigured ? "stripe" : "demo";
+    }
+
     public record MerchantContext(
             String slug,
             String businessName,
@@ -154,7 +168,8 @@ public record PublicBookingView(
                 options,
                 new Stripe(stripeConfigured, stripeConfigured ? stripePublishableKey : null),
                 policies,
-                booking.status().wire()
+                booking.status().wire(),
+                railOf(merchant, stripeConfigured)
         );
     }
 }
