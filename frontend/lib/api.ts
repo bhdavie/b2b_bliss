@@ -294,6 +294,65 @@ export async function completeStripeConnectDemo(): Promise<DemoStripeConnectResu
   return unwrap<DemoStripeConnectResult>(res);
 }
 
+/**
+ * Per-property Stripe Connect *Standard* status, read from
+ * merchant_stripe_connections. Distinct from StripeStatus, which reports the
+ * older Express account stored on the merchant row.
+ */
+export type StripeConnectStatus = {
+  configured: boolean;
+  connected: boolean;
+  status: "not_started" | "in_progress" | "charges_enabled" | "restricted";
+  accountId: string | null;
+  chargesEnabled: boolean;
+};
+
+export async function fetchStripeConnectStatus(): Promise<StripeConnectStatus> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/merchants/stripe-connect/status`,
+    { credentials: "include", cache: "no-store" },
+  );
+  return unwrap<StripeConnectStatus>(res);
+}
+
+/**
+ * Starts or resumes Standard onboarding. Returns a one-time Stripe-hosted URL
+ * to send the browser to, or the not-configured error when the backend has no
+ * Stripe key (demo mode).
+ */
+export async function startStripeConnect(): Promise<
+  StripeAccountLink | StripeNotConfiguredError
+> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/merchants/stripe-connect/start`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  if (res.status === 503) {
+    return (await res.json()) as StripeNotConfiguredError;
+  }
+  return unwrap<StripeAccountLink>(res);
+}
+
+/**
+ * Demo-only Standard completion, for when Stripe is not configured and there is
+ * no hosted flow to run. Backend refuses (409) if real Stripe is configured.
+ */
+export async function completeStripeConnectStandardDemo(): Promise<StripeConnectStatus> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/merchants/stripe-connect/demo-complete`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  return unwrap<StripeConnectStatus>(res);
+}
+
 export type MewsConnection = {
   connected: boolean;
   enterpriseName?: string;

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CheckIcon,
   PAYMENT_PROVIDERS,
@@ -12,12 +12,15 @@ import {
 } from "./ConnectionsContext";
 import {
   cloudbedsOAuthStartUrl,
-  completeStripeConnectDemo,
+  completeStripeConnectStandardDemo,
   disconnectMews,
+  fetchStripeConnectStatus,
+  startStripeConnect,
   type OnboardingCloudbeds,
   type OnboardingMews,
   type OnboardingStateWire,
   type PmsType,
+  type StripeConnectStatus,
 } from "@/lib/api";
 
 export type AccountInitial = {
@@ -536,10 +539,30 @@ function PropertyManagementSection({ connections }: { connections: AccountConnec
 // the real Stripe connect flow.
 function PaymentProcessorSection({ connections }: { connections: AccountConnections }) {
   const router = useRouter();
-  const { pmsType, mews, stripeConnectStatus } = connections;
+  const { pmsType, mews } = connections;
   const mewsConnected = pmsType === "mews" && Boolean(mews?.connected);
   const [phase, setPhase] = useState<"idle" | "connecting" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  // Live Connect Standard status. The session's stripeConnectStatus reflects
+  // the older Express columns on the merchant row, which the per-property
+  // Standard flow never writes, so read the connection from its own endpoint.
+  // Mounting after Stripe returns to /dashboard is what refreshes this.
+  const [connect, setConnect] = useState<StripeConnectStatus | null>(null);
+
+  useEffect(() => {
+    if (mewsConnected) return;
+    let active = true;
+    fetchStripeConnectStatus()
+      .then((status) => {
+        if (active) setConnect(status);
+      })
+      .catch(() => {
+        // Leave the section in its not-connected state; the button still works.
+      });
+    return () => {
+      active = false;
+    };
+  }, [mewsConnected]);
 
   if (mewsConnected) {
     return (
@@ -550,9 +573,7 @@ function PaymentProcessorSection({ connections }: { connections: AccountConnecti
     );
   }
 
-  const stripeConnected = stripeConnectStatus === "charges_enabled";
-
-  if (stripeConnected) {
+  if (connect?.chargesEnabled) {
     return (
       <div>
         <ConnectedHeader provider={STRIPE} subtext="Payouts are set up. You can take payment plans and get paid out on arrival." />
@@ -564,13 +585,23 @@ function PaymentProcessorSection({ connections }: { connections: AccountConnecti
     setError(null);
     setPhase("connecting");
     try {
-      await completeStripeConnectDemo();
-      router.refresh();
+      const link = await startStripeConnect();
+      if ("error" in link) {
+        // No Stripe key on the backend, so there is no hosted flow to send
+        // them to. Mark the property connected the way the demo path does.
+        setConnect(await completeStripeConnectStandardDemo());
+        setPhase("idle");
+        router.refresh();
+        return;
+      }
+      window.location.href = link.url;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not connect Stripe. Try again.");
       setPhase("error");
     }
   }
+
+  const resuming = connect?.status === "in_progress" || connect?.status === "restricted";
 
   return (
     <div>
@@ -578,7 +609,9 @@ function PaymentProcessorSection({ connections }: { connections: AccountConnecti
         <ProviderLogo provider={STRIPE} className="h-8" />
       </div>
       <p className="mt-3 text-sm text-brand-navy/65">
-        Connect Stripe to accept payments and installments, and route payouts to your bank.
+        {resuming
+          ? "Your Stripe onboarding is not finished. Pick up where you left off to start taking payments."
+          : "Connect Stripe to accept payments and installments, and route payouts to your bank."}
       </p>
       {error ? (
         <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
@@ -592,8 +625,10 @@ function PaymentProcessorSection({ connections }: { connections: AccountConnecti
         {phase === "connecting" ? (
           <span className="flex items-center gap-2">
             <Spinner className="h-4 w-4" />
-            Connecting
+            Redirecting to Stripe
           </span>
+        ) : resuming ? (
+          "Continue Stripe setup"
         ) : (
           "Connect Stripe"
         )}

@@ -84,10 +84,12 @@ public class StripeStandardConnectResource {
                 connectionDao.upsertAccount(
                         merchant.id(), accountId, ConnectStatus.IN_PROGRESS.wire(), false);
             }
+            // /dashboard is the "Account settings" tab that owns the Stripe
+            // section; /settings is plan rules and policies only.
             String returnUrl = appConfig.getMerchantBaseUrl()
-                    + "/settings?stripe_connect=return";
+                    + "/dashboard?stripe_connect=return";
             String refreshUrl = appConfig.getMerchantBaseUrl()
-                    + "/settings?stripe_connect=refresh";
+                    + "/dashboard?stripe_connect=refresh";
             AccountLinkResponse link = stripe.createAccountLink(accountId, returnUrl, refreshUrl);
             return Response.ok(new StripeAccountLinkView(link.url(), link.expiresAtEpochSeconds())).build();
         } catch (StripeNotConfiguredException e) {
