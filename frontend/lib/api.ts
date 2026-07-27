@@ -319,16 +319,22 @@ export async function fetchStripeConnectStatus(): Promise<StripeConnectStatus> {
  * Starts or resumes Standard onboarding. Returns a one-time Stripe-hosted URL
  * to send the browser to, or the not-configured error when the backend has no
  * Stripe key (demo mode).
+ *
+ * returnPath is where Stripe drops the merchant afterwards. The backend only
+ * honours an allowlisted path and falls back to /dashboard, so callers outside
+ * the onboarding wizard can omit it. The body is always sent, never empty, so
+ * the endpoint has an entity to deserialize.
  */
-export async function startStripeConnect(): Promise<
-  StripeAccountLink | StripeNotConfiguredError
-> {
+export async function startStripeConnect(
+  returnPath?: string,
+): Promise<StripeAccountLink | StripeNotConfiguredError> {
   const res = await fetch(
     `${API_BASE_URL}/api/v1/merchants/stripe-connect/start`,
     {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(returnPath ? { returnPath } : {}),
     },
   );
   if (res.status === 503) {

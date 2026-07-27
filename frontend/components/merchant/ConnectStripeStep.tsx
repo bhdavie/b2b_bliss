@@ -1,31 +1,59 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { completeStripeConnectDemo } from "@/lib/api";
+import { useEffect, useState } from "react";
+import {
+  completeStripeConnectStandardDemo,
+  fetchStripeConnectStatus,
+  startStripeConnect,
+  type StripeConnectStatus,
+} from "@/lib/api";
 
-// Simulated "Connect with Stripe" step. Stripe isn't configured in this env, so
-// instead of a dead button we stage a convincing Connect handoff and then mark
-// the merchant connected via the demo-complete endpoint (mirrors the demo path
-// the rest of the app uses).
+// "Connect with Stripe" step of the onboarding wizard. Sends the merchant to
+// Stripe's hosted Standard onboarding and asks to be returned here, so the
+// wizard can carry on to plan rules. With no Stripe key on the backend there is
+// no hosted flow to run, so it falls back to the demo-complete endpoint.
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const RETURN_PATH = "/onboarding/connect-stripe";
 
-type Phase = "idle" | "redirecting" | "verifying" | "done" | "error";
+type Phase = "idle" | "redirecting" | "done" | "error";
 
 export function ConnectStripeStep() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
+  // Status on mount is what renders the connected state when Stripe returns
+  // the merchant to this page.
+  const [connect, setConnect] = useState<StripeConnectStatus | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchStripeConnectStatus()
+      .then((status) => {
+        if (!active) return;
+        setConnect(status);
+        if (status.chargesEnabled) setPhase("done");
+      })
+      .catch(() => {
+        // Leave the step in its not-connected state; the button still works.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function handleConnect() {
     setError(null);
     setPhase("redirecting");
     try {
-      await sleep(1100); // "Redirecting to Stripe…"
-      setPhase("verifying");
-      await sleep(900); // "Verifying your details…"
-      await completeStripeConnectDemo();
-      setPhase("done");
+      const link = await startStripeConnect(RETURN_PATH);
+      if ("error" in link) {
+        // No Stripe key on the backend, so there is no hosted flow to send
+        // them to. Mark the property connected the way the demo path does.
+        setConnect(await completeStripeConnectStandardDemo());
+        setPhase("done");
+        return;
+      }
+      window.location.href = link.url;
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Could not connect Stripe. Try again.",
@@ -55,7 +83,9 @@ export function ConnectStripeStep() {
     );
   }
 
-  const busy = phase === "redirecting" || phase === "verifying";
+  const busy = phase === "redirecting";
+  const resuming =
+    connect?.status === "in_progress" || connect?.status === "restricted";
 
   return (
     <div className="card overflow-hidden">
@@ -101,14 +131,16 @@ export function ConnectStripeStep() {
         >
           {phase === "redirecting"
             ? "Redirecting to Stripe…"
-            : phase === "verifying"
-              ? "Verifying your details…"
+            : resuming
+              ? "Continue Stripe setup"
               : "Connect with Stripe"}
         </button>
 
-        <p className="mt-3 text-center text-[11px] text-ink-muted">
-          Demo mode. Simulated Connect, no real charges or bank details.
-        </p>
+        {connect && !connect.configured ? (
+          <p className="mt-3 text-center text-[11px] text-ink-muted">
+            Demo mode. Simulated Connect, no real charges or bank details.
+          </p>
+        ) : null}
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import com.bliss.b2b.integration.StripeConnectStandardService.AccountLinkRespons
 import com.bliss.b2b.integration.StripeNotConfiguredException;
 import com.bliss.b2b.persistence.MerchantStripeConnectionDao;
 import com.bliss.b2b.service.PropertyOnboardingService;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Account;
 import io.dropwizard.auth.Auth;
@@ -24,6 +25,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +45,8 @@ public class StripeStandardConnectResource {
 
     private static final Logger log = LoggerFactory.getLogger(StripeStandardConnectResource.class);
     private static final java.security.SecureRandom RNG = new java.security.SecureRandom();
+    private static final Set<String> ALLOWED_RETURN_PATHS =
+            Set.of("/dashboard", "/onboarding/connect-stripe");
 
     private final StripeConnectStandardService stripe;
     private final MerchantStripeConnectionDao connectionDao;
@@ -66,12 +70,13 @@ public class StripeStandardConnectResource {
     /**
      * Starts (or resumes) Standard onboarding. Creates the connected account on
      * first call, stores it, and returns a one-time Stripe-hosted onboarding URL
-     * whose return/refresh links land back on the dashboard settings page.
+     * whose return/refresh links land back on the surface the merchant started
+     * from (see {@link #returnPathOf}).
      */
     @POST
     @Path("/start")
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response start(@Auth MerchantPrincipal principal) {
+    public Response start(@Auth MerchantPrincipal principal, StartRequest req) {
         if (!stripe.isConfigured()) {
             return notConfigured();
         }
@@ -84,12 +89,11 @@ public class StripeStandardConnectResource {
                 connectionDao.upsertAccount(
                         merchant.id(), accountId, ConnectStatus.IN_PROGRESS.wire(), false);
             }
-            // /dashboard is the "Account settings" tab that owns the Stripe
-            // section; /settings is plan rules and policies only.
+            String path = returnPathOf(req);
             String returnUrl = appConfig.getMerchantBaseUrl()
-                    + "/dashboard?stripe_connect=return";
+                    + path + "?stripe_connect=return";
             String refreshUrl = appConfig.getMerchantBaseUrl()
-                    + "/dashboard?stripe_connect=refresh";
+                    + path + "?stripe_connect=refresh";
             AccountLinkResponse link = stripe.createAccountLink(accountId, returnUrl, refreshUrl);
             return Response.ok(new StripeAccountLinkView(link.url(), link.expiresAtEpochSeconds())).build();
         } catch (StripeNotConfiguredException e) {
@@ -198,6 +202,23 @@ public class StripeStandardConnectResource {
         long n = RNG.nextLong();
         return String.format("%012x", n & 0xFFFFFFFFFFFFL);
     }
+
+    /**
+     * Where Stripe drops the merchant after the hosted flow. Only the two
+     * surfaces that own a Stripe section are accepted: /dashboard (the
+     * "Account settings" tab) and the onboarding wizard's Connect step, so a
+     * merchant who starts inside the wizard returns to it and can continue to
+     * plan rules. Anything else, including a missing or absent body, falls back
+     * to /dashboard. The allowlist is what keeps this from becoming an open
+     * redirect: the value is never used as a full URL, only as a path appended
+     * to the configured merchant base.
+     */
+    private static String returnPathOf(StartRequest req) {
+        String path = req == null ? null : req.returnPath();
+        return path != null && ALLOWED_RETURN_PATHS.contains(path) ? path : "/dashboard";
+    }
+
+    public record StartRequest(@JsonProperty("returnPath") String returnPath) {}
 
     private static Response notConfigured() {
         return Response.status(503)
