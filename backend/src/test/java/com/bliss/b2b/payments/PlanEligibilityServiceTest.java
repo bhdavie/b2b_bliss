@@ -96,9 +96,16 @@ class PlanEligibilityServiceTest {
                 TODAY, TODAY.plusDays(35), PRICE_CENTS, looser); // 5w
 
         assertThat(result.eligible()).isTrue();
+        // Biweekly only. TODAY 2026-05-14 anchors monthly to the 16th, and the
+        // first anchor clearing MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS is
+        // 2026-06-16 — one day past the 2026-06-15 cutoff (appt 2026-06-18
+        // less the 3-day buffer). That leaves the day-0 charge as the only
+        // monthly date, which fails the "no deposit needs >= 2 payments" floor,
+        // so MONTHLY is dropped. The point of this test is that a 4-week
+        // minimum lead admits a 5-week booking at all, which it still does.
         assertThat(result.options())
                 .extracting(PlanOption::frequency)
-                .containsExactly(PlanFrequency.BIWEEKLY, PlanFrequency.MONTHLY);
+                .containsExactly(PlanFrequency.BIWEEKLY);
     }
 
     // -- Maximum lead time --
@@ -285,18 +292,20 @@ class PlanEligibilityServiceTest {
                 DepositType.PERCENTAGE, 25L, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(63), 80_000L, rules); // 9w out gives room for 2 monthly installments
+                TODAY, TODAY.plusDays(63), 80_000L, rules); // 9w out
 
         assertThat(result.eligible()).isTrue();
         assertThat(result.depositAmountCents()).isEqualTo(20_000L);
         PlanOption monthly = result.options().get(0);
-        assertThat(monthly.numPayments()).isEqualTo(2);
-        assertThat(monthly.perPaymentAmountCents()).isEqualTo(30_000L);
-        assertThat(monthly.finalPaymentAmountCents()).isEqualTo(30_000L);
-        // Monthly installments anchor to the 1st of each calendar month. First
-        // 1st ≥ TODAY + 7 days (2026-05-21) → 2026-06-01.
-        assertThat(monthly.dueDates().get(0)).isEqualTo(LocalDate.of(2026, 6, 1));
-        assertThat(monthly.dueDates().get(1)).isEqualTo(LocalDate.of(2026, 7, 1));
+        // Monthly installments anchor to the 2nd or the 16th, chosen by booking
+        // day; day 14 → the 16th. 2026-05-16 is 2 days out, inside the 14-day
+        // minimum first gap, so the first installment is 2026-06-16. Appt
+        // 2026-07-16 less the 3-day buffer gives a 2026-07-13 cutoff, which
+        // 2026-07-16 clears — so this fits one installment, not two.
+        assertThat(monthly.numPayments()).isEqualTo(1);
+        assertThat(monthly.perPaymentAmountCents()).isEqualTo(60_000L);
+        assertThat(monthly.finalPaymentAmountCents()).isEqualTo(60_000L);
+        assertThat(monthly.dueDates()).containsExactly(LocalDate.of(2026, 6, 16));
     }
 
     @Test
@@ -330,13 +339,16 @@ class PlanEligibilityServiceTest {
         assertThat(result.eligible()).isTrue();
         assertThat(result.depositAmountCents()).isEqualTo(50_000L);
         PlanOption monthly = result.options().get(0);
-        // TODAY 2026-05-14, appt 2026-08-13, cutoff 2026-08-10. 1st-of-month
-        // installments anchored to dates ≥ TODAY+7 (2026-05-21) → June 1,
-        // July 1, Aug 1 = 3 installments.
-        assertThat(monthly.numPayments()).isEqualTo(3);
-        // $9,500 / 3 = $3,166.66 each, remainder 2 cents on the final
-        assertThat(monthly.perPaymentAmountCents()).isEqualTo(316_666L);
-        assertThat(monthly.finalPaymentAmountCents()).isEqualTo(316_668L);
+        // TODAY 2026-05-14, appt 2026-08-13, cutoff 2026-08-10. Booking day 14
+        // anchors to the 16th; 2026-05-16 is inside the 14-day minimum first
+        // gap so the first installment is 2026-06-16, then 2026-07-16.
+        // 2026-08-16 is past the cutoff → 2 installments.
+        assertThat(monthly.numPayments()).isEqualTo(2);
+        assertThat(monthly.dueDates()).containsExactly(
+                LocalDate.of(2026, 6, 16), LocalDate.of(2026, 7, 16));
+        // $9,500 / 2 = $4,750.00 each, no remainder
+        assertThat(monthly.perPaymentAmountCents()).isEqualTo(475_000L);
+        assertThat(monthly.finalPaymentAmountCents()).isEqualTo(475_000L);
     }
 
     @Test
@@ -347,12 +359,15 @@ class PlanEligibilityServiceTest {
                 DepositType.FIXED, 20_000L, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(63), 80_000L, rules); // 9w monthly fits 2 installments
+                TODAY, TODAY.plusDays(63), 80_000L, rules); // 9w
 
         assertThat(result.eligible()).isTrue();
         assertThat(result.depositAmountCents()).isEqualTo(20_000L);
         PlanOption monthly = result.options().get(0);
-        assertThat(monthly.numPayments()).isEqualTo(2);
+        // One installment: same anchor arithmetic as
+        // depositRequired_percentage_carvesOutDepositAndDividesRemainder.
+        assertThat(monthly.numPayments()).isEqualTo(1);
+        assertThat(monthly.dueDates()).containsExactly(LocalDate.of(2026, 6, 16));
         assertSchedulesSumsToTotal(monthly, 60_000L);
     }
 
@@ -381,8 +396,9 @@ class PlanEligibilityServiceTest {
     @Test
     void depositPresent_atSixWeeksMonthly_fitsOneInstallment() {
         // 6 weeks (42 days) + monthly + deposit. TODAY 2026-05-14, appt
-        // 2026-06-25, cutoff 2026-06-22. 1st-of-month anchored ≥ TODAY+7
-        // (2026-05-21) → June 1. Only 2026-06-01 fits before cutoff, so
+        // 2026-06-25, cutoff 2026-06-22. Booking day 14 anchors to the 16th;
+        // 2026-05-16 is inside the 14-day minimum first gap, so the first
+        // installment is 2026-06-16. 2026-07-16 is past the cutoff, so
         // 1 installment.
         MerchantPlanRules rules = withDeposit(
                 6, null, AllowedFrequencies.MONTHLY, null, null, null,
@@ -396,7 +412,7 @@ class PlanEligibilityServiceTest {
         PlanOption monthly = result.options().get(0);
         assertThat(monthly.numPayments()).isEqualTo(1);
         assertThat(monthly.perPaymentAmountCents()).isEqualTo(60_000L);
-        assertThat(monthly.dueDates()).containsExactly(LocalDate.of(2026, 6, 1));
+        assertThat(monthly.dueDates()).containsExactly(LocalDate.of(2026, 6, 16));
     }
 
     @Test
@@ -523,9 +539,11 @@ class PlanEligibilityServiceTest {
 
     @Test
     void dueDeadline_oneMonthBefore_compressesSchedule() {
-        // 70-day appointment, deadline 30 days before = effective buffer 30.
-        // Usable = 40 days. Monthly: 1 + 40/30 = 2 payments at 0, 30. Final
-        // installment at day 30, which is exactly the deadline.
+        // 70-day appointment, deadline 30 days before = effective buffer 30, so
+        // the cutoff is 2026-06-23. No deposit, so payment 1 is the day-0 charge
+        // on TODAY and installments follow on the anchor: 2026-06-16 fits,
+        // 2026-07-16 does not. 2 payments, the last on the anchor rather than at
+        // a fixed day-30 offset.
         EligibilityResult result = service.evaluate(
                 TODAY, TODAY.plusDays(70), PRICE_CENTS,
                 withDueDeadline(6, AllowedFrequencies.MONTHLY, PaymentDuePolicy.ONE_MONTH_BEFORE, null));
@@ -533,7 +551,8 @@ class PlanEligibilityServiceTest {
         assertThat(result.eligible()).isTrue();
         PlanOption monthly = result.options().get(0);
         assertThat(monthly.numPayments()).isEqualTo(2);
-        assertThat(monthly.dueDates().get(monthly.numPayments() - 1)).isEqualTo(TODAY.plusDays(30));
+        assertThat(monthly.dueDates()).containsExactly(TODAY, LocalDate.of(2026, 6, 16));
+        assertThat(monthly.dueDates().get(monthly.numPayments() - 1)).isEqualTo(LocalDate.of(2026, 6, 16));
     }
 
     @Test
