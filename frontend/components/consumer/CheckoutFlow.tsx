@@ -345,13 +345,13 @@ function disclosureCopy(
       `Your card will be charged ${formatDollarsCompact(todayCents)} today as a deposit. ` +
       `${option.numPayments} ${cadence} payment${option.numPayments === 1 ? "" : "s"} ` +
       `of ${formatDollarsCompact(perPaymentCents)} will be charged automatically on the schedule above. ` +
-      `You can cancel anytime.`
+      `Cancel your booking anytime before check-in.`
     );
   }
   return (
     `Your card will be charged ${formatDollarsCompact(perPaymentCents)} today. ` +
     `${option.numPayments - 1} more ${cadence} payments will follow on the schedule above. ` +
-    `You can cancel anytime.`
+    `Cancel your booking anytime before check-in.`
   );
 }
 

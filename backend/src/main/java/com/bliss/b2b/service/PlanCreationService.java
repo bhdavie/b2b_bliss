@@ -303,10 +303,11 @@ public class PlanCreationService {
                     customerPhone, paymentMethodId, requestedFrequency, demoCard);
         }
         // Per-property Connect Standard: when the property has finished Standard
-        // onboarding, every Stripe call below runs on its connected account
-        // (direct charge, property is merchant of record). When it has not, the
-        // account is null and we fall back to the existing Express gate + the
-        // platform key — unchanged behavior for merchants on the old rail.
+        // onboarding its account is the destination of the charge, and Bliss
+        // keeps application_fee_amount. Every Stripe object below still lives on
+        // the platform, so the guest's card is vaulted once and reusable for the
+        // later installments. When there is no connected account we fall back to
+        // the existing Express gate and a plain platform charge.
         String connectedAccountId = stripeConnectResolver.resolveOrNull(merchant.id());
         if (connectedAccountId == null) {
             ConnectStatus connectStatus = ConnectStatus.fromWire(merchant.stripeConnectStatus());
@@ -315,6 +316,9 @@ public class PlanCreationService {
                         "merchant has not completed Stripe onboarding");
             }
         }
+        StripePaymentsService.Destination destination = new StripePaymentsService.Destination(
+                connectedAccountId,
+                handle.attach(MerchantDao.class).findFeePercentage(merchant.id()).orElse(null));
 
         MerchantPlanRules rules = handle.attach(MerchantPlanRulesDao.class)
                 .findByMerchantId(merchant.id())
@@ -361,7 +365,7 @@ public class PlanCreationService {
         String stripeCustomerId = customer.stripeCustomerId();
         if (stripeCustomerId == null || stripeCustomerId.isBlank()) {
             try {
-                stripeCustomerId = stripeService.createStripeCustomer(customer, connectedAccountId);
+                stripeCustomerId = stripeService.createStripeCustomer(customer);
             } catch (StripeException e) {
                 throw stripeFailure(e);
             }
@@ -371,7 +375,7 @@ public class PlanCreationService {
 
         PaymentMethod pm;
         try {
-            pm = stripeService.attachPaymentMethod(paymentMethodId, stripeCustomerId, connectedAccountId);
+            pm = stripeService.attachPaymentMethod(paymentMethodId, stripeCustomerId);
         } catch (CardException e) {
             throw declined(e);
         } catch (StripeException e) {
@@ -437,7 +441,10 @@ public class PlanCreationService {
                             "bliss_payment_plan_id", plan.id().toString(),
                             "bliss_booking_id", booking.id().toString(),
                             "bliss_kind", first.kind().wire()),
-                    connectedAccountId);
+                    destination,
+                    // Guest is on the checkout page: vault the card here so the
+                    // scheduler can charge installments 2..N off-session.
+                    StripePaymentsService.SessionMode.ON_SESSION_VAULT);
         } catch (CardException e) {
             throw declined(e);
         } catch (StripeException e) {

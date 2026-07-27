@@ -10,6 +10,7 @@ import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.persistence.CustomerCardDao;
 import com.bliss.b2b.persistence.CustomerDao;
 import com.bliss.b2b.persistence.DueChargeDao.DueInstallment;
+import com.bliss.b2b.persistence.MerchantDao;
 import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentScheduleDao;
 import com.bliss.b2b.service.InstallmentChargeService.StripeChargeOutcome;
@@ -93,9 +94,14 @@ public class JdbiStripeInstallmentCharger implements StripeInstallmentCharger {
             return StripeChargeOutcome.SKIPPED;
         }
 
-        // On the merchant's connected Standard account when it has one, else the
-        // platform key. Same resolver the plan-creation charge uses.
-        String connectedAccountId = stripeConnectResolver.resolveOrNull(due.merchantId());
+        // Destination charge to the property's connected account when it has
+        // one, else a plain platform charge. Same resolver plan creation uses.
+        // The card itself is vaulted on the platform, which is what makes this
+        // off-session charge possible without the guest present.
+        StripePaymentsService.Destination destination = new StripePaymentsService.Destination(
+                stripeConnectResolver.resolveOrNull(due.merchantId()),
+                jdbi.withHandle(h -> h.attach(MerchantDao.class)
+                        .findFeePercentage(due.merchantId()).orElse(null)));
 
         PaymentIntent intent;
         try {
@@ -112,7 +118,8 @@ public class JdbiStripeInstallmentCharger implements StripeInstallmentCharger {
                             "bliss_payment_plan_id", due.planId().toString(),
                             "bliss_kind", due.kind(),
                             "bliss_source", "scheduled_charge_pass"),
-                    connectedAccountId);
+                    destination,
+                    StripePaymentsService.SessionMode.OFF_SESSION);
         } catch (CardException e) {
             // Off-session decline. Route through the same recordAttempt machinery
             // the other charge paths use: the FAILED row is the retry/attention

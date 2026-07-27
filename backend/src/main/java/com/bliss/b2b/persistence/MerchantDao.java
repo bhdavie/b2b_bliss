@@ -1,6 +1,7 @@
 package com.bliss.b2b.persistence;
 
 import com.bliss.b2b.domain.Merchant;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -91,4 +92,12 @@ public interface MerchantDao {
             WHERE id = :id
             """)
     int updateOnboardingState(@Bind("id") UUID id, @Bind("state") String state);
+
+    /**
+     * The property's Bliss fee as a fraction (0.0300 = 3%). Read on the charge
+     * path to size {@code application_fee_amount} on destination charges; not on
+     * the {@link Merchant} record, which has no fee field.
+     */
+    @SqlQuery("SELECT bliss_fee_percentage FROM merchants WHERE id = :id")
+    Optional<BigDecimal> findFeePercentage(@Bind("id") UUID id);
 }
