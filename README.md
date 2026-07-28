@@ -265,6 +265,7 @@ CI runs both on every push and PR via `.github/workflows/ci.yml`.
 ```
 backend/        Java + Dropwizard 4 + Maven, Flyway migrations under src/main/resources/db/migration/
 frontend/       Next.js 15 (App Router) + TypeScript strict
+frontend/public/mews-overlay.js  Mews booking-engine overlay. Served as-is at /mews-overlay.js — the file merchants load IS the file we develop against, so there is no second copy to drift. Paste it into a browser console to develop; see its header for the dev config.
 docs/           Data model, v1 build plan, hosted page spec
 docker-compose.yml + Dockerfiles  Container path (alternative to native)
 .github/workflows/ci.yml  GitHub Actions

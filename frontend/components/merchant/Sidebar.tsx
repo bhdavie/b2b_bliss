@@ -14,6 +14,7 @@ const NAV: NavItem[] = [
   { href: "/bookings", label: "Bookings" },
   { href: "/payouts", label: "Payouts" },
   { href: "/settings", label: "Payment settings" },
+  { href: "/install", label: "Install" },
 ];
 
 export function Sidebar({ email }: { email: string }) {
