@@ -181,9 +181,21 @@ public class PropertyOnboardingService {
                 cfg.enterpriseId(), cfg.name(), cfg.defaultCurrency(), Instant.now(clock));
         merchantDao.updatePmsType(merchant.id(), PmsType.MEWS.wire());
         advanceTo(merchant, OnboardingState.PMS_CONNECTED);
+
+        // Report what was STORED, not what the enterprise said. upsertValidated
+        // deliberately preserves an existing currency, so on a re-connect those
+        // two can differ — echoing the enterprise value would tell the property
+        // it is charging in a currency it is not.
+        String storedCurrency = connectionDao.findByMerchant(merchant.id())
+                .map(MewsConnection::currency)
+                .orElse(cfg.defaultCurrency());
+        if (storedCurrency != null && !storedCurrency.equals(cfg.defaultCurrency())) {
+            log.info("Property {} keeps stored currency {}; Mews enterprise reports {}",
+                    merchant.id(), storedCurrency, cfg.defaultCurrency());
+        }
         log.info("Property {} connected Mews enterprise '{}' ({})",
-                merchant.id(), cfg.name(), cfg.defaultCurrency());
-        return new MewsConnectResult(cfg.name(), cfg.defaultCurrency());
+                merchant.id(), cfg.name(), storedCurrency);
+        return new MewsConnectResult(cfg.name(), storedCurrency);
     }
 
     /**

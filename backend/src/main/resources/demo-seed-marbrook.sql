@@ -272,3 +272,189 @@ INSERT INTO payment_schedule (
     ('55555555-0000-4000-8000-000000000504', '44444444-0000-4000-8000-000000000005',
      4, DATE '2026-05-02', 63000, 'paid', 'installment', TIMESTAMPTZ '2026-05-02 08:00:00-04')
 ON CONFLICT (payment_plan_id, sequence) DO NOTHING;
+
+-- ===========================================================================
+-- Marbrook family: one property per account-setup path
+-- ===========================================================================
+-- Three properties that differ ONLY in which rail they charge on. Same plan
+-- rules, same branding (both nulls, as Marbrook House has always had), same
+-- Hudson NY address pattern. They exist so each setup path can be demoed
+-- end to end without reconfiguring a single merchant between takes.
+--
+--   Marbrook House  j9l29fke  pms_type mews       Mews Connector rail
+--   Marbrook Grand  g7hq2wxn  pms_type cloudbeds  Cloudbeds OAuth rail
+--   Marbrook Lodge  l4vt8zpc  pms_type stripe     no PMS; platform Stripe rail
+--
+-- Idempotent like the rest of this file: inserts key on slug / merchant_id,
+-- and the one UPDATE below is a no-op once it has run.
+
+-- Marbrook House correction ------------------------------------------------
+-- The merchant INSERT above predates V17 and sets neither pms_type nor
+-- onboarding_state, so a FRESH seed produced a Marbrook House on the 'stripe'
+-- rail with onboarding_state 'created' — i.e. the dashboard showed the setup
+-- checklist instead of a working property. The live database only reads 'mews'
+-- because it was clicked through onboarding by hand, never because of a seed.
+--
+-- ON CONFLICT DO NOTHING cannot fix an existing row, so this is a targeted
+-- UPDATE. It is idempotent: once the values match, it changes nothing.
+UPDATE merchants
+   SET business_name    = 'Marbrook House',
+       pms_type         = 'mews',
+       onboarding_state = 'active',
+       status           = 'active'
+ WHERE slug = 'j9l29fke'
+   AND (business_name IS DISTINCT FROM 'Marbrook House'
+        OR pms_type != 'mews'
+        OR onboarding_state != 'active'
+        OR status != 'active');
+
+-- Marbrook House Mews connection -------------------------------------------
+-- Public Mews demo credentials for the shared "Gross pricing UK" demo property.
+-- The same pair already appears in BlissConfiguration.MewsPmsConfig and in
+-- ConnectMewsStep.tsx; docs.mews.com states the demo environment is completely
+-- public and must never hold real data, so they are safe to seed.
+--
+-- NOTE the currency: this shared demo enterprise reports GBP, so a Mews-rail
+-- plan quotes in GBP regardless of what the rest of the demo shows in USD.
+INSERT INTO merchant_mews_connections (
+    merchant_id, platform_url, client_token, access_token,
+    enterprise_id, enterprise_name, currency, validated_at
+) VALUES (
+    '9b54a488-b308-4a6d-91cc-38983ff982ac',
+    'https://api.mews-demo.com',
+    'E0D439EE522F44368DC78E1BFB03710C-D24FB11DBE31D4621C4817E028D9E1D',
+    'C66EF7B239D24632943D115EDE9CB810-EA00F8FD8294692C940F6B5A8F9453D',
+    '851df8c8-90f2-4c4a-8e01-a4fc46b25178',
+    'API Hotel Gross Pricing (DO NOT CHANGE THE NAME)',
+    'USD',
+    now()
+)
+ON CONFLICT (merchant_id) DO NOTHING;
+
+-- The seed owns the currency, the enterprise does not.
+--
+-- The shared demo enterprise reports GBP, but every amount in this system is a
+-- Bliss-side dollar figure (plan totals come from the checkout request or
+-- MewsSyncService.PLACEHOLDER_TOTAL_CENTS, never from a Mews reservation) and
+-- the frontend renders USD unconditionally. Nothing converts between
+-- currencies: MewsAdapter.chargeStoredCard sends Currency and GrossValue as
+-- independent fields, so this string only LABELS an amount that is already
+-- fixed. GBP here was mislabelling dollars as pounds, not holding a different
+-- sum of money.
+--
+-- ON CONFLICT DO NOTHING above cannot correct a row that already exists, so
+-- this is a targeted UPDATE. Idempotent: a no-op once the value is USD.
+UPDATE merchant_mews_connections
+   SET currency = 'USD'
+ WHERE merchant_id = '9b54a488-b308-4a6d-91cc-38983ff982ac'
+   AND currency IS DISTINCT FROM 'USD';
+
+-- Marbrook Grand (Cloudbeds rail) -------------------------------------------
+-- stripe_connect_account_id is UNIQUE, so each property needs its own synthetic
+-- acct_demo_* value. It is set charges_enabled purely so the public merchant
+-- view reports the property as ready; a Cloudbeds-rail plan never charges
+-- through it.
+INSERT INTO merchants (
+    id, slug, email, business_name, business_type,
+    address_line1, address_city, address_state, address_zip, address_country,
+    stripe_connect_account_id, stripe_connect_status,
+    pms_type, onboarding_state,
+    status, email_verified_at
+) VALUES (
+    '6d3ae2b1-0000-4000-8000-000000000002',
+    'g7hq2wxn',
+    'demo@marbrookgrand.com',
+    'Marbrook Grand',
+    'hotel',
+    '204 Warren Street', 'Hudson', 'NY', '12534', 'US',
+    'acct_demo_2f7c93ab55e1', 'charges_enabled',
+    'cloudbeds', 'active',
+    'active', now()
+)
+ON CONFLICT (slug) DO NOTHING;
+
+-- Marbrook Lodge (no PMS; platform Stripe rail) -----------------------------
+-- Deliberately has NO merchant_stripe_connections row. That table is the
+-- Standard-Connect rail added in V20, where the property is merchant of record.
+-- This property runs the original Express rail through the merchants columns
+-- above, exactly as Marbrook House does, which is what the pay-link flow uses.
+INSERT INTO merchants (
+    id, slug, email, business_name, business_type,
+    address_line1, address_city, address_state, address_zip, address_country,
+    stripe_connect_account_id, stripe_connect_status,
+    pms_type, onboarding_state,
+    status, email_verified_at
+) VALUES (
+    '6d3ae2b1-0000-4000-8000-000000000003',
+    'l4vt8zpc',
+    'demo@marbrooklodge.com',
+    'Marbrook Lodge',
+    'hotel',
+    '46 Union Street', 'Hudson', 'NY', '12534', 'US',
+    'acct_demo_9c41e6d70b2a', 'charges_enabled',
+    'stripe', 'active',
+    'active', now()
+)
+ON CONFLICT (slug) DO NOTHING;
+
+-- Plan rules for the two new properties -------------------------------------
+-- Copied from Marbrook House's LIVE row, not from the rules INSERT earlier in
+-- this file: that block sets refund_policy 'credit_only' while the live row
+-- reads 'full', so the file and the database have diverged. Every column is
+-- listed explicitly here rather than leaning on schema defaults, so "the same
+-- rules as Marbrook House" stays true even if a default changes.
+--
+-- payment_due_custom_months is DAYS, not months (V15 changed the unit and left
+-- the column name for wire compatibility). 2 = two days before check-in.
+INSERT INTO merchant_plan_rules (
+    id, merchant_id,
+    min_lead_time_weeks, max_lead_time_weeks, allowed_frequencies,
+    min_booking_amount_cents, max_booking_amount_cents, recommended_frequency,
+    deposit_required, deposit_type, deposit_value, deposit_max_cents,
+    refund_policy, cancellation_fee_enabled, late_fee_enabled,
+    payment_due_policy, payment_due_custom_months,
+    retry_attempts, retry_spacing_days, after_retries_action,
+    discount_basis_points
+) VALUES
+    ('6d3ae2b1-1111-4000-8000-000000000002', '6d3ae2b1-0000-4000-8000-000000000002',
+     6, NULL, 'both',
+     NULL, NULL, NULL,
+     FALSE, NULL, NULL, NULL,
+     'full', FALSE, FALSE,
+     'custom_months', 2,
+     3, 3, 'treat_as_cancellation',
+     0),
+    ('6d3ae2b1-1111-4000-8000-000000000003', '6d3ae2b1-0000-4000-8000-000000000003',
+     6, NULL, 'both',
+     NULL, NULL, NULL,
+     FALSE, NULL, NULL, NULL,
+     'full', FALSE, FALSE,
+     'custom_months', 2,
+     3, 3, 'treat_as_cancellation',
+     0)
+ON CONFLICT (merchant_id) DO NOTHING;
+
+-- Marbrook Grand Cloudbeds connection ---------------------------------------
+-- Synthetic tokens: no Cloudbeds object backs these, matching the pm_seed_*
+-- convention used for cards above. Enough for the dashboard to report the
+-- property as connected and for CloudbedsAdapterFactory to resolve a row.
+--
+-- access_token_expires_at is relative to seed time rather than a fixed
+-- timestamp, so re-seeding a stale database does not produce an
+-- already-expired connection.
+INSERT INTO merchant_cloudbeds_connections (
+    merchant_id, property_id, property_name, currency,
+    access_token, refresh_token, access_token_expires_at,
+    status, connected_at
+) VALUES (
+    '6d3ae2b1-0000-4000-8000-000000000002',
+    'cb_demo_property_318842',
+    'Marbrook Grand',
+    'USD',
+    'cb_seed_access_token_marbrook_grand',
+    'cb_seed_refresh_token_marbrook_grand',
+    now() + interval '365 days',
+    'connected',
+    now()
+)
+ON CONFLICT (merchant_id) DO NOTHING;

@@ -28,8 +28,19 @@ import org.jdbi.v3.core.Jdbi;
  */
 public class MewsAdapterFactory implements ChargeContextResolver {
 
-    /** Fallback currency when a connection has no stored currency yet. */
-    private static final String DEFAULT_CURRENCY = "GBP";
+    /**
+     * Fallback currency when a connection has no stored currency yet.
+     *
+     * <p>USD, not the shared Mews demo enterprise's GBP. Every amount in this
+     * system is a Bliss-side dollar figure — plan totals come from the checkout
+     * request or MewsSyncService.PLACEHOLDER_TOTAL_CENTS, never from a Mews
+     * reservation — and the frontend formats them as USD unconditionally
+     * (frontend/lib/publicApi.ts, frontend/lib/eligibility.ts). Nothing converts
+     * between currencies anywhere: chargeStoredCard sends Currency and
+     * GrossValue as independent fields, so this string only labels an amount
+     * that is already fixed. GBP here mislabelled dollar figures as pounds.
+     */
+    private static final String DEFAULT_CURRENCY = "USD";
 
     private final MerchantMewsConnectionDao connectionDao;
     /** Demo charge cap in cents, threaded into every adapter this factory builds. */

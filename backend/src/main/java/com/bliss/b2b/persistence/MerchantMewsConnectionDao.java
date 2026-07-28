@@ -39,7 +39,16 @@ public interface MerchantMewsConnectionDao {
                 access_token = EXCLUDED.access_token,
                 enterprise_id = EXCLUDED.enterprise_id,
                 enterprise_name = EXCLUDED.enterprise_name,
-                currency = EXCLUDED.currency,
+                -- Currency is the one field a re-connect does NOT overwrite.
+                -- It is set once, from the enterprise, on first connect; after
+                -- that an operator override survives. Re-running onboarding
+                -- used to silently revert a deliberate choice back to whatever
+                -- the enterprise reported, which on the shared Mews demo
+                -- property means GBP against dollar-denominated amounts.
+                -- NULLIF so a blank is treated as unset and still gets filled.
+                currency = COALESCE(
+                    NULLIF(merchant_mews_connections.currency, ''),
+                    EXCLUDED.currency),
                 validated_at = EXCLUDED.validated_at
             """)
     void upsertValidated(
