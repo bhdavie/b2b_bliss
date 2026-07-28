@@ -7,10 +7,12 @@ import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.persistence.MerchantDao;
 import com.bliss.b2b.service.MerchantPlanRulesService;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.Map;
@@ -99,6 +101,58 @@ public class PublicMerchantsResource {
                         ? "mews"
                         : (stripeService.isConfigured() ? "stripe" : "demo")
         )).build();
+    }
+
+    /**
+     * Plan rules for a merchant, readable from ANY origin.
+     *
+     * <p>Exists for the Mews overlay, which runs inside a hotel's own booking
+     * engine on app.mews.com or the property's domain — a third-party origin
+     * that the global CORS filter
+     * ({@code BlissApplication#registerCors}, driven by BLISS_CORS_ORIGINS)
+     * does not and should not allow. Rather than widening that allow-list, this
+     * one endpoint sets its own {@code Access-Control-Allow-Origin: *}.
+     *
+     * <p>The scoping is per-response, not per-filter: the global filter is
+     * untouched and every other route keeps the configured allow-list.
+     * {@code setHeader} (not {@code addHeader}) is used so that when the caller
+     * IS an allowed origin, the filter's specific value is REPLACED rather than
+     * appended — two Access-Control-Allow-Origin values would be rejected by
+     * every browser.
+     *
+     * <p>Credentials are explicitly refused. A wildcard origin and
+     * {@code Access-Control-Allow-Credentials: true} are incompatible, and the
+     * global filter sets that flag true. Overriding it to false here keeps the
+     * pairing legal and means a future caller that adds
+     * {@code credentials: "include"} fails loudly at the browser instead of
+     * quietly sending a session cookie to a hotel's page. Nothing in this
+     * payload is session-scoped, so there is nothing to authenticate.
+     *
+     * <p>A plain {@code fetch(url)} for this is a CORS "simple request": GET,
+     * no custom headers, so no preflight is issued and the global filter's
+     * OPTIONS handling is never consulted.
+     */
+    @GET
+    @Path("/{slug}/plan-rules")
+    public Response planRules(@PathParam("slug") String slug,
+                              @Context HttpServletResponse servletResponse) {
+        allowAnyOrigin(servletResponse);
+        if (slug == null || slug.isBlank()) return notFound();
+        Optional<Merchant> maybe = merchantDao.findBySlug(slug);
+        if (maybe.isEmpty()) return notFound();
+        Merchant merchant = maybe.get();
+        MerchantPlanRules rules = rulesService.forMerchant(merchant.id());
+        return Response.ok(PublicPlanRulesView.from(rules, merchant.pmsType())).build();
+    }
+
+    /**
+     * Opens exactly this response to any origin, credential-free. Scoped to the
+     * single endpoint that calls it; the servlet-level CORS filter is unchanged.
+     */
+    private static void allowAnyOrigin(HttpServletResponse response) {
+        if (response == null) return;
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Credentials", "false");
     }
 
     private static Response notFound() {
