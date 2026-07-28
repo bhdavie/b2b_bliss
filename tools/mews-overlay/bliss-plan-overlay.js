@@ -2,10 +2,25 @@
 /**
  * Bliss plan-selector overlay for a live Mews distributor page.
  *
- * Standalone. Paste into the browser console on app.mews.com with a
- * distributor booking in progress. Touches nothing in the Bliss app, makes no
- * network calls, and captures no card data — it reads the page's dataLayer,
- * renders a plan selector, and records the guest's choice.
+ * Hosted script. Include it on the property's booking page and tell it which
+ * merchant it is running for:
+ *
+ *   <script src="https://.../mews-overlay.js"
+ *           data-bliss-merchant="j9l29fke"
+ *           data-bliss-api="https://api.bliss-payments.com"></script>
+ *
+ * data-bliss-api is optional and defaults to DEFAULT_API_BASE below.
+ *
+ * On load it fetches that merchant's plan rules from the public API and
+ * renders nothing until they arrive. It captures no card data and makes no
+ * network call other than that one GET — everything else is read from the
+ * page's own dataLayer.
+ *
+ * DEVELOPMENT: pasting into the console still works. With no script tag to
+ * read, it looks for window.__blissOverlayConfig = { merchant, apiBase } and
+ * fetches exactly as it would when hosted. Rules are ALWAYS fetched; there is
+ * no paste-time rules override, because wrong rules put wrong money on a live
+ * booking page.
  *
  * PASTE INTO THE TOP FRAME. The distributor renders its steps in a same-origin
  * child iframe while the dataLayer lives in the top frame, so the script walks
@@ -43,13 +58,7 @@
  * ---------------------------------------------------------------------------
  * KNOWN ISSUES (accepted, not scheduled)
  *
- * 1. CONFIG.rules is Marbrook House's, hardcoded. Those are that property's
- *    terms and are WRONG on any other property. This matters because the
- *    trigger line puts a dollar figure on screen before the guest clicks
- *    anything. On a non-Marbrook property every number the overlay shows is
- *    wrong until CONFIG.rules is pasted over with that merchant's real rules.
- *
- * 2. THE RATES FIGURE IS TAX-EXCLUSIVE, THE SUMMARY TOTAL IS TAX-INCLUSIVE.
+ * 1. THE RATES FIGURE IS TAX-EXCLUSIVE, THE SUMMARY TOTAL IS TAX-INCLUSIVE.
  *    A Freehand rate card renders "$494.00 nightly (Facility Fee included,
  *    Taxes excluded)", and ga4_RatesLoaded matches what the card shows. The
  *    Summary total the guest eventually pays includes tax. So a per-payment
@@ -61,7 +70,7 @@
  *    a plan is written against, which is the same open question as item 4, and
  *    the tax rate is not in the dataLayer to apply even if that were settled.
  *
- * 3. THE TRIGGER AND THE MODAL QUOTE DIFFERENT BASES, BY DESIGN.
+ * 2. THE TRIGGER AND THE MODAL QUOTE DIFFERENT BASES, BY DESIGN.
  *    The rate-card trigger teases the NIGHTLY rate over the installment count,
  *    mirroring perNightInstallmentLabel in frontend/app/inn/marbrook/page.tsx.
  *    The modal quotes the real per-payment figure off the STAY total, after the
@@ -77,7 +86,7 @@
  *    number. Accepted so the overlay matches the Marbrook teaser it is
  *    demoing alongside.
  *
- * 4. NO PAY-NOW / PAY-LATER SIGNAL EXISTS. The Mews Google Triggers Reference
+ * 3. NO PAY-NOW / PAY-LATER SIGNAL EXISTS. The Mews Google Triggers Reference
  *    exposes no payment-timing, prepayment or deposit field on any event. The
  *    only payment-adjacent events are add_payment_info and purchase, both of
  *    which fire after the guest has committed, so neither can gate a badge at
@@ -86,7 +95,7 @@
  *    on both. CONFIG.rateCards.excludeRatePattern is the only lever, and it
  *    matches on rate name, which is a workaround rather than a signal.
  *
- * 5. THE SUMMARY AMOUNT BASIS IS STILL UNRESOLVED. Mews documents that "all
+ * 4. THE SUMMARY AMOUNT BASIS IS STILL UNRESOLVED. Mews documents that "all
  *    prices currently presented via the Data Layer are gross prices, i.e.
  *    including taxes and fees", but that claim does not hold in practice: the
  *    reference capture recorded ecommerce.value 778 against an on-screen total
@@ -101,6 +110,20 @@
  */
 (function () {
   "use strict";
+
+  // Captured synchronously: document.currentScript is only non-null while the
+  // script is executing, so it must be read before anything async happens.
+  var CURRENT_SCRIPT = (function () {
+    try {
+      return document.currentScript || null;
+    } catch (e) {
+      return null;
+    }
+  })();
+
+  var MERCHANT_ATTR = "data-bliss-merchant";
+  var API_ATTR = "data-bliss-api";
+  var DEFAULT_API_BASE = "https://api.bliss-payments.com";
 
   // =========================================================================
   // BLISS FEE
@@ -126,32 +149,22 @@
   // =========================================================================
   var CONFIG = {
     /**
-     * KNOWN ISSUE — property-specific, hardcoded. See KNOWN ISSUES at the top.
+     * Merchant plan rules. POPULATED AT BOOT from
+     * GET {apiBase}/api/v1/public/merchants/{slug}/plan-rules, never hardcoded:
+     * these are per-property terms, and the trigger puts a dollar figure on
+     * screen before the guest clicks anything, so a stale copy is wrong money
+     * on a live booking page.
      *
-     * Merchant plan rules. Shape matches PlanRules in frontend/lib/api.ts; only
-     * the eligibility-relevant fields are consulted here.
+     * Null until the fetch resolves. Nothing renders while it is null — boot()
+     * is the only caller of start(), and it only calls it after assigning here.
+     * There is deliberately no default and no fallback: if the fetch fails the
+     * overlay does not run at all.
      *
-     * The overlay cannot fetch these live: BLISS_CORS_ORIGINS allows only
-     * http://localhost:3000, and an https Mews page calling http://localhost is
-     * also mixed content. Swap this object by hand per property.
+     * Shape matches the 13 fields of PlanRules in frontend/lib/api.ts that
+     * previewEligibility consults, same names and units.
+     * @type {object|null}
      */
-    // Marbrook House (merchant slug j9l29fke), read from the live
-    // merchant_plan_rules row on 2026-07-28, not from demo-seed-marbrook.sql.
-    rules: {
-      minLeadTimeWeeks: 6,
-      maxLeadTimeWeeks: null,
-      allowedFrequencies: "both", // "both" | "biweekly" | "monthly"
-      minBookingAmountCents: null,
-      maxBookingAmountCents: null,
-      recommendedFrequency: null, // null | "biweekly" | "monthly"
-      depositRequired: false,
-      depositType: null, // "percentage" | "fixed"
-      depositValue: null,
-      depositMaxCents: null,
-      paymentDuePolicy: "custom_months",
-      paymentDueCustomMonths: 2, // DAYS before check-in, not months (V15 changed the unit, the column name is stale)
-      discountBasisPoints: 0, // basis points; 0 = no plan discount
-    },
+    rules: null,
 
     /**
      * THE AMOUNT BASIS IS UNRESOLVED. This single function decides every number
@@ -2834,6 +2847,159 @@
     hookedWin = null;
   }
 
+  // =========================================================================
+  // BOOT
+  //
+  // Nothing renders until the merchant's plan rules have arrived. start() is
+  // the only thing that touches the page, and boot() is its only caller.
+  // =========================================================================
+
+  var bailed = false;
+
+  /** Refuses to run, once, with the reason. Never renders, never retries. */
+  function bail(why) {
+    if (bailed) return;
+    bailed = true;
+    console.warn("[bliss] overlay not started — " + why);
+  }
+
+  /**
+   * Where the merchant slug and API base come from.
+   *
+   * Hosted: the script tag's own data attributes, read via
+   * document.currentScript. A querySelector fallback covers the case where the
+   * script was loaded in a way that leaves currentScript null (async/module
+   * injection), by finding any script tag carrying the merchant attribute.
+   *
+   * Console paste: no script tag exists, so it falls back to
+   * window.__blissOverlayConfig = { merchant, apiBase }. Note what does NOT
+   * fall back — the RULES. Both paths fetch them identically; the only thing
+   * the dev path substitutes is where the slug came from.
+   */
+  function readInstallConfig() {
+    var el = CURRENT_SCRIPT;
+    if (!el || !el.getAttribute || !el.getAttribute(MERCHANT_ATTR)) {
+      try {
+        el = document.querySelector("script[" + MERCHANT_ATTR + "]");
+      } catch (e) {
+        el = null;
+      }
+    }
+    if (el && el.getAttribute && el.getAttribute(MERCHANT_ATTR)) {
+      return {
+        source: "script tag",
+        merchant: String(el.getAttribute(MERCHANT_ATTR) || "").trim(),
+        apiBase: String(el.getAttribute(API_ATTR) || "").trim() || DEFAULT_API_BASE,
+      };
+    }
+    var g = null;
+    try {
+      g = window.__blissOverlayConfig || null;
+    } catch (e) {
+      g = null;
+    }
+    if (g && g.merchant) {
+      return {
+        source: "window.__blissOverlayConfig",
+        merchant: String(g.merchant).trim(),
+        apiBase: String(g.apiBase || "").trim() || DEFAULT_API_BASE,
+      };
+    }
+    return { source: null, merchant: "", apiBase: DEFAULT_API_BASE };
+  }
+
+  /**
+   * Builds CONFIG.rules from the API payload field by field, rather than
+   * assigning the response wholesale: a missing field would otherwise arrive as
+   * undefined and read as "no limit" inside previewEligibility. Returns null if
+   * anything required is absent, which bails rather than guessing.
+   */
+  function rulesFromPayload(p) {
+    var required = [
+      "minLeadTimeWeeks",
+      "allowedFrequencies",
+      "depositRequired",
+      "paymentDuePolicy",
+      "discountBasisPoints",
+    ];
+    for (var i = 0; i < required.length; i++) {
+      if (p[required[i]] === undefined) return null;
+    }
+    return {
+      minLeadTimeWeeks: p.minLeadTimeWeeks,
+      maxLeadTimeWeeks: p.maxLeadTimeWeeks == null ? null : p.maxLeadTimeWeeks,
+      allowedFrequencies: p.allowedFrequencies,
+      minBookingAmountCents: p.minBookingAmountCents == null ? null : p.minBookingAmountCents,
+      maxBookingAmountCents: p.maxBookingAmountCents == null ? null : p.maxBookingAmountCents,
+      recommendedFrequency: p.recommendedFrequency == null ? null : p.recommendedFrequency,
+      depositRequired: !!p.depositRequired,
+      depositType: p.depositType == null ? null : p.depositType,
+      depositValue: p.depositValue == null ? null : p.depositValue,
+      depositMaxCents: p.depositMaxCents == null ? null : p.depositMaxCents,
+      paymentDuePolicy: p.paymentDuePolicy,
+      // DAYS before check-in, not months. The name is stale wire compat.
+      paymentDueCustomMonths: p.paymentDueCustomMonths == null ? null : p.paymentDueCustomMonths,
+      discountBasisPoints: p.discountBasisPoints,
+    };
+  }
+
+  function boot() {
+    var install = readInstallConfig();
+    if (!install.merchant) {
+      bail(
+        'no merchant slug. Add ' + MERCHANT_ATTR + '="<slug>" to the script tag, or for a ' +
+          "console paste set window.__blissOverlayConfig = { merchant: \"<slug>\" } first."
+      );
+      return;
+    }
+    var url =
+      install.apiBase.replace(/\/+$/, "") +
+      "/api/v1/public/merchants/" +
+      encodeURIComponent(install.merchant) +
+      "/plan-rules";
+
+    var request;
+    try {
+      // credentials omitted deliberately: the endpoint answers any origin with
+      // Access-Control-Allow-Origin: *, which is incompatible with credentials.
+      request = window.fetch(url, { credentials: "omit", cache: "no-store" });
+    } catch (e) {
+      bail("could not request " + url + " (" + e.message + ").");
+      return;
+    }
+
+    request
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (payload) {
+        if (!payload || payload.pmsType !== "mews") {
+          bail(
+            "merchant " + install.merchant + ' is on the "' +
+              (payload ? payload.pmsType : "unknown") +
+              '" rail, not "mews". This overlay only decorates a Mews booking engine.'
+          );
+          return;
+        }
+        var rules = rulesFromPayload(payload);
+        if (!rules) {
+          bail("plan rules payload was missing required fields. Nothing rendered.");
+          return;
+        }
+        CONFIG.rules = rules;
+        start(install, url);
+      })
+      .catch(function (e) {
+        bail(
+          "could not load plan rules from " + url + " (" + e.message + "). Nothing rendered: " +
+            "running on stale or default rules would put wrong money on a live booking page."
+        );
+      });
+  }
+
+  function start(install, url) {
+
   refresh(); // resolves frames, hooks the data frame, decorates, observes
 
   var api = {
@@ -2896,6 +3062,8 @@
   }
   console.log(
     "[bliss] overlay installed. __blissOverlay.refresh() / .destroy() / .open() / .state() / .frames().\n" +
+      "  merchant: " + install.merchant + " (slug read from " + install.source + ")\n" +
+      "  plan rules: fetched from " + url + "\n" +
       "  frames reachable: " + state.frames.all.length +
       "  |  data frame is top: " + (state.frames.data === state.frames.all[0]) +
       "  |  dataLayer entries: " + ((dataLayerArray() || []).length) + "\n" +
@@ -2922,4 +3090,7 @@
         "cross-origin from here, its dataLayer cannot be read and there is no way around that."
     );
   }
+  } // end start()
+
+  boot();
 })();
