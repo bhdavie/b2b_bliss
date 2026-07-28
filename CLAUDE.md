@@ -150,9 +150,23 @@ Rules:
 - **8 to 12 weeks** to appointment: both bi-weekly and monthly offered, customer chooses.
 - **13 weeks or more** to appointment: monthly option only.
 
-Bi-weekly means every 14 days. Monthly means every 30 days. First payment fires when the plan is created. The number of payments is calculated as the maximum that fits before the appointment date, with the final payment scheduled at least 3 days before the appointment to allow for retry on failure.
+Bi-weekly means every 14 days, relative to the booking date.
 
-This logic lives in `payments/PlanEligibilityService` on the backend and is mirrored client-side for UX. The backend is the source of truth and must validate plan eligibility on plan creation, not just trust the client.
+**Monthly means calendar monthly, not every 30 days.** This doc previously said every 30 days, which was wrong and has been corrected here to match the shipped code. Monthly installments collect on a fixed calendar anchor, the 2nd or the 16th of the month, chosen by the booking's day of month: bookings on day 1-10 or 26-end anchor to the 2nd, bookings on day 11-25 anchor to the 16th. Payday alignment is the point of the anchors, and it is what keeps off-session decline rates down, so it outranks a tidier relative-interval ladder.
+
+The first monthly installment is the first anchor occurrence at least 14 days after the booking date (`MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS`); an anchor falling inside that window is skipped to the next month so it isn't a charge landing on top of the deposit. Every payment date rolls forward off weekends to the following Monday.
+
+First payment fires when the plan is created. The number of payments is calculated as the maximum that fits before the appointment date, with the final payment scheduled at least 3 days before the appointment to allow for retry on failure.
+
+This logic lives in `payments/PlanEligibilityService` on the backend and is mirrored client-side for UX. The backend is the source of truth and must validate plan eligibility on plan creation, not just trust the client. The backend never accepts client-supplied dates: it recomputes the schedule on plan creation and writes its own. Any drift between the mirrors and the backend therefore shows the guest one schedule and charges them another, silently.
+
+### Open follow-up: computed first monthly installment
+
+Not scheduled. Today the first monthly installment is anchored like every other one, so a booking landing just before an anchor is pushed a full month. The option is to put the **first** installment on a computed date (one monthly interval after the booking or deposit) and have payments 2 onward resume the 2nd/16th ladder.
+
+Worth doing primarily for the **deposit-free** case, where monthly currently vanishes entirely: at short horizons the anchor can leave only the day-0 charge, which fails the 2-payment floor and drops the cadence from the offer. Measured over booking days across 2026 at a 35-day horizon, monthly is dropped for 23.5% of booking days today and 0% under the proposal.
+
+The near-anchor installment-count gain is **fragile** and is not the reason to do it. It recovers an installment only by compressing the first-to-second interval, which lands under 7 days for roughly a third of booking days. Reimposing a 14-day minimum at that new position gives the gain straight back. Do not adopt this expecting more installments; adopt it to stop losing the monthly cadence.
 
 ## Conventions
 
