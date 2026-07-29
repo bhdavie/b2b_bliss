@@ -24,3 +24,16 @@ export const DEMO_HOTEL = {
   addressZip: "12534",
   tagline: "Boutique riverside hotel · Hudson Valley, NY",
 } as const;
+
+// Frozen constant for the preserved /inn/marbrook-classic demo — do not change it when DEMO_HOTEL changes.
+export const DEMO_HOTEL_CLASSIC = {
+  email: "demo@marbrookhouse.com",
+  slug: "j9l29fke",
+  businessName: "Marbrook House",
+  businessType: "hotel",
+  addressLine1: "118 Greenwich Avenue",
+  addressCity: "Hudson",
+  addressState: "NY",
+  addressZip: "12534",
+  tagline: "Boutique riverside hotel · Hudson Valley, NY",
+} as const;
