@@ -79,6 +79,20 @@ function formatDateLong(iso: string): string {
 function stayRangeLabel(checkinIso: string, checkoutIso: string): string {
   return `${formatDateShort(checkinIso)} to ${formatDateLong(checkoutIso)}`;
 }
+// Numeric date, matching the dates-occupancy-header's "8/14/2026" in
+// 02-categories.html.
+function formatDateNumeric(iso: string): string {
+  return parseIso(iso).toLocaleDateString("en-US");
+}
+// Short weekday ("Fri") plus the invariant text key the Distributor puts on it
+// ("DayShortFriday"). The capture only evidences Friday and Sunday; the key
+// pattern is DayShort + the full weekday name.
+function weekdayShort(iso: string): string {
+  return parseIso(iso).toLocaleDateString("en-US", { weekday: "short" });
+}
+function weekdayTextKey(iso: string): string {
+  return `DayShort${parseIso(iso).toLocaleDateString("en-US", { weekday: "long" })}`;
+}
 function guestsLabel(adults: number, children: number): string {
   const a = `${adults} ${adults === 1 ? "adult" : "adults"}`;
   const c = `${children} ${children === 1 ? "child" : "children"}`;
@@ -140,6 +154,60 @@ const RATES: Rate[] = [
     cancellationPolicy: "Free cancellation up to 48 hours before check-in.",
   },
 ];
+
+// --- Room categories (step 2) ---------------------------------------------
+// Marbrook had no category layer: the funnel sold one room. The Distributor's
+// step 2 needs one, so it is created here.
+//
+// rateIds is what makes a category's from-price real rather than a magic
+// number. TEMPORARY: both of Marbrook's rates apply to the single existing
+// room, so both are listed against both categories rather than inventing
+// per-category rate data. When real per-category rates exist, only this table
+// changes.
+type RoomCategory = {
+  id: string;
+  name: string;
+  description: string;
+  sleeps: number;
+  rateIds: string[];
+  // Lowest nightlyCents among rateIds, in integer cents.
+  fromPriceCents: number;
+};
+
+function lowestNightlyCents(rateIds: string[]): number {
+  const cents = RATES.filter((r) => rateIds.includes(r.id)).map(
+    (r) => r.nightlyCents,
+  );
+  return Math.min(...cents);
+}
+
+const ALL_RATE_IDS = RATES.map((r) => r.id);
+
+const ROOM_CATEGORIES: RoomCategory[] = [
+  {
+    id: "king-terrace",
+    // Marbrook's existing room. Name and description are ROOM's, unchanged.
+    name: ROOM.name,
+    description: ROOM.description,
+    sleeps: 2,
+    rateIds: ALL_RATE_IDS,
+    fromPriceCents: lowestNightlyCents(ALL_RATE_IDS),
+  },
+  {
+    id: "garden-double",
+    name: "Garden Double",
+    description:
+      "A ground-floor room opening onto the walled garden. Two double beds, a wet room, and a seating corner by the window.",
+    sleeps: 4,
+    rateIds: ALL_RATE_IDS,
+    fromPriceCents: lowestNightlyCents(ALL_RATE_IDS),
+  },
+];
+
+function ratesForCategory(category: RoomCategory | null): Rate[] {
+  if (!category) return RATES;
+  return RATES.filter((r) => category.rateIds.includes(r.id));
+}
 
 function formatUsd(cents: number): string {
   return (cents / 100).toLocaleString("en-US", {
@@ -303,6 +371,9 @@ export default function MarbrookHousePage() {
   // Opens on Dates, step 1, as the real Distributor does.
   const [step, setStep] = useState<Step>("dates");
   const [rateId, setRateId] = useState<string | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
+    null,
+  );
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [frequency, setFrequency] = useState<PublicPlanFrequency>("biweekly");
 
@@ -370,6 +441,17 @@ export default function MarbrookHousePage() {
   const rate = useMemo(
     () => RATES.find((r) => r.id === rateId) ?? null,
     [rateId],
+  );
+
+  const selectedCategory = useMemo(
+    () => ROOM_CATEGORIES.find((c) => c.id === selectedCategoryId) ?? null,
+    [selectedCategoryId],
+  );
+  // Rates the rates step may offer. Falls back to every rate when no category
+  // is selected, so reaching step 3 straight from the stepper still shows them.
+  const availableRates = useMemo(
+    () => ratesForCategory(selectedCategory),
+    [selectedCategory],
   );
 
   // Number of biweekly installments for the room/rate-card teaser. Uses the
@@ -652,9 +734,21 @@ export default function MarbrookHousePage() {
       ) : null}
 
       {step === "categories" ? (
-        <StepPlaceholder
-          name="Categories"
-          note="Room category selection has not been ported yet."
+        <RoomsView
+          checkinIso={checkinIso}
+          checkoutIso={checkoutIso}
+          nights={nights}
+          adults={adults}
+          guestChildren={children}
+          onEditStay={() => {
+            setStep("dates");
+            window.scrollTo({ top: 0 });
+          }}
+          onSelectCategory={(id) => {
+            setSelectedCategoryId(id);
+            setStep("rates");
+            window.scrollTo({ top: 0 });
+          }}
         />
       ) : null}
 
@@ -669,6 +763,7 @@ export default function MarbrookHousePage() {
           <div className="min-w-0">
             {step === "rates" ? (
               <RoomStep
+                rates={availableRates}
                 onSelectRate={selectRate}
                 selectedRateId={rateId}
                 installmentCount={biweeklyInstallments}
@@ -1258,11 +1353,336 @@ function DatesView({
   );
 }
 
-function StepPlaceholder({ name, note }: { name: string; note: string }) {
+// --- rooms-view (step 2) ---------------------------------------------------
+// Structural port of the rooms-view subtree in
+// reference/distributor/02-categories.html:
+//
+//   div[data-test-id="rooms-view"]
+//     h1[data-test-id="select-category-heading"] > span[data-test-textkey="SelectCategory"]
+//     div[data-test-id="dates-occupancy-header"]           (Card)
+//       nights + date range + guests + Edit button
+//     Grid > GridItem > div[data-test-id="category-card"]  (one per category)
+//
+// Two parts of the captured card are deliberately not reproduced, because both
+// would mean inventing data Marbrook does not have:
+//   - The image carousel (data-test-slide-next / -previous / -image, the
+//     camera badge, the index dots). The capture's property ships three photos
+//     per category; Marbrook has one image, so a single <img> stands in.
+//   - The "More" description expander. Marbrook's descriptions are two lines
+//     and render in full, so there is nothing to expand.
+function RoomsView({
+  checkinIso,
+  checkoutIso,
+  nights,
+  adults,
+  guestChildren,
+  onEditStay,
+  onSelectCategory,
+}: {
+  checkinIso: string;
+  checkoutIso: string;
+  nights: number;
+  adults: number;
+  guestChildren: number;
+  onEditStay: () => void;
+  onSelectCategory: (id: string) => void;
+}) {
   return (
-    <div className="mx-auto max-w-7xl px-6 py-16">
-      <h1 className="font-serif text-3xl tracking-tight text-[#23262e]">{name}</h1>
-      <p className="mt-3 text-sm text-[#23262e]/55">{note}</p>
+    <div className="mx-auto max-w-7xl px-6 py-10">
+      <div data-mds-element="true" className="rooms-view-stack">
+        <div data-mds-element="true">
+          <h1
+            data-test-id="select-category-heading"
+            data-mds-element="true"
+            className="font-serif text-3xl tracking-tight text-[#23262e]"
+          >
+            <span data-test-textkey="SelectCategory" data-non-sensitive="true">
+              Select category
+            </span>
+          </h1>
+        </div>
+
+        <DatesOccupancyHeader
+          checkinIso={checkinIso}
+          checkoutIso={checkoutIso}
+          nights={nights}
+          adults={adults}
+          guestChildren={guestChildren}
+          onEdit={onEditStay}
+        />
+
+        <div data-mds-element="true" className="mt-8">
+          <div
+            data-mds-element="true"
+            className="grid grid-cols-1 gap-6 lg:grid-cols-2"
+          >
+            {ROOM_CATEGORIES.map((c) => (
+              <div key={c.id} data-mds-element="true" className="min-w-0">
+                <CategoryCard category={c} onSelect={onSelectCategory} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// SPEC 1.6 reuses this same block as the editable stay summary on steps 2 and
+// 3. Only step 2 renders it for now.
+function DatesOccupancyHeader({
+  checkinIso,
+  checkoutIso,
+  nights,
+  adults,
+  guestChildren,
+  onEdit,
+}: {
+  checkinIso: string;
+  checkoutIso: string;
+  nights: number;
+  adults: number;
+  guestChildren: number;
+  onEdit: () => void;
+}) {
+  return (
+    <div
+      data-test-id="dates-occupancy-header"
+      data-mds-element="true"
+      className="mt-5 border border-[#1A56DB] bg-white p-5"
+    >
+      <div
+        data-mds-element="true"
+        className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div data-mds-element="true">
+          <strong data-mds-element="true" className="text-sm text-[#23262e]">
+            <div data-mds-element="true">
+              <span
+                data-test-textkey="NightPluralSelected"
+                data-non-sensitive="true"
+              >
+                Nights selected
+              </span>
+              &nbsp;{nights}
+            </div>
+          </strong>
+          <div
+            data-mds-element="true"
+            className="mt-1 flex items-center gap-2 text-sm text-[#23262e]/70"
+          >
+            <span>
+              <span
+                data-test-textkey={weekdayTextKey(checkinIso)}
+                data-non-sensitive="true"
+              >
+                {weekdayShort(checkinIso)}
+              </span>{" "}
+              <span data-localized-entity="true">
+                {formatDateNumeric(checkinIso)}
+              </span>
+            </span>
+            <div data-mds-element="true">→</div>
+            <span>
+              <span
+                data-test-textkey={weekdayTextKey(checkoutIso)}
+                data-non-sensitive="true"
+              >
+                {weekdayShort(checkoutIso)}
+              </span>{" "}
+              <span data-localized-entity="true">
+                {formatDateNumeric(checkoutIso)}
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <div data-mds-element="true">
+          <strong data-mds-element="true" className="text-sm text-[#23262e]">
+            <div data-mds-element="true">
+              <span
+                data-test-textkey="GuestPluralSelected"
+                data-non-sensitive="true"
+              >
+                Guests selected
+              </span>
+              &nbsp;{adults + guestChildren}
+            </div>
+          </strong>
+          <div
+            data-mds-element="true"
+            className="mt-1 flex items-center gap-3 text-sm text-[#23262e]/70"
+          >
+            <div data-mds-element="true">
+              <span data-test-textkey="AdultPlural" data-non-sensitive="true">
+                Adults
+              </span>
+              &nbsp;{adults}
+            </div>
+            {/* The capture's stay had no children, so it evidences no text key
+                for a children line. This one is left unkeyed rather than
+                guessing at one. */}
+            {guestChildren > 0 ? (
+              <div data-mds-element="true">Children&nbsp;{guestChildren}</div>
+            ) : null}
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          data-mds-element="true"
+          className="shrink-0 border border-[#1A56DB] px-5 py-2 text-sm text-[#1A56DB]"
+          onClick={onEdit}
+        >
+          <span data-test-textkey="Edit" data-non-sensitive="true">
+            Edit
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CategoryCard({
+  category,
+  onSelect,
+}: {
+  category: RoomCategory;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div
+      data-test-id="category-card"
+      data-mds-element="true"
+      className="flex h-full flex-col border border-[#1A56DB] bg-white"
+    >
+      <div data-mds-element="true" className="flex h-full flex-col">
+        <RoomPhoto />
+
+        <div data-mds-element="true" className="flex flex-1 flex-col p-6">
+          <h3
+            data-test-id="category-card-name"
+            data-mds-element="true"
+            className="font-serif text-2xl text-[#23262e]"
+          >
+            <span data-localized-entity="true">{category.name}</span>
+          </h3>
+
+          <div data-mds-element="true" className="mt-2">
+            {/* The capture carries data-test-id="category-card-max-persons"
+                twice: on the <ul> and again on the inner label div. */}
+            <ul
+              data-test-id="category-card-max-persons"
+              data-mds-element="true"
+            >
+              <li data-mds-element="true" className="flex items-center gap-2">
+                <span
+                  data-test-icon="profile"
+                  aria-hidden="true"
+                  data-mds-element="true"
+                  className="shrink-0 text-[#23262e]/55"
+                >
+                  <GuestsIcon />
+                </span>
+                <div>
+                  <div data-mds-element="true">
+                    <div
+                      data-test-id="category-card-max-persons"
+                      data-mds-element="true"
+                      className="text-sm text-[#23262e]"
+                    >
+                      <span data-test-textkey="Sleeps" data-non-sensitive="true">
+                        Sleeps
+                      </span>
+                      &nbsp;{category.sleeps}
+                    </div>
+                  </div>
+                  <div data-mds-element="true" />
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <p className="mt-3 text-sm leading-relaxed text-[#23262e]/75">
+            {category.description}
+          </p>
+
+          <div
+            data-mds-element="true"
+            className="mt-6 flex items-end justify-between gap-4 pt-4"
+          >
+            <div data-mds-element="true">
+              <div
+                data-test-id="from-price-wrapper"
+                data-mds-element="true"
+                className="min-w-0"
+              >
+                <div>
+                  <div data-mds-element="true" className="text-xs text-[#23262e]/55">
+                    <span data-test-textkey="FromPrice" data-non-sensitive="true">
+                      From
+                    </span>
+                  </div>
+                  <strong
+                    data-test-id="from-price-value"
+                    data-mds-element="true"
+                    className="font-serif text-3xl font-normal text-[#23262e]"
+                  >
+                    <span dir="ltr" data-test-id="localizedCurrency">
+                      {formatUsd(category.fromPriceCents)}
+                    </span>
+                    <span>&nbsp;</span>
+                  </strong>
+                </div>
+              </div>
+              <div
+                data-mds-element="true"
+                className="text-[11px] uppercase tracking-[0.14em] text-[#23262e]/50"
+              >
+                <span data-test-textkey="PerRoom" data-non-sensitive="true">
+                  Per room
+                </span>
+                {" / "}
+                <span data-test-textkey="PerNight" data-non-sensitive="true">
+                  Nightly
+                </span>
+              </div>
+              {/* The capture also carries a FeesIncluded span here. Marbrook's
+                  destination fee is added on top of nightlyCents rather than
+                  included in it, so only the taxes-excluded half is true and
+                  only that half is rendered. */}
+              <div
+                data-test-id="tax-label"
+                data-mds-element="true"
+                className="mt-1 text-[11px] text-[#23262e]/50"
+              >
+                (
+                <span
+                  data-test-id="tax-label"
+                  data-test-textkey="ExcludingTaxes"
+                  data-non-sensitive="true"
+                >
+                  Taxes excluded
+                </span>
+                )
+              </div>
+            </div>
+
+            <button
+              data-test-id="price-footer-button"
+              type="button"
+              aria-label="Show rates"
+              data-mds-element="true"
+              className="shrink-0 bg-[#1A56DB] px-6 py-2.5 text-sm font-medium text-white transition hover:bg-[#1545B0]"
+              onClick={() => onSelect(category.id)}
+            >
+              <span data-test-textkey="ShowRates" data-non-sensitive="true">
+                Show rates
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1611,11 +2031,13 @@ function CalendarIcon() {
 }
 
 function RoomStep({
+  rates,
   onSelectRate,
   selectedRateId,
   installmentCount,
   planEligible,
 }: {
+  rates: Rate[];
   onSelectRate: (id: string) => void;
   selectedRateId: string | null;
   installmentCount: number | null;
@@ -1639,7 +2061,7 @@ function RoomStep({
             Choose a rate
           </h2>
           <div className="mt-3 space-y-3">
-            {RATES.map((r) => (
+            {rates.map((r) => (
               <div
                 key={r.id}
                 className={`flex flex-col gap-4 rounded-none border-2 p-5 sm:flex-row sm:items-center sm:justify-between ${
