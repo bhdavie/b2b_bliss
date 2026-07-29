@@ -300,10 +300,8 @@ type CardFieldState = {
 };
 
 export default function MarbrookHousePage() {
-  // Opens on Rates: that is where the ported room/rate content lives, so the
-  // demo still lands on the same screen it did before the shell swap. Dates and
-  // Categories are reachable from the stepper but are placeholders for now.
-  const [step, setStep] = useState<Step>("rates");
+  // Opens on Dates, step 1, as the real Distributor does.
+  const [step, setStep] = useState<Step>("dates");
   const [rateId, setRateId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [frequency, setFrequency] = useState<PublicPlanFrequency>("biweekly");
@@ -315,13 +313,6 @@ export default function MarbrookHousePage() {
   const [adults, setAdults] = useState(DEFAULT_ADULTS);
   const [children, setChildren] = useState(DEFAULT_CHILDREN);
   const nights = nightsBetween(checkinIso, checkoutIso);
-  // BookingBar was the only caller of these four setters, and it is unmounted
-  // until dates-view is ported. The state itself is still live (nights,
-  // pricing, eligibility and the dataLayer date events all read it), so the
-  // setters are retained rather than removed. Referenced here so noUnusedLocals
-  // and no-unused-vars stay switched on for the rest of the file; delete this
-  // line when BookingBar is mounted again.
-  void [setCheckinIso, setCheckoutIso, setAdults, setChildren];
 
   // Contact info. Intentionally NOT prefilled: every booking must carry the
   // guest's own name and email so the plan binds to their customer record and
@@ -640,9 +631,23 @@ export default function MarbrookHousePage() {
   return (
     <DistributorShell step={step} onSelectStep={setStep}>
       {step === "dates" ? (
-        <StepPlaceholder
-          name="Dates"
-          note="Date and occupancy selection has not been ported yet."
+        <DatesView
+          checkinIso={checkinIso}
+          checkoutIso={checkoutIso}
+          adults={adults}
+          guestChildren={children}
+          onChangeRange={(ci, co) => {
+            setCheckinIso(ci);
+            setCheckoutIso(co);
+          }}
+          onChangeGuests={(a, c) => {
+            setAdults(a);
+            setChildren(c);
+          }}
+          onNext={() => {
+            setStep("categories");
+            window.scrollTo({ top: 0 });
+          }}
         />
       ) : null}
 
@@ -653,22 +658,10 @@ export default function MarbrookHousePage() {
         />
       ) : null}
 
-      {/* The view container holds step content only. HeroBanner and BookingBar
-          used to render here; neither exists as a view child in the
-          Distributor, so both are unmounted for now:
-
-          - The hotel imagery has no page-level home. SPEC 1.6 scopes the only
-            image in the shell to "Decoration hero image
-            (`DecorationImageElement-sc-77587fe0-0`) — step 1 only", listed
-            under "Structures that appear on some steps only", and the capture
-            has it as the first child of dates-view. SPEC 1.5 describes no
-            background element behind the view. HeroBanner therefore comes back
-            when dates-view is ported, not before.
-          - Date and occupancy selection belongs in dates-view on step 1 and is
-            reused as [data-test-id="dates-occupancy-header"] on steps 2 and 3
-            (SPEC 1.6). BookingBar comes back with those.
-
-          Both component definitions are retained for that port. */}
+      {/* The view container holds step content only. BookingBar now lives in
+          DatesView, where the Distributor puts it; SPEC 1.6 also reuses it as
+          [data-test-id="dates-occupancy-header"] on steps 2 and 3, which is not
+          built yet. */}
       {contentStep ? (
         <>
       <div className="mx-auto max-w-7xl px-6 py-8">
@@ -1152,63 +1145,124 @@ function ChevronIcon({ up }: { up: boolean }) {
 
 // Dates and Categories have no ported content yet: the view container still
 // renders, carrying the right data-test-id, with a heading and nothing else.
+// --- dates-view (step 1) ---------------------------------------------------
+// Structural port of the dates-view subtree in
+// reference/distributor/01-dates.html. That subtree runs:
+//
+//   div[data-test-id="dates-view"]
+//     div.DecorationImageElement-sc-77587fe0-0 > img[sizes="100vw"][alt=""]
+//     span.VisuallyHidden > h1[aria-label="Dates"]  ("Dates")
+//     div[role="region"] > Stack > Container > Card
+//       ├ date + occupancy selection
+//       ├ div[data-test-divider="true"][role="none"] > div
+//       ├ div > button[data-test-id="voucher-link"]
+//       └ button[data-test-id="dates-next-button"][aria-label="Next"]
+//
+// Reproduced here with plain classes, per SPEC 6.4 (the generated hashes are
+// build-versioned and not selectors). The date and occupancy block is
+// Marbrook's existing BookingBar, unchanged: the capture's own block is a
+// "Select dates" button plus three age-category counters, and swapping
+// Marbrook's calendar and guest stepper for those would change behaviour and
+// copy, which this port does not do. Only the structure around it is the
+// Distributor's.
+//
+// voucher-link is left out: it is a promotional-code entry point and Marbrook
+// has no promo codes, so there is nothing behind it to wire up.
+function DatesView({
+  checkinIso,
+  checkoutIso,
+  adults,
+  guestChildren,
+  onChangeRange,
+  onChangeGuests,
+  onNext,
+}: {
+  checkinIso: string;
+  checkoutIso: string;
+  adults: number;
+  guestChildren: number;
+  onChangeRange: (checkinIso: string, checkoutIso: string) => void;
+  onChangeGuests: (adults: number, children: number) => void;
+  onNext: () => void;
+}) {
+  return (
+    <>
+      {/* First child of dates-view, exactly as in the capture. The captured
+          <img> also carries hidden="" — the Distributor paints the picture from
+          a CSS background on the wrapper's generated class and keeps the <img>
+          only for its srcset. There is no such class here, so the <img> renders
+          instead of being hidden; that is the one deliberate divergence. */}
+      <div data-mds-element="true" className="dates-decoration-image">
+        {/* eslint-disable-next-line @next/next/no-img-element -- the capture's
+            decoration node is a plain <img>; next/image would wrap it. */}
+        <img
+          sizes="100vw"
+          data-mds-element="true"
+          src="/hud_valley_pic.jpg"
+          alt=""
+          className="h-[300px] w-full object-cover object-bottom"
+        />
+      </div>
+
+      <span data-mds-element="true" className="sr-only">
+        <h1 aria-label="Dates" data-mds-element="true">
+          Dates
+        </h1>
+      </span>
+
+      <div role="region" data-mds-element="true" className="dates-region">
+        <div data-mds-element="true" className="dates-stack">
+          <div data-mds-element="true" className="dates-container">
+            <div data-mds-element="true" className="dates-card">
+              <BookingBar
+                checkinIso={checkinIso}
+                checkoutIso={checkoutIso}
+                adults={adults}
+                guestChildren={guestChildren}
+                onChangeRange={onChangeRange}
+                onChangeGuests={onChangeGuests}
+              />
+
+              <div className="mx-auto max-w-7xl px-6">
+                {/* The capture also puts direction="horizontal" on both divider
+                    divs; React's typings reject it on a div, so it is dropped,
+                    as with the shell's width/offset props. */}
+                <div
+                  data-test-divider="true"
+                  role="none"
+                  data-mds-element="true"
+                  className="my-6"
+                >
+                  <div data-mds-element="true" className="h-px bg-[#23262e]/12" />
+                </div>
+
+                <button
+                  aria-disabled="false"
+                  data-test-id="dates-next-button"
+                  aria-label="Next"
+                  type="submit"
+                  data-mds-element="true"
+                  className="mb-10 bg-[#1A56DB] px-8 py-3 text-sm uppercase tracking-[0.16em] text-white"
+                  onClick={onNext}
+                >
+                  <span data-test-textkey="Next" data-non-sensitive="true">
+                    Next
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function StepPlaceholder({ name, note }: { name: string; note: string }) {
   return (
     <div className="mx-auto max-w-7xl px-6 py-16">
       <h1 className="font-serif text-3xl tracking-tight text-[#23262e]">{name}</h1>
       <p className="mt-3 text-sm text-[#23262e]/55">{note}</p>
-    </div>
-  );
-}
-
-// HeroBanner and BookingBar are both unmounted for now (see the comment on the
-// view container) and are kept for the dates-view port. Referenced here so the
-// unused-symbol checks stay on for the rest of the file; delete this line when
-// they are mounted again.
-void [HeroBanner, BookingBar];
-
-function HeroBanner() {
-  return (
-    <section className="relative w-full">
-      <div
-        className="h-[370px] w-full bg-cover bg-bottom"
-        style={{ backgroundImage: "url(/hud_valley_pic.jpg)" }}
-        role="img"
-        aria-label="Marbrook House and the Hudson Valley"
-      />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0">
-        <div className="mx-auto max-w-7xl px-6 pb-8">
-          <div className="pointer-events-auto max-w-sm rounded-none border border-white/50 bg-white/85 p-6 shadow-xl backdrop-blur-md">
-            <h1 className="font-serif text-3xl tracking-tight text-[#23262e]">
-              Marbrook House
-            </h1>
-            <div className="mt-3 space-y-2 text-sm text-[#23262e]/80">
-              <ContactLine icon={<PinIcon />}>
-                118 Greenwich Avenue, Hudson, NY 12534
-              </ContactLine>
-              <ContactLine icon={<PhoneIcon />}>(518) 555-0190</ContactLine>
-              <ContactLine icon={<GlobeIcon />}>marbrookhouse.com</ContactLine>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ContactLine({
-  icon,
-  children,
-}: {
-  icon: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className="shrink-0 text-[#23262e]/55" aria-hidden="true">
-        {icon}
-      </span>
-      <span>{children}</span>
     </div>
   );
 }
@@ -1533,33 +1587,6 @@ const iconProps = {
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
 };
-
-function PinIcon() {
-  return (
-    <svg {...iconProps}>
-      <path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0Z" />
-      <circle cx="12" cy="10" r="3" />
-    </svg>
-  );
-}
-
-function PhoneIcon() {
-  return (
-    <svg {...iconProps}>
-      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z" />
-    </svg>
-  );
-}
-
-function GlobeIcon() {
-  return (
-    <svg {...iconProps}>
-      <circle cx="12" cy="12" r="10" />
-      <path d="M2 12h20" />
-      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z" />
-    </svg>
-  );
-}
 
 function GuestsIcon() {
   return (
