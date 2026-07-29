@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -9,8 +10,11 @@ import {
   updateMerchant,
   DEFAULT_PLAN_RULES,
 } from "@/lib/api";
-import { previewEligibility, formatScheduleDate } from "@/lib/eligibility";
-import { calcInstallmentPlan } from "@/lib/blissFee";
+import {
+  previewEligibility,
+  type PreviewReason,
+} from "@/lib/eligibility";
+import { calcInstallmentPlan, BLISS_FEE_RATE } from "@/lib/blissFee";
 import {
   attemptCustomerLogin,
   createPlan,
@@ -25,7 +29,6 @@ import {
   failedPaymentCopy,
 } from "@/components/consumer/PolicyDisclosure";
 import { DEMO_HOTEL } from "@/lib/mewsDemo";
-import { BlissWordmark } from "@/components/BlissWordmark";
 
 // Guest-facing sample booking site for the Marbrook House demo merchant.
 // This is a neutral boutique-hotel funnel (room + rate -> your stay -> checkout)
@@ -105,8 +108,12 @@ function guestsLabel(adults: number, children: number): string {
 // shared cadence source of truth, mirroring the backend), so the teaser,
 // checkout, and portal reconcile and update together when dates/nights change.
 // Per-night basis reads apples-to-apples with the per-night sticker price.
+// Mirrors mews-overlay.js:1642-1643: round the per-night figure to CENTS and
+// format it with the currency-aware formatter (the overlay's money()), not to
+// whole dollars. The overlay's moneyWhole() is dead code there and is not used
+// by the teaser.
 function perNightInstallmentLabel(nightlyCents: number, count: number): string {
-  return `$${Math.round(nightlyCents / count / 100)}`;
+  return formatUsd(Math.round(nightlyCents / count));
 }
 
 type Rate = {
@@ -114,6 +121,10 @@ type Rate = {
   name: string;
   detail: string;
   nightlyCents: number;
+  // This rate's OWN pre-discount nightly price, in integer cents. Present only
+  // on a discounted rate; its absence is what says the rate is not discounted.
+  // Never another rate's price — the Distributor strikes a rate against itself.
+  strikeCents?: number;
   // Full cancellation policy shown in the checkout Policies block. Co-located
   // with the rate so the checkout reads it from the same selected rate that
   // drives the totals, with no separate rate-keyed lookup.
@@ -128,19 +139,13 @@ type Pricing = {
   avgPerNightCents: number;
 };
 
-const ROOM = {
-  name: "King with Terrace",
-  specs: "1 King bed · Sleeps 2 · 260 sq ft",
-  description:
-    "A corner room with a private terrace overlooking the courtyard gardens. Soaking tub, walk-in rain shower, and a writing nook framed by tall windows.",
-};
-
 const RATES: Rate[] = [
   {
     id: "advance",
     name: "Advance purchase rate",
     detail: "Pay in full to lock in the lowest rate. Non-refundable.",
     nightlyCents: 38500,
+    strikeCents: 45000,
     // Temporary alignment with the Bliss installment policy so the page never
     // shows two contradicting cancellation statements. Per-hotel policies come
     // later.
@@ -168,6 +173,8 @@ type RoomCategory = {
   id: string;
   name: string;
   description: string;
+  // One-line room spec, shown on the summary step.
+  specs: string;
   sleeps: number;
   rateIds: string[];
   // Lowest nightlyCents among rateIds, in integer cents.
@@ -186,9 +193,12 @@ const ALL_RATE_IDS = RATES.map((r) => r.id);
 const ROOM_CATEGORIES: RoomCategory[] = [
   {
     id: "king-terrace",
-    // Marbrook's existing room. Name and description are ROOM's, unchanged.
-    name: ROOM.name,
-    description: ROOM.description,
+    // Marbrook's original single room. Name, description and specs are the
+    // former ROOM constant's strings, verbatim.
+    name: "King with Terrace",
+    description:
+      "A corner room with a private terrace overlooking the courtyard gardens. Soaking tub, walk-in rain shower, and a writing nook framed by tall windows.",
+    specs: "1 King bed · Sleeps 2 · 260 sq ft",
     sleeps: 2,
     rateIds: ALL_RATE_IDS,
     fromPriceCents: lowestNightlyCents(ALL_RATE_IDS),
@@ -198,6 +208,7 @@ const ROOM_CATEGORIES: RoomCategory[] = [
     name: "Garden Double",
     description:
       "A ground-floor room opening onto the walled garden. Two double beds, a wet room, and a seating corner by the window.",
+    specs: "2 Double beds · Sleeps 4",
     sleeps: 4,
     rateIds: ALL_RATE_IDS,
     fromPriceCents: lowestNightlyCents(ALL_RATE_IDS),
@@ -231,6 +242,124 @@ function formatCardExp(value: string): string {
 // CVV: digits only, max 4.
 function formatCvv(value: string): string {
   return value.replace(/\D/g, "").slice(0, 4);
+}
+
+// previewEligibility's rules arg, whose type lib/eligibility does not export.
+type PlanRulesArg = Parameters<typeof previewEligibility>[3];
+
+// The Marbrook equivalent of an overlay trigger's `t.preview`: one plan preview
+// per rate card, carrying the per-payment figures the overlay's options already
+// have. Teaser and modal both read it, so they cannot drift.
+type TeaserOption = {
+  frequency: PublicPlanFrequency;
+  numPayments: number;
+  dueDates: string[];
+  recommended: boolean;
+  perPaymentCents: number;
+  finalPaymentCents: number;
+};
+type TeaserPreview = {
+  eligible: boolean;
+  reason: PreviewReason;
+  depositAmountCents: number;
+  amountCents: number;
+  options: TeaserOption[];
+};
+
+function buildTeaserPreview(
+  today: Date,
+  checkinIso: string,
+  amountCents: number,
+  rules: PlanRulesArg,
+): TeaserPreview {
+  const preview = previewEligibility(today, parseIso(checkinIso), amountCents, rules);
+  return {
+    eligible: preview.eligible,
+    reason: preview.reason,
+    depositAmountCents: preview.depositAmountCents,
+    amountCents,
+    options: preview.options.map((o) => {
+      const calc = calcInstallmentPlan({
+        baseCents: amountCents,
+        numPayments: o.numPayments,
+      });
+      return {
+        frequency: o.frequency as PublicPlanFrequency,
+        numPayments: o.numPayments,
+        dueDates: o.dueDates,
+        recommended: o.recommended,
+        perPaymentCents: calc.perPaymentCents,
+        finalPaymentCents: calc.finalPaymentCents,
+      };
+    }),
+  };
+}
+
+// mews-overlay.js:1590-1596. openModal seeds state.modal.selected with this
+// (mews-overlay.js:1920), so the modal never opens with nothing selected.
+function defaultSelected(p: TeaserPreview): PublicPlanFrequency | null {
+  if (!p.options.length) return null;
+  for (const o of p.options) if (o.recommended) return o.frequency;
+  return p.options[0]!.frequency;
+}
+
+// mews-overlay.js:606-612. Tax-INCLUSIVE, unlike the rate-card figure, because
+// it derives from the summary Total rather than a pre-tax nightly price. That
+// difference is why this block's supporting line says only "No credit check".
+function summaryPerNightCents(
+  totalCents: number,
+  nights: number,
+  numPayments: number,
+): number | null {
+  if (!totalCents || totalCents <= 0) return null;
+  if (!nights || nights <= 0) return null;
+  if (!numPayments || numPayments <= 0) return null;
+  const withFee = Math.round(totalCents * (1 + BLISS_FEE_RATE));
+  return Math.round(withFee / nights / numPayments);
+}
+
+// mews-overlay.js:1615-1621 — monthly if offered, else the option with the
+// smallest per-payment figure.
+function fallbackOption(p: TeaserPreview): TeaserOption | null {
+  if (!p.options.length) return null;
+  const monthly = p.options.find((o) => o.frequency === "monthly");
+  if (monthly) return monthly;
+  return p.options.reduce((best, o) =>
+    o.perPaymentCents < best.perPaymentCents ? o : best,
+  );
+}
+
+// mews-overlay.js:1635-1641 — biweekly if offered, else the option with the
+// most payments. This is what makes "starting at" truthful.
+function spreadOption(p: TeaserPreview): TeaserOption | null {
+  if (!p.options.length) return null;
+  const biweekly = p.options.find((o) => o.frequency === "biweekly");
+  if (biweekly) return biweekly;
+  return p.options.reduce((best, o) =>
+    o.numPayments > best.numPayments ? o : best,
+  );
+}
+
+// Verbatim from mews-overlay.js:1265-1273.
+const REASON_COPY: Record<PreviewReason, string> = {
+  ok: "",
+  too_close: "This stay is too soon to spread into a plan.",
+  too_far: "This stay is too far out for a plan right now.",
+  amount_too_low: "This stay is below the minimum for a payment plan.",
+  amount_too_high: "This stay is above the maximum for a payment plan.",
+  deposit_too_high:
+    "The deposit covers the whole stay, so there is nothing left to spread.",
+  no_plan_fits: "No plan fits between today and check-in.",
+  invalid_input: "Pick your dates to see payment plan options.",
+};
+
+// mews-overlay.js:1259-1263.
+function shortDate(iso: string): string {
+  return parseIso(iso).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 declare global {
@@ -338,19 +467,6 @@ function stepDescriptor(step: Step): StepDescriptor {
 
 type PaymentMethod = "card" | "bliss";
 
-type PlanOptionPreview = {
-  numPayments: number;
-  dueDates: string[];
-  recommended: boolean;
-  feeCents: number;
-  totalWithFeeCents: number;
-  perPaymentCents: number;
-  finalPaymentCents: number;
-};
-type PlanPreview = {
-  biweekly: PlanOptionPreview | null;
-  monthly: PlanOptionPreview | null;
-};
 type BookedState =
   | { method: "card" }
   | { method: "bliss"; plan: CreatePlanResponse };
@@ -453,38 +569,29 @@ export default function MarbrookHousePage() {
     () => ratesForCategory(selectedCategory),
     [selectedCategory],
   );
-
-  // Number of biweekly installments for the room/rate-card teaser. Uses the
-  // existing eligibility helper (mirror of PlanEligibilityService) so the
-  // cadence matches what the /pay handoff will quote. Date-driven for a
-  // no-deposit plan, so it's the same N for every rate.
-  const biweeklyInstallments = useMemo<number | null>(() => {
-    const preview = previewEligibility(
-      new Date(),
-      parseIso(checkinIso),
-      RATES[0]!.nightlyCents * nights,
-      planRules,
-    );
-    if (!preview.eligible) return null;
-    const biweekly = preview.options.find((o) => o.frequency === "biweekly");
-    return biweekly ? biweekly.numPayments : null;
+  // One plan preview per rate card — the Marbrook equivalent of each overlay
+  // trigger carrying its own `t.preview`. Basis is the rate's own pre-tax room
+  // subtotal, matching the "Pre-tax" fine print the teaser and modal show.
+  const previewByRateId = useMemo<Record<string, TeaserPreview>>(() => {
+    const today = new Date();
+    const out: Record<string, TeaserPreview> = {};
+    for (const r of RATES) {
+      out[r.id] = buildTeaserPreview(
+        today,
+        checkinIso,
+        r.nightlyCents * nights,
+        planRules,
+      );
+    }
+    return out;
   }, [checkinIso, nights, planRules]);
 
-  // Whether the stay qualifies for ANY plan, independent of cadence. Drives
-  // Bliss visibility (rate-card line + checkout tile): hidden when the booking
-  // is out of the merchant's lead-time range (too_close or too_far) or fails
-  // another eligibility rule. Distinct from biweeklyInstallments, which is also
-  // null in the eligible-but-monthly-only case where Bliss should stay visible.
-  const planEligible = useMemo<boolean>(
-    () =>
-      previewEligibility(
-        new Date(),
-        parseIso(checkinIso),
-        RATES[0]!.nightlyCents * nights,
-        planRules,
-      ).eligible,
-    [checkinIso, nights, planRules],
-  );
+  // The one resolved category every downstream step reads: the rates heading,
+  // the summary, the sidebar, checkout, the confirmation, and the booking
+  // written to the backend. Reaching a later step straight from the stepper
+  // leaves none selected, so the first one stands in.
+  const activeCategory = selectedCategory ?? ROOM_CATEGORIES[0]!;
+
 
   const pricing = useMemo(() => {
     if (!rate || nights <= 0) return null;
@@ -500,6 +607,13 @@ export default function MarbrookHousePage() {
       avgPerNightCents: Math.round(totalCents / nights),
     };
   }, [rate, nights]);
+
+  // The details block's basis is the tax-inclusive total, not a pre-tax
+  // nightly price (mews-overlay.js:595-601).
+  const checkoutPreview = useMemo<TeaserPreview | null>(() => {
+    if (!pricing) return null;
+    return buildTeaserPreview(new Date(), checkinIso, pricing.totalCents, planRules);
+  }, [pricing, checkinIso, planRules]);
 
   // --- Mews distributor dataLayer feed -------------------------------------
   // Emits the four events the Bliss overlay reads. Kept as effects rather than
@@ -551,35 +665,6 @@ export default function MarbrookHousePage() {
     });
   }, [rateId, pricing, rate]);
 
-  // Client-side plan preview for the inline installments selector. Cadence and
-  // due dates come from the eligibility mirror; per-payment amounts come from
-  // the shared calcInstallmentPlan, so the numbers match /pay and the backend
-  // exactly. No backend write happens here; the plan is created on Book now.
-  const planPreview = useMemo<PlanPreview | null>(() => {
-    if (!pricing) return null;
-    const preview = previewEligibility(
-      new Date(),
-      parseIso(checkinIso),
-      pricing.totalCents,
-      planRules,
-    );
-    if (!preview.eligible) return null;
-    const forFrequency = (f: PublicPlanFrequency): PlanOptionPreview | null => {
-      const opt = preview.options.find((o) => o.frequency === f);
-      if (!opt) return null;
-      const calc = calcInstallmentPlan({
-        baseCents: pricing.totalCents,
-        numPayments: opt.numPayments,
-      });
-      return {
-        numPayments: opt.numPayments,
-        dueDates: opt.dueDates,
-        recommended: opt.recommended,
-        ...calc,
-      };
-    };
-    return { biweekly: forFrequency("biweekly"), monthly: forFrequency("monthly") };
-  }, [pricing, checkinIso, planRules]);
 
   function selectRate(id: string) {
     setRateId(id);
@@ -590,10 +675,6 @@ export default function MarbrookHousePage() {
   function goToCheckout() {
     setStep("checkout");
     window.scrollTo({ top: 0 });
-  }
-
-  function onAddRoom() {
-    alert("This demo is set up for a single room. Continue to checkout to book your stay.");
   }
 
   function onBookNow() {
@@ -628,7 +709,7 @@ export default function MarbrookHousePage() {
     });
     const guestName = `${firstName} ${lastName}`.trim();
     const booking = await createBooking({
-      serviceName: `${ROOM.name} · ${rate.name}`,
+      serviceName: `${activeCategory.name} · ${rate.name}`,
       serviceDescription: `${nights} nights · ${stayRangeLabel(checkinIso, checkoutIso)} · ${guestsLabel(adults, children)}`,
       totalAmountCents: pricing.totalCents,
       appointmentDate: checkinIso,
@@ -654,8 +735,8 @@ export default function MarbrookHousePage() {
         customerEmail: email.trim(),
         customerFirstName: firstName.trim() || undefined,
         customerLastName: lastName.trim() || undefined,
-        paymentMethodId: "pm_card_visa",
         frequency,
+        paymentMethodId: "pm_card_visa",
         demoCardLastFour: digits.slice(-4) || "4242",
         demoCardExpMonth: mm ? Number(mm) : 12,
         demoCardExpYear: yy ? 2000 + Number(yy) : 2030,
@@ -762,17 +843,27 @@ export default function MarbrookHousePage() {
         <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
           <div className="min-w-0">
             {step === "rates" ? (
-              <RoomStep
+              <RatesView
+                category={activeCategory}
                 rates={availableRates}
-                onSelectRate={selectRate}
                 selectedRateId={rateId}
-                installmentCount={biweeklyInstallments}
-                planEligible={planEligible}
+                previewByRateId={previewByRateId}
+                checkinIso={checkinIso}
+                checkoutIso={checkoutIso}
+                nights={nights}
+                adults={adults}
+                guestChildren={children}
+                onEditStay={() => {
+                  setStep("dates");
+                  window.scrollTo({ top: 0 });
+                }}
+                onSelectRate={selectRate}
               />
             ) : null}
 
             {step === "summary" && rate && pricing ? (
-              <StayStep
+              <SummaryView
+                category={activeCategory}
                 rate={rate}
                 pricing={pricing}
                 nights={nights}
@@ -781,7 +872,6 @@ export default function MarbrookHousePage() {
                 adults={adults}
                 guestChildren={children}
                 onBack={() => setStep("rates")}
-                onAddRoom={onAddRoom}
                 onCheckout={goToCheckout}
               />
             ) : null}
@@ -790,11 +880,18 @@ export default function MarbrookHousePage() {
               booked ? (
                 <BookedPanel
                   booked={booked}
+                  category={activeCategory}
                   rate={rate}
                   stayLabel={stayRangeLabel(checkinIso, checkoutIso)}
                 />
               ) : (
                 <CheckoutStep
+                  category={activeCategory}
+                  bookingTotalCents={pricing.totalCents}
+                  pricing={pricing}
+                  nights={nights}
+                  checkinIso={checkinIso}
+                  checkoutPreview={checkoutPreview}
                   prefix={prefix}
                   setPrefix={setPrefix}
                   firstName={firstName}
@@ -816,11 +913,9 @@ export default function MarbrookHousePage() {
                   rate={rate}
                   paymentMethod={paymentMethod}
                   setPaymentMethod={setPaymentMethod}
-                  frequency={frequency}
                   setFrequency={setFrequency}
-                  planPreview={planPreview}
-                  planEligible={planEligible}
                   policies={policies}
+
                   cardFields={{
                     cardNumber,
                     setCardNumber,
@@ -846,6 +941,7 @@ export default function MarbrookHousePage() {
           {/* Persistent price-details / cart panel. */}
           <aside className="lg:sticky lg:top-6 lg:self-start">
             <PricePanel
+              category={activeCategory}
               rate={rate}
               pricing={pricing}
               nights={nights}
@@ -890,7 +986,7 @@ function DistributorShell({
       id="distributor"
       className="distributor min-h-screen bg-white text-[#23262e] font-sans"
     >
-      <div data-mds-element="true" className="distributor-app-canvas">
+      <div data-mds-element="true" className="distributor-app-canvas flex min-h-screen flex-col">
         <SkipLinks />
 
         {/* The Distributor also carries width="100%" here, offset="152" on
@@ -903,7 +999,13 @@ function DistributorShell({
           <DistributorStepper step={step} onSelectStep={onSelectStep} />
         </div>
 
-        <main id="main" data-mds-element="true" className="distributor-app-view">
+        <main
+          id="main"
+          data-mds-element="true"
+          className={`distributor-app-view flex-1 ${
+            step === "dates" ? "" : "bg-[#F0F0F0]"
+          }`}
+        >
           <div data-mds-element="true">
             <div data-mds-element="true" className="distributor-transition">
               <div
@@ -1080,7 +1182,7 @@ function ToolbarSelect({
           aria-label={ariaLabel}
           data-test-display-value={value}
           data-mds-element="true"
-          className="distributor-combo cursor-pointer border border-[#23262e]/15 bg-white px-3 py-1.5 text-sm text-[#23262e]"
+          className="distributor-combo cursor-pointer rounded-[6px] border border-[#23262e]/15 bg-white px-3 py-1.5 text-sm text-[#23262e]"
           value={value}
           onChange={(e) => onChange(e.target.value)}
         >
@@ -1121,48 +1223,54 @@ function DistributorStepper({
   step: Step;
   onSelectStep: (step: Step) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const current = stepDescriptor(step);
-  const visible = expanded ? STEPS : [current];
+  // All five steps render so the connector and the completed/future states have
+  // something to draw. data-test-step still sits on the current step only,
+  // preserving the invariant SPEC 1.4 documents.
   return (
     <nav
       id="navigation"
       aria-label="Progress"
-      className="distributor-navbar border-b border-[#23262e]/10 bg-white"
+      className="distributor-navbar border-b border-[#E6E8EB] bg-white"
     >
       <div
         data-mds-element="true"
-        className="distributor-stepper mx-auto flex max-w-7xl flex-col px-6 py-3"
+        className="distributor-stepper mx-auto max-w-7xl px-6 py-6"
       >
         <button
           type="button"
-          aria-expanded={expanded}
+          aria-expanded="true"
           data-mds-element="true"
-          className="distributor-stepper-toggle flex items-center gap-2 self-start text-xs uppercase tracking-[0.16em] text-[#23262e]/60"
-          onClick={() => setExpanded((v) => !v)}
+          className="distributor-stepper-toggle sr-only"
         >
           <div data-mds-element="true" className="distributor-step-count tabular-nums">
             {current.number} of {STEPS.length}
           </div>
-          <span
-            data-test-icon={expanded ? "chevron_up" : "chevron_down"}
-            aria-hidden="true"
-            data-mds-element="true"
-            className="distributor-expand-icon"
-          >
-            <ChevronIcon up={expanded} />
-          </span>
         </button>
 
         <nav aria-label="progress" data-mds-element="true" className="distributor-nav">
           <ol
             data-mds-element="true"
-            className="distributor-progress mt-2 flex flex-wrap items-center gap-x-6 gap-y-1"
+            className="distributor-progress relative flex w-full items-start justify-between"
           >
-            {visible.map((s) => {
+            {/* 2px #C8CCD2 connector through the circle centres, behind them.
+                Inset by half a cell each side so it spans between the outer
+                circles rather than past them. Filled circle is 34px, so its
+                centre is 17px down. */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute left-[17px] right-[17px] top-[16px] z-0 h-[2px] bg-[#C8CCD2]"
+            />
+            {STEPS.map((s) => {
               const isCurrent = s.key === step;
+              const isDone = s.number < current.number;
+              const filled = isCurrent || isDone;
               return (
-                <li key={s.key} data-mds-element="true" className="distributor-step">
+                <li
+                  key={s.key}
+                  data-mds-element="true"
+                  className="distributor-step relative z-10 flex w-[34px] flex-col items-center pb-[36px]"
+                >
                   <div
                     role="button"
                     tabIndex={0}
@@ -1170,7 +1278,7 @@ function DistributorStepper({
                     data-test-step={isCurrent ? s.key : undefined}
                     aria-label={s.ariaLabel}
                     data-mds-element="true"
-                    className="distributor-step-button cursor-pointer"
+                    className="distributor-step-button flex cursor-pointer flex-col items-center"
                     onClick={() => onSelectStep(s.key)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
@@ -1181,29 +1289,32 @@ function DistributorStepper({
                   >
                     <div
                       data-mds-element="true"
-                      className="distributor-step-inner flex items-center gap-2"
+                      className="distributor-step-inner flex h-[34px] items-center justify-center"
                     >
                       <span
                         data-mds-element="true"
-                        className={`distributor-step-number tabular-nums text-sm font-medium ${
-                          isCurrent ? "text-[#1A56DB]" : "text-[#23262e]/40"
-                        }`}
+                        className={
+                          filled
+                            ? "distributor-step-number flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[#1A56DB] text-[15px] font-medium tabular-nums text-white"
+                            : "distributor-step-number block h-[10px] w-[10px] rounded-full border-2 border-[#C8CCD2] bg-white"
+                        }
                       >
-                        {s.number}
+                        {filled ? (isDone ? <StepCheckIcon /> : s.number) : null}
                       </span>
-                      <div data-mds-element="true" className="distributor-step-text">
+                    </div>
+                    <div
+                      data-mds-element="true"
+                      className="distributor-step-text absolute left-1/2 top-[48px] -translate-x-1/2 whitespace-nowrap"
+                    >
+                      <div data-mds-element="true">
                         <div data-mds-element="true">
-                          <div data-mds-element="true">
-                            <span
-                              data-test-textkey={s.textKey}
-                              data-non-sensitive="true"
-                              className={`text-xs uppercase tracking-[0.16em] ${
-                                isCurrent ? "text-[#1A56DB]" : "text-[#23262e]/45"
-                              }`}
-                            >
-                              {s.name}
-                            </span>
-                          </div>
+                          <span
+                            data-test-textkey={s.textKey}
+                            data-non-sensitive="true"
+                            className="block text-center text-[15px] text-[#2E3440]"
+                          >
+                            {s.name}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1218,25 +1329,21 @@ function DistributorStepper({
   );
 }
 
-function ChevronIcon({ up }: { up: boolean }) {
+// White checkmark for a completed step.
+function StepCheckIcon() {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      fill="none"
-      viewBox="0 0 24 24"
-      role="presentation"
-      className={up ? "rotate-180" : undefined}
-      data-mds-element="true"
-    >
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
-        fill="currentColor"
-        d="M5.22 8.227a.79.79 0 0 0 0 1.095l6.25 6.451a.733.733 0 0 0 1.06 0l6.25-6.451a.79.79 0 0 0 0-1.095.733.733 0 0 0-1.06 0L12 14.13 6.28 8.227a.734.734 0 0 0-1.06 0"
+        d="M20 6 9 17l-5-5"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );
 }
+
 
 // Dates and Categories have no ported content yet: the view container still
 // renders, carrying the right data-test-id, with a heading and nothing else.
@@ -1280,6 +1387,47 @@ function DatesView({
   onChangeGuests: (adults: number, children: number) => void;
   onNext: () => void;
 }) {
+  // The image region takes the largest of three floors, so it can never leave a
+  // white gap:
+  //   1. 60vh, the original baseline
+  //   2. the card's height + HERO_PAD top and bottom — a fixed vh cannot clear a
+  //      card whose height varies with the calendar being open
+  //   3. the viewport height left below the toolbar and stepper, measured off
+  //      the region's own document offset, so the dates step never bottoms out
+  //      in white
+  const HERO_PAD = 64;
+  const cardRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
+  const [heroPx, setHeroPx] = useState<number | null>(null);
+  const [viewportPx, setViewportPx] = useState<number | null>(null);
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const measure = () => {
+      setHeroPx(card.offsetHeight + HERO_PAD * 2);
+      const hero = heroRef.current;
+      if (hero) {
+        // rect.top + scrollY is the region's offset in the document, so the
+        // remaining height is stable regardless of scroll position.
+        const offsetTop = hero.getBoundingClientRect().top + window.scrollY;
+        setViewportPx(Math.max(0, window.innerHeight - offsetTop));
+      }
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(card);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+  const heroFloors = ["60vh"];
+  if (heroPx != null) heroFloors.push(`${heroPx}px`);
+  if (viewportPx != null) heroFloors.push(`${viewportPx}px`);
+  const heroHeight =
+    heroFloors.length > 1 ? `max(${heroFloors.join(", ")})` : "60vh";
+
   return (
     <>
       {/* First child of dates-view, exactly as in the capture. The captured
@@ -1287,7 +1435,12 @@ function DatesView({
           a CSS background on the wrapper's generated class and keeps the <img>
           only for its srcset. There is no such class here, so the <img> renders
           instead of being hidden; that is the one deliberate divergence. */}
-      <div data-mds-element="true" className="dates-decoration-image">
+      <div
+        data-mds-element="true"
+        ref={heroRef}
+        className="dates-decoration-image relative w-full"
+        style={{ height: heroHeight }}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element -- the capture's
             decoration node is a plain <img>; next/image would wrap it. */}
         <img
@@ -1295,7 +1448,7 @@ function DatesView({
           data-mds-element="true"
           src="/hud_valley_pic.jpg"
           alt=""
-          className="h-[300px] w-full object-cover object-bottom"
+          className="absolute inset-0 h-full w-full object-cover"
         />
       </div>
 
@@ -1305,10 +1458,19 @@ function DatesView({
         </h1>
       </span>
 
-      <div role="region" data-mds-element="true" className="dates-region">
-        <div data-mds-element="true" className="dates-stack">
-          <div data-mds-element="true" className="dates-container">
-            <div data-mds-element="true" className="dates-card">
+      <div
+        role="region"
+        data-mds-element="true"
+        className="dates-region relative z-10 flex items-center"
+        style={{ height: heroHeight, marginTop: `calc(-1 * ${heroHeight})` }}
+      >
+        <div data-mds-element="true" className="dates-stack w-full">
+          <div data-mds-element="true" className="dates-container mx-auto w-full max-w-[560px] px-6">
+            <div
+              ref={cardRef}
+              data-mds-element="true"
+              className="dates-card rounded-[8px] bg-white p-[24px] shadow-[0_4px_16px_rgba(0,0,0,.12)]"
+            >
               <BookingBar
                 checkinIso={checkinIso}
                 checkoutIso={checkoutIso}
@@ -1318,33 +1480,19 @@ function DatesView({
                 onChangeGuests={onChangeGuests}
               />
 
-              <div className="mx-auto max-w-7xl px-6">
-                {/* The capture also puts direction="horizontal" on both divider
-                    divs; React's typings reject it on a div, so it is dropped,
-                    as with the shell's width/offset props. */}
-                <div
-                  data-test-divider="true"
-                  role="none"
-                  data-mds-element="true"
-                  className="my-6"
-                >
-                  <div data-mds-element="true" className="h-px bg-[#23262e]/12" />
-                </div>
-
-                <button
-                  aria-disabled="false"
-                  data-test-id="dates-next-button"
-                  aria-label="Next"
-                  type="submit"
-                  data-mds-element="true"
-                  className="mb-10 bg-[#1A56DB] px-8 py-3 text-sm uppercase tracking-[0.16em] text-white"
-                  onClick={onNext}
-                >
-                  <span data-test-textkey="Next" data-non-sensitive="true">
-                    Next
-                  </span>
-                </button>
-              </div>
+              <button
+                aria-disabled="false"
+                data-test-id="dates-next-button"
+                aria-label="Next"
+                type="submit"
+                data-mds-element="true"
+                className="mt-[20px] h-[46px] w-full rounded-[6px] bg-[#1A56DB] text-[16px] font-medium text-white"
+                onClick={onNext}
+              >
+                <span data-test-textkey="Next" data-non-sensitive="true">
+                  Next
+                </span>
+              </button>
             </div>
           </div>
         </div>
@@ -1449,7 +1597,7 @@ function DatesOccupancyHeader({
     <div
       data-test-id="dates-occupancy-header"
       data-mds-element="true"
-      className="mt-5 border border-[#1A56DB] bg-white p-5"
+      className="mt-5 rounded-[8px] border border-[#1A56DB] bg-white p-5"
     >
       <div
         data-mds-element="true"
@@ -1554,10 +1702,10 @@ function CategoryCard({
     <div
       data-test-id="category-card"
       data-mds-element="true"
-      className="flex h-full flex-col border border-[#1A56DB] bg-white"
+      className="flex h-full flex-col rounded-[8px] border border-[#1A56DB] bg-white"
     >
       <div data-mds-element="true" className="flex h-full flex-col">
-        <RoomPhoto />
+        <RoomPhoto categoryName={category.name} />
 
         <div data-mds-element="true" className="flex flex-1 flex-col p-6">
           <h3
@@ -1708,30 +1856,107 @@ function BookingBar({
   const [open, setOpen] = useState<null | "dates" | "guests">(null);
   const toggle = (which: "dates" | "guests") =>
     setOpen((cur) => (cur === which ? null : which));
+  const stepper =
+    "flex h-[46px] items-center justify-between rounded-[6px] border border-[#D8DBE0] px-3";
+  const stepBtn =
+    "flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] text-[18px] leading-none text-[#2E3440] disabled:opacity-30";
   return (
-    <div className="mx-auto mt-5 max-w-7xl px-6">
-      <div className="grid grid-cols-1 divide-y divide-[#23262e]/12 overflow-hidden rounded-none border border-[#1A56DB] bg-white shadow-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-        <BookingCell
-          icon={<GuestsIcon />}
-          label="Guests"
-          value={guestsLabel(adults, guestChildren)}
-          active={open === "guests"}
-          onClick={() => toggle("guests")}
-        />
-        <BookingCell
-          icon={<CalendarIcon />}
-          label="Check-in"
-          value={formatDateLong(checkinIso)}
-          active={open === "dates"}
-          onClick={() => toggle("dates")}
-        />
-        <BookingCell
-          icon={<CalendarIcon />}
-          label="Check-out"
-          value={formatDateLong(checkoutIso)}
-          active={open === "dates"}
-          onClick={() => toggle("dates")}
-        />
+    <div>
+      {/* Section label, the capture's DatePlural inside the DateRangeWrapper. */}
+      <div data-mds-element="true" className="text-[20px] font-semibold text-[#2E3440]">
+        <span data-test-textkey="DatePlural" data-non-sensitive="true">
+          Dates
+        </span>
+      </div>
+
+      {/* Date selector: one full-width control opening the existing calendar. */}
+      <button
+        type="button"
+        onClick={() => toggle("dates")}
+        className={`mt-[16px] w-full ${stepper} justify-center gap-2 text-[15px] text-[#2E3440]`}
+      >
+        <span className="shrink-0 text-[#2E3440]" aria-hidden="true">
+          <CalendarIcon />
+        </span>
+        <span data-test-textkey="SelectDatesTitle" data-non-sensitive="true">
+          {formatDateLong(checkinIso)} to {formatDateLong(checkoutIso)}
+        </span>
+      </button>
+
+      <div
+        data-test-divider="true"
+        role="none"
+        data-mds-element="true"
+        className="my-[20px]"
+      >
+        <div data-mds-element="true" className="h-px bg-[#E6E8EB]" />
+      </div>
+
+      {/* Adults and children side by side, equal width, 20px gap. Same state
+          and the same floors the popover stepper used. */}
+      <div className="grid grid-cols-2 gap-[20px]">
+        <div
+          data-test-id="age-category-occupancy-field"
+          data-mds-element="true"
+        >
+          <div className="text-[15px] text-[#2E3440]">Adults</div>
+          <div className={`mt-2 ${stepper}`}>
+            <button
+              type="button"
+              aria-label="Decrement"
+              data-test-button-minus="true"
+              data-test-id="button-minus-sign"
+              className={stepBtn}
+              disabled={adults <= 1}
+              onClick={() => onChangeGuests(Math.max(1, adults - 1), guestChildren)}
+            >
+              −
+            </button>
+            <span className="text-[15px] tabular-nums text-[#2E3440]">{adults}</span>
+            <button
+              type="button"
+              aria-label="Increment"
+              data-test-button-plus="true"
+              data-test-id="button-plus-sign"
+              className={stepBtn}
+              onClick={() => onChangeGuests(adults + 1, guestChildren)}
+            >
+              +
+            </button>
+          </div>
+        </div>
+        <div
+          data-test-id="age-category-occupancy-field"
+          data-mds-element="true"
+        >
+          <div className="text-[15px] text-[#2E3440]">Children</div>
+          <div className={`mt-2 ${stepper}`}>
+            <button
+              type="button"
+              aria-label="Decrement"
+              data-test-button-minus="true"
+              data-test-id="button-minus-sign"
+              className={stepBtn}
+              disabled={guestChildren <= 0}
+              onClick={() => onChangeGuests(adults, Math.max(0, guestChildren - 1))}
+            >
+              −
+            </button>
+            <span className="text-[15px] tabular-nums text-[#2E3440]">
+              {guestChildren}
+            </span>
+            <button
+              type="button"
+              aria-label="Increment"
+              data-test-button-plus="true"
+              data-test-id="button-plus-sign"
+              className={stepBtn}
+              onClick={() => onChangeGuests(adults, guestChildren + 1)}
+            >
+              +
+            </button>
+          </div>
+        </div>
       </div>
 
       {open === "dates" ? (
@@ -1758,40 +1983,6 @@ function BookingBar({
   );
 }
 
-function BookingCell({
-  icon,
-  label,
-  value,
-  active,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-expanded={active}
-      className={`flex w-full items-center gap-3 px-5 py-4 text-left transition-colors ${
-        active ? "bg-[#1A56DB]/5" : "hover:bg-[#1A56DB]/5"
-      }`}
-    >
-      <span className="shrink-0 text-[#1A56DB]" aria-hidden="true">
-        {icon}
-      </span>
-      <div>
-        <div className="text-[11px] uppercase tracking-[0.16em] text-[#1A56DB]">
-          {label}
-        </div>
-        <div className="text-sm font-medium text-[#23262e]">{value}</div>
-      </div>
-    </button>
-  );
-}
 
 // Lightweight custom range calendar (no date library). Pick check-in then
 // check-out; the selected range highlights. Any dates allowed, no past-date or
@@ -2030,92 +2221,780 @@ function CalendarIcon() {
   );
 }
 
-function RoomStep({
+// --- rates-view (step 3) ---------------------------------------------------
+// Structural port of the rates-view subtree in
+// reference/distributor/03-rates.html, whose document order is:
+//
+//   div[data-test-id="rates-view"]
+//     h1[data-test-id="select-rate-heading"]
+//     div[data-test-id="dates-occupancy-header"]      (same block as step 2)
+//     div[data-test-id="category-detail-card"]
+//     div[data-test-id="upsells-container"]
+//     div[data-test-id="occupancy-container"]
+//     div[data-test-id="rates-container"]
+//       h2[data-test-id="rates-heading"]
+//       Card > ul > li[data-test-id="rate-item"] × n
+//
+// upsells-container and occupancy-container are not reproduced: Marbrook sells
+// no add-on products, and the room/guest counters would duplicate the editing
+// the dates-occupancy-header already offers.
+function RatesView({
+  category,
   rates,
-  onSelectRate,
   selectedRateId,
-  installmentCount,
-  planEligible,
+  previewByRateId,
+  checkinIso,
+  checkoutIso,
+  nights,
+  adults,
+  guestChildren,
+  onEditStay,
+  onSelectRate,
 }: {
+  category: RoomCategory;
   rates: Rate[];
-  onSelectRate: (id: string) => void;
   selectedRateId: string | null;
-  installmentCount: number | null;
-  planEligible: boolean;
+  previewByRateId: Record<string, TeaserPreview>;
+  checkinIso: string;
+  checkoutIso: string;
+  nights: number;
+  adults: number;
+  guestChildren: number;
+  onEditStay: () => void;
+  onSelectRate: (id: string) => void;
 }) {
   return (
-    <section>
-      <h1 className="font-serif text-3xl tracking-tight text-[#23262e]">
-        {ROOM.name}
-      </h1>
-      <p className="mt-1 text-sm text-[#23262e]/65">{ROOM.specs}</p>
+    <div className="mx-auto max-w-7xl px-6 py-10">
+      <div data-mds-element="true">
+        <h1
+          data-test-id="select-rate-heading"
+          data-mds-element="true"
+          className="font-serif text-3xl tracking-tight text-[#23262e]"
+        >
+          <span data-test-textkey="SelectRate" data-non-sensitive="true">
+            Select rate
+          </span>
+        </h1>
+      </div>
 
-      <div className="mt-5 overflow-hidden rounded-none border border-[#1A56DB] bg-white">
-        <RoomPhoto />
-        <div className="p-6">
-          <p className="max-w-xl text-sm leading-relaxed text-[#23262e]/75">
-            {ROOM.description}
-          </p>
+      <DatesOccupancyHeader
+        checkinIso={checkinIso}
+        checkoutIso={checkoutIso}
+        nights={nights}
+        adults={adults}
+        guestChildren={guestChildren}
+        onEdit={onEditStay}
+      />
 
-          <h2 className="mt-7 font-serif text-lg text-[#23262e]">
-            Choose a rate
+      <CategoryDetailCard category={category} />
+
+      <div
+        data-test-id="rates-container"
+        data-mds-element="true"
+        className="mt-8"
+      >
+        <div data-mds-element="true">
+          <h2
+            data-test-id="rates-heading"
+            data-mds-element="true"
+            className="font-serif text-lg text-[#23262e]"
+          >
+            <span data-test-textkey="RatePlural" data-non-sensitive="true">
+              Rates
+            </span>
           </h2>
-          <div className="mt-3 space-y-3">
-            {rates.map((r) => (
-              <div
-                key={r.id}
-                className={`flex flex-col gap-4 rounded-none border-2 p-5 sm:flex-row sm:items-center sm:justify-between ${
-                  selectedRateId === r.id
-                    ? "border-[#1A56DB] bg-[#1A56DB]/5"
-                    : "border-[#1A56DB] bg-white"
-                }`}
-              >
-                <div className="min-w-0 sm:self-start">
-                  <div className="font-serif text-4xl text-[#23262e]">{r.name}</div>
-                  <p className="mt-0.5 text-base text-[#23262e]/60">{r.detail}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-5 sm:flex-col sm:items-end sm:gap-1">
-                  <div className="text-right">
-                    <div className="font-serif text-3xl text-[#23262e]">
-                      {formatUsd(r.nightlyCents)}
-                    </div>
-                    <div className="text-[11px] uppercase tracking-[0.14em] text-[#23262e]/50">
-                      per night
-                    </div>
-                    {installmentCount ? (
-                      <div className="mt-1">
-                        <div className="text-[11px] font-bold text-[#6A629E]">
-                          or pay {perNightInstallmentLabel(r.nightlyCents, installmentCount)}/night over{" "}
-                          {installmentCount} installments
-                        </div>
-                        <div className="text-[10px] text-[#23262e]/45">
-                          no credit check · excluding taxes
-                        </div>
-                      </div>
-                    ) : planEligible ? (
-                      <div className="mt-0.5 text-[11px] text-[#23262e]/60">
-                        or pay over time with Bliss
-                      </div>
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onSelectRate(r.id)}
-                    className="rounded-none bg-[#1A56DB] px-6 py-2.5 text-sm font-medium text-white transition hover:bg-[#1545B0]"
-                  >
-                    Book
-                  </button>
-                </div>
-              </div>
-            ))}
+
+          <div data-mds-element="true" className="mt-3">
+            {/* One Card wrapping one <ul>; the visual cards are <li> rows, as
+                SPEC 3.1 notes — there is no per-card Card wrapper. */}
+            <div
+              data-mds-element="true"
+              className="overflow-hidden rounded-[8px] border border-[#1A56DB] bg-white"
+            >
+              <ul data-mds-element="true" className="divide-y divide-[#23262e]/12">
+                {rates.map((r) => (
+                  <RateItem
+                    key={r.id}
+                    rate={r}
+                    selected={selectedRateId === r.id}
+                    preview={previewByRateId[r.id] ?? null}
+                    checkinIso={checkinIso}
+                    nights={nights}
+                    onSelect={onSelectRate}
+                  />
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
-function StayStep({
+// The capture's category-detail-card leads with an image carousel, then an h3
+// carrying the category name (note: no data-test-id on that h3, unlike
+// category-card-name on step 2), a max-persons line, and the description. The
+// carousel is replaced by the single RoomPhoto, as on step 2.
+function CategoryDetailCard({ category }: { category: RoomCategory }) {
+  return (
+    <div
+      data-test-id="category-detail-card"
+      data-mds-element="true"
+      className="mt-6 rounded-[8px] border border-[#1A56DB] bg-white"
+    >
+      <div
+        data-mds-element="true"
+        className="flex flex-col sm:flex-row sm:items-stretch"
+      >
+        <div data-mds-element="true" className="sm:w-[45%]">
+          <RoomPhoto categoryName={category.name} />
+        </div>
+
+        <div data-mds-element="true" className="flex-1 p-6">
+          <h3 data-mds-element="true" className="font-serif text-2xl text-[#23262e]">
+            <span data-localized-entity="true">{category.name}</span>
+          </h3>
+
+          <div data-mds-element="true" className="mt-3">
+            <div data-mds-element="true">
+              <div
+                data-test-id="category-detail-max-persons"
+                data-mds-element="true"
+                className="flex items-center gap-2 text-sm text-[#23262e]/70"
+              >
+                <span
+                  data-test-icon="profile"
+                  aria-hidden="true"
+                  data-mds-element="true"
+                  className="shrink-0 text-[#23262e]/55"
+                >
+                  <GuestsIcon />
+                </span>
+                <div>
+                  <span data-test-textkey="MaxPersons" data-non-sensitive="true">
+                    Maximum persons
+                  </span>
+                  :&nbsp;{category.sleeps}
+                </div>
+              </div>
+            </div>
+
+            <p
+              data-test-id="category-detail-description"
+              data-mds-element="true"
+              className="mt-3 max-w-xl text-sm leading-relaxed text-[#23262e]/75"
+            >
+              <span>{category.description}</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Verbatim structural port of the rate card in SPEC 3.2. Marbrook's rate name,
+// description and price are unchanged; only the wrapper elements and the
+// data-test-* attributes are the Distributor's.
+//
+// The capture's "More" description expander is left out: r.detail is one line
+// and renders in full, so there is nothing to expand.
+function RateItem({
+  rate,
+  selected,
+  preview,
+  checkinIso,
+  nights,
+  onSelect,
+}: {
+  rate: Rate;
+  selected: boolean;
+  preview: TeaserPreview | null;
+  checkinIso: string;
+  nights: number;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <li
+      data-test-id="rate-item"
+      data-mds-element="true"
+      className={`flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between ${
+        selected ? "bg-[#1A56DB]/5" : "bg-white"
+      }`}
+    >
+      <div className="min-w-0 sm:self-start">
+        {/* SPEC 2.2: rate-item-name sits inside a bare, attribute-less div, so
+            it is not a direct child of the rate-item. */}
+        <div>
+          <h3
+            data-test-id="rate-item-name"
+            data-mds-element="true"
+            className="font-serif text-4xl text-[#23262e]"
+          >
+            <span data-localized-entity="true">{rate.name}</span>
+          </h3>
+        </div>
+
+        <div>
+          <p
+            data-test-id="rate-item-description"
+            data-mds-element="true"
+            className="mt-0.5 text-base text-[#23262e]/60"
+          >
+            <span>{rate.detail}</span>
+          </p>
+        </div>
+      </div>
+
+      <div
+        data-mds-element="true"
+        className="flex shrink-0 items-center gap-5 sm:flex-col sm:items-end sm:gap-1"
+      >
+        <div data-mds-element="true" className="text-right">
+          {rate.strikeCents !== undefined ? (
+            <div
+              data-test-id="rate-item-discount"
+              data-mds-element="true"
+              className="text-sm text-[#23262e]/45"
+            >
+              <s>
+                &nbsp;
+                <span dir="ltr" data-test-id="localizedCurrency">
+                  {formatUsd(rate.strikeCents)}
+                </span>
+                &nbsp;
+              </s>
+            </div>
+          ) : null}
+
+          <div data-test-id="from-price-wrapper" data-mds-element="true">
+            <strong
+              data-mds-element="true"
+              className="font-serif text-3xl font-normal text-[#23262e]"
+            >
+              <span dir="ltr" data-test-id="localizedCurrency">
+                {formatUsd(rate.nightlyCents)}
+              </span>
+              <span>&nbsp;</span>
+            </strong>
+            <div
+              data-mds-element="true"
+              className="text-[11px] uppercase tracking-[0.14em] text-[#23262e]/50"
+            >
+              <span data-test-textkey="PerNight" data-non-sensitive="true">
+                Nightly
+              </span>
+            </div>
+          </div>
+
+          {/* As on the category card, the capture's FeesIncluded half is
+              omitted: Marbrook's destination fee is added on top of
+              nightlyCents rather than included in it. */}
+          <div
+            data-test-id="tax-label"
+            data-mds-element="true"
+            className="mt-1 text-[11px] text-[#23262e]/50"
+          >
+            (
+            <span
+              data-test-id="tax-label"
+              data-test-textkey="ExcludingTaxes"
+              data-non-sensitive="true"
+            >
+              Taxes excluded
+            </span>
+            )
+          </div>
+
+          {/* Bliss installment teaser. No Distributor equivalent; strings come
+              from frontend/public/mews-overlay.js. */}
+          <BlissTeaser
+            preview={preview}
+            nightlyCents={rate.nightlyCents}
+            rateName={rate.name}
+            checkinIso={checkinIso}
+            nights={nights}
+          />
+        </div>
+
+        <button
+          data-test-id="price-footer-button"
+          type="button"
+          aria-label="Book"
+          data-mds-element="true"
+          className="rounded-none bg-[#1A56DB] px-6 py-2.5 text-sm font-medium text-white transition hover:bg-[#1545B0]"
+          onClick={() => onSelect(rate.id)}
+        >
+          {/* Capture renders AddRoom as "Book now"; Marbrook's existing CTA
+              copy is "Book" and is kept. */}
+          <span data-test-textkey="AddRoom" data-non-sensitive="true">
+            Book
+          </span>
+        </button>
+      </div>
+    </li>
+  );
+}
+
+// --- Bliss teaser + modal --------------------------------------------------
+// Strings copied verbatim from frontend/public/mews-overlay.js, which is the
+// source of truth. Line references are to that file.
+//
+// Not ported, deliberately: the plan-selected states (overlay 1740, 1788-1797,
+// 2088-2113) and confirmPlan/clearSelection. Marbrook has no selection model
+// for this yet, so the modal's CTA selects a cadence within the modal only.
+//
+// STYLING: also ported verbatim, from triggerCss (1450-1505), modalCss
+// (1516-1578) and baseCss (1443-1448), with the CONFIG.brand tokens at 435-452
+// substituted in. The overlay renders into a shadow root, so `:host{all:initial}`
+// scopes its very generic class names (.card, .head, .body, .opt, .amt …). Here
+// the same scoping is done with a `.bliss-ui` root prefix instead. baseCss sets
+// font-family to the SAMPLED HOST font, so the faithful reproduction is to
+// inherit Marbrook's page font rather than name one.
+const BLISS_CSS = `
+.bliss-ui *{box-sizing:border-box;margin:0;padding:0;font-family:inherit}
+
+.bliss-ui .trig{display:block;width:100%;margin:0;padding:0;background:none;border:0;border-radius:0;box-shadow:none;color:#51576A;font-size:12px;line-height:1.45;cursor:pointer;text-align:left;white-space:normal;overflow-wrap:break-word}
+.bliss-ui .trig:hover .amt{text-decoration:underline}
+.bliss-ui .trig:focus-visible{outline:2px solid #C9AFFA;outline-offset:2px}
+.bliss-ui .sep{margin:0 5px;opacity:.55}
+.bliss-ui .amt{font-weight:600}
+.bliss-ui .sub{display:block;margin-top:2px;font-size:11px;font-weight:400;color:#97ACC8}
+.bliss-ui .trig[disabled]{cursor:default}
+
+.bliss-ui .scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.44);display:flex;align-items:center;justify-content:center;padding:16px}
+.bliss-ui .card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:#ffffff;color:#51576A;border:1px solid #D9D9D9;border-radius:4px;box-shadow:0 18px 56px rgba(0,0,0,.32)}
+.bliss-ui .card:focus{outline:none}
+.bliss-ui .head{display:flex;align-items:flex-start;gap:12px;padding:22px 24px;border-bottom:1px solid #D9D9D9}
+.bliss-ui .head h2{font-size:17px;font-weight:600;line-height:1.3}
+.bliss-ui .head p{font-size:13px;color:#97ACC8;margin-top:4px;line-height:1.4}
+.bliss-ui .x{margin-left:auto;background:none;border:0;cursor:pointer;font-size:20px;line-height:1;color:#97ACC8}
+.bliss-ui .body{padding:20px 24px 24px}
+.bliss-ui .ctx{font-size:13px;color:#97ACC8;margin-bottom:2px;line-height:1.5}
+.bliss-ui .fine{font-size:11px;color:#97ACC8;margin-bottom:12px;line-height:1.4}
+.bliss-ui .disc{display:block;width:100%;text-align:left;margin:2px 0 8px;padding:8px 0;background:none;border:0;border-top:1px solid #D9D9D9;color:#51576A;font-size:12px;font-weight:600;cursor:pointer}
+.bliss-ui .sched{margin:0 0 12px;border:1px solid #D9D9D9;border-radius:4px}
+.bliss-ui .sched .row{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12px;border-bottom:1px solid #D9D9D9}
+.bliss-ui .sched .row:last-child{border-bottom:0}
+.bliss-ui .sched .n{width:18px;color:#97ACC8}
+.bliss-ui .sched .d{color:#51576A}
+.bliss-ui .sched .v{margin-left:auto;font-weight:600;color:#51576A}
+.bliss-ui .opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 12px;margin-bottom:8px;background:transparent;color:#51576A;border:1px solid #D9D9D9;border-radius:4px;cursor:pointer}
+.bliss-ui .opt[aria-pressed="true"]{border-color:#C9AFFA;border-width:2px;padding:10px 11px}
+.bliss-ui .opt .lbl{font-size:13px;font-weight:600}
+.bliss-ui .opt .sub{font-size:11px;color:#97ACC8;margin-top:2px}
+.bliss-ui .opt .amt{margin-left:auto;text-align:right}
+.bliss-ui .opt .amt b{font-size:14px;font-weight:600;display:block}
+.bliss-ui .opt .amt span{font-size:11px;color:#97ACC8}
+.bliss-ui .tag{display:inline-block;font-size:9px;letter-spacing:.4px;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:#F0E9FE;border:1px solid #C9AFFA;color:#51576A;margin-left:6px;vertical-align:middle}
+.bliss-ui .cta{width:100%;padding:12px;border:0;border-radius:4px;background:#6A629E;color:#ffffff;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px}
+.bliss-ui .cta[disabled]{opacity:.5;cursor:default}
+.bliss-ui .note{font-size:11px;color:#97ACC8;margin-top:10px;line-height:1.45}
+.bliss-ui .msg{font-size:12px;color:#97ACC8;line-height:1.5}
+
+@media (max-width:420px){
+.bliss-ui .scrim{align-items:flex-end;padding:0}
+.bliss-ui .card{width:100%;max-width:100%;max-height:88vh;border-radius:4px 4px 0 0}
+}
+`;
+
+function BlissStyles() {
+  return <style>{BLISS_CSS}</style>;
+}
+
+function BlissTeaser({
+  preview,
+  nightlyCents,
+  rateName,
+  checkinIso,
+  nights,
+  variant = "rate-card",
+  selected = false,
+  onConfirm,
+  policies,
+}: {
+  preview: TeaserPreview | null;
+  nightlyCents: number;
+  rateName: string;
+  checkinIso: string;
+  nights: number;
+  // mews-overlay.js branches on t.kind: "rate-card" triggers vs the "details"
+  // block on the checkout step. Same component, the overlay's two states.
+  variant?: "rate-card" | "details";
+  selected?: boolean;
+  onConfirm?: (frequency: PublicPlanFrequency) => void;
+  policies?: MerchantPolicies | null;
+}) {
+  const [modalOpen, setModalOpen] = useState(false);
+
+  if (!preview || !preview.eligible || preview.options.length === 0) return null;
+
+  const spread = spreadOption(preview);
+  const fallback = fallbackOption(preview);
+
+  // mews-overlay.js:1642-1643. The numerator is the card's own displayed
+  // tax-exclusive nightly price, so this figure deliberately does not
+  // reconcile with the modal.
+  const line =
+    spread != null
+      ? "Pay installments over time starting at " +
+        perNightInstallmentLabel(nightlyCents, spread.numPayments) +
+        "/night"
+      : null;
+
+  // mews-overlay.js:1646-1647.
+  const fallbackLine =
+    fallback != null
+      ? "from " +
+        formatUsd(fallback.perPaymentCents) +
+        (fallback.frequency === "monthly" ? "/mo" : " every 2 weeks")
+      : null;
+
+  // mews-overlay.js:1670-1671 — the details block quotes the tax-inclusive
+  // total, not the pre-tax nightly price.
+  const detailsPerNight =
+    spread != null
+      ? summaryPerNightCents(preview.amountCents, nights, spread.numPayments)
+      : null;
+  const detailsLine =
+    detailsPerNight != null
+      ? "Pay installments over time starting at " +
+        formatUsd(detailsPerNight) +
+        "/night"
+      : null;
+
+  const openModal = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setModalOpen(true);
+  };
+
+  const modal = modalOpen ? (
+    <BlissModal
+      preview={preview}
+      rateName={rateName}
+      checkinIso={checkinIso}
+      nights={nights}
+      policies={policies}
+      onConfirm={
+        onConfirm
+          ? (f) => {
+              onConfirm(f);
+              setModalOpen(false);
+            }
+          : undefined
+      }
+      onClose={() => setModalOpen(false)}
+    />
+  ) : null;
+
+  // mews-overlay.js:1704-1777, the details block.
+  if (variant === "details") {
+    if (selected) {
+      // STATE A (mews-overlay.js:1738-1748).
+      return (
+        <div className="bliss-ui">
+          <BlissStyles />
+          <div className="details">
+            <span className="amt">You&apos;ve selected installment payments</span>
+            <button className="link" type="button" onClick={openModal}>
+              See details
+            </button>
+          </div>
+          {modal}
+        </div>
+      );
+    }
+    // STATE B (mews-overlay.js:1751-1776). No "Pre-tax" on the supporting
+    // line: unlike the rate-card figure this one includes tax.
+    if (!detailsLine) return null;
+    return (
+      <div className="bliss-ui">
+        <BlissStyles />
+        <button
+          className="trig details"
+          type="button"
+          aria-haspopup="dialog"
+          onClick={openModal}
+        >
+          <span className="amt">{detailsLine}</span>
+          <span className="sub">No credit check</span>
+        </button>
+        {modal}
+      </div>
+    );
+  }
+
+  if (!line && !fallbackLine) return null;
+
+  return (
+    <div className="bliss-ui mt-1">
+      <BlissStyles />
+      {/* The teaser line is itself the trigger. Same button semantics the
+          overlay's trigger carries (mews-overlay.js:1756-1760). */}
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        className="trig"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setModalOpen(true);
+        }}
+      >
+        {line ? (
+          <>
+            <span className="amt">{line}</span>
+            {/* mews-overlay.js:1815. Only on this branch, as in the overlay,
+                because it describes this line's basis. */}
+            <span className="sub">Pre-tax · No credit check</span>
+          </>
+        ) : (
+          /* mews-overlay.js:1818-1821: prefix, separator, then the line. No
+             supporting line on this branch. */
+          <>
+            <span>Spread this stay over time</span>
+            <span className="sep">·</span>
+            <span className="amt">{fallbackLine}</span>
+          </>
+        )}
+      </button>
+
+      {modal}
+    </div>
+  );
+}
+
+// Structural port of the overlay's modal, mews-overlay.js:1954-2138.
+function BlissModal({
+  preview,
+  rateName,
+  checkinIso,
+  nights,
+  policies,
+  onConfirm,
+  onClose,
+}: {
+  preview: TeaserPreview;
+  rateName: string;
+  checkinIso: string;
+  nights: number;
+  policies?: MerchantPolicies | null;
+  // mews-overlay.js:2197 confirmPlan. Optional: the rate-card trigger has no
+  // confirm target yet, so its CTA stays inert as before.
+  onConfirm?: (frequency: PublicPlanFrequency) => void;
+  onClose: () => void;
+}) {
+  // mews-overlay.js:1920 — seeded on open, not left null.
+  const [selected, setSelected] = useState<PublicPlanFrequency | null>(() =>
+    defaultSelected(preview),
+  );
+  // mews-overlay.js:1920 sets no scheduleOpen key, so it starts falsy.
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+
+  const chosen = preview.options.find((o) => o.frequency === selected) ?? null;
+
+  // mews-overlay.js:1964-1970.
+  const ctxBits: string[] = [];
+  if (checkinIso) ctxBits.push(shortDate(checkinIso));
+  if (nights > 0) ctxBits.push(nights + (nights === 1 ? " night" : " nights"));
+  ctxBits.push(formatUsd(preview.amountCents));
+
+  // mews-overlay.js:1862-1872 — the modal host is appended to the document
+  // body, fixed to the full viewport at max z-index, not nested in the card.
+  return createPortal(
+    <div
+      className="bliss-ui"
+      style={{
+        position: "fixed",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+        zIndex: 2147483647,
+      }}
+    >
+      <BlissStyles />
+      <div className="scrim" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="card" onClick={(e) => e.stopPropagation()}>
+        <div className="head">
+          <div>
+            <h2>Spread this stay over time</h2>
+            <p>{rateName}</p>
+          </div>
+          {/* mews-overlay.js:1959. */}
+          <button aria-label="Close" type="button" className="x" onClick={onClose}>
+            ×
+          </button>
+        </div>
+
+        <div className="body">
+          <div className="ctx">{ctxBits.join(" · ") || "Waiting for dates"}</div>
+          {/* mews-overlay.js:1972-1976. The "details" variant does not apply:
+              Marbrook has no details-block trigger kind. */}
+          <div className="fine">Pre-tax</div>
+
+          {!preview.eligible ? (
+            <div className="msg">
+              {REASON_COPY[preview.reason] || REASON_COPY.invalid_input}
+            </div>
+          ) : (
+            <>
+              {preview.depositAmountCents > 0 ? (
+                <div className="ctx">
+                  {formatUsd(preview.depositAmountCents)} today, then the balance
+                  on the schedule below.
+                </div>
+              ) : null}
+
+              {preview.options.map((opt) => {
+                const isSel = selected === opt.frequency;
+                return (
+                  <button
+                    key={opt.frequency}
+                    type="button"
+                    className="opt"
+                    aria-pressed={isSel ? "true" : "false"}
+                    onClick={() => {
+                      // mews-overlay.js:2019-2022: clicking the selected row
+                      // toggles it off rather than being a no-op.
+                      setSelected(isSel ? null : opt.frequency);
+                    }}
+                  >
+                    <div>
+                      <div className="lbl">
+                        {opt.frequency === "biweekly" ? "Every 2 weeks" : "Monthly"}
+                        {opt.recommended ? (
+                          <span className="tag">Recommended</span>
+                        ) : null}
+                      </div>
+                      <div className="sub">
+                        {opt.numPayments}
+                        {opt.numPayments === 1 ? " payment" : " payments"} through{" "}
+                        {shortDate(opt.dueDates[opt.dueDates.length - 1]!)}
+                      </div>
+                    </div>
+                    <div className="amt">
+                      <b>{formatUsd(opt.perPaymentCents)}</b>
+                      <span>per payment</span>
+                    </div>
+                  </button>
+                );
+              })}
+
+              {chosen ? (
+                <>
+                  <button
+                    type="button"
+                    className="disc"
+                    aria-expanded={scheduleOpen ? "true" : "false"}
+                    onClick={() => setScheduleOpen((v) => !v)}
+                  >
+                    {(scheduleOpen ? "▾" : "▸") + "  Payment schedule"}
+                  </button>
+                  {scheduleOpen ? (
+                    <div className="sched">
+                      {chosen.dueDates.map((iso, i) => {
+                        const last = i === chosen.dueDates.length - 1;
+                        return (
+                          <div className="row" key={iso}>
+                            <span className="n">{i + 1}</span>
+                            <span className="d">{shortDate(iso)}</span>
+                            <span className="v">
+                              {formatUsd(
+                                last ? chosen.finalPaymentCents : chosen.perPaymentCents,
+                              )}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+
+              {chosen ? (
+                <>
+                  {/* Fine print in place of the removed fee breakdown. The
+                      fee stays inside the per-payment figures and the
+                      schedule. .note treatment (mews-overlay.js:1560). */}
+                  <div className="note">
+                    Includes a small additional processing fee.
+                  </div>
+
+                  {/* Plan policy, .note (mews-overlay.js:1560). */}
+                  <ul className="note">
+                    {policies ? (
+                      <>
+                        <li>{refundCopy(policies)}</li>
+                        <li>{dueDateCopy(policies)}</li>
+                        <li>{failedPaymentCopy(policies)}</li>
+                      </>
+                    ) : (
+                      <>
+                        <li>Full refund anytime before your check-in.</li>
+                        <li>Each payment runs automatically on the date shown.</li>
+                        <li>
+                          If a payment does not go through, we retry it before your
+                          check-in.
+                        </li>
+                      </>
+                    )}
+                  </ul>
+                </>
+              ) : null}
+
+              {/* mews-overlay.js:2118-2124. Label follows the selection. */}
+              <button
+                type="button"
+                className="cta"
+                disabled={!chosen}
+                onClick={() => {
+                  if (chosen && onConfirm) onConfirm(chosen.frequency);
+                }}
+              >
+                {chosen ? "Update this plan" : "Continue with this plan"}
+              </button>
+              {/* mews-overlay.js:2136. */}
+              <div className="note">
+                No card needed here. You will finish checkout the usual way.
+              </div>
+            </>
+          )}
+        </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+// --- summary-view (step 4) -------------------------------------------------
+// Structural replica of [data-test-id="summary-view"] in
+// reference/distributor/04-summary.html. Structure from the capture, data and
+// copy from Marbrook.
+//
+// Omitted, no Marbrook data (same basis as the rooms/rates ports):
+//   - image carousel and its slide controls (one photo, no gallery)
+//   - reservation quantity stepper: summary-card-counts-wrapper,
+//     reservation-counter-decrement-button, -increment-button (no cart)
+//   - add-another-reservation-button (no cart)
+//   - products and extras: toggle-expandable-box, product, IncludedInRate
+//     (no add-on products, and Marbrook's fee is charged on top rather than
+//     included in the rate, so IncludedInRate would be false)
+//   - the summary-card-rate-description "More" expander (rate.detail is short)
+//
+// Kept with no capture counterpart, at the funnel's request: the back link,
+// category.specs, the nights count, and the "avg per night" line.
+//
+// TAX SHAPE: Marbrook's additive total is kept — room subtotal + occupancy tax
+// + destination fee. The capture's "Included in rate" shape is deliberately NOT
+// adopted, because the destination fee really is charged on top here. The
+// capture's six-row itemised breakdown collapses to one tax-rate row: Marbrook
+// has exactly one tax. The destination fee sits in the line-item area rather
+// than under the Taxes disclosure, because it is a fee, not a tax.
+function SummaryView({
+  category,
   rate,
   pricing,
   nights,
@@ -2124,9 +3003,9 @@ function StayStep({
   adults,
   guestChildren,
   onBack,
-  onAddRoom,
   onCheckout,
 }: {
+  category: RoomCategory;
   rate: Rate;
   pricing: Pricing;
   nights: number;
@@ -2135,11 +3014,11 @@ function StayStep({
   adults: number;
   guestChildren: number;
   onBack: () => void;
-  onAddRoom: () => void;
   onCheckout: () => void;
 }) {
   return (
-    <section>
+    <div className="mx-auto max-w-7xl px-6 py-10">
+      {/* No capture counterpart; the funnel needs a way back. */}
       <button
         type="button"
         onClick={onBack}
@@ -2147,54 +3026,281 @@ function StayStep({
       >
         ← Back to rooms
       </button>
-      <h1 className="mt-3 font-serif text-3xl tracking-tight text-[#23262e]">
-        Your stay
+
+      <h1
+        data-test-id="summary-heading"
+        data-mds-element="true"
+        className="mt-3 font-serif text-3xl tracking-tight text-[#23262e]"
+      >
+        <span data-test-textkey="Summary" data-non-sensitive="true">
+          Your stay
+        </span>
       </h1>
 
-      <div className="mt-5 overflow-hidden rounded-none border border-[#1A56DB] bg-white">
+      <div
+        data-test-id="summary-reservation-card"
+        data-mds-element="true"
+        className="mt-5 overflow-hidden rounded-[8px] border border-[#1A56DB] bg-white"
+      >
         <div className="flex gap-5 p-5">
-          <div className="hidden h-24 w-32 shrink-0 overflow-hidden rounded-none sm:block">
-            <RoomPhoto compact />
+          {/* 2a. The carousel is omitted; the single RoomPhoto stands in, as on
+              rooms-view and rates-view. */}
+          <div
+            data-test-id="summary-card-image"
+            data-mds-element="true"
+            className="hidden h-24 w-32 shrink-0 overflow-hidden rounded-none sm:block"
+          >
+            <RoomPhoto categoryName={category.name} compact />
           </div>
+
           <div className="min-w-0">
-            <div className="font-serif text-xl text-[#23262e]">{ROOM.name}</div>
-            <div className="mt-0.5 text-sm text-[#23262e]/60">{ROOM.specs}</div>
-            <div className="mt-2 text-sm text-[#23262e]/80">{rate.name}</div>
-            <p className="text-xs text-[#23262e]/55">{rate.detail}</p>
+            {/* 2b */}
+            <h2
+              data-test-id="summary-card-name"
+              data-mds-element="true"
+              className="font-serif text-xl text-[#23262e]"
+            >
+              <span data-localized-entity="true">{category.name}</span>
+            </h2>
+            <div className="mt-0.5 text-sm text-[#23262e]/60">{category.specs}</div>
+
+            {/* 2e. Capture: icon rate_management + span[data-test-textkey="Rate"]
+                + ":&nbsp;" + the rate name. Marbrook has no rate_management
+                glyph, so the marker span carries no icon. */}
+            <div
+              data-test-id="summary-card-rate"
+              data-mds-element="true"
+              className="mt-2 text-sm text-[#23262e]/80"
+            >
+              <span
+                data-test-icon="rate_management"
+                aria-hidden="true"
+                data-mds-element="true"
+              />
+              <span data-test-textkey="Rate" data-non-sensitive="true">
+                Rate
+              </span>
+              :&nbsp;
+              <span data-localized-entity="true">{rate.name}</span>
+              <p
+                data-test-id="summary-card-rate-description"
+                data-mds-element="true"
+                className="text-xs text-[#23262e]/55"
+              >
+                <span>{rate.detail}</span>
+              </p>
+            </div>
           </div>
         </div>
 
         <div className="border-t border-[#23262e]/10 px-5 py-4 text-sm">
           <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-[#23262e]/80">
-            <StayFact label="Check-in" value={formatDateLong(checkinIso)} />
-            <StayFact label="Check-out" value={formatDateLong(checkoutIso)} />
-            <StayFact label="Guests" value={guestsLabel(adults, guestChildren)} />
+            {/* 2c. Capture joins the two days with "&nbsp;‐&nbsp;" (U+2010). */}
+            <div
+              data-test-id="summary-card-date"
+              data-mds-element="true"
+              className="flex items-center gap-2"
+            >
+              <span
+                data-test-icon="calendar"
+                aria-hidden="true"
+                data-mds-element="true"
+                className="shrink-0 text-[#23262e]/55"
+              >
+                <CalendarIcon />
+              </span>
+              <div data-mds-element="true">
+                <span>
+                  <span>
+                    <span
+                      data-test-textkey={weekdayTextKey(checkinIso)}
+                      data-non-sensitive="true"
+                    >
+                      {weekdayShort(checkinIso)}
+                    </span>{" "}
+                    <span data-localized-entity="true">
+                      {formatDateNumeric(checkinIso)}
+                    </span>
+                  </span>
+                  &nbsp;‐&nbsp;
+                  <span>
+                    <span
+                      data-test-textkey={weekdayTextKey(checkoutIso)}
+                      data-non-sensitive="true"
+                    >
+                      {weekdayShort(checkoutIso)}
+                    </span>{" "}
+                    <span data-localized-entity="true">
+                      {formatDateNumeric(checkoutIso)}
+                    </span>
+                  </span>
+                </span>
+              </div>
+            </div>
+
+            {/* 2d */}
+            <div
+              data-test-id="summary-card-occupancy"
+              data-mds-element="true"
+              className="flex items-center gap-2"
+            >
+              <span
+                data-test-icon="profile"
+                aria-hidden="true"
+                data-mds-element="true"
+                className="shrink-0 text-[#23262e]/55"
+              >
+                <GuestsIcon />
+              </span>
+              <div data-mds-element="true">{guestsLabel(adults, guestChildren)}</div>
+            </div>
+
+            {/* No capture counterpart; kept at the funnel's request. */}
             <StayFact label="Nights" value={String(nights)} />
           </div>
         </div>
 
-        <div className="border-t border-[#23262e]/10 px-5 py-5">
-          <PriceLines rate={rate} pricing={pricing} nights={nights} />
+        {/* Blocks 4-9. */}
+        <div className="border-t border-[#23262e]/10 px-5 py-5 text-sm">
+          {/* 4. Line item: the capture's label is two data-localized-entity
+              spans glued with " + ", its amount a strong > localizedCurrency,
+              and its additional-info the per-unit line. */}
+          <div className="flex items-baseline justify-between gap-3">
+            <strong data-mds-element="true" className="font-normal text-[#23262e]">
+              <span data-localized-entity="true">{category.name}</span>
+              {"  + "}
+              <span data-localized-entity="true">{rate.name}</span>
+            </strong>
+            <strong data-mds-element="true" className="font-normal text-[#23262e]">
+              <span dir="ltr" data-test-id="localizedCurrency">
+                {formatUsd(pricing.roomSubtotalCents)}
+              </span>
+            </strong>
+          </div>
+          <div
+            data-test-id="additional-info"
+            data-mds-element="true"
+            className="text-xs text-[#23262e]/55"
+          >
+            {formatUsd(rate.nightlyCents)} × {nights} nights
+          </div>
+
+          {/* Destination fee. A fee, not a tax, so it carries no tax-rate
+              marker and sits outside the Taxes disclosure. */}
+          <div className="mt-2 flex items-baseline justify-between gap-3 text-[#23262e]/80">
+            <span>Destination fee ($30/night)</span>
+            <span className="tabular-nums">
+              <span dir="ltr" data-test-id="localizedCurrency">
+                {formatUsd(pricing.destinationFeeCents)}
+              </span>
+            </span>
+          </div>
+
+          {/* 6. */}
+          <div
+            data-test-divider="true"
+            role="none"
+            data-mds-element="true"
+            className="my-4"
+          >
+            <div data-mds-element="true" className="h-px bg-[#23262e]/10" />
+          </div>
+
+          {/* 7. Taxes. One row: Marbrook has one tax. The aggregate beside the
+              toggle is a bare text node in the capture, not a localizedCurrency. */}
+          <div className="flex items-baseline justify-between gap-3">
+            <button
+              data-test-id="tax-breakdown-toggle-expandable-box"
+              type="button"
+              data-mds-element="true"
+              className="text-[#23262e]/80"
+            >
+              <span data-test-textkey="TaxPlural" data-non-sensitive="true">
+                Taxes
+              </span>
+            </button>
+            <div data-mds-element="true" className="tabular-nums text-[#23262e]/80">
+              {formatUsd(pricing.occupancyTaxCents)}
+            </div>
+          </div>
+          <div className="mt-1 flex items-baseline justify-between gap-3">
+            <div
+              data-test-id="tax-rate"
+              data-mds-element="true"
+              className="text-xs text-[#23262e]/55"
+            >
+              Occupancy tax (8.875%)
+            </div>
+            <div data-mds-element="true" className="text-xs tabular-nums text-[#23262e]/55">
+              {formatUsd(pricing.occupancyTaxCents)}
+            </div>
+          </div>
+
+          {/* 8. */}
+          <div
+            data-test-divider="true"
+            role="none"
+            data-mds-element="true"
+            className="my-4"
+          >
+            <div data-mds-element="true" className="h-px bg-[#23262e]/10" />
+          </div>
+
+          {/* 9. */}
+          <div className="flex items-baseline justify-between gap-3">
+            <strong
+              data-test-id="total-bar-total"
+              data-mds-element="true"
+              className="font-serif text-base font-normal text-[#23262e]"
+            >
+              <span data-test-textkey="Total" data-non-sensitive="true">
+                Total
+              </span>
+            </strong>
+            <strong
+              data-test-id="total-bar-total-value"
+              data-mds-element="true"
+              className="font-serif text-xl font-semibold text-[#23262e]"
+            >
+              <span dir="ltr" data-test-id="localizedCurrency">
+                {formatUsd(pricing.totalCents)}
+              </span>
+            </strong>
+          </div>
+          <div
+            data-test-id="total-bar-tax-included"
+            data-mds-element="true"
+            className="text-right text-[11px] text-[#23262e]/50"
+          >
+            <span data-test-textkey="TaxIncluded" data-non-sensitive="true">
+              Tax included
+            </span>
+          </div>
+          {/* No capture counterpart; existing approved copy. */}
+          <div className="text-right text-[11px] text-[#23262e]/50">
+            {formatUsd(pricing.avgPerNightCents)} avg per night
+          </div>
         </div>
       </div>
 
-      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* 10. Capture renders Continue; Marbrook's existing CTA copy is
+          Checkout and is kept, as with the rate card's Book. */}
+      <div className="mt-5 flex justify-end">
         <button
-          type="button"
-          onClick={onAddRoom}
-          className="rounded-none border border-[#1A56DB] bg-white px-5 py-3 text-sm font-medium text-[#1A56DB] transition hover:bg-[#1A56DB]/5"
-        >
-          Add a room
-        </button>
-        <button
-          type="button"
-          onClick={onCheckout}
+          aria-disabled="false"
+          data-test-id="summary-next-button"
+          aria-label="Checkout"
+          type="submit"
+          data-mds-element="true"
           className="rounded-none bg-[#1A56DB] px-8 py-3 text-sm font-medium text-white transition hover:bg-[#1545B0]"
+          onClick={onCheckout}
         >
-          Checkout
+          <span data-test-textkey="Continue" data-non-sensitive="true">
+            Checkout
+          </span>
         </button>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -2210,6 +3316,12 @@ function StayFact({ label, value }: { label: string; value: string }) {
 }
 
 function CheckoutStep(props: {
+  category: RoomCategory;
+  bookingTotalCents: number;
+  pricing: Pricing;
+  nights: number;
+  checkinIso: string;
+  checkoutPreview: TeaserPreview | null;
   prefix: string;
   setPrefix: (v: string) => void;
   firstName: string;
@@ -2231,10 +3343,7 @@ function CheckoutStep(props: {
   rate: Rate;
   paymentMethod: PaymentMethod;
   setPaymentMethod: (v: PaymentMethod) => void;
-  frequency: PublicPlanFrequency;
   setFrequency: (v: PublicPlanFrequency) => void;
-  planPreview: PlanPreview | null;
-  planEligible: boolean;
   policies: MerchantPolicies | null;
   cardFields: CardFieldState;
   onBack: () => void;
@@ -2243,6 +3352,12 @@ function CheckoutStep(props: {
   error: string | null;
 }) {
   const {
+    category,
+    bookingTotalCents,
+    pricing,
+    nights,
+    checkinIso,
+    checkoutPreview,
     prefix,
     setPrefix,
     firstName,
@@ -2264,10 +3379,7 @@ function CheckoutStep(props: {
     rate,
     paymentMethod,
     setPaymentMethod,
-    frequency,
     setFrequency,
-    planPreview,
-    planEligible,
     policies,
     cardFields,
     onBack,
@@ -2276,15 +3388,41 @@ function CheckoutStep(props: {
     error,
   } = props;
 
-  const selectedOption =
-    frequency === "monthly" ? planPreview?.monthly : planPreview?.biweekly;
-  const biweeklyTeaser = planPreview?.biweekly ?? null;
 
   // The Bliss plan-policy block is driven by the merchant's saved policy
   // settings (refund policy, payment deadline, failed-payment handling), passed
   // down from the parent. Falls back to static copy until loaded.
 
   const bookLabel = submitting ? "Booking…" : "Book now";
+
+  // Typography sampling for the Bliss host wrapper, mirroring
+  // mews-overlay.js:1713-1723: read family, size and weight off the element the
+  // block was inserted next to, rather than hardcoding them. The overlay's own
+  // anchor (rate-settlement-rule-description-later) is absent here, so the
+  // sample comes from the host's parent — the price-breakdown container
+  // (div.border-t.pt-4.text-sm), as directed.
+  //
+  // Applied to the HOST WRAPPER ONLY. It cannot override anything the tile or
+  // expansion renders: every text element inside sets its own ported size,
+  // weight and colour, and those win over an inherited value. The sample is
+  // also read from the host's own parent, so the values it writes are the ones
+  // the subtree already inherited — identical computed output, no override.
+  const blissHostRef = useRef<HTMLDivElement>(null);
+  const [blissHostFont, setBlissHostFont] = useState<{
+    fontFamily?: string;
+    fontSize?: string;
+    fontWeight?: string;
+  }>({});
+  useEffect(() => {
+    const source = blissHostRef.current?.parentElement;
+    if (!source) return;
+    const cs = window.getComputedStyle(source);
+    setBlissHostFont({
+      fontFamily: cs.fontFamily,
+      fontSize: cs.fontSize,
+      fontWeight: cs.fontWeight,
+    });
+  }, []);
 
   return (
     <section>
@@ -2296,13 +3434,49 @@ function CheckoutStep(props: {
         ← Back to your stay
       </button>
       <h1 className="mt-3 font-serif text-3xl tracking-tight text-[#23262e]">
-        Checkout
+        <span data-test-textkey="ContactAndPaymentDetails" data-non-sensitive="true">
+          Contact &amp; payment details
+        </span>
       </h1>
 
+      {/* Booker toggle. Visual only: Marbrook has no booking-for-someone-else
+          model, so enable-booker changes nothing. */}
+      <div
+        data-test-id="booker-selection"
+        data-mds-element="true"
+        className="mt-4 flex flex-wrap items-center gap-3 text-sm"
+      >
+        <span data-test-textkey="BookerDisabled" data-non-sensitive="true" className="text-[#23262e]">
+          I&apos;m booking for myself
+        </span>
+        <button
+          data-test-id="enable-booker"
+          type="submit"
+          data-mds-element="true"
+          className="text-[#1A56DB] underline-offset-2 hover:underline"
+        >
+          <span data-test-textkey="BookerEnabled" data-non-sensitive="true">
+            I&apos;m booking for someone else
+          </span>
+        </button>
+      </div>
+
       {/* Contact info */}
-      <div className="mt-5 rounded-none border border-[#1A56DB] bg-white p-6">
-        <h2 className="font-serif text-lg text-[#23262e]">Contact info</h2>
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-6">
+      <div className="mt-5 rounded-[8px] border border-[#1A56DB] bg-white p-6">
+        <h3
+          data-test-id="checkout-your-details-heading"
+          data-mds-element="true"
+          className="font-serif text-lg text-[#23262e]"
+        >
+          <span data-test-textkey="YourDetails" data-non-sensitive="true">
+            Your details
+          </span>
+        </h3>
+        <form
+          id="contact-details"
+          aria-label="Your details"
+          className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-6"
+        >
           <HotelField label="Prefix" className="sm:col-span-1">
             <select
               value={prefix}
@@ -2316,32 +3490,96 @@ function CheckoutStep(props: {
               ))}
             </select>
           </HotelField>
-          <HotelField label="First name" className="sm:col-span-2">
+          <HotelField
+            label="First name"
+            className="sm:col-span-2"
+            field="firstName"
+            name="firstName"
+            textKey="FirstName"
+          >
             <input
+              id="firstName"
+              name="firstName"
+              data-test-id="checkout-field-firstName"
+              data-mds-element="true"
               type="text"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
               className={hotelInputClass}
             />
           </HotelField>
-          <HotelField label="Last name" className="sm:col-span-3">
+          <HotelField
+            label="Last name"
+            className="sm:col-span-3"
+            field="lastName"
+            name="lastName"
+            textKey="LastName"
+          >
             <input
+              id="lastName"
+              name="lastName"
+              data-test-id="checkout-field-lastName"
+              data-mds-element="true"
               type="text"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
               className={hotelInputClass}
             />
           </HotelField>
-          <HotelField label="Phone" className="sm:col-span-3">
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className={hotelInputClass}
-            />
+          {/* Capture: div[data-test-field="phone"] holds a dial-code combobox
+              (phone.countryCode / #prefixSelect) beside the number input
+              (phone.number). The dial-code select is visual only — Marbrook has
+              no country list, so it renders empty. */}
+          <HotelField
+            label="Phone"
+            className="sm:col-span-3"
+            field="phone"
+            name="phone"
+            textKey="PhoneNumber"
+          >
+            <div className="flex gap-2">
+              <div
+                data-test-field="prefixSelect"
+                data-mds-element="true"
+                className="w-24 shrink-0"
+              >
+                <div
+                  data-test-id="checkout-field-phone"
+                  data-mds-element="true"
+                >
+                  <select
+                    id="prefixSelect"
+                    data-test-id="phone.countryCode"
+                    aria-label="Country code"
+                    data-mds-element="true"
+                    className={hotelInputClass}
+                  />
+                </div>
+              </div>
+              <input
+                id="phone"
+                name="phone"
+                data-test-id="phone.number"
+                data-mds-element="true"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className={hotelInputClass}
+              />
+            </div>
           </HotelField>
-          <HotelField label="Email" className="sm:col-span-3">
+          <HotelField
+            label="Email"
+            className="sm:col-span-3"
+            field="email"
+            name="email"
+            textKey="Email"
+          >
             <input
+              id="email"
+              name="email"
+              data-test-id="checkout-field-email"
+              data-mds-element="true"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -2380,137 +3618,304 @@ function CheckoutStep(props: {
               className={hotelInputClass}
             />
           </HotelField>
-        </div>
+          {/* Nationality. Visual only: no country list, renders empty. */}
+          <HotelField
+            label="Nationality"
+            className="sm:col-span-3"
+            field="nationalityCode"
+            name="nationalityCode"
+            textKey="Nationality"
+          >
+            <div
+              data-test-id="checkout-field-nationalityCode"
+              data-mds-element="true"
+            >
+              <select
+                id="nationalityCode"
+                data-mds-element="true"
+                className={hotelInputClass}
+              />
+            </div>
+          </HotelField>
+          {/* Special requests. Visual only: not passed to createBooking. */}
+          <HotelField
+            label="Special requests"
+            className="sm:col-span-6"
+            field="notes"
+            name="notes"
+            textKey="BookingNotes"
+          >
+            <textarea
+              id="notes"
+              name="notes"
+              data-test-id="checkout-field-notes"
+              data-test-autosize-text-area="true"
+              data-mds-element="true"
+              rows={3}
+              className={hotelInputClass}
+            />
+          </HotelField>
+        </form>
       </div>
 
       {/* Payment */}
-      <div className="mt-5 rounded-none border border-[#1A56DB] bg-white p-6">
-        <h2 className="font-serif text-lg text-[#23262e]">Payment</h2>
+      <div className="mt-5 rounded-[8px] border border-[#1A56DB] bg-white p-6">
+        <h2
+          data-test-id="checkout-payment-heading"
+          data-mds-element="true"
+          className="font-serif text-lg text-[#23262e]"
+        >
+          <span data-test-textkey="Payment" data-non-sensitive="true">
+            Payment
+          </span>
+        </h2>
         <p className="mt-1 text-sm text-[#23262e]/60">
           Choose how you would like to pay for your stay.
         </p>
 
-        <div className="mt-4 space-y-3">
-          {/* Credit / debit card */}
-          <PaymentOption
-            selected={paymentMethod === "card"}
-            onSelect={() => setPaymentMethod("card")}
-            accent="neutral"
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="font-medium text-[#23262e]">
-                  Credit or debit card
-                </div>
-                <div className="text-sm text-[#23262e]/55">
-                  Pay your full balance.
-                </div>
-              </div>
-              <CardNetworkIcons />
+        <form id="payment-details" aria-label="Payment" className="mt-4 space-y-3">
+          {/* Capture's card-network strip. Its "Secured with / Mews Payments"
+              line and lock mark are deliberately not rendered: Marbrook is not
+              on the Mews payment rail. Container, background, padding and
+              position are unchanged; the logos centre in place of the text. */}
+          <div className="flex items-center justify-center gap-4 border border-[#23262e]/12 bg-white px-4 py-3">
+            <CardNetworkIcons />
+          </div>
+          {/* No payment-method chooser: the capture has none, and the card
+              fields render unconditionally the way they do on the real Mews
+              details page. */}
+          <CardFields fields={cardFields} />
+
+          {/* Capture repeats the full summary breakdown inside the payment
+              card. One tax row (Marbrook has one tax) and the destination fee
+              as the only Products-and-extras row. */}
+          <div className="border-t border-[#23262e]/10 pt-4 text-sm">
+            <div className="flex items-baseline justify-between gap-3">
+              <strong data-mds-element="true" className="font-normal text-[#23262e]">
+                <span data-localized-entity="true">{category.name}</span>
+                {"  + "}
+                <span data-localized-entity="true">{rate.name}</span>
+              </strong>
+              <strong data-mds-element="true" className="font-normal text-[#23262e]">
+                <span dir="ltr" data-test-id="localizedCurrency">
+                  {formatUsd(pricing.roomSubtotalCents)}
+                </span>
+              </strong>
             </div>
-          </PaymentOption>
-
-          {/* Card option expands inline with the card fields. Pays in full. */}
-          {paymentMethod === "card" ? <CardFields fields={cardFields} /> : null}
-
-          {/* Pay in installments over time — the only place Bliss brand
-              appears. Hidden entirely when the stay is out of the merchant's
-              lead-time range (or otherwise ineligible for any plan). */}
-          {planEligible ? (
-            <PaymentOption
-              selected={paymentMethod === "bliss"}
-              onSelect={() => setPaymentMethod("bliss")}
-              accent="bliss"
+            <div
+              data-test-id="additional-info"
+              data-mds-element="true"
+              className="text-xs text-[#23262e]/55"
             >
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="font-medium text-[#51576A]">
-                    Pay installments over time
-                  </div>
-                  <div className="text-sm text-[#51576A]/70">
-                    Split your stay into smaller payments on your debit or credit
-                    card. No interest, no credit check.
-                  </div>
-                </div>
-                <div className="shrink-0 text-right">
-                  <BlissWordmark className="text-base text-[#6A629E]" />
-                  {biweeklyTeaser ? (
-                    <>
-                      <div className="mt-1 text-sm font-medium text-[#51576A]">
-                        {biweeklyTeaser.numPayments} installments of{" "}
-                        {formatUsd(biweeklyTeaser.perPaymentCents)}
-                      </div>
-                      <div className="text-[10px] text-[#23262e]/45">
-                        no credit check
-                      </div>
-                    </>
-                  ) : null}
-                </div>
+              {formatUsd(rate.nightlyCents)} × {nights} nights
+            </div>
+
+            <button
+              data-test-id="toggle-expandable-box"
+              type="button"
+              data-mds-element="true"
+              className="mt-3 text-[#23262e]/80"
+            >
+              <span data-test-textkey="ProductsAndExtras" data-non-sensitive="true">
+                Products and extras
+              </span>
+            </button>
+            <div className="mt-1 flex items-baseline justify-between gap-3">
+              <div
+                data-test-id="product"
+                data-mds-element="true"
+                className="text-xs text-[#23262e]/55"
+              >
+                Destination fee ($30/night)
               </div>
-            </PaymentOption>
-          ) : null}
-
-          {/* Installments expansion: plan choices, schedule, plan policy, and
-              the card the installments run on. All computed client-side; no
-              backend write until Book now. */}
-          {paymentMethod === "bliss" && planPreview ? (
-            <div className="space-y-5 rounded-none border border-brand-lavender bg-white p-4 font-sans">
-              <div>
-                <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-brand-navy/60">
-                  Choose your plan
-                </div>
-                <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                  <PlanChoice
-                    label="Every 2 weeks"
-                    option={planPreview.biweekly}
-                    selected={frequency === "biweekly"}
-                    onSelect={() => setFrequency("biweekly")}
-                  />
-                  <PlanChoice
-                    label="Monthly"
-                    option={planPreview.monthly}
-                    selected={frequency === "monthly"}
-                    onSelect={() => setFrequency("monthly")}
-                  />
-                </div>
-              </div>
-
-              {selectedOption ? (
-                <PlanSchedule option={selectedOption} />
-              ) : null}
-
-              <div>
-                <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-brand-navy/60">
-                  Plan policy
-                </div>
-                <ul className="mt-2 space-y-1.5 text-sm text-brand-navy/85">
-                  {policies ? (
-                    <>
-                      <li>{refundCopy(policies)}</li>
-                      <li>{dueDateCopy(policies)}</li>
-                      <li>{failedPaymentCopy(policies)}</li>
-                    </>
-                  ) : (
-                    <>
-                      <li>Full refund anytime before your check-in.</li>
-                      <li>Each payment runs automatically on the date shown.</li>
-                      <li>
-                        If a payment does not go through, we retry it before your
-                        check-in.
-                      </li>
-                    </>
-                  )}
-                </ul>
-              </div>
-
-              <div>
-                <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.6px] text-brand-navy/60">
-                  Card for your installments
-                </div>
-                <CardFields fields={cardFields} tone="bliss" />
+              <div className="text-xs tabular-nums text-[#23262e]/55">
+                <span dir="ltr" data-test-id="localizedCurrency">
+                  {formatUsd(pricing.destinationFeeCents)}
+                </span>
               </div>
             </div>
-          ) : null}
+
+            <div
+              data-test-divider="true"
+              role="none"
+              data-mds-element="true"
+              className="my-4"
+            >
+              <div data-mds-element="true" className="h-px bg-[#23262e]/10" />
+            </div>
+
+            <div className="flex items-baseline justify-between gap-3">
+              <button
+                data-test-id="tax-breakdown-toggle-expandable-box"
+                type="button"
+                data-mds-element="true"
+                className="text-[#23262e]/80"
+              >
+                <span data-test-textkey="TaxPlural" data-non-sensitive="true">
+                  Taxes
+                </span>
+              </button>
+              <div data-mds-element="true" className="tabular-nums text-[#23262e]/80">
+                {formatUsd(pricing.occupancyTaxCents)}
+              </div>
+            </div>
+            <div className="mt-1 flex items-baseline justify-between gap-3">
+              <div
+                data-test-id="tax-rate"
+                data-mds-element="true"
+                className="text-xs text-[#23262e]/55"
+              >
+                Occupancy tax (8.875%)
+              </div>
+              <div className="text-xs tabular-nums text-[#23262e]/55">
+                {formatUsd(pricing.occupancyTaxCents)}
+              </div>
+            </div>
+
+            <div
+              data-test-divider="true"
+              role="none"
+              data-mds-element="true"
+              className="my-4"
+            >
+              <div data-mds-element="true" className="h-px bg-[#23262e]/10" />
+            </div>
+
+            <div className="flex items-baseline justify-between gap-3">
+              <strong
+                data-test-id="total-bar-total"
+                data-mds-element="true"
+                className="font-serif text-base font-normal text-[#23262e]"
+              >
+                <span data-test-textkey="Total" data-non-sensitive="true">
+                  Total
+                </span>
+              </strong>
+              <strong
+                data-test-id="total-bar-total-value"
+                data-mds-element="true"
+                className="font-serif text-xl font-semibold text-[#23262e]"
+              >
+                <span dir="ltr" data-test-id="localizedCurrency">
+                  {formatUsd(bookingTotalCents)}
+                </span>
+              </strong>
+            </div>
+            <div
+              data-test-id="total-bar-tax-included"
+              data-mds-element="true"
+              className="text-right text-[11px] text-[#23262e]/50"
+            >
+              <span data-test-textkey="TaxIncluded" data-non-sensitive="true">
+                Tax included
+              </span>
+            </div>
+
+            {/* Bliss block, injected here to mirror the overlay's placement:
+                mews-overlay.js:2479-2500 climbs from its anchor to that anchor's
+                top-level container and inserts immediately after it. The anchor
+                on the real page is rate-settlement-rule-description-later; that
+                line is deliberately absent here, so per instruction the anchor
+                is total-bar-tax-included. Its parent has many children, so the
+                climb stops at the anchor itself and the block lands directly
+                after it. Host styling mirrors mews-overlay.js:2493-2497. */}
+            <div
+              ref={blissHostRef}
+              data-bliss-details=""
+              style={{
+                marginTop: 10,
+                width: "100%",
+                gridColumn: "1 / -1",
+                ...blissHostFont,
+              }}
+            >
+              {/* The overlay's details-step trigger (mews-overlay.js:1704-1777):
+                  a teaser line that opens the modal, plus a selected state once
+                  a plan is confirmed. The plan choices, schedule, disclosure
+                  rows and plan policy all live inside that modal. */}
+              <BlissTeaser
+                variant="details"
+                preview={checkoutPreview}
+                nightlyCents={rate.nightlyCents}
+                rateName={rate.name}
+                checkinIso={checkinIso}
+                nights={nights}
+                selected={paymentMethod === "bliss"}
+                policies={policies}
+                onConfirm={(f) => {
+                  // mews-overlay.js:2197 confirmPlan.
+                  setFrequency(f);
+                  setPaymentMethod("bliss");
+                }}
+              />
+            </div>
+          </div>
+        </form>
+
+        {/* Capture: divider, then the two consent checkboxes. Both visual only
+            — Marbrook captures no consent — and both links point nowhere. */}
+        <div
+          data-test-divider="true"
+          role="none"
+          data-mds-element="true"
+          className="my-5"
+        >
+          <div data-mds-element="true" className="h-px bg-[#23262e]/10" />
+        </div>
+
+        <div
+          data-test-id="checkout-field-agreeWithConditions"
+          data-mds-element="true"
+          className="flex items-start gap-2 text-sm text-[#23262e]/80"
+        >
+          <input
+            id="terms-and-conditions-checkbox"
+            type="checkbox"
+            className="mt-1 shrink-0"
+          />
+          <div id="terms-and-conditions-checkbox-label">
+            <span data-test-textkey="AgreeTo" data-non-sensitive="true">
+              I agree to the
+            </span>{" "}
+            <span
+              data-test-textkey="PropertyTermsAndConditions"
+              data-non-sensitive="true"
+              className="underline underline-offset-2"
+            >
+              Property Terms and Conditions
+            </span>
+          </div>
+        </div>
+
+        <div
+          data-test-id="marketing-emails-checkbox"
+          data-mds-element="true"
+          className="mt-3 flex items-start gap-2 text-sm text-[#23262e]/80"
+        >
+          <input
+            id="marketing-emails-checkbox"
+            type="checkbox"
+            className="mt-1 shrink-0"
+          />
+          <div id="marketing-emails-checkbox-label">
+            <span
+              data-test-textkey="SendMarketingEmailsTemplateEnterpriseAndChain"
+              data-non-sensitive="true"
+            >
+              I&apos;d like to occasionally receive marketing emails from{" "}
+              {DEMO_HOTEL.businessName}.
+            </span>{" "}
+            <span data-test-textkey="PropertyPrivacyPolicySentence" data-non-sensitive="true">
+              Please see our
+            </span>{" "}
+            <span
+              data-test-textkey="PropertyPrivacyPolicy"
+              data-non-sensitive="true"
+              className="underline underline-offset-2"
+            >
+              Property Privacy Policy
+            </span>
+          </div>
         </div>
       </div>
 
@@ -2520,7 +3925,12 @@ function CheckoutStep(props: {
         </p>
       ) : null}
 
+      {/* Capture renders Confirm; Marbrook's existing CTA copy is kept. */}
       <button
+        data-test-id="checkout-next-button"
+        aria-label={bookLabel}
+        aria-disabled={submitting ? "true" : "false"}
+        data-mds-element="true"
         type="button"
         onClick={onBookNow}
         disabled={submitting}
@@ -2530,18 +3940,20 @@ function CheckoutStep(props: {
             : "bg-[#1A56DB] hover:bg-[#1545B0]"
         }`}
       >
-        {bookLabel}
+        <span data-test-textkey="Confirm" data-non-sensitive="true">
+          {bookLabel}
+        </span>
       </button>
 
       {/* Policies (below the payment CTA so it's consistent across methods). */}
-      <div className="mt-5 rounded-none border border-[#1A56DB] bg-white p-6">
+      <div className="mt-5 rounded-[8px] border border-[#1A56DB] bg-white p-6">
         <h2 className="font-serif text-lg text-[#23262e]">Policies</h2>
         <div className="mt-4 space-y-3 text-sm text-[#23262e]/75">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <PolicyLine label="Check-in" value="Check-in after 4:00 PM" />
             <PolicyLine label="Check-out" value="Check-out before 11:00 AM" />
           </div>
-          <PolicyLine label="Room" value={ROOM.name} />
+          <PolicyLine label="Room" value={category.name} />
           <p>Credit card required to guarantee your reservation.</p>
           <PolicyLine label="Cancellation" value={rate.cancellationPolicy} />
         </div>
@@ -2553,22 +3965,52 @@ function CheckoutStep(props: {
 const hotelInputClass =
   "w-full rounded-none border border-[#23262e]/20 bg-white px-3 py-2.5 text-sm text-[#23262e] focus:border-[#1A56DB] focus:outline-none";
 
+// `field`, `name` and `textKey` are the capture's markers
+// (05-details.html: div[data-test-field] > label#<name>-label > span[data-test-textkey]).
+// All three are optional: the Marbrook-only fields the capture has no
+// counterpart for (Prefix, Address, City, State, ZIP) render without them.
 function HotelField({
   label,
   className,
+  field,
+  name,
+  textKey,
   children,
 }: {
   label: string;
   className?: string;
+  field?: string;
+  name?: string;
+  textKey?: string;
   children: React.ReactNode;
 }) {
-  return (
-    <label className={`block ${className ?? ""}`}>
+  const inner = (
+    <label
+      id={name ? `${name}-label` : undefined}
+      htmlFor={name}
+      className={`block ${field ? "" : (className ?? "")}`}
+    >
       <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#23262e]/55">
-        {label}
+        {textKey ? (
+          <span data-test-textkey={textKey} data-non-sensitive="true">
+            {label}
+          </span>
+        ) : (
+          label
+        )}
       </span>
       {children}
     </label>
+  );
+  if (!field) return inner;
+  return (
+    <div
+      className={className}
+      data-test-field={field}
+      data-mds-element="true"
+    >
+      {inner}
+    </div>
   );
 }
 
@@ -2612,11 +4054,23 @@ function CardFields({
       : "border border-[#23262e]/12 bg-white";
   return (
     <div className={`space-y-3 rounded-none ${shell} p-4`}>
-      <label className="block">
+      {/* Capture: div[data-test-field="number"] > label#number-label +
+          div[data-test-id="field-pci-proxy-card-number"][id="pci-proxy-card-number"],
+          whose only child is the cross-origin Datatrans iframe. The host
+          structure is reproduced; the iframe is absent and Marbrook's plain
+          demo input sits in its place. Same for CVV below. */}
+      <div data-test-field="number" data-mds-element="true">
+      <label id="number-label" htmlFor="number" className="block">
         <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#23262e]/55">
-          Card number
+          <span data-test-textkey="PaymentCardNumber" data-non-sensitive="true">
+            Card number
+          </span>
         </span>
-        <div className="relative">
+        <div
+          data-test-id="field-pci-proxy-card-number"
+          id="pci-proxy-card-number"
+          className="relative"
+        >
           <span
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#23262e]/40"
             aria-hidden="true"
@@ -2634,12 +4088,20 @@ function CardFields({
           />
         </div>
       </label>
+      </div>
       <div className="grid grid-cols-2 gap-3">
-        <label className="block">
+        <div data-test-field="expiration" data-mds-element="true">
+        <label id="expiration-label" htmlFor="expiration" className="block">
           <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#23262e]/55">
-            Expiration date
+            <span data-test-textkey="PaymentCardExpiration" data-non-sensitive="true">
+              Expiration date
+            </span>
           </span>
           <input
+            id="expiration"
+            name="expiration"
+            data-test-id="checkout-field-expiration"
+            data-mds-element="true"
             type="text"
             inputMode="numeric"
             autoComplete="off"
@@ -2649,9 +4111,13 @@ function CardFields({
             className={hotelInputClass}
           />
         </label>
-        <label className="block">
+        </div>
+        <div data-test-field="cvv" data-mds-element="true">
+        <label id="cvv-label" htmlFor="cvv" className="block">
           <span className="mb-1 flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-[#23262e]/55">
-            CVV
+            <span data-test-textkey="PaymentCardCVV" data-non-sensitive="true">
+              CVV
+            </span>
             <span
               className="text-[#23262e]/40"
               title="3 digit security code on the back of your card"
@@ -2660,22 +4126,33 @@ function CardFields({
               <InfoGlyph />
             </span>
           </span>
-          <input
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="123"
-            value={cardCvv}
-            onChange={(e) => setCardCvv(formatCvv(e.target.value))}
-            className={hotelInputClass}
-          />
+          <div data-test-id="field-pci-proxy-cvv" id="pci-proxy-cvv">
+            <input
+              id="cvv"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="123"
+              value={cardCvv}
+              onChange={(e) => setCardCvv(formatCvv(e.target.value))}
+              className={hotelInputClass}
+            />
+          </div>
         </label>
+        </div>
       </div>
-      <label className="block">
+      <div data-test-field="holderName" data-mds-element="true">
+      <label id="holderName-label" htmlFor="holderName" className="block">
         <span className="mb-1 block text-[11px] uppercase tracking-[0.14em] text-[#23262e]/55">
-          Name on card
+          <span data-test-textkey="NameOnCard" data-non-sensitive="true">
+            Name on card
+          </span>
         </span>
         <input
+          id="holderName"
+          name="holderName"
+          data-test-id="checkout-field-holderName"
+          data-mds-element="true"
           type="text"
           autoComplete="off"
           placeholder="Full name"
@@ -2684,127 +4161,30 @@ function CardFields({
           className={hotelInputClass}
         />
       </label>
+      </div>
     </div>
   );
 }
 
-// One plan-frequency choice (Every 2 weeks / Monthly) in the inline selector.
-// Mirrors the /pay PlanCard: brand-purple border + lavender fill when selected,
-// neutral otherwise. All text is the sans body font.
-function PlanChoice({
-  label,
-  option,
-  selected,
-  onSelect,
-}: {
-  label: string;
-  option: PlanOptionPreview | null;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  if (!option) return null;
-  const lastDate = option.dueDates[option.dueDates.length - 1];
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      className={`relative rounded-none p-3 text-left transition-colors ${
-        selected
-          ? "border-2 border-[#C9AFFA] bg-brand-lavender/20"
-          : "border-[0.5px] border-brand-neutral bg-white hover:border-brand-dusty"
-      }`}
-    >
-      {option.recommended ? (
-        <span className="absolute -top-[9px] left-[12px] rounded-none bg-brand-lavender px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.3px] text-white">
-          Recommended
-        </span>
-      ) : null}
-      <div className="flex items-baseline justify-between gap-2">
-        <span
-          className={`text-sm font-medium ${selected ? "text-brand-purple" : "text-brand-navy"}`}
-        >
-          {label}
-        </span>
-        <span
-          className={`text-base font-semibold tabular-nums ${selected ? "text-brand-purple" : "text-brand-navy"}`}
-        >
-          {formatUsd(option.perPaymentCents)}
-        </span>
-      </div>
-      <div className="mt-0.5 text-[11px] text-brand-navy/60">
-        {option.numPayments} payments
-        {lastDate ? ` through ${formatScheduleDate(lastDate)}` : ""}
-      </div>
-    </button>
-  );
-}
-
-// Dated schedule for the selected plan. Collapsed to the first payment by
-// default; an expander reveals the full lavender-chip schedule. The final row
-// absorbs the rounding remainder so the rows sum to the fee-inclusive total.
-// Sans body font throughout.
-function PlanSchedule({ option }: { option: PlanOptionPreview }) {
-  const [expanded, setExpanded] = useState(false);
-  const rows = option.dueDates.map((d, i) => ({
-    date: d,
-    amountCents:
-      i === option.dueDates.length - 1
-        ? option.finalPaymentCents
-        : option.perPaymentCents,
-  }));
-  const visible = expanded ? rows : rows.slice(0, 1);
-  return (
-    <div>
-      <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-brand-navy/60">
-        Your schedule
-      </div>
-      <div className="mt-2 space-y-1.5">
-        {visible.map((r) => (
-          <div
-            key={r.date}
-            className="flex items-center justify-between rounded-none bg-brand-lavender/20 px-3 py-2 text-sm"
-          >
-            <span className="text-brand-navy/80">{formatScheduleDate(r.date)}</span>
-            <span className="font-medium tabular-nums text-brand-navy">
-              {formatUsd(r.amountCents)}
-            </span>
-          </div>
-        ))}
-      </div>
-      {rows.length > 1 ? (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
-          className="mt-2 text-xs font-medium text-brand-purple hover:underline"
-        >
-          {expanded ? "Hide schedule" : `See all ${rows.length} payments`}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-// Inline confirmation shown after Book now. No /pay navigation. Shared by both
-// payment paths; the installment path adds a single portal link below.
 function BookedPanel({
   booked,
+  category,
   rate,
   stayLabel,
 }: {
   booked: BookedState;
+  category: RoomCategory;
   rate: Rate;
   stayLabel: string;
 }) {
   return (
     <section>
-      <div className="rounded-none border border-[#1A56DB] bg-white p-6">
+      <div className="rounded-[8px] border border-[#1A56DB] bg-white p-6">
         <h1 className="font-serif text-3xl tracking-tight text-[#23262e]">
           You are booked
         </h1>
         <p className="mt-1 text-sm text-[#23262e]/70">
-          {ROOM.name} · {rate.name}
+          {category.name} · {rate.name}
         </p>
         <div className="mt-4">
           <PolicyLine label="Stay" value={stayLabel} />
@@ -2829,49 +4209,6 @@ function BookedPanel({
   );
 }
 
-function PaymentOption({
-  selected,
-  onSelect,
-  accent,
-  children,
-}: {
-  selected: boolean;
-  onSelect: () => void;
-  accent: "neutral" | "bliss";
-  children: React.ReactNode;
-}) {
-  const ring = selected
-    ? accent === "bliss"
-      ? "border border-[#C9AFFA] ring-1 ring-[#C9AFFA] bg-[#C9AFFA]/8"
-      : "border border-[#1A56DB] ring-1 ring-[#1A56DB]/30 bg-[#1A56DB]/5"
-    : accent === "bliss"
-      ? "border border-[#C9AFFA] bg-white hover:border-[#97ACC8]"
-      : "border border-[#1A56DB] bg-white hover:border-[#1545B0]";
-  const dot = selected
-    ? accent === "bliss"
-      ? "border-[#97ACC8] bg-[#C9AFFA]"
-      : "border-[#1A56DB] bg-[#1A56DB]"
-    : "border-[#23262e]/30 bg-white";
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={`flex w-full items-start gap-3 rounded-none p-4 text-left transition ${ring}`}
-    >
-      <span
-        className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${dot}`}
-        aria-hidden="true"
-      >
-        {selected ? <span className="h-1.5 w-1.5 rounded-full bg-white" /> : null}
-      </span>
-      <span className="min-w-0 flex-1">{children}</span>
-    </button>
-  );
-}
-
-// Card-network logos shown top-right of the card option. Bare transparent PNGs
-// (no pill/box background), constrained to a uniform height so the differing
-// aspect ratios scale by width without stretching.
 function CardNetworkIcons() {
   return (
     <div className="flex shrink-0 items-center gap-3">
@@ -2922,6 +4259,7 @@ function InfoGlyph() {
 }
 
 function PricePanel({
+  category,
   rate,
   pricing,
   nights,
@@ -2930,6 +4268,7 @@ function PricePanel({
   adults,
   guestChildren,
 }: {
+  category: RoomCategory;
   rate: Rate | null;
   pricing: Pricing | null;
   nights: number;
@@ -2939,7 +4278,7 @@ function PricePanel({
   guestChildren: number;
 }) {
   return (
-    <div className="rounded-none border border-[#1A56DB] bg-white p-5">
+    <div className="rounded-[8px] border border-[#1A56DB] bg-white p-5">
       <div className="text-[11px] uppercase tracking-[0.18em] text-[#23262e]/50">
         Your stay
       </div>
@@ -2953,7 +4292,7 @@ function PricePanel({
       <div className="mt-4 border-t border-[#23262e]/10 pt-4">
         {rate && pricing ? (
           <>
-            <div className="text-sm font-medium text-[#23262e]">{ROOM.name}</div>
+            <div className="text-sm font-medium text-[#23262e]">{category.name}</div>
             <div className="text-xs text-[#23262e]/55">{rate.name}</div>
             <div className="mt-3">
               <PriceLines rate={rate} pricing={pricing} nights={nights} />
@@ -3016,7 +4355,13 @@ function Line({ label, value }: { label: string; value: string }) {
   );
 }
 
-function RoomPhoto({ compact = false }: { compact?: boolean }) {
+function RoomPhoto({
+  categoryName,
+  compact = false,
+}: {
+  categoryName: string;
+  compact?: boolean;
+}) {
   // Gradient base shows as a tasteful placeholder. If a real photo exists at
   // frontend/public/marbrook-room.jpg it loads as a cover image on top of the
   // gradient; if the file is absent the layer is transparent and the gradient
@@ -3035,7 +4380,7 @@ function RoomPhoto({ compact = false }: { compact?: boolean }) {
       />
       {!compact ? (
         <span className="absolute bottom-3 right-4 rounded-none bg-black/25 px-2 py-0.5 text-[11px] uppercase tracking-[0.2em] text-white/90">
-          King with terrace
+          {categoryName}
         </span>
       ) : null}
     </div>
