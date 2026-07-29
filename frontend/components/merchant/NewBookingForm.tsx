@@ -49,7 +49,9 @@ export function NewBookingForm({
   const totalCents = parseDollarsToCents(form.totalDollars);
   const appointmentDate = parseLocalDate(form.appointmentDate);
   const preview = useMemo(
-    () => previewEligibility(today(), appointmentDate, totalCents ?? 0, planRules),
+    // Merchant-created bookings have no checkout-date field, so there is no
+    // departure to pass.
+    () => previewEligibility(today(), appointmentDate, null, totalCents ?? 0, planRules),
     [appointmentDate, totalCents, planRules],
   );
 

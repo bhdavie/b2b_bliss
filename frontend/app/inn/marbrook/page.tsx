@@ -245,7 +245,8 @@ function formatCvv(value: string): string {
 }
 
 // previewEligibility's rules arg, whose type lib/eligibility does not export.
-type PlanRulesArg = Parameters<typeof previewEligibility>[3];
+// Index 4 since the departure date was threaded in at position 2.
+type PlanRulesArg = Parameters<typeof previewEligibility>[4];
 
 // The Marbrook equivalent of an overlay trigger's `t.preview`: one plan preview
 // per rate card, carrying the per-payment figures the overlay's options already
@@ -269,10 +270,17 @@ type TeaserPreview = {
 function buildTeaserPreview(
   today: Date,
   checkinIso: string,
+  checkoutIso: string,
   amountCents: number,
   rules: PlanRulesArg,
 ): TeaserPreview {
-  const preview = previewEligibility(today, parseIso(checkinIso), amountCents, rules);
+  const preview = previewEligibility(
+    today,
+    parseIso(checkinIso),
+    parseIso(checkoutIso),
+    amountCents,
+    rules,
+  );
   return {
     eligible: preview.eligible,
     reason: preview.reason,
@@ -579,12 +587,13 @@ export default function MarbrookHousePage() {
       out[r.id] = buildTeaserPreview(
         today,
         checkinIso,
+        checkoutIso,
         r.nightlyCents * nights,
         planRules,
       );
     }
     return out;
-  }, [checkinIso, nights, planRules]);
+  }, [checkinIso, checkoutIso, nights, planRules]);
 
   // The one resolved category every downstream step reads: the rates heading,
   // the summary, the sidebar, checkout, the confirmation, and the booking
@@ -612,8 +621,14 @@ export default function MarbrookHousePage() {
   // nightly price (mews-overlay.js:595-601).
   const checkoutPreview = useMemo<TeaserPreview | null>(() => {
     if (!pricing) return null;
-    return buildTeaserPreview(new Date(), checkinIso, pricing.totalCents, planRules);
-  }, [pricing, checkinIso, planRules]);
+    return buildTeaserPreview(
+      new Date(),
+      checkinIso,
+      checkoutIso,
+      pricing.totalCents,
+      planRules,
+    );
+  }, [pricing, checkinIso, checkoutIso, planRules]);
 
   // --- Mews distributor dataLayer feed -------------------------------------
   // Emits the four events the Bliss overlay reads. Kept as effects rather than

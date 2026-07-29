@@ -70,9 +70,16 @@ export function CheckoutFlow({
   const rules = adaptPolicies(merchant.policies);
   const checkinDate = parseLocalDate(cart.checkin);
   const preview: PreviewResult = useMemo(
-    () => previewEligibility(today(), checkinDate, cart.totalCents, rules),
+    () =>
+      previewEligibility(
+        today(),
+        checkinDate,
+        parseLocalDate(cart.checkout),
+        cart.totalCents,
+        rules,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cart.totalCents, cart.checkin],
+    [cart.totalCents, cart.checkin, cart.checkout],
   );
 
   const defaultFreq: PlanFrequency = preview.options.find((o) => o.recommended)?.frequency

@@ -126,8 +126,10 @@ export default function HawthornInnPage() {
   } | null>(() => {
     if (!merchant || totalCents <= 0) return null;
     const [ay, am, ad] = parseIso(checkin);
+    const [cy, cm, cd] = parseIso(checkout);
     const [ty, tm, td] = parseIso(today);
     const appt = new Date(ay, am - 1, ad);
+    const departure = new Date(cy, cm - 1, cd);
     const todayDt = new Date(ty, tm - 1, td);
     const rules: PlanRules = {
       ...DEFAULT_PLAN_RULES,
@@ -143,7 +145,7 @@ export default function HawthornInnPage() {
       depositMaxCents: merchant.policies.depositMaxCents,
       discountBasisPoints: merchant.policies.discountBasisPoints,
     };
-    const preview = previewEligibility(todayDt, appt, totalCents, rules);
+    const preview = previewEligibility(todayDt, appt, departure, totalCents, rules);
     if (!preview.eligible || preview.options.length === 0) return null;
     const option =
       preview.options.find((o) => o.frequency === "monthly") ?? preview.options[0]!;
@@ -163,7 +165,7 @@ export default function HawthornInnPage() {
       finalPaymentCents: distribution.finalPaymentCents,
       dueDates: option.dueDates,
     };
-  }, [merchant, totalCents, checkin, today]);
+  }, [merchant, totalCents, checkin, today, checkout]);
 
   function onCheckinChange(value: string) {
     setCheckin(value);

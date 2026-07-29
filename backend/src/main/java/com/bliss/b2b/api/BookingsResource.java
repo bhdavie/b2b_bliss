@@ -212,7 +212,8 @@ public class BookingsResource {
                 ? booking.originalTotalAmountCents()
                 : booking.totalAmountCents();
         EligibilityResult eligibility = eligibilityService.evaluate(
-                LocalDate.now(clock), booking.appointmentDate(), evaluateInput, rules);
+                LocalDate.now(clock), booking.appointmentDate(), booking.checkoutDate(),
+                evaluateInput, rules);
         List<BookingView.PlanOptionView> options = eligibility.options().stream()
                 .map(BookingsResource::toOptionView)
                 .toList();

@@ -277,13 +277,14 @@ export default function MarbrookHousePage() {
     const preview = previewEligibility(
       new Date(),
       parseIso(checkinIso),
+      parseIso(checkoutIso),
       RATES[0]!.nightlyCents * nights,
       planRules,
     );
     if (!preview.eligible) return null;
     const biweekly = preview.options.find((o) => o.frequency === "biweekly");
     return biweekly ? biweekly.numPayments : null;
-  }, [checkinIso, nights, planRules]);
+  }, [checkinIso, checkoutIso, nights, planRules]);
 
   // Whether the stay qualifies for ANY plan, independent of cadence. Drives
   // Bliss visibility (rate-card line + checkout tile): hidden when the booking
@@ -295,10 +296,11 @@ export default function MarbrookHousePage() {
       previewEligibility(
         new Date(),
         parseIso(checkinIso),
+      parseIso(checkoutIso),
         RATES[0]!.nightlyCents * nights,
         planRules,
       ).eligible,
-    [checkinIso, nights, planRules],
+    [checkinIso, checkoutIso, nights, planRules],
   );
 
   const pricing = useMemo(() => {
@@ -325,6 +327,7 @@ export default function MarbrookHousePage() {
     const preview = previewEligibility(
       new Date(),
       parseIso(checkinIso),
+      parseIso(checkoutIso),
       pricing.totalCents,
       planRules,
     );
@@ -344,7 +347,7 @@ export default function MarbrookHousePage() {
       };
     };
     return { biweekly: forFrequency("biweekly"), monthly: forFrequency("monthly") };
-  }, [pricing, checkinIso, planRules]);
+  }, [pricing, checkinIso, checkoutIso, planRules]);
 
   function selectRate(id: string) {
     setRateId(id);

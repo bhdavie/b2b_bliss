@@ -71,7 +71,8 @@ public class PublicBookingsResource {
                 ? booking.originalTotalAmountCents()
                 : booking.totalAmountCents();
         EligibilityResult eligibility = eligibilityService.evaluate(
-                LocalDate.now(clock), booking.appointmentDate(), evaluateInput, rules);
+                LocalDate.now(clock), booking.appointmentDate(), booking.checkoutDate(),
+                evaluateInput, rules);
         PublicBookingView view = PublicBookingView.build(
                 merchant, booking, eligibility, rules,
                 stripeService.isConfigured(), stripeService.publishableKey(),

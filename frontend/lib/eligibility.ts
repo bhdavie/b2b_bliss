@@ -49,12 +49,23 @@ const MIN_FINAL_PAYMENT_BUFFER_DAYS = 3;
 // PlanEligibilityService.MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS.
 const MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS = 14;
 
+/**
+ * `departureDate` is the end of the stay. Nullable: bookings.checkout_date is
+ * nullable and single-day services have no departure. Accepted but not yet
+ * consulted, mirroring PlanEligibilityService.evaluate, so a later stage can
+ * gate on the full stay range rather than the arrival alone.
+ */
 export function previewEligibility(
   today: Date,
   appointmentDate: Date | null,
+  departureDate: Date | null,
   totalAmountCents: number,
   rules: PlanRules = DEFAULT_PLAN_RULES,
 ): PreviewResult {
+  // Stage 1 threads the departure through without consulting it, so every
+  // existing reason code and outcome is unchanged. Remove this line when a
+  // later stage starts gating on the stay range.
+  void departureDate;
   if (!appointmentDate || Number.isNaN(appointmentDate.getTime())) {
     return {
       eligible: false,

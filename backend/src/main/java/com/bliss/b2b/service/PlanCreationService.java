@@ -333,7 +333,7 @@ public class PlanCreationService {
                 ? booking.originalTotalAmountCents()
                 : booking.totalAmountCents();
         EligibilityResult eligibility = eligibilityService.evaluate(
-                today, booking.appointmentDate(), evaluateInput, rules);
+                today, booking.appointmentDate(), booking.checkoutDate(), evaluateInput, rules);
         if (!eligibility.eligible()) {
             throw new PlanCreationException(Reason.ELIGIBILITY_FAILED,
                     "booking does not satisfy this merchant's plan rules (" + eligibility.reason() + ")");
@@ -511,7 +511,7 @@ public class PlanCreationService {
                 ? booking.originalTotalAmountCents()
                 : booking.totalAmountCents();
         EligibilityResult eligibility = eligibilityService.evaluate(
-                today, booking.appointmentDate(), evaluateInput, rules);
+                today, booking.appointmentDate(), booking.checkoutDate(), evaluateInput, rules);
         if (!eligibility.eligible()) {
             throw new PlanCreationException(Reason.ELIGIBILITY_FAILED,
                     "booking does not satisfy this merchant's plan rules (" + eligibility.reason() + ")");
@@ -651,7 +651,7 @@ public class PlanCreationService {
                 ? booking.originalTotalAmountCents()
                 : booking.totalAmountCents();
         EligibilityResult eligibility = eligibilityService.evaluate(
-                today, booking.appointmentDate(), evaluateInput, rules);
+                today, booking.appointmentDate(), booking.checkoutDate(), evaluateInput, rules);
         if (!eligibility.eligible()) {
             throw new PlanCreationException(Reason.ELIGIBILITY_FAILED,
                     "booking does not satisfy this merchant's plan rules (" + eligibility.reason() + ")");

@@ -35,9 +35,17 @@ public class PlanEligibilityService {
     // charge against the immediate payment 1.
     private static final int MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS = 14;
 
+    /**
+     * @param departureDate end of the stay, nullable because
+     *        {@code bookings.checkout_date} is nullable and single-day services
+     *        have no departure. Accepted but not yet consulted: it is threaded
+     *        through so a later stage can gate on the full stay range rather
+     *        than the arrival alone.
+     */
     public EligibilityResult evaluate(
             LocalDate today,
             LocalDate appointmentDate,
+            LocalDate departureDate,
             long totalAmountCents,
             MerchantPlanRules rules
     ) {

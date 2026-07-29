@@ -18,7 +18,7 @@ class PlanEligibilityServiceTest {
     @Test
     void defaults_fiveWeeks_notEligible() {
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(35), PRICE_CENTS, MerchantPlanRules.DEFAULTS);
+                TODAY, TODAY.plusDays(35), null, PRICE_CENTS, MerchantPlanRules.DEFAULTS);
 
         assertThat(result.eligible()).isFalse();
         assertThat(result.reason()).isEqualTo("too_close");
@@ -30,7 +30,7 @@ class PlanEligibilityServiceTest {
     @Test
     void defaults_justUnderSixWeeks_notEligible() {
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(41), PRICE_CENTS, MerchantPlanRules.DEFAULTS);
+                TODAY, TODAY.plusDays(41), null, PRICE_CENTS, MerchantPlanRules.DEFAULTS);
 
         assertThat(result.eligible()).isFalse();
         assertThat(result.reason()).isEqualTo("too_close");
@@ -39,7 +39,7 @@ class PlanEligibilityServiceTest {
     @Test
     void defaults_sixWeeksExact_bothFrequenciesFit() {
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(42), PRICE_CENTS, MerchantPlanRules.DEFAULTS);
+                TODAY, TODAY.plusDays(42), null, PRICE_CENTS, MerchantPlanRules.DEFAULTS);
 
         assertThat(result.eligible()).isTrue();
         assertThat(result.depositAmountCents()).isZero();
@@ -57,7 +57,7 @@ class PlanEligibilityServiceTest {
     @Test
     void defaults_thirteenWeeks_bothFrequenciesFit() {
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(91), PRICE_CENTS, MerchantPlanRules.DEFAULTS);
+                TODAY, TODAY.plusDays(91), null, PRICE_CENTS, MerchantPlanRules.DEFAULTS);
 
         assertThat(result.eligible()).isTrue();
         assertThat(result.options())
@@ -68,7 +68,7 @@ class PlanEligibilityServiceTest {
     @Test
     void defaults_sameDayAppointment_notEligible() {
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY, PRICE_CENTS, MerchantPlanRules.DEFAULTS);
+                TODAY, TODAY, null, PRICE_CENTS, MerchantPlanRules.DEFAULTS);
 
         assertThat(result.eligible()).isFalse();
         assertThat(result.reason()).isEqualTo("too_close");
@@ -82,7 +82,7 @@ class PlanEligibilityServiceTest {
         MerchantPlanRules tighter = noDeposit(8, null, AllowedFrequencies.BOTH, null, null, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(49), PRICE_CENTS, tighter); // 7w
+                TODAY, TODAY.plusDays(49), null, PRICE_CENTS, tighter); // 7w
 
         assertThat(result.eligible()).isFalse();
         assertThat(result.reason()).isEqualTo("too_close");
@@ -93,7 +93,7 @@ class PlanEligibilityServiceTest {
         MerchantPlanRules looser = noDeposit(4, null, AllowedFrequencies.BOTH, null, null, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(35), PRICE_CENTS, looser); // 5w
+                TODAY, TODAY.plusDays(35), null, PRICE_CENTS, looser); // 5w
 
         assertThat(result.eligible()).isTrue();
         // Biweekly only. TODAY 2026-05-14 anchors monthly to the 16th, and the
@@ -115,7 +115,7 @@ class PlanEligibilityServiceTest {
         MerchantPlanRules capped = noDeposit(6, 16, AllowedFrequencies.BOTH, null, null, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(140), PRICE_CENTS, capped); // 20w
+                TODAY, TODAY.plusDays(140), null, PRICE_CENTS, capped); // 20w
 
         assertThat(result.eligible()).isFalse();
         assertThat(result.reason()).isEqualTo("too_far");
@@ -126,7 +126,7 @@ class PlanEligibilityServiceTest {
         MerchantPlanRules capped = noDeposit(6, 16, AllowedFrequencies.BOTH, null, null, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(112), PRICE_CENTS, capped); // exactly 16w
+                TODAY, TODAY.plusDays(112), null, PRICE_CENTS, capped); // exactly 16w
 
         assertThat(result.eligible()).isTrue();
     }
@@ -138,7 +138,7 @@ class PlanEligibilityServiceTest {
         MerchantPlanRules monthlyOnly = noDeposit(6, null, AllowedFrequencies.MONTHLY, null, null, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(70), PRICE_CENTS, monthlyOnly);
+                TODAY, TODAY.plusDays(70), null, PRICE_CENTS, monthlyOnly);
 
         assertThat(result.options())
                 .extracting(PlanOption::frequency)
@@ -150,7 +150,7 @@ class PlanEligibilityServiceTest {
         MerchantPlanRules biwOnly = noDeposit(6, null, AllowedFrequencies.BIWEEKLY, null, null, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(42), PRICE_CENTS, biwOnly);
+                TODAY, TODAY.plusDays(42), null, PRICE_CENTS, biwOnly);
 
         assertThat(result.options())
                 .extracting(PlanOption::frequency)
@@ -162,7 +162,7 @@ class PlanEligibilityServiceTest {
         MerchantPlanRules monthlyOnly = noDeposit(4, null, AllowedFrequencies.MONTHLY, null, null, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(28), PRICE_CENTS, monthlyOnly);
+                TODAY, TODAY.plusDays(28), null, PRICE_CENTS, monthlyOnly);
 
         assertThat(result.eligible()).isFalse();
         assertThat(result.reason()).isEqualTo("no_plan_fits");
@@ -176,7 +176,7 @@ class PlanEligibilityServiceTest {
         MerchantPlanRules withFloor = noDeposit(6, null, AllowedFrequencies.BOTH, 100_000L, null, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(70), 50_000L, withFloor);
+                TODAY, TODAY.plusDays(70), null, 50_000L, withFloor);
 
         assertThat(result.eligible()).isFalse();
         assertThat(result.reason()).isEqualTo("amount_too_low");
@@ -187,7 +187,7 @@ class PlanEligibilityServiceTest {
         MerchantPlanRules withFloor = noDeposit(6, null, AllowedFrequencies.BOTH, 100_000L, null, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(70), 100_000L, withFloor);
+                TODAY, TODAY.plusDays(70), null, 100_000L, withFloor);
 
         assertThat(result.eligible()).isTrue();
     }
@@ -197,7 +197,7 @@ class PlanEligibilityServiceTest {
         MerchantPlanRules withCap = noDeposit(6, null, AllowedFrequencies.BOTH, null, 500_000L, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(70), 600_000L, withCap);
+                TODAY, TODAY.plusDays(70), null, 600_000L, withCap);
 
         assertThat(result.eligible()).isFalse();
         assertThat(result.reason()).isEqualTo("amount_too_high");
@@ -208,7 +208,7 @@ class PlanEligibilityServiceTest {
         MerchantPlanRules ranged = noDeposit(6, null, AllowedFrequencies.BOTH, 100_000L, 500_000L, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(70), 50_000L, ranged);
+                TODAY, TODAY.plusDays(70), null, 50_000L, ranged);
 
         assertThat(result.reason()).isEqualTo("amount_too_low");
     }
@@ -223,7 +223,7 @@ class PlanEligibilityServiceTest {
                 DepositType.PERCENTAGE, 50L, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(70), 80_000L, withFloor);
+                TODAY, TODAY.plusDays(70), null, 80_000L, withFloor);
 
         assertThat(result.eligible()).isFalse();
         assertThat(result.reason()).isEqualTo("amount_too_low");
@@ -258,7 +258,7 @@ class PlanEligibilityServiceTest {
     @Test
     void evenSplit_amountsAreEqual_noDeposit() {
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(49), 400_000L, MerchantPlanRules.DEFAULTS);
+                TODAY, TODAY.plusDays(49), null, 400_000L, MerchantPlanRules.DEFAULTS);
         PlanOption biw = byFrequency(result.options(), PlanFrequency.BIWEEKLY);
 
         assertThat(biw.numPayments()).isEqualTo(4);
@@ -272,7 +272,7 @@ class PlanEligibilityServiceTest {
         MerchantPlanRules biwOnly = noDeposit(6, null, AllowedFrequencies.BIWEEKLY, null, null, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(42), 10_001L, biwOnly);
+                TODAY, TODAY.plusDays(42), null, 10_001L, biwOnly);
         PlanOption only = result.options().get(0);
 
         assertThat(only.numPayments()).isEqualTo(3);
@@ -292,7 +292,7 @@ class PlanEligibilityServiceTest {
                 DepositType.PERCENTAGE, 25L, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(63), 80_000L, rules); // 9w out
+                TODAY, TODAY.plusDays(63), null, 80_000L, rules); // 9w out
 
         assertThat(result.eligible()).isTrue();
         assertThat(result.depositAmountCents()).isEqualTo(20_000L);
@@ -317,7 +317,7 @@ class PlanEligibilityServiceTest {
         // Booking of $40 — the fixed deposit equals the total, which would
         // leave zero for installments. Reject as deposit_too_high.
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(70), 4_000L, rules);
+                TODAY, TODAY.plusDays(70), null, 4_000L, rules);
 
         assertThat(result.eligible()).isFalse();
         assertThat(result.reason()).isEqualTo("deposit_too_high");
@@ -334,7 +334,7 @@ class PlanEligibilityServiceTest {
                 DepositType.PERCENTAGE, 25L, 50_000L);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(91), 1_000_000L, rules); // 13w
+                TODAY, TODAY.plusDays(91), null, 1_000_000L, rules); // 13w
 
         assertThat(result.eligible()).isTrue();
         assertThat(result.depositAmountCents()).isEqualTo(50_000L);
@@ -359,7 +359,7 @@ class PlanEligibilityServiceTest {
                 DepositType.FIXED, 20_000L, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(63), 80_000L, rules); // 9w
+                TODAY, TODAY.plusDays(63), null, 80_000L, rules); // 9w
 
         assertThat(result.eligible()).isTrue();
         assertThat(result.depositAmountCents()).isEqualTo(20_000L);
@@ -381,7 +381,7 @@ class PlanEligibilityServiceTest {
                 DepositType.FIXED, 10_000L, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(49), 100_101L, rules); // 7w biweekly fits 3 installments
+                TODAY, TODAY.plusDays(49), null, 100_101L, rules); // 7w biweekly fits 3 installments
 
         assertThat(result.eligible()).isTrue();
         assertThat(result.depositAmountCents()).isEqualTo(10_000L);
@@ -405,7 +405,7 @@ class PlanEligibilityServiceTest {
                 DepositType.PERCENTAGE, 25L, null);
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(42), 80_000L, rules);
+                TODAY, TODAY.plusDays(42), null, 80_000L, rules);
 
         assertThat(result.eligible()).isTrue();
         assertThat(result.depositAmountCents()).isEqualTo(20_000L);
@@ -437,7 +437,7 @@ class PlanEligibilityServiceTest {
     @Test
     void discount_zero_returnsTotalsEqual() {
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(91), 195_000L, MerchantPlanRules.DEFAULTS);
+                TODAY, TODAY.plusDays(91), null, 195_000L, MerchantPlanRules.DEFAULTS);
         assertThat(result.originalTotalAmountCents()).isEqualTo(195_000L);
         assertThat(result.discountedTotalAmountCents()).isEqualTo(195_000L);
     }
@@ -461,7 +461,7 @@ class PlanEligibilityServiceTest {
         );
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(91), 195_000L, rules);
+                TODAY, TODAY.plusDays(91), null, 195_000L, rules);
 
         assertThat(result.eligible()).isTrue();
         assertThat(result.originalTotalAmountCents()).isEqualTo(195_000L);
@@ -487,7 +487,7 @@ class PlanEligibilityServiceTest {
         );
 
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(91), 100_000L, rules); // 20% off $1000 → $800
+                TODAY, TODAY.plusDays(91), null, 100_000L, rules); // 20% off $1000 → $800
 
         assertThat(result.discountedTotalAmountCents()).isEqualTo(80_000L);
         // Sum of installments equals discounted total (no deposit branch).
@@ -514,12 +514,12 @@ class PlanEligibilityServiceTest {
         );
 
         EligibilityResult ok = service.evaluate(
-                TODAY, TODAY.plusDays(91), 105_000L, rules);
+                TODAY, TODAY.plusDays(91), null, 105_000L, rules);
         assertThat(ok.eligible()).isTrue();
         assertThat(ok.discountedTotalAmountCents()).isEqualTo(94_500L);
 
         EligibilityResult tooLow = service.evaluate(
-                TODAY, TODAY.plusDays(91), 95_000L, rules);
+                TODAY, TODAY.plusDays(91), null, 95_000L, rules);
         assertThat(tooLow.eligible()).isFalse();
         assertThat(tooLow.reason()).isEqualTo("amount_too_low");
     }
@@ -529,7 +529,7 @@ class PlanEligibilityServiceTest {
     @Test
     void dueDeadline_atAppointment_doesNotChangeSchedule() {
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(70), PRICE_CENTS,
+                TODAY, TODAY.plusDays(70), null, PRICE_CENTS,
                 withDueDeadline(6, AllowedFrequencies.MONTHLY, PaymentDuePolicy.AT_APPOINTMENT, null));
 
         assertThat(result.eligible()).isTrue();
@@ -545,7 +545,7 @@ class PlanEligibilityServiceTest {
         // 2026-07-16 does not. 2 payments, the last on the anchor rather than at
         // a fixed day-30 offset.
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(70), PRICE_CENTS,
+                TODAY, TODAY.plusDays(70), null, PRICE_CENTS,
                 withDueDeadline(6, AllowedFrequencies.MONTHLY, PaymentDuePolicy.ONE_MONTH_BEFORE, null));
 
         assertThat(result.eligible()).isTrue();
@@ -560,7 +560,7 @@ class PlanEligibilityServiceTest {
         // 70-day appointment, deadline 7 days before. Usable = 63 days.
         // Monthly: 1 + 63/30 = 3 payments at 0, 30, 60. Last at day 60 ≤ 63.
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(70), PRICE_CENTS,
+                TODAY, TODAY.plusDays(70), null, PRICE_CENTS,
                 withDueDeadline(6, AllowedFrequencies.MONTHLY, PaymentDuePolicy.ONE_WEEK_BEFORE, null));
 
         PlanOption monthly = result.options().get(0);
@@ -573,7 +573,7 @@ class PlanEligibilityServiceTest {
         // 90 days is more than the lead time → usable becomes negative → no
         // plan fits, reason = exceeds_payment_deadline.
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(42), PRICE_CENTS,
+                TODAY, TODAY.plusDays(42), null, PRICE_CENTS,
                 withDueDeadline(6, AllowedFrequencies.BOTH, PaymentDuePolicy.CUSTOM_MONTHS, 90));
 
         assertThat(result.eligible()).isFalse();
@@ -585,7 +585,7 @@ class PlanEligibilityServiceTest {
         // 16-week (112-day) booking, custom "60 days before" deadline. Usable =
         // 52 days. Monthly: 1 + 52/30 = 2 payments.
         EligibilityResult result = service.evaluate(
-                TODAY, TODAY.plusDays(112), PRICE_CENTS,
+                TODAY, TODAY.plusDays(112), null, PRICE_CENTS,
                 withDueDeadline(6, AllowedFrequencies.MONTHLY, PaymentDuePolicy.CUSTOM_MONTHS, 60));
 
         assertThat(result.eligible()).isTrue();

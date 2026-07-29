@@ -107,7 +107,7 @@ public class MewsSyncService {
                     : null;
 
             EligibilityResult elig = eligibilityService.evaluate(
-                    today, arrival, PLACEHOLDER_TOTAL_CENTS, rules);
+                    today, arrival, departure, PLACEHOLDER_TOTAL_CENTS, rules);
             if (!elig.eligible()) {
                 ineligible++;
                 continue;
