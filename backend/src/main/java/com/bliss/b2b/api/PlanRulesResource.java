@@ -21,7 +21,13 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Path("/api/v1/merchants/me/plan-rules")
 @Produces(MediaType.APPLICATION_JSON)
@@ -37,6 +43,9 @@ public class PlanRulesResource {
     // frontend validation (both 1-365).
     private static final int MAX_CUSTOM_MONTHS = 365;
     private static final int MAX_DISCOUNT_BASIS_POINTS = 5_000;
+    // The client offers a rolling 365-day window; 400 leaves headroom for a
+    // merchant who saves near the edge of it without inviting an unbounded list.
+    private static final int MAX_BLACKOUT_DATES = 400;
 
     private final MerchantPlanRulesService service;
     private final PropertyOnboardingService onboardingService;
@@ -263,6 +272,35 @@ public class PlanRulesResource {
             return badRequest("discountBasisPoints must be 0-" + MAX_DISCOUNT_BASIS_POINTS);
         }
 
+        // --- Blackout dates ---
+        // Past dates are accepted deliberately: they are harmless once behind
+        // the rolling window, and pruning them on save would fight a client
+        // that sent exactly what the merchant saw.
+        List<LocalDate> blackoutDates = new ArrayList<>();
+        List<String> rawBlackout = req.blackoutDates();
+        if (rawBlackout != null) {
+            if (rawBlackout.size() > MAX_BLACKOUT_DATES) {
+                return badRequest("blackoutDates must contain at most " + MAX_BLACKOUT_DATES + " dates");
+            }
+            Set<String> seen = new HashSet<>();
+            for (String raw : rawBlackout) {
+                if (raw == null || raw.isBlank()) {
+                    return badRequest("blackoutDates entries must be dates in yyyy-MM-dd format");
+                }
+                LocalDate parsed;
+                try {
+                    parsed = LocalDate.parse(raw.trim());
+                } catch (DateTimeParseException e) {
+                    return badRequest("blackoutDates contains an invalid date: " + raw.trim());
+                }
+                if (!seen.add(parsed.toString())) {
+                    return badRequest("blackoutDates contains a duplicate date: " + parsed);
+                }
+                blackoutDates.add(parsed);
+            }
+            blackoutDates.sort(LocalDate::compareTo);
+        }
+
         MerchantPlanRules rules = new MerchantPlanRules(
                 minLead, maxLead, allowed, minAmt, maxAmt, recommended,
                 depositRequired, depositType, depositValue, depositMaxCents,
@@ -272,7 +310,8 @@ public class PlanRulesResource {
                 retryAttempts, retrySpacingDays,
                 lateFeeEnabled, lateFeeType, lateFeeValue, lateFeeScope,
                 afterRetries,
-                discountBasisPoints);
+                discountBasisPoints,
+                List.copyOf(blackoutDates));
         service.save(principal.merchant().id(), rules);
         // Saving policies satisfies the POLICY_SET onboarding step (no-op unless
         // the property is exactly at PMS_CONNECTED).
@@ -317,6 +356,7 @@ public class PlanRulesResource {
             @JsonProperty("lateFeeValue") Long lateFeeValue,
             @JsonProperty("lateFeeScope") String lateFeeScope,
             @JsonProperty("afterRetriesAction") String afterRetriesAction,
-            @JsonProperty("discountBasisPoints") Integer discountBasisPoints
+            @JsonProperty("discountBasisPoints") Integer discountBasisPoints,
+            @JsonProperty("blackoutDates") List<String> blackoutDates
     ) {}
 }

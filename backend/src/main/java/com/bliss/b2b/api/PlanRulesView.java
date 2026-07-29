@@ -1,6 +1,8 @@
 package com.bliss.b2b.api;
 
 import com.bliss.b2b.payments.MerchantPlanRules;
+import java.time.LocalDate;
+import java.util.List;
 
 public record PlanRulesView(
         int minLeadTimeWeeks,
@@ -28,7 +30,8 @@ public record PlanRulesView(
         Long lateFeeValue,
         String lateFeeScope,
         String afterRetriesAction,
-        int discountBasisPoints
+        int discountBasisPoints,
+        List<String> blackoutDates
 ) {
     public static PlanRulesView from(MerchantPlanRules rules) {
         return new PlanRulesView(
@@ -57,7 +60,8 @@ public record PlanRulesView(
                 rules.lateFeeValue(),
                 rules.lateFeeScope() == null ? null : rules.lateFeeScope().wire(),
                 rules.afterRetriesAction().wire(),
-                rules.discountBasisPoints()
+                rules.discountBasisPoints(),
+                rules.blackoutDates().stream().map(LocalDate::toString).toList()
         );
     }
 }

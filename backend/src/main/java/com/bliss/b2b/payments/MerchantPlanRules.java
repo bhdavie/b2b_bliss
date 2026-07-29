@@ -1,5 +1,8 @@
 package com.bliss.b2b.payments;
 
+import java.time.LocalDate;
+import java.util.List;
+
 /**
  * Per-merchant configuration for plan eligibility and the cancellation /
  * dunning policy stack. Nullable fields mean "unset, use system behavior".
@@ -38,7 +41,14 @@ public record MerchantPlanRules(
         Long lateFeeValue,
         LateFeeScope lateFeeScope,
         AfterRetriesAction afterRetriesAction,
-        int discountBasisPoints
+        int discountBasisPoints,
+        /**
+         * Specific calendar dates on which no plan is offered, evaluated
+         * against the guest's stay rather than their booking date. Never null:
+         * an unset column reads as an empty list. Not consulted by
+         * {@link PlanEligibilityService#evaluate} yet.
+         */
+        List<LocalDate> blackoutDates
 ) {
     public static final MerchantPlanRules DEFAULTS = new MerchantPlanRules(
             6, null,
@@ -51,7 +61,8 @@ public record MerchantPlanRules(
             3, 3,
             false, null, null, null,
             AfterRetriesAction.TREAT_AS_CANCELLATION,
-            0
+            0,
+            List.of()
     );
 
     /**

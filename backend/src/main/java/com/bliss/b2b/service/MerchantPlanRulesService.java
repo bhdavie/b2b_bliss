@@ -2,6 +2,9 @@ package com.bliss.b2b.service;
 
 import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.persistence.MerchantPlanRulesDao;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -10,6 +13,8 @@ import java.util.UUID;
  * defaulting logic lives in exactly one place.
  */
 public class MerchantPlanRulesService {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final MerchantPlanRulesDao dao;
 
@@ -49,7 +54,22 @@ public class MerchantPlanRulesService {
                 rules.lateFeeValue(),
                 rules.lateFeeScope() == null ? null : rules.lateFeeScope().wire(),
                 rules.afterRetriesAction().wire(),
-                rules.discountBasisPoints()
+                rules.discountBasisPoints(),
+                blackoutDatesJson(rules.blackoutDates())
         );
+    }
+
+    /**
+     * Serialises the blackout list to a JSONB array of ISO strings. An empty or
+     * null list writes SQL NULL, so "no blackout dates" round-trips as the
+     * unset column every other optional field on this table uses.
+     */
+    private static String blackoutDatesJson(List<LocalDate> dates) {
+        if (dates == null || dates.isEmpty()) return null;
+        try {
+            return JSON.writeValueAsString(dates.stream().map(LocalDate::toString).toList());
+        } catch (Exception e) {
+            throw new IllegalStateException("could not serialise blackout dates", e);
+        }
     }
 }

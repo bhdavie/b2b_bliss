@@ -90,7 +90,8 @@ public class PublicMerchantsResource {
                         rules.depositType() == null ? null : rules.depositType().wire(),
                         rules.depositValue(),
                         rules.depositMaxCents(),
-                        rules.discountBasisPoints()),
+                        rules.discountBasisPoints(),
+                        rules.blackoutDates().stream().map(java.time.LocalDate::toString).toList()),
                 new PublicMerchantView.Stripe(
                         stripeService.isConfigured(),
                         stripeService.isConfigured() ? stripeService.publishableKey() : null,

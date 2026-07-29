@@ -2,6 +2,8 @@ package com.bliss.b2b.api;
 
 import com.bliss.b2b.domain.PmsType;
 import com.bliss.b2b.payments.MerchantPlanRules;
+import java.time.LocalDate;
+import java.util.List;
 
 /**
  * The plan rules a third-party overlay needs, and nothing else.
@@ -40,6 +42,12 @@ public record PublicPlanRulesView(
         String paymentDuePolicy,
         Integer paymentDueCustomMonths,
         int discountBasisPoints,
+        /**
+         * ISO yyyy-MM-dd dates on which no plan is offered, evaluated against
+         * the guest's stay. An eligibility input, so it belongs in this narrow
+         * payload alongside the lead-time and amount limits.
+         */
+        List<String> blackoutDates,
         String pmsType
 ) {
     public static PublicPlanRulesView from(MerchantPlanRules rules, PmsType pmsType) {
@@ -57,6 +65,7 @@ public record PublicPlanRulesView(
                 rules.paymentDuePolicy().wire(),
                 rules.paymentDueCustomMonths(),
                 rules.discountBasisPoints(),
+                rules.blackoutDates().stream().map(LocalDate::toString).toList(),
                 pmsType == null ? null : pmsType.wire());
     }
 }

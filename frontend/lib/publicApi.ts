@@ -157,6 +157,10 @@ export type MerchantPolicies = PublicPolicies & {
   depositValue: number | null;
   depositMaxCents: number | null;
   discountBasisPoints: number;
+  // ISO yyyy-MM-dd dates on which no plan is offered, matched against the
+  // guest's stay. Optional on the wire so a backend that predates the column
+  // still deserialises; treat undefined as none configured.
+  blackoutDates?: string[];
 };
 
 export type PublicMerchant = {

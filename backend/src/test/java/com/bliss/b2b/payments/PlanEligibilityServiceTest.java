@@ -457,7 +457,8 @@ class PlanEligibilityServiceTest {
                 3, 3,
                 false, null, null, null,
                 AfterRetriesAction.TREAT_AS_CANCELLATION,
-                1000
+                1000,
+                List.of()
         );
 
         EligibilityResult result = service.evaluate(
@@ -483,7 +484,8 @@ class PlanEligibilityServiceTest {
                 3, 3,
                 false, null, null, null,
                 AfterRetriesAction.TREAT_AS_CANCELLATION,
-                2000
+                2000,
+                List.of()
         );
 
         EligibilityResult result = service.evaluate(
@@ -510,7 +512,8 @@ class PlanEligibilityServiceTest {
                 3, 3,
                 false, null, null, null,
                 AfterRetriesAction.TREAT_AS_CANCELLATION,
-                1000
+                1000,
+                List.of()
         );
 
         EligibilityResult ok = service.evaluate(
@@ -638,7 +641,8 @@ class PlanEligibilityServiceTest {
                 3, 3,
                 false, null, null, null,
                 AfterRetriesAction.TREAT_AS_CANCELLATION,
-                0);
+                0,
+                List.of());
     }
 
     private static PlanOption byFrequency(List<PlanOption> options, PlanFrequency frequency) {

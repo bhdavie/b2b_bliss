@@ -531,6 +531,11 @@ export type PlanRules = {
   lateFeeScope: LateFeeScope | null;
   afterRetriesAction: AfterRetriesAction;
   discountBasisPoints: number;
+  // Specific calendar dates, ISO yyyy-MM-dd, on which no plan is offered.
+  // Matched against the guest's stay dates, not their booking date. Optional so
+  // the narrower public policy payloads stay assignable to PlanRules and a
+  // backend without the column still deserialises; undefined means none set.
+  blackoutDates?: string[];
 };
 
 export const DEFAULT_PLAN_RULES: PlanRules = {
@@ -560,6 +565,7 @@ export const DEFAULT_PLAN_RULES: PlanRules = {
   lateFeeScope: null,
   afterRetriesAction: "treat_as_cancellation",
   discountBasisPoints: 0,
+  blackoutDates: [],
 };
 
 export async function fetchPlanRules(): Promise<PlanRules> {

@@ -26,7 +26,7 @@ public interface MerchantPlanRulesDao {
                 payment_due_policy, payment_due_custom_months,
                 retry_attempts, retry_spacing_days,
                 late_fee_enabled, late_fee_type, late_fee_value, late_fee_scope,
-                after_retries_action, discount_basis_points
+                after_retries_action, discount_basis_points, blackout_dates
             ) VALUES (
                 :merchantId, :minLeadTimeWeeks, :maxLeadTimeWeeks,
                 :allowedFrequencies, :minBookingAmountCents,
@@ -38,7 +38,8 @@ public interface MerchantPlanRulesDao {
                 :paymentDuePolicy, :paymentDueCustomMonths,
                 :retryAttempts, :retrySpacingDays,
                 :lateFeeEnabled, :lateFeeType, :lateFeeValue, :lateFeeScope,
-                :afterRetriesAction, :discountBasisPoints
+                :afterRetriesAction, :discountBasisPoints,
+                CAST(:blackoutDatesJson AS jsonb)
             )
             ON CONFLICT (merchant_id) DO UPDATE SET
                 min_lead_time_weeks = EXCLUDED.min_lead_time_weeks,
@@ -66,7 +67,8 @@ public interface MerchantPlanRulesDao {
                 late_fee_value = EXCLUDED.late_fee_value,
                 late_fee_scope = EXCLUDED.late_fee_scope,
                 after_retries_action = EXCLUDED.after_retries_action,
-                discount_basis_points = EXCLUDED.discount_basis_points
+                discount_basis_points = EXCLUDED.discount_basis_points,
+                blackout_dates = EXCLUDED.blackout_dates
             """)
     void upsert(
             @Bind("merchantId") UUID merchantId,
@@ -95,6 +97,10 @@ public interface MerchantPlanRulesDao {
             @Bind("lateFeeValue") Long lateFeeValue,
             @Bind("lateFeeScope") String lateFeeScope,
             @Bind("afterRetriesAction") String afterRetriesAction,
-            @Bind("discountBasisPoints") int discountBasisPoints
+            @Bind("discountBasisPoints") int discountBasisPoints,
+            // JSON array of ISO yyyy-MM-dd strings, or null when unset. Bound as
+            // text and cast to jsonb in the statement; the first JSONB column in
+            // the schema, so there is no existing argument factory to reuse.
+            @Bind("blackoutDatesJson") String blackoutDatesJson
     );
 }

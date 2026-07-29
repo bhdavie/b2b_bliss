@@ -1,3 +1,4 @@
+import { BlackoutDatesCard } from "@/components/merchant/BlackoutDatesCard";
 import { PlanRulesCard } from "@/components/merchant/PlanRulesCard";
 import { PoliciesCard } from "@/components/merchant/PoliciesCard";
 import { DEFAULT_PLAN_RULES } from "@/lib/api";
@@ -26,6 +27,17 @@ export default async function SettingsPage() {
           your customers see.
         </p>
         <PlanRulesCard initial={planRules ?? DEFAULT_PLAN_RULES} />
+      </section>
+
+      <section className="mt-10 space-y-4">
+        <h2 className="text-sm text-brand-navy font-semibold">
+          Blackout dates
+        </h2>
+        <p className="text-xs text-brand-navy/65 -mt-2">
+          Dates you do not want to offer a payment plan on, matched against your
+          guest&apos;s stay.
+        </p>
+        <BlackoutDatesCard initial={planRules ?? DEFAULT_PLAN_RULES} />
       </section>
 
       <section className="mt-10 space-y-4">

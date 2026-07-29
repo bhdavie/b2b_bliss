@@ -47,7 +47,13 @@ public record PublicMerchantView(
             String depositType,
             Long depositValue,
             Long depositMaxCents,
-            int discountBasisPoints
+            int discountBasisPoints,
+            /**
+             * ISO yyyy-MM-dd dates on which no plan is offered, matched against
+             * the guest's stay. Here as well as on {@link PublicPlanRulesView}
+             * because the hosted funnels read their rules from this payload.
+             */
+            java.util.List<String> blackoutDates
     ) {}
 
     public record Stripe(
