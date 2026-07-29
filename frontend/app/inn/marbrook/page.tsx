@@ -165,6 +165,42 @@ function formatCvv(value: string): string {
   return value.replace(/\D/g, "").slice(0, 4);
 }
 
+declare global {
+  interface Window {
+    dataLayer?: unknown[];
+  }
+}
+
+// Appends one event to the GTM-style dataLayer, mirroring what the Mews
+// distributor emits so the Bliss overlay can read this funnel unmodified.
+//
+// Append-only by contract. The overlay wraps dataLayer.push to re-sync on every
+// event and walks the array backwards taking the LAST match per event name, so
+// the array is never reassigned, spliced or reordered here — doing any of those
+// would drop the overlay's hook or hide earlier events from it.
+function pushDataLayer(event: Record<string, unknown>): void {
+  if (typeof window === "undefined") return;
+  // Only create it if absent. An existing array may already carry a wrapped
+  // push (the overlay's) plus prior events; reassigning would discard both.
+  if (!window.dataLayer) window.dataLayer = [];
+  window.dataLayer.push(event);
+}
+
+// Gross nightly price in major units: net rate + occupancy tax + destination
+// fee, rounded to cents.
+//
+// This DELIBERATELY differs from the figure the rate card prints. The card
+// shows tax-exclusive `nightlyCents`; the feed carries gross. That split is not
+// an inconsistency to fix — it mirrors the Mews distributor, where
+// ga4_RatesLoaded carries a gross tax-and-fee-inclusive price while the card
+// prints a tax-exclusive one, and it is the divergence the overlay's
+// rate-card-versus-modal basis handling exists to cope with.
+function grossNightly(nightlyCents: number): number {
+  const grossCents =
+    nightlyCents * OCCUPANCY_TAX_RATE + nightlyCents + DESTINATION_FEE_PER_NIGHT_CENTS;
+  return Math.round(grossCents) / 100;
+}
+
 type Step = "room" | "stay" | "checkout";
 type PaymentMethod = "card" | "bliss";
 
@@ -315,6 +351,56 @@ export default function MarbrookHousePage() {
       avgPerNightCents: Math.round(totalCents / nights),
     };
   }, [rate, nights]);
+
+  // --- Mews distributor dataLayer feed -------------------------------------
+  // Emits the four events the Bliss overlay reads. Kept as effects rather than
+  // folded into the click handlers so each event fires from the state it
+  // describes, after that state has settled.
+
+  // Rates shown to the guest. Keyed on step so it fires on mount and again on
+  // every re-entry to the room step, matching the distributor's behaviour of
+  // re-emitting when the Rates step is displayed. `name` passes through
+  // untouched: the overlay matches a card to its rate by substring of the
+  // card's visible label, so any reformatting here breaks that match.
+  useEffect(() => {
+    if (step !== "room") return;
+    pushDataLayer({
+      event: "ga4_RatesLoaded",
+      rates: RATES.map((r) => ({
+        id: r.id,
+        name: r.name,
+        price: grossNightly(r.nightlyCents),
+        currency: "USD",
+      })),
+    });
+  }, [step]);
+
+  // Stay dates, start then end as two separate pushes. This fires on mount as
+  // well as on change, which is required rather than incidental: the demo ships
+  // with a preset stay, and the overlay derives nights from both events — with
+  // either missing, nights resolves null and every per-night figure is
+  // suppressed. Values stay in "YYYY-MM-DD"; the overlay parses them as local
+  // dates.
+  useEffect(() => {
+    pushDataLayer({ event: "distributorStartDateSelected", startDate: checkinIso });
+    pushDataLayer({ event: "distributorEndDateSelected", endDate: checkoutIso });
+  }, [checkinIso, checkoutIso]);
+
+  // Cart contents once a rate is chosen. Deliberately NOT fired from
+  // selectRate: pricing is a useMemo over [rate, nights] and has not recomputed
+  // for the newly selected rate at the moment that handler runs, so firing
+  // there would publish the previous rate's total.
+  useEffect(() => {
+    if (!rate || !pricing) return;
+    pushDataLayer({
+      event: "add_to_cart",
+      ecommerce: {
+        value: pricing.totalCents / 100,
+        currency: "USD",
+        items: [{ item_name: rate.name, item_variant: rate.detail }],
+      },
+    });
+  }, [rateId, pricing, rate]);
 
   // Client-side plan preview for the inline installments selector. Cadence and
   // due dates come from the eligibility mirror; per-payment amounts come from
