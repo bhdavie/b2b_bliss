@@ -201,7 +201,73 @@ function grossNightly(nightlyCents: number): number {
   return Math.round(grossCents) / 100;
 }
 
-type Step = "room" | "stay" | "checkout";
+// --- Mews Distributor step machine ----------------------------------------
+// Five steps, keyed exactly as the hosted Distributor keys them (see
+// reference/distributor/SPEC.md section 1.4). Note step 5's key is "checkout",
+// not "details", while its visible name is "Details" — matching on the key is
+// what SPEC says to do, so the key is what we store.
+type Step = "dates" | "categories" | "rates" | "summary" | "checkout";
+
+type StepDescriptor = {
+  key: Step;
+  // 1-5, rendered in the numbered badge and in the "N of 5" control.
+  number: number;
+  name: string;
+  // Locale-invariant copy key the Distributor puts on the step label span.
+  textKey: string;
+  ariaLabel: string;
+  // The view container's data-test-id for this step. Deliberately NOT
+  // `${key}-view`: step 2's key is "categories" but its view id is "rooms-view".
+  viewId: string;
+};
+
+const STEPS: readonly StepDescriptor[] = [
+  {
+    key: "dates",
+    number: 1,
+    name: "Dates",
+    textKey: "DatePlural",
+    ariaLabel: "Link to Dates",
+    viewId: "dates-view",
+  },
+  {
+    key: "categories",
+    number: 2,
+    name: "Categories",
+    textKey: "Categories",
+    ariaLabel: "Link to Categories",
+    viewId: "rooms-view",
+  },
+  {
+    key: "rates",
+    number: 3,
+    name: "Rates",
+    textKey: "RatePlural",
+    ariaLabel: "Link to Rates",
+    viewId: "rates-view",
+  },
+  {
+    key: "summary",
+    number: 4,
+    name: "Summary",
+    textKey: "Summary",
+    ariaLabel: "Link to Summary",
+    viewId: "summary-view",
+  },
+  {
+    key: "checkout",
+    number: 5,
+    name: "Details",
+    textKey: "DetailPlural",
+    ariaLabel: "Link to Details",
+    viewId: "checkout-view",
+  },
+] as const;
+
+function stepDescriptor(step: Step): StepDescriptor {
+  return STEPS.find((s) => s.key === step) ?? STEPS[0]!;
+}
+
 type PaymentMethod = "card" | "bliss";
 
 type PlanOptionPreview = {
@@ -234,7 +300,10 @@ type CardFieldState = {
 };
 
 export default function MarbrookHousePage() {
-  const [step, setStep] = useState<Step>("room");
+  // Opens on Rates: that is where the ported room/rate content lives, so the
+  // demo still lands on the same screen it did before the shell swap. Dates and
+  // Categories are reachable from the stepper but are placeholders for now.
+  const [step, setStep] = useState<Step>("rates");
   const [rateId, setRateId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [frequency, setFrequency] = useState<PublicPlanFrequency>("biweekly");
@@ -246,6 +315,13 @@ export default function MarbrookHousePage() {
   const [adults, setAdults] = useState(DEFAULT_ADULTS);
   const [children, setChildren] = useState(DEFAULT_CHILDREN);
   const nights = nightsBetween(checkinIso, checkoutIso);
+  // BookingBar was the only caller of these four setters, and it is unmounted
+  // until dates-view is ported. The state itself is still live (nights,
+  // pricing, eligibility and the dataLayer date events all read it), so the
+  // setters are retained rather than removed. Referenced here so noUnusedLocals
+  // and no-unused-vars stay switched on for the rest of the file; delete this
+  // line when BookingBar is mounted again.
+  void [setCheckinIso, setCheckoutIso, setAdults, setChildren];
 
   // Contact info. Intentionally NOT prefilled: every booking must carry the
   // guest's own name and email so the plan binds to their customer record and
@@ -358,12 +434,12 @@ export default function MarbrookHousePage() {
   // describes, after that state has settled.
 
   // Rates shown to the guest. Keyed on step so it fires on mount and again on
-  // every re-entry to the room step, matching the distributor's behaviour of
+  // every re-entry to the rates step, matching the distributor's behaviour of
   // re-emitting when the Rates step is displayed. `name` passes through
   // untouched: the overlay matches a card to its rate by substring of the
   // card's visible label, so any reformatting here breaks that match.
   useEffect(() => {
-    if (step !== "room") return;
+    if (step !== "rates") return;
     pushDataLayer({
       event: "ga4_RatesLoaded",
       rates: RATES.map((r) => ({
@@ -434,7 +510,7 @@ export default function MarbrookHousePage() {
 
   function selectRate(id: string) {
     setRateId(id);
-    setStep("stay");
+    setStep("summary");
     window.scrollTo({ top: 0 });
   }
 
@@ -558,35 +634,47 @@ export default function MarbrookHousePage() {
     }
   }
 
+  const contentStep =
+    step === "rates" || step === "summary" || step === "checkout";
+
   return (
-    <div className="min-h-screen bg-white text-[#23262e] font-sans">
-      <SiteHeader />
+    <DistributorShell step={step} onSelectStep={setStep}>
+      {step === "dates" ? (
+        <StepPlaceholder
+          name="Dates"
+          note="Date and occupancy selection has not been ported yet."
+        />
+      ) : null}
 
-      {/* Shared across all three steps so the hero image, overlay card, and
-          stay bar stay identically positioned from Choose your room through
-          Checkout. */}
-      <HeroBanner />
-      <BookingBar
-        checkinIso={checkinIso}
-        checkoutIso={checkoutIso}
-        adults={adults}
-        guestChildren={children}
-        onChangeRange={(ci, co) => {
-          setCheckinIso(ci);
-          setCheckoutIso(co);
-        }}
-        onChangeGuests={(a, c) => {
-          setAdults(a);
-          setChildren(c);
-        }}
-      />
+      {step === "categories" ? (
+        <StepPlaceholder
+          name="Categories"
+          note="Room category selection has not been ported yet."
+        />
+      ) : null}
 
-      <main className="mx-auto max-w-7xl px-6 py-8">
-        <StepBar step={step} />
+      {/* The view container holds step content only. HeroBanner and BookingBar
+          used to render here; neither exists as a view child in the
+          Distributor, so both are unmounted for now:
 
+          - The hotel imagery has no page-level home. SPEC 1.6 scopes the only
+            image in the shell to "Decoration hero image
+            (`DecorationImageElement-sc-77587fe0-0`) — step 1 only", listed
+            under "Structures that appear on some steps only", and the capture
+            has it as the first child of dates-view. SPEC 1.5 describes no
+            background element behind the view. HeroBanner therefore comes back
+            when dates-view is ported, not before.
+          - Date and occupancy selection belongs in dates-view on step 1 and is
+            reused as [data-test-id="dates-occupancy-header"] on steps 2 and 3
+            (SPEC 1.6). BookingBar comes back with those.
+
+          Both component definitions are retained for that port. */}
+      {contentStep ? (
+        <>
+      <div className="mx-auto max-w-7xl px-6 py-8">
         <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
           <div className="min-w-0">
-            {step === "room" ? (
+            {step === "rates" ? (
               <RoomStep
                 onSelectRate={selectRate}
                 selectedRateId={rateId}
@@ -595,7 +683,7 @@ export default function MarbrookHousePage() {
               />
             ) : null}
 
-            {step === "stay" && rate && pricing ? (
+            {step === "summary" && rate && pricing ? (
               <StayStep
                 rate={rate}
                 pricing={pricing}
@@ -604,7 +692,7 @@ export default function MarbrookHousePage() {
                 checkoutIso={checkoutIso}
                 adults={adults}
                 guestChildren={children}
-                onBack={() => setStep("room")}
+                onBack={() => setStep("rates")}
                 onAddRoom={onAddRoom}
                 onCheckout={goToCheckout}
               />
@@ -658,7 +746,7 @@ export default function MarbrookHousePage() {
                       setCardName(v);
                     },
                   }}
-                  onBack={() => setStep("stay")}
+                  onBack={() => setStep("summary")}
                   onBookNow={onBookNow}
                   submitting={submitting}
                   error={error}
@@ -680,47 +768,404 @@ export default function MarbrookHousePage() {
             />
           </aside>
         </div>
-      </main>
+      </div>
+        </>
+      ) : null}
+    </DistributorShell>
+  );
+}
 
-      <footer className="mx-auto max-w-7xl px-6 pb-12 pt-4 text-xs text-[#23262e]/45">
-        Marbrook House · 118 Greenwich Avenue, Hudson, NY · A boutique riverside hotel
-      </footer>
+// --- Mews Distributor shell ------------------------------------------------
+// Structural port of reference/distributor/SPEC.md section 1: the chrome that
+// is byte-identical on all five Distributor steps, plus the single swappable
+// view container.
+//
+// Class-name policy, per SPEC section 6.4: the Distributor's generated
+// styled-components classes (`Stack-sc-261eb2-0 cVHJkl` and friends) are
+// build-versioned and explicitly NOT usable as selectors, so none of them are
+// reproduced here. Every structural hook is a `data-test-*` attribute, a stable
+// DOM id, or an ARIA role — the tiers SPEC section 6.4 ranks as durable — and
+// the classes below are plain semantic names carrying the styling only.
+
+function DistributorShell({
+  step,
+  onSelectStep,
+  children,
+}: {
+  step: Step;
+  onSelectStep: (step: Step) => void;
+  children: React.ReactNode;
+}) {
+  const current = stepDescriptor(step);
+  return (
+    <div
+      id="distributor"
+      className="distributor min-h-screen bg-white text-[#23262e] font-sans"
+    >
+      <div data-mds-element="true" className="distributor-app-canvas">
+        <SkipLinks />
+
+        {/* The Distributor also carries width="100%" here, offset="152" on
+            <main>, and height="100%" on the live region. Those are styled-
+            components props leaking onto the DOM rather than selector hooks
+            (SPEC 1.1 lists none of them), and React's typings reject them on
+            div/main, so they are dropped. */}
+        <div data-mds-element="true" className="distributor-header">
+          <DistributorToolbar />
+          <DistributorStepper step={step} onSelectStep={onSelectStep} />
+        </div>
+
+        <main id="main" data-mds-element="true" className="distributor-app-view">
+          <div data-mds-element="true">
+            <div data-mds-element="true" className="distributor-transition">
+              <div
+                aria-busy="false"
+                data-mds-element="true"
+                className="distributor-app-content"
+              >
+                <div
+                  aria-live="assertive"
+                  data-mds-element="true"
+                  className="distributor-live-region"
+                />
+                <div className="distributor-view-wrapper" data-mds-element="true">
+                  <div data-mds-element="true" className="distributor-transition-inner">
+                    {/* Outgoing transition slot. Empty in every capture; kept so
+                        the two-sibling View pattern SPEC 1.5 documents holds. */}
+                    <div aria-live="assertive" className="distributor-view" />
+                    <div aria-busy="false" className="distributor-view">
+                      {/* The one element whose data-test-id changes with the
+                          step. SPEC 1.5: select via [data-test-id$="-view"]. */}
+                      <div
+                        data-test-id={current.viewId}
+                        role="region"
+                        data-mds-element="true"
+                        className="distributor-view-content"
+                      >
+                        {children}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <div data-mds-element="true" />
+        <div id="portal-container" />
+      </div>
     </div>
   );
 }
 
-function SiteHeader() {
+function SkipLinks() {
   return (
-    <header className="border-b border-[#23262e]/10 bg-white">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center text-[#23262e]" aria-hidden="true">
+    <div data-mds-element="true" className="distributor-skip-links sr-only">
+      <div data-mds-element="true">
+        <span data-test-textkey="SkipTo" data-non-sensitive="true">
+          Skip to:
+        </span>
+      </div>
+      <ol data-mds-element="true">
+        <li>
+          <a href="#toolbar" data-mds-element="true">
+            <span data-test-textkey="Toolbar" data-non-sensitive="true">
+              Toolbar
+            </span>
+          </a>
+        </li>
+        <li>
+          <a href="#navigation" data-mds-element="true">
+            <span data-test-textkey="SiteNavigation" data-non-sensitive="true">
+              Site navigation
+            </span>
+          </a>
+        </li>
+        <li>
+          <a href="#main" data-mds-element="true">
+            <span data-test-textkey="MainContent" data-non-sensitive="true">
+              Main content
+            </span>
+          </a>
+        </li>
+      </ol>
+    </div>
+  );
+}
+
+// Property identity on the left, language + currency selects on the right.
+// SPEC 1.3 notes the Distributor duplicates each selector's value three ways;
+// the one it calls the cleanest read, data-test-display-value, is reproduced on
+// the control itself.
+const LANGUAGES = ["English (United States)", "Deutsch", "Français", "Español"];
+const CURRENCIES = ["USD", "EUR", "GBP", "CAD"];
+
+function DistributorToolbar() {
+  const [language, setLanguage] = useState(LANGUAGES[0]!);
+  const [currency, setCurrency] = useState(CURRENCIES[0]!);
+  return (
+    <div
+      role="banner"
+      id="toolbar"
+      data-mds-element="true"
+      className="distributor-toolbar border-b border-[#23262e]/10 bg-white"
+    >
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-6 py-4">
+        <div data-mds-element="true" className="flex items-center gap-3">
+          <div
+            data-mds-element="true"
+            className="distributor-property-logo flex items-center text-[#23262e]"
+            aria-hidden="true"
+          >
             <span
-              className="text-5xl leading-none"
+              className="text-4xl leading-none"
               style={{ fontFamily: "var(--font-caveat), cursive", fontWeight: 700 }}
             >
               MH
             </span>
           </div>
-          <div>
-            <div className="font-serif text-2xl leading-tight tracking-tight text-[#23262e]">
-              Marbrook House
-            </div>
-            <div className="text-xs uppercase tracking-[0.22em] text-[#23262e]/55">
-              Hudson Valley, New York
-            </div>
+          <div
+            data-mds-element="true"
+            className="distributor-property-name font-serif text-xl leading-tight tracking-tight text-[#23262e]"
+          >
+            {DEMO_HOTEL.businessName}
           </div>
         </div>
-        <nav className="hidden gap-7 text-sm uppercase tracking-[0.18em] text-[#23262e]/60 sm:flex">
-          <span>Rooms</span>
-          <span>Dining</span>
-          <span>The grounds</span>
-          <span className="text-[#23262e]">Reserve</span>
-        </nav>
+
+        <div data-mds-element="true" className="flex items-center gap-3">
+          <ToolbarSelect
+            fieldName="languageSelector"
+            testId="language-selector"
+            controlId="languageSelector"
+            ariaLabel="Select language"
+            labelTextKey="SelectLanguage"
+            labelText="Select language"
+            options={LANGUAGES}
+            value={language}
+            onChange={setLanguage}
+          />
+          <ToolbarSelect
+            fieldName="currencySelect"
+            testId="currency-selector"
+            controlId="currencySelect"
+            ariaLabel="Select currency"
+            labelTextKey="SelectCurrency"
+            labelText="Select currency"
+            options={CURRENCIES}
+            value={currency}
+            onChange={setCurrency}
+          />
+        </div>
       </div>
-    </header>
+    </div>
   );
 }
+
+function ToolbarSelect({
+  fieldName,
+  testId,
+  controlId,
+  ariaLabel,
+  labelTextKey,
+  labelText,
+  options,
+  value,
+  onChange,
+}: {
+  fieldName: string;
+  testId: string;
+  controlId: string;
+  ariaLabel: string;
+  labelTextKey: string;
+  labelText: string;
+  options: readonly string[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="distributor-field" data-test-field={fieldName} data-mds-element="true">
+      <div data-mds-element="true" className="distributor-field-input">
+        <select
+          id={controlId}
+          data-test-id={testId}
+          aria-label={ariaLabel}
+          data-test-display-value={value}
+          data-mds-element="true"
+          className="distributor-combo cursor-pointer border border-[#23262e]/15 bg-white px-3 py-1.5 text-sm text-[#23262e]"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          {options.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      </div>
+      <span
+        aria-hidden="true"
+        id={`${controlId}-sr-only-label`}
+        data-mds-element="true"
+        className="sr-only"
+      >
+        <span>{value}</span>
+        <span>
+          ,
+          <span data-test-textkey={labelTextKey} data-non-sensitive="true">
+            {labelText}
+          </span>
+        </span>
+      </span>
+    </div>
+  );
+}
+
+// SPEC 1.4: the captured stepper is collapsed, and in that state exactly one
+// StepWrapper and one [data-test-step] exist — the current step only. The
+// toggle's aria-expanded is what flips that, so expanding renders all five.
+// [data-test-step] stays on the current step alone in both states, so the
+// invariant an overlay reads progress from holds either way.
+function DistributorStepper({
+  step,
+  onSelectStep,
+}: {
+  step: Step;
+  onSelectStep: (step: Step) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const current = stepDescriptor(step);
+  const visible = expanded ? STEPS : [current];
+  return (
+    <nav
+      id="navigation"
+      aria-label="Progress"
+      className="distributor-navbar border-b border-[#23262e]/10 bg-white"
+    >
+      <div
+        data-mds-element="true"
+        className="distributor-stepper mx-auto flex max-w-7xl flex-col px-6 py-3"
+      >
+        <button
+          type="button"
+          aria-expanded={expanded}
+          data-mds-element="true"
+          className="distributor-stepper-toggle flex items-center gap-2 self-start text-xs uppercase tracking-[0.16em] text-[#23262e]/60"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          <div data-mds-element="true" className="distributor-step-count tabular-nums">
+            {current.number} of {STEPS.length}
+          </div>
+          <span
+            data-test-icon={expanded ? "chevron_up" : "chevron_down"}
+            aria-hidden="true"
+            data-mds-element="true"
+            className="distributor-expand-icon"
+          >
+            <ChevronIcon up={expanded} />
+          </span>
+        </button>
+
+        <nav aria-label="progress" data-mds-element="true" className="distributor-nav">
+          <ol
+            data-mds-element="true"
+            className="distributor-progress mt-2 flex flex-wrap items-center gap-x-6 gap-y-1"
+          >
+            {visible.map((s) => {
+              const isCurrent = s.key === step;
+              return (
+                <li key={s.key} data-mds-element="true" className="distributor-step">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-current={isCurrent ? "step" : undefined}
+                    data-test-step={isCurrent ? s.key : undefined}
+                    aria-label={s.ariaLabel}
+                    data-mds-element="true"
+                    className="distributor-step-button cursor-pointer"
+                    onClick={() => onSelectStep(s.key)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onSelectStep(s.key);
+                      }
+                    }}
+                  >
+                    <div
+                      data-mds-element="true"
+                      className="distributor-step-inner flex items-center gap-2"
+                    >
+                      <span
+                        data-mds-element="true"
+                        className={`distributor-step-number tabular-nums text-sm font-medium ${
+                          isCurrent ? "text-[#1A56DB]" : "text-[#23262e]/40"
+                        }`}
+                      >
+                        {s.number}
+                      </span>
+                      <div data-mds-element="true" className="distributor-step-text">
+                        <div data-mds-element="true">
+                          <div data-mds-element="true">
+                            <span
+                              data-test-textkey={s.textKey}
+                              data-non-sensitive="true"
+                              className={`text-xs uppercase tracking-[0.16em] ${
+                                isCurrent ? "text-[#1A56DB]" : "text-[#23262e]/45"
+                              }`}
+                            >
+                              {s.name}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+      </div>
+    </nav>
+  );
+}
+
+function ChevronIcon({ up }: { up: boolean }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      fill="none"
+      viewBox="0 0 24 24"
+      role="presentation"
+      className={up ? "rotate-180" : undefined}
+      data-mds-element="true"
+    >
+      <path
+        fill="currentColor"
+        d="M5.22 8.227a.79.79 0 0 0 0 1.095l6.25 6.451a.733.733 0 0 0 1.06 0l6.25-6.451a.79.79 0 0 0 0-1.095.733.733 0 0 0-1.06 0L12 14.13 6.28 8.227a.734.734 0 0 0-1.06 0"
+      />
+    </svg>
+  );
+}
+
+// Dates and Categories have no ported content yet: the view container still
+// renders, carrying the right data-test-id, with a heading and nothing else.
+function StepPlaceholder({ name, note }: { name: string; note: string }) {
+  return (
+    <div className="mx-auto max-w-7xl px-6 py-16">
+      <h1 className="font-serif text-3xl tracking-tight text-[#23262e]">{name}</h1>
+      <p className="mt-3 text-sm text-[#23262e]/55">{note}</p>
+    </div>
+  );
+}
+
+// HeroBanner and BookingBar are both unmounted for now (see the comment on the
+// view container) and are kept for the dates-view port. Referenced here so the
+// unused-symbol checks stay on for the rest of the file; delete this line when
+// they are mounted again.
+void [HeroBanner, BookingBar];
 
 function HeroBanner() {
   return (
@@ -1135,42 +1580,6 @@ function CalendarIcon() {
       <path d="M8 2v4" />
       <path d="M3 10h18" />
     </svg>
-  );
-}
-
-function StepBar({ step }: { step: Step }) {
-  const steps: { key: Step; label: string }[] = [
-    { key: "room", label: "Choose your room" },
-    { key: "stay", label: "Your stay" },
-    { key: "checkout", label: "Checkout" },
-  ];
-  const activeIndex = steps.findIndex((s) => s.key === step);
-  return (
-    <ol className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs uppercase tracking-[0.16em]">
-      {steps.map((s, i) => {
-        const state =
-          i < activeIndex ? "done" : i === activeIndex ? "active" : "todo";
-        return (
-          <li key={s.key} className="flex items-center gap-3">
-            <span
-              className={
-                state === "active"
-                  ? "text-[#1A56DB]"
-                  : state === "done"
-                    ? "text-[#23262e]/70"
-                    : "text-[#23262e]/35"
-              }
-            >
-              <span className="mr-2 font-medium tabular-nums">{i + 1}</span>
-              {s.label}
-            </span>
-            {i < steps.length - 1 ? (
-              <span className="text-[#23262e]/25">/</span>
-            ) : null}
-          </li>
-        );
-      })}
-    </ol>
   );
 }
 
