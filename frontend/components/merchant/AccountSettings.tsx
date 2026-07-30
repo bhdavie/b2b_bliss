@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -22,6 +21,7 @@ import {
   type PmsType,
   type StripeConnectStatus,
 } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
 
 export type AccountInitial = {
   hotelName: string;
@@ -344,12 +344,12 @@ function AddressEditor({
 function EditActions({ onSave, onCancel }: { onSave: () => void; onCancel: () => void }) {
   return (
     <div className="mt-3 flex gap-2">
-      <button type="button" onClick={onSave} className="btn-primary-merchant">
+      <Button type="button" onClick={onSave} variant="merchant">
         Save
-      </button>
-      <button type="button" onClick={onCancel} className="btn-ghost">
+      </Button>
+      <Button type="button" onClick={onCancel} variant="ghost">
         Cancel
-      </button>
+      </Button>
     </div>
   );
 }
@@ -463,9 +463,9 @@ function PropertyManagementSection({ connections }: { connections: AccountConnec
           <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         ) : null}
         <div className="mt-5 flex items-center gap-4">
-          <Link href="/onboarding/connect-mews" className="btn-ghost">
+          <Button href="/onboarding/connect-mews" variant="ghost">
             Manage
-          </Link>
+          </Button>
           <button
             type="button"
             onClick={handleDisconnect}
@@ -616,11 +616,12 @@ function PaymentProcessorSection({ connections }: { connections: AccountConnecti
       {error ? (
         <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       ) : null}
-      <button
+      <Button
         type="button"
         onClick={handleConnectStripe}
         disabled={phase === "connecting"}
-        className="btn-primary-merchant mt-5"
+        variant="merchant"
+        className="mt-5"
       >
         {phase === "connecting" ? (
           <span className="flex items-center gap-2">
@@ -632,7 +633,7 @@ function PaymentProcessorSection({ connections }: { connections: AccountConnecti
         ) : (
           "Connect Stripe"
         )}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -661,9 +662,9 @@ function ConnectPrompt({ text, href, label }: { text: string; href: string; labe
   return (
     <div>
       <p className="text-sm text-brand-navy/65">{text}</p>
-      <Link href={href} className="btn-primary-merchant mt-5 inline-block">
+      <Button href={href} variant="merchant" className="mt-5 inline-block">
         {label}
-      </Link>
+      </Button>
     </div>
   );
 }

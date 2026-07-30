@@ -13,6 +13,8 @@ import {
   formatScheduleDate,
   previewEligibility,
 } from "@/lib/eligibility";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 type FormState = {
   serviceName: string;
@@ -90,8 +92,8 @@ export function NewBookingForm({
       <section className="card p-6 space-y-4">
         <label className="block">
           <span className="label">Service name</span>
-          <input
-            className="input mt-1.5"
+          <Input
+            className="mt-1.5"
             value={form.serviceName}
             onChange={(e) => update("serviceName", e.target.value)}
             placeholder="Sarah & James wedding"
@@ -103,8 +105,8 @@ export function NewBookingForm({
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="label">Total price (USD)</span>
-            <input
-              className="input mt-1.5"
+            <Input
+              className="mt-1.5"
               value={form.totalDollars}
               onChange={(e) => update("totalDollars", e.target.value)}
               placeholder="4000.00"
@@ -114,8 +116,8 @@ export function NewBookingForm({
           </label>
           <label className="block">
             <span className="label">Appointment date</span>
-            <input
-              className="input mt-1.5"
+            <Input
+              className="mt-1.5"
               type="date"
               value={form.appointmentDate}
               onChange={(e) => update("appointmentDate", e.target.value)}
@@ -128,8 +130,8 @@ export function NewBookingForm({
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="label">Customer name (optional)</span>
-            <input
-              className="input mt-1.5"
+            <Input
+              className="mt-1.5"
               value={form.customerNameHint}
               onChange={(e) => update("customerNameHint", e.target.value)}
               placeholder="Sarah Lee"
@@ -138,8 +140,8 @@ export function NewBookingForm({
           </label>
           <label className="block">
             <span className="label">Customer email (optional)</span>
-            <input
-              className="input mt-1.5"
+            <Input
+              className="mt-1.5"
               value={form.customerEmailHint}
               onChange={(e) => update("customerEmailHint", e.target.value)}
               type="email"
@@ -166,21 +168,21 @@ export function NewBookingForm({
         ) : null}
 
         <div className="flex justify-end gap-2 pt-2">
-          <button
+          <Button
             type="button"
-            className="btn-ghost"
+            variant="ghost"
             onClick={() => router.push("/bookings")}
             disabled={submitting}
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
-            className="btn-primary"
+            variant="primary"
             disabled={!valid || submitting}
           >
             {submitting ? "Creating" : "Create booking"}
-          </button>
+          </Button>
         </div>
       </section>
 

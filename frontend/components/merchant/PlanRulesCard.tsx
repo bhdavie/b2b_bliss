@@ -8,6 +8,7 @@ import {
   type PlanFrequency,
   type PlanRules,
 } from "@/lib/api";
+import { Input } from "@/components/ui/Input";
 
 type FormState = {
   minLeadTimeWeeks: string;
@@ -444,13 +445,13 @@ function NumberInput({
   return (
     <label className="block">
       <span className="text-xs text-brand-navy">{label}</span>
-      <input
+      <Input
         type="number"
         inputMode="numeric"
         value={value}
         min={min}
         onChange={(e) => onChange(e.target.value)}
-        className="input mt-1.5"
+        className="mt-1.5"
         placeholder={placeholder}
       />
     </label>
@@ -478,12 +479,12 @@ function DollarInput({
         >
           $
         </span>
-        <input
+        <Input
           type="text"
           inputMode="decimal"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="input pl-7"
+          className="pl-7"
           placeholder={placeholder}
         />
       </div>
@@ -510,14 +511,14 @@ function PercentInput({
     <label className="block">
       <span className="text-xs text-brand-navy">{label}</span>
       <div className="relative mt-1.5">
-        <input
+        <Input
           type="number"
           inputMode="numeric"
           min={min}
           max={max}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="input pr-8"
+          className="pr-8"
           placeholder={placeholder}
         />
         <span

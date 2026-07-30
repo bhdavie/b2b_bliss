@@ -10,6 +10,8 @@ import {
   type PlanRules,
   type RefundPolicy,
 } from "@/lib/api";
+import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
 
 type FormState = {
   refundPolicy: RefundPolicy;
@@ -209,7 +211,7 @@ export function PoliciesCard({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
-      <div className="card p-6 space-y-6">
+      <Card padding="lg" className="space-y-6">
         <SectionTitle>Cancellation policies</SectionTitle>
 
         <Row label="Refund policy" hint="What customers get back if they cancel a plan in progress.">
@@ -288,9 +290,9 @@ export function PoliciesCard({
             ) : null}
           </div>
         </Row>
-      </div>
+      </Card>
 
-      <div className="card p-6 space-y-6">
+      <Card padding="lg" className="space-y-6">
         <SectionTitle>Payment deadline</SectionTitle>
 
         <Row
@@ -320,9 +322,9 @@ export function PoliciesCard({
             </div>
           ) : null}
         </Row>
-      </div>
+      </Card>
 
-      <div className="card p-6 space-y-6">
+      <Card padding="lg" className="space-y-6">
         <SectionTitle>Failed payment handling</SectionTitle>
 
         <Row label="Retry policy" hint="How aggressively to retry a failed installment.">
@@ -419,7 +421,7 @@ export function PoliciesCard({
             ))}
           </div>
         </Row>
-      </div>
+      </Card>
 
       {error ? (
         <div className="text-xs text-red-600" role="alert">
@@ -624,13 +626,13 @@ function NumberInput({
   return (
     <label className="block">
       <span className="text-xs text-brand-navy">{label}</span>
-      <input
+      <Input
         type="number"
         inputMode="numeric"
         value={value}
         min={min}
         onChange={(e) => onChange(e.target.value)}
-        className="input mt-1.5"
+        className="mt-1.5"
         placeholder={placeholder}
       />
     </label>
@@ -652,14 +654,14 @@ function PercentInput({
     <label className="block">
       <span className="text-xs text-brand-navy">{label}</span>
       <div className="relative mt-1.5">
-        <input
+        <Input
           type="number"
           inputMode="numeric"
           min={0}
           max={100}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="input pr-8"
+          className="pr-8"
           placeholder={placeholder}
         />
         <span
@@ -694,12 +696,12 @@ function DollarInput({
         >
           $
         </span>
-        <input
+        <Input
           type="text"
           inputMode="decimal"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="input pl-7"
+          className="pl-7"
           placeholder={placeholder}
         />
       </div>
