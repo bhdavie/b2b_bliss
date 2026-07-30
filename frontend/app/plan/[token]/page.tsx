@@ -10,7 +10,7 @@ export default async function PlanPortalPage(props: { params: Promise<Params> })
 
   if (!portal) {
     return (
-      <PortalShell active="plans">
+      <PortalShell active="home">
         <div className="py-16 text-center">
           <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
             Plan not found
@@ -25,7 +25,7 @@ export default async function PlanPortalPage(props: { params: Promise<Params> })
   }
 
   return (
-    <PortalShell active="plans" email={portal.booking.customerEmailHint}>
+    <PortalShell active="home" email={portal.booking.customerEmailHint}>
       <PlanPortal token={token} initial={portal} />
     </PortalShell>
   );

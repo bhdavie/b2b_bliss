@@ -9,11 +9,12 @@ import { API_BASE_URL } from "@/lib/api";
 // sign-out server action clears the customer session cookie and bounces to
 // login. The Bliss wordmark is the only serif; everything else is Inter.
 
-type Section = "home" | "plans" | "history" | "settings";
+// "Plans" folded into "Home": /account now renders the plan (single) or the
+// plan list (several), so the two entries pointed at the same route.
+type Section = "home" | "history" | "settings";
 
 const TABS: { key: Section; href: string; label: string }[] = [
   { key: "home", href: "/account", label: "Home" },
-  { key: "plans", href: "/account/plans", label: "Plans" },
   { key: "history", href: "/account/history", label: "History" },
   { key: "settings", href: "/account/settings", label: "Settings" },
 ];

@@ -17,9 +17,16 @@ import { CancelPlanSection } from "./CancelPlanSection";
 export function PlanPortal({
   token,
   initial,
+  backHref = "/account",
 }: {
   token: string;
   initial: PublicPlanPortal;
+  /**
+   * Where "Back to your plans" points. Pass `null` to omit the link entirely,
+   * which /account does in the single-plan case: there the plan IS the plans
+   * view, so a back-link would point at the page you are already on.
+   */
+  backHref?: string | null;
 }) {
   const [portal, setPortal] = useState<PublicPlanPortal>(initial);
 
@@ -59,13 +66,17 @@ export function PlanPortal({
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          href="/account/plans"
-          className="text-sm font-medium text-brand-purple no-underline hover:underline"
+        {backHref ? (
+          <Link
+            href={backHref}
+            className="text-sm font-medium text-brand-purple no-underline hover:underline"
+          >
+            Back to your plans
+          </Link>
+        ) : null}
+        <h1
+          className={`${backHref ? "mt-4 " : ""}text-4xl font-bold tracking-tight text-brand-navy`}
         >
-          Back to your plans
-        </Link>
-        <h1 className="mt-4 text-4xl font-bold tracking-tight text-brand-navy">
           {portal.merchant.businessName}
         </h1>
         <p className="mt-1 text-sm text-ink-muted">
