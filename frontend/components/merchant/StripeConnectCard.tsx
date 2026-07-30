@@ -5,6 +5,8 @@ import {
   createStripeAccountLink,
   type StripeStatus,
 } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 
 type Variant = "card" | "inline";
 
@@ -30,11 +32,12 @@ export function StripeConnectCard({
     window.location.href = result.url;
   }
 
-  const wrapperClass =
-    variant === "card" ? "card p-5" : "card-subtle";
+  // `.card-subtle` carries its own p-4, so the subtle branch takes no padding
+  // tier. Same two class sets as the string this replaced.
+  const isCard = variant === "card";
 
   return (
-    <div className={wrapperClass}>
+    <Card variant={isCard ? "default" : "subtle"} padding={isCard ? "md" : "none"}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-xs text-ink-muted">Stripe Connect</div>
@@ -59,9 +62,9 @@ export function StripeConnectCard({
             You can create bookings and accept payment plans.
           </div>
         ) : (
-          <button
+          <Button
             type="button"
-            className="btn-primary"
+            variant="primary"
             disabled={busy || !status.configured}
             onClick={startStripe}
           >
@@ -72,7 +75,7 @@ export function StripeConnectCard({
                 : status.status === "restricted"
                   ? "Resolve issues"
                   : "Continue Stripe setup"}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -81,7 +84,7 @@ export function StripeConnectCard({
           {status.accountId}
         </div>
       ) : null}
-    </div>
+    </Card>
   );
 }
 

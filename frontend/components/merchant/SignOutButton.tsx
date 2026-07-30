@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { signOut } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
 
 export function SignOutButton() {
   const router = useRouter();
@@ -20,8 +21,8 @@ export function SignOutButton() {
   }
 
   return (
-    <button onClick={handleClick} disabled={busy} className="btn-ghost">
+    <Button onClick={handleClick} disabled={busy} variant="ghost">
       {busy ? "Signing out" : "Sign out"}
-    </button>
+    </Button>
   );
 }

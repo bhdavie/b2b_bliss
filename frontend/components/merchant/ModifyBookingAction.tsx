@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { modifyBooking, type ModificationResult } from "@/lib/api";
 import { formatDollars, formatScheduleDateShort } from "@/lib/publicApi";
+import { Button } from "@/components/ui/Button";
 
 // Merchant-only booking modification: change dates and/or total, see a preview
 // of the rebuilt schedule (paid/processing rows preserved), then confirm. The
@@ -90,13 +91,13 @@ export function ModifyBookingAction({
 
   if (!open) {
     return (
-      <button
+      <Button
         type="button"
         onClick={() => setOpen(true)}
-        className="btn-ghost"
+        variant="ghost"
       >
         Modify booking
-      </button>
+      </Button>
     );
   }
 
@@ -179,23 +180,25 @@ export function ModifyBookingAction({
       ) : null}
 
       <div className="mt-4 flex items-center gap-3">
-        <button
+        <Button
           type="button"
           onClick={runPreview}
           disabled={busy !== null}
-          className="btn-ghost disabled:opacity-60"
+          variant="ghost"
+          className="disabled:opacity-60"
         >
           {busy === "preview" ? "Previewing" : "Preview"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={apply}
           disabled={busy !== null || preview === null}
-          className="btn-primary-merchant disabled:opacity-50"
+          variant="merchant"
+          className="disabled:opacity-50"
           title={preview === null ? "Preview first" : undefined}
         >
           {busy === "apply" ? "Applying" : "Confirm changes"}
-        </button>
+        </Button>
         <button
           type="button"
           onClick={() => {

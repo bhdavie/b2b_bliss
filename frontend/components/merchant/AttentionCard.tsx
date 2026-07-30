@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { PaymentPlanStatus, PlanDetail } from "@/lib/api";
+import { Card } from "@/components/ui/Card";
 
 const STATUS_LABEL: Record<PaymentPlanStatus, string> = {
   pending_card: "Awaiting card",
@@ -28,17 +29,17 @@ const STATUS_PILL: Record<PaymentPlanStatus, string> = {
 export function AttentionCard({ plans }: { plans: PlanDetail[] }) {
   if (plans.length === 0) {
     return (
-      <div className="card p-5">
+      <Card padding="md">
         <div className="text-sm font-medium text-brand-navy">Plans needing attention</div>
         <p className="mt-1 text-xs text-brand-navy">
           Nothing here. Every active plan is in good standing.
         </p>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="card overflow-hidden">
+    <Card className="overflow-hidden">
       <div className="border-b border-brand-neutral bg-brand-cream/60 px-4 py-2.5">
         <div className="flex items-baseline justify-between">
           <div className="text-sm font-medium text-brand-navy">Plans needing attention</div>
@@ -84,7 +85,7 @@ export function AttentionCard({ plans }: { plans: PlanDetail[] }) {
           </li>
         ))}
       </ul>
-    </div>
+    </Card>
   );
 }
 

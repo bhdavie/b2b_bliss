@@ -3,6 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { updateMerchant, type UpdateMerchantPayload } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
 
 type FormState = {
   businessName: string;
@@ -88,15 +91,15 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
   }
 
   return (
-    <div className="mt-10 card p-6">
+    <Card padding="lg" className="mt-10">
       <Stepper current={step} />
 
       {step === 0 && (
         <section className="mt-6 space-y-4">
           <label className="block">
             <span className="label text-brand-navy">Business name</span>
-            <input
-              className="input mt-1.5"
+            <Input
+              className="mt-1.5"
               value={form.businessName}
               onChange={(e) => update("businessName", e.target.value)}
               placeholder="Marbrook House"
@@ -139,8 +142,8 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
         <section className="mt-6 space-y-4">
           <label className="block">
             <span className="label text-brand-navy">Phone (optional)</span>
-            <input
-              className="input mt-1.5"
+            <Input
+              className="mt-1.5"
               value={form.phone}
               onChange={(e) => update("phone", e.target.value)}
               placeholder="(555) 123-4567"
@@ -158,8 +161,8 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
         <section className="mt-6 space-y-4">
           <label className="block">
             <span className="label text-brand-navy">Street address</span>
-            <input
-              className="input mt-1.5"
+            <Input
+              className="mt-1.5"
               value={form.addressLine1}
               onChange={(e) => update("addressLine1", e.target.value)}
               autoComplete="address-line1"
@@ -167,8 +170,8 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
           </label>
           <label className="block">
             <span className="label text-brand-navy">Suite or unit (optional)</span>
-            <input
-              className="input mt-1.5"
+            <Input
+              className="mt-1.5"
               value={form.addressLine2}
               onChange={(e) => update("addressLine2", e.target.value)}
               autoComplete="address-line2"
@@ -177,8 +180,8 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
           <div className="grid grid-cols-3 gap-3">
             <label className="block col-span-1">
               <span className="label text-brand-navy">City</span>
-              <input
-                className="input mt-1.5"
+              <Input
+                className="mt-1.5"
                 value={form.addressCity}
                 onChange={(e) => update("addressCity", e.target.value)}
                 autoComplete="address-level2"
@@ -186,8 +189,8 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
             </label>
             <label className="block col-span-1">
               <span className="label text-brand-navy">State</span>
-              <input
-                className="input mt-1.5"
+              <Input
+                className="mt-1.5"
                 value={form.addressState}
                 onChange={(e) => update("addressState", e.target.value)}
                 autoComplete="address-level1"
@@ -197,8 +200,8 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
             </label>
             <label className="block col-span-1">
               <span className="label text-brand-navy">Zip</span>
-              <input
-                className="input mt-1.5"
+              <Input
+                className="mt-1.5"
                 value={form.addressZip}
                 onChange={(e) => update("addressZip", e.target.value)}
                 autoComplete="postal-code"
@@ -219,35 +222,35 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
       ) : null}
 
       <div className="mt-6 flex justify-between">
-        <button
+        <Button
           type="button"
-          className="btn-ghost"
+          variant="ghost"
           onClick={() => setStep((s) => Math.max(0, s - 1))}
           disabled={step === 0 || submitting}
         >
           Back
-        </button>
+        </Button>
         {step < STEPS.length - 1 ? (
-          <button
+          <Button
             type="button"
-            className="btn-primary-merchant"
+            variant="merchant"
             disabled={!canAdvance()}
             onClick={() => setStep((s) => s + 1)}
           >
             Continue
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             type="button"
-            className="btn-primary-merchant"
+            variant="merchant"
             disabled={!canAdvance() || submitting}
             onClick={handleSubmit}
           >
             {submitting ? "Saving" : "Finish"}
-          </button>
+          </Button>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
 

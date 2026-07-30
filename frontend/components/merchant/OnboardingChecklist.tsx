@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { activateOnboarding, type OnboardingStatus, type PmsType } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
 
 // Setup checklist shown on the dashboard until the property reaches `active`.
 // Each step links to its page; the final step activates the property.
@@ -101,12 +101,13 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
                 <div className="mt-0.5 truncate text-xs text-brand-navy/60">{it.hint}</div>
               </div>
               {!isDone && it.href ? (
-                <Link
+                <Button
                   href={it.href}
-                  className={isCurrent ? "btn-primary-merchant shrink-0" : "btn-ghost shrink-0"}
+                  variant={isCurrent ? "merchant" : "ghost"}
+                  className="shrink-0"
                 >
                   {isCurrent ? "Continue" : "Open"}
-                </Link>
+                </Button>
               ) : null}
             </li>
           );
@@ -118,14 +119,15 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
       ) : null}
 
       <div className="mt-5 flex items-center gap-3">
-        <button
+        <Button
           type="button"
           onClick={handleActivate}
           disabled={!canActivate || activating}
-          className="btn-primary-merchant disabled:opacity-50"
+          variant="merchant"
+          className="disabled:opacity-50"
         >
           {activating ? "Going live" : "Go live"}
-        </button>
+        </Button>
         {!canActivate ? (
           <span className="text-xs text-brand-navy/55">Finish the steps above to go live.</span>
         ) : null}

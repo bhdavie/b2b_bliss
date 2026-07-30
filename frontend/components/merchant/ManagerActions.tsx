@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { cancelPlan, refundPlan } from "@/lib/api";
 import { formatDollars } from "@/lib/publicApi";
+import { Button } from "@/components/ui/Button";
 
 type Kind = "cancel" | "refund";
 
@@ -139,15 +140,15 @@ function ConfirmDialog({
           >
             Keep it
           </button>
-          <button
+          <Button
             type="button"
             onClick={onConfirm}
             disabled={busy}
             autoFocus
-            className="btn-primary-merchant"
+            variant="merchant"
           >
             {busy ? "Working…" : copy.confirm}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

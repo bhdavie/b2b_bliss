@@ -11,6 +11,8 @@ import {
   type PaymentPlanStatus,
   type PlanDetail,
 } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 
 const OVERRIDE_OPTIONS: PaymentPlanStatus[] = [
   "active",
@@ -41,33 +43,36 @@ export function PlanDetailActions({ plan }: { plan: PlanDetail }) {
   }
 
   return (
-    <div className="card p-5 space-y-4">
+    <Card padding="md" className="space-y-4">
       <div className="text-sm font-medium">Take action</div>
       <div className="flex flex-wrap gap-2">
-        <button
+        <Button
           type="button"
-          className="btn-primary disabled:opacity-60"
+          variant="primary"
+          className="disabled:opacity-60"
           disabled={busy !== null || plan.failedInstallment == null}
           onClick={() => runAction("retry", () => retryPlan(plan.id))}
         >
           {busy === "retry" ? "Retrying" : "Retry now"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="btn-ghost disabled:opacity-60"
+          variant="ghost"
+          className="disabled:opacity-60"
           disabled={busy !== null || plan.status === "active"}
           onClick={() => runAction("resolve", () => resolvePlan(plan.id))}
         >
           {busy === "resolve" ? "Resolving" : "Mark resolved"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="btn-ghost disabled:opacity-60"
+          variant="ghost"
+          className="disabled:opacity-60"
           disabled={busy !== null || plan.status === "canceled"}
           onClick={() => runAction("cancel", () => cancelPlan(plan.id))}
         >
           {busy === "cancel" ? "Cancelling" : "Cancel plan"}
-        </button>
+        </Button>
       </div>
 
       <details className="border-t border-brand-neutral pt-3">
@@ -76,17 +81,18 @@ export function PlanDetailActions({ plan }: { plan: PlanDetail }) {
         </summary>
         <div className="mt-3 flex flex-wrap gap-2">
           {OVERRIDE_OPTIONS.map((status) => (
-            <button
+            <Button
               key={status}
               type="button"
-              className={`btn-ghost text-[11px] ${
+              variant="ghost"
+              className={`text-[11px] ${
                 plan.status === status ? "border-brand-purple text-brand-purple" : ""
               }`}
               disabled={busy !== null || plan.status === status}
               onClick={() => runAction("override", () => overridePlanState(plan.id, status))}
             >
               {status}
-            </button>
+            </Button>
           ))}
         </div>
       </details>
@@ -96,22 +102,24 @@ export function PlanDetailActions({ plan }: { plan: PlanDetail }) {
           Dev-mode failure simulation
         </summary>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button
+          <Button
             type="button"
-            className="btn-ghost text-[11px]"
+            variant="ghost"
+            className="text-[11px]"
             disabled={busy !== null}
             onClick={() => runAction("dev-fail", () => devMarkPlanFailed(plan.id, "fail"))}
           >
             {busy === "dev-fail" ? "Failing" : "Mark next installment failed"}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn-ghost text-[11px]"
+            variant="ghost"
+            className="text-[11px]"
             disabled={busy !== null}
             onClick={() => runAction("dev-exhaust", () => devMarkPlanFailed(plan.id, "exhaust"))}
           >
             {busy === "dev-exhaust" ? "Exhausting" : "Exhaust retries → after-action"}
-          </button>
+          </Button>
         </div>
       </details>
 
@@ -120,6 +128,6 @@ export function PlanDetailActions({ plan }: { plan: PlanDetail }) {
           {error}
         </div>
       ) : null}
-    </div>
+    </Card>
   );
 }

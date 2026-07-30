@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { cloudbedsOAuthStartUrl } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 
 // Cloudbeds connects via OAuth, so "connect" is a full-page redirect to the
 // backend start endpoint (which 302s to the Cloudbeds authorize page), not a
@@ -30,7 +31,7 @@ export function ConnectCloudbedsStep({
 
   if (alreadyConnected) {
     return (
-      <div className="card p-8 text-center">
+      <Card padding="xl" className="text-center">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
           ✓
         </div>
@@ -46,29 +47,30 @@ export function ConnectCloudbedsStep({
           )}
           {alreadyConnected.currency ? ` · charging in ${alreadyConnected.currency}` : ""}.
         </p>
-        <Link href="/onboarding/plan-rules" className="btn-primary-merchant mt-6 inline-block">
+        <Button href="/onboarding/plan-rules" variant="merchant" className="mt-6 inline-block">
           Continue
-        </Link>
-      </div>
+        </Button>
+      </Card>
     );
   }
 
   return (
-    <div className="card p-8">
+    <Card padding="xl">
       <h2 className="text-lg font-medium text-brand-navy">Connect Cloudbeds</h2>
       <p className="mt-1 text-sm text-ink-muted">
         Authorize Bliss in your Cloudbeds account. You will be sent to Cloudbeds to sign in
         and approve access, then returned here.
       </p>
 
-      <button
+      <Button
         type="button"
         onClick={connect}
         disabled={redirecting}
-        className="btn-primary-merchant mt-6 w-full disabled:opacity-60"
+        variant="merchant"
+        className="mt-6 w-full disabled:opacity-60"
       >
         {redirecting ? "Redirecting to Cloudbeds" : "Connect Cloudbeds"}
-      </button>
-    </div>
+      </Button>
+    </Card>
   );
 }

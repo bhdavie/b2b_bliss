@@ -1,8 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { connectMews, type MewsConnectResult } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
 
 // Property enters its Mews Connector tokens; we validate them against Mews
 // (Get configuration) before storing. On success we show the enterprise we
@@ -49,7 +52,7 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
 
   if (result) {
     return (
-      <div className="card p-8 text-center">
+      <Card padding="xl" className="text-center">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
           ✓
         </div>
@@ -58,10 +61,10 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
           Linked to <span className="font-medium text-ink">{result.enterpriseName}</span>
           {result.currency ? ` · charging in ${result.currency}` : ""}.
         </p>
-        <Link href="/onboarding/plan-rules" className="btn-primary-merchant mt-6 inline-block">
+        <Button href="/onboarding/plan-rules" variant="merchant" className="mt-6 inline-block">
           Continue
-        </Link>
-      </div>
+        </Button>
+      </Card>
     );
   }
 
@@ -74,12 +77,11 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
 
       <div className="mt-6 space-y-4">
         <div>
-          <label className="label" htmlFor="platformUrl">
+          <Label htmlFor="platformUrl">
             Platform URL
-          </label>
-          <input
+          </Label>
+          <Input
             id="platformUrl"
-            className="input"
             type="text"
             placeholder={DEMO_PLATFORM_URL}
             value={platformUrl}
@@ -91,12 +93,11 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
           </p>
         </div>
         <div>
-          <label className="label" htmlFor="clientToken">
+          <Label htmlFor="clientToken">
             Client token
-          </label>
-          <input
+          </Label>
+          <Input
             id="clientToken"
-            className="input"
             type="text"
             value={clientToken}
             onChange={(e) => setClientToken(e.target.value)}
@@ -105,12 +106,11 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
           />
         </div>
         <div>
-          <label className="label" htmlFor="accessToken">
+          <Label htmlFor="accessToken">
             Access token
-          </label>
-          <input
+          </Label>
+          <Input
             id="accessToken"
-            className="input"
             type="text"
             value={accessToken}
             onChange={(e) => setAccessToken(e.target.value)}
@@ -124,13 +124,14 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
         <p className="mt-5 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       ) : null}
 
-      <button
+      <Button
         type="submit"
         disabled={submitting || !clientToken.trim() || !accessToken.trim()}
-        className="btn-primary-merchant mt-6 w-full disabled:opacity-60"
+        variant="merchant"
+        className="mt-6 w-full disabled:opacity-60"
       >
         {submitting ? "Validating with Mews" : "Validate and connect"}
-      </button>
+      </Button>
 
       <button
         type="button"

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   completeStripeConnectStandardDemo,
@@ -8,6 +7,8 @@ import {
   startStripeConnect,
   type StripeConnectStatus,
 } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 
 // "Connect with Stripe" step of the onboarding wizard. Sends the merchant to
 // Stripe's hosted Standard onboarding and asks to be returned here, so the
@@ -64,7 +65,7 @@ export function ConnectStripeStep() {
 
   if (phase === "done") {
     return (
-      <div className="card p-8 text-center">
+      <Card padding="xl" className="text-center">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
           ✓
         </div>
@@ -73,13 +74,14 @@ export function ConnectStripeStep() {
           Payouts are set up. You can take payment plans and get paid out on
           arrival.
         </p>
-        <Link
+        <Button
           href="/onboarding/plan-rules"
-          className="btn-primary mt-6 inline-block"
+          variant="primary"
+          className="mt-6 inline-block"
         >
           Continue
-        </Link>
-      </div>
+        </Button>
+      </Card>
     );
   }
 
@@ -88,7 +90,7 @@ export function ConnectStripeStep() {
     connect?.status === "in_progress" || connect?.status === "restricted";
 
   return (
-    <div className="card overflow-hidden">
+    <Card className="overflow-hidden">
       {/* Stripe-styled panel */}
       <div className="bg-[#635BFF] px-8 py-7 text-white">
         <div className="text-sm font-medium opacity-90">Stripe</div>
@@ -142,6 +144,6 @@ export function ConnectStripeStep() {
           </p>
         ) : null}
       </div>
-    </div>
+    </Card>
   );
 }
