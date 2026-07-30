@@ -1,3 +1,4 @@
+import { Card } from "@/components/ui/Card";
 import { fetchMerchantSession } from "@/lib/auth";
 
 export default async function PayoutsPage() {
@@ -19,14 +20,14 @@ export default async function PayoutsPage() {
         </p>
       </header>
 
-      <div className="mt-8 card p-10 text-center">
+      <Card padding="2xl" className="mt-8 text-center">
         <div className="text-sm font-medium">No payouts yet</div>
         <p className="mt-1 text-ink-muted text-sm">
           {isMews
             ? "Mews-rail plans settle straight to your property, so there is nothing to route here."
             : "You will see plans pay out here once a plan completes."}
         </p>
-      </div>
+      </Card>
     </>
   );
 }

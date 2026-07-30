@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PlanDetailActions } from "@/components/merchant/PlanDetailActions";
+import { Card } from "@/components/ui/Card";
 import { fetchPlanServer } from "@/lib/auth";
 import type { PaymentPlanStatus } from "@/lib/api";
 
@@ -100,7 +101,7 @@ export default async function PlanDetailPage({
       ) : null}
 
       <section className="mt-8 grid gap-4 sm:grid-cols-2">
-        <div className="card p-4">
+        <Card padding="sm">
           <div className="text-xs text-ink-muted">Plan</div>
           <div className="mt-1 text-sm">
             {plan.numPayments}{" "}
@@ -112,8 +113,8 @@ export default async function PlanDetailPage({
               + {formatCents(plan.depositAmountCents)} deposit
             </div>
           ) : null}
-        </div>
-        <div className="card p-4">
+        </Card>
+        <Card padding="sm">
           <div className="text-xs text-ink-muted">Total · Paid · Balance</div>
           <div className="mt-1 text-sm tabular-nums">
             {formatCents(plan.totalAmountCents)} ·{" "}
@@ -122,7 +123,7 @@ export default async function PlanDetailPage({
               {formatCents(balance)}
             </span>
           </div>
-        </div>
+        </Card>
       </section>
 
       <section className="mt-6">
