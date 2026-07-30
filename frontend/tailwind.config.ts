@@ -21,6 +21,11 @@ const config: Config = {
           // Interactive text on light backgrounds: links, accents.
           purple: "#6A629E",
           "purple-dark": "#564E89",
+          // High-emphasis accent. A distinct hue from `purple` (265deg vs
+          // 248deg) at roughly three times the saturation, not a shade of it —
+          // do not use it as a hover state for `purple`. Clears AAA on white
+          // (9.3:1), so unlike `lavender` it is safe as text.
+          violet: "#5A1BB5",
           // Fill-only highlight: active-state fills, badges, selected pills,
           // progress fills. Never use as text on a light background.
           lavender: "#C9AFFA",
