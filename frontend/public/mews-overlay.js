@@ -1519,10 +1519,10 @@
       baseCss(theme) +
       ".scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.44);" +
       "display:flex;align-items:center;justify-content:center;padding:16px}" +
-      ".card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:" + b.surface +
+      ".bliss-card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:" + b.surface +
       ";color:" + b.navy + ";border:1px solid " + b.divider + ";border-radius:" + b.radius +
       ";box-shadow:0 18px 56px rgba(0,0,0,.32)}" +
-      ".card:focus{outline:none}" +
+      ".bliss-card:focus{outline:none}" +
       ".head{display:flex;align-items:flex-start;gap:12px;padding:22px 24px;border-bottom:1px solid " + b.divider + "}" +
       ".head h2{font-size:17px;font-weight:600;line-height:1.3}" +
       ".head p{font-size:13px;color:" + b.dustyBlue + ";margin-top:4px;line-height:1.4}" +
@@ -1571,7 +1571,7 @@
       ".done .s{font-size:11px;color:" + b.dustyBlue + ";margin-top:1px}" +
       // Below the phone breakpoint the modal becomes a bottom sheet.
       "@media (max-width:420px){.scrim{align-items:flex-end;padding:0}" +
-      ".card{width:100%;max-width:100%;max-height:88vh;border-radius:" + b.radius + " " + b.radius + " 0 0}}"
+      ".bliss-card{width:100%;max-width:100%;max-height:88vh;border-radius:" + b.radius + " " + b.radius + " 0 0}}"
     );
   }
 
@@ -2165,7 +2165,7 @@
   }
 
   function mountModalCard(h, head, body) {
-    var card = h("div", { class: "card", role: "dialog", "aria-modal": "true", tabindex: "-1" }, [head, body]);
+    var card = h("div", { class: "bliss-card", role: "dialog", "aria-modal": "true", tabindex: "-1" }, [head, body]);
     card.addEventListener("click", function (ev) {
       ev.stopPropagation();
     });

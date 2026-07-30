@@ -2583,8 +2583,8 @@ const BLISS_CSS = `
 .bliss-ui .trig[disabled]{cursor:default}
 
 .bliss-ui .scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.44);display:flex;align-items:center;justify-content:center;padding:16px}
-.bliss-ui .card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:#ffffff;color:#51576A;border:1px solid #D9D9D9;border-radius:4px;box-shadow:0 18px 56px rgba(0,0,0,.32)}
-.bliss-ui .card:focus{outline:none}
+.bliss-ui .bliss-card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:#ffffff;color:#51576A;border:1px solid #D9D9D9;border-radius:4px;box-shadow:0 18px 56px rgba(0,0,0,.32)}
+.bliss-ui .bliss-card:focus{outline:none}
 .bliss-ui .head{display:flex;align-items:flex-start;gap:12px;padding:22px 24px;border-bottom:1px solid #D9D9D9}
 .bliss-ui .head h2{font-size:17px;font-weight:600;line-height:1.3}
 .bliss-ui .head p{font-size:13px;color:#97ACC8;margin-top:4px;line-height:1.4}
@@ -2614,7 +2614,7 @@ const BLISS_CSS = `
 
 @media (max-width:420px){
 .bliss-ui .scrim{align-items:flex-end;padding:0}
-.bliss-ui .card{width:100%;max-width:100%;max-height:88vh;border-radius:4px 4px 0 0}
+.bliss-ui .bliss-card{width:100%;max-width:100%;max-height:88vh;border-radius:4px 4px 0 0}
 }
 `;
 
@@ -2836,7 +2836,7 @@ function BlissModal({
     >
       <BlissStyles />
       <div className="scrim" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="card" onClick={(e) => e.stopPropagation()}>
+      <div className="bliss-card" onClick={(e) => e.stopPropagation()}>
         <div className="head">
           <div>
             <h2>Spread this stay over time</h2>
