@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { BookingsTable } from "@/components/merchant/BookingsTable";
+import { Button } from "@/components/ui/Button";
 import { fetchBookingsServer, fetchStripeStatusServer } from "@/lib/auth";
 
 export default async function BookingsPage() {
@@ -21,14 +21,15 @@ export default async function BookingsPage() {
             Every plan you&apos;ve created and where it stands today.
           </p>
         </div>
-        <Link
+        <Button
           href="/bookings/new"
+          variant="merchant"
           aria-disabled={!canCreate}
-          className={`btn-primary-merchant ${canCreate ? "" : "pointer-events-none opacity-50"}`}
+          className={canCreate ? "" : "pointer-events-none opacity-50"}
           title={canCreate ? undefined : "Finish setup before creating bookings"}
         >
           New booking
-        </Link>
+        </Button>
       </header>
 
       {bookings.length === 0 ? (
@@ -38,9 +39,9 @@ export default async function BookingsPage() {
             Create your first booking to generate a shareable payment plan link.
             It&apos;ll show up here with its live status.
           </p>
-          <Link href="/bookings/new" className="btn-primary-merchant mt-5 inline-flex">
+          <Button href="/bookings/new" variant="merchant" className="mt-5 inline-flex">
             New booking
-          </Link>
+          </Button>
         </div>
       ) : (
         <BookingsTable bookings={bookings} />

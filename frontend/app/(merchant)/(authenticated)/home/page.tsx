@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { OverviewConnections } from "@/components/merchant/OverviewConnections";
 import { OnboardingChecklist } from "@/components/merchant/OnboardingChecklist";
+import { Button } from "@/components/ui/Button";
 import {
   fetchAttentionPlansServer,
   fetchBookingsServer,
@@ -48,9 +49,9 @@ export default async function HomePage() {
               <p className="mt-1 text-sm text-brand-navy/60">
                 Create a booking to share a payment plan link with a guest.
               </p>
-              <Link href="/bookings" className="btn-primary-merchant mt-4">
+              <Button href="/bookings" variant="merchant" className="mt-4">
                 New booking
-              </Link>
+              </Button>
             </div>
           ) : (
             <>
