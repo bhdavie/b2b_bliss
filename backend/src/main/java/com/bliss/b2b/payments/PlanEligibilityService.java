@@ -4,7 +4,9 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Determines which plan frequencies are available for a booking by combining
@@ -52,6 +54,12 @@ public class PlanEligibilityService {
         long days = ChronoUnit.DAYS.between(today, appointmentDate);
         long weeks = days / 7;
         long discountedTotal = rules.applyDiscountCents(totalAmountCents);
+
+        // Blackout dates first, ahead of the lead-time checks: a stay the
+        // merchant has closed to plans should not report a lead-time reason.
+        if (stayHitsBlackout(appointmentDate, departureDate, rules.blackoutDates())) {
+            return ineligible("stay_blacked_out", days, 0L, totalAmountCents, discountedTotal);
+        }
 
         if (weeks < rules.minLeadTimeWeeks()) {
             return ineligible("too_close", days, 0L, totalAmountCents, discountedTotal);
@@ -102,6 +110,33 @@ public class PlanEligibilityService {
         }
         return new EligibilityResult(true, "ok", days, deposit,
                 totalAmountCents, discountedTotal, List.copyOf(options));
+    }
+
+    /**
+     * True when any night the stay occupies falls on a blackout date.
+     *
+     * <p>Nights occupied run arrival through departure minus one day: the
+     * departure day is not a night, the room is free again that day. A stay
+     * arriving Dec 22 and departing Dec 26 occupies Dec 22, 23, 24 and 25.
+     *
+     * <p>A null departure checks the arrival alone rather than guessing a length
+     * of stay. A null or empty blackout list is a no-op.
+     */
+    private static boolean stayHitsBlackout(
+            LocalDate arrival,
+            LocalDate departure,
+            List<LocalDate> blackoutDates
+    ) {
+        if (blackoutDates == null || blackoutDates.isEmpty()) return false;
+        if (arrival == null) return false;
+        Set<LocalDate> blacked = new HashSet<>(blackoutDates);
+        if (departure == null || !departure.isAfter(arrival)) {
+            return blacked.contains(arrival);
+        }
+        for (LocalDate night = arrival; night.isBefore(departure); night = night.plusDays(1)) {
+            if (blacked.contains(night)) return true;
+        }
+        return false;
     }
 
     /**

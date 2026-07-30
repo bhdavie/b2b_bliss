@@ -348,8 +348,12 @@ function spreadOption(p: TeaserPreview): TeaserOption | null {
   );
 }
 
-// Verbatim from mews-overlay.js:1265-1273.
-const REASON_COPY: Record<PreviewReason, string> = {
+// Verbatim from mews-overlay.js:1265-1273. Partial because the overlay has no
+// string for stay_blacked_out and inventing one would explain the merchant's
+// blackout to the guest. The modal already falls back to invalid_input, and the
+// branch is unreachable from this funnel anyway: BlissTeaser renders nothing at
+// all when the preview is ineligible, for any reason.
+const REASON_COPY: Partial<Record<PreviewReason, string>> = {
   ok: "",
   too_close: "This stay is too soon to spread into a plan.",
   too_far: "This stay is too far out for a plan right now.",

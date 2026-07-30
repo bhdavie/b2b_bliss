@@ -24,6 +24,7 @@ export type PreviewReason =
   | "amount_too_high"
   | "deposit_too_high"
   | "no_plan_fits"
+  | "stay_blacked_out"
   | "invalid_input";
 
 export type PreviewResult = {
@@ -62,10 +63,6 @@ export function previewEligibility(
   totalAmountCents: number,
   rules: PlanRules = DEFAULT_PLAN_RULES,
 ): PreviewResult {
-  // Stage 1 threads the departure through without consulting it, so every
-  // existing reason code and outcome is unchanged. Remove this line when a
-  // later stage starts gating on the stay range.
-  void departureDate;
   if (!appointmentDate || Number.isNaN(appointmentDate.getTime())) {
     return {
       eligible: false,
@@ -80,6 +77,13 @@ export function previewEligibility(
   const days = daysBetween(today, appointmentDate);
   const weeks = Math.floor(days / 7);
   const discountedTotal = applyDiscountCents(totalAmountCents, rules);
+
+  // Blackout dates before the lead-time checks, mirroring
+  // PlanEligibilityService.evaluate: a stay the merchant has closed to plans
+  // should not report a lead-time reason.
+  if (stayHitsBlackout(appointmentDate, departureDate, rules.blackoutDates ?? [])) {
+    return ineligible("stay_blacked_out", days, 0, totalAmountCents, discountedTotal);
+  }
 
   if (weeks < rules.minLeadTimeWeeks) {
     return ineligible("too_close", days, 0, totalAmountCents, discountedTotal);
@@ -289,6 +293,57 @@ function monthlyDueDates(today: Date, cutoff: Date, hasDeposit: boolean): string
 // PlanEligibilityService.monthlyAnchorDay.
 function monthlyAnchorDay(bookingDayOfMonth: number): number {
   return bookingDayOfMonth >= 11 && bookingDayOfMonth <= 25 ? 16 : 2;
+}
+
+/**
+ * True when any night the stay occupies falls on a blackout date. Mirrors
+ * PlanEligibilityService.stayHitsBlackout.
+ *
+ * Nights occupied run arrival through departure minus one day: the departure day
+ * is not a night, the room is free again that day. A stay arriving Dec 22 and
+ * departing Dec 26 occupies Dec 22, 23, 24 and 25.
+ *
+ * A null departure checks the arrival alone rather than guessing a length of
+ * stay. An empty blackout list is a no-op.
+ *
+ * Iteration steps through UTC midnights, the same normalisation daysBetween
+ * uses, so a DST boundary inside the stay cannot skip or repeat a night.
+ */
+function stayHitsBlackout(
+  arrival: Date,
+  departure: Date | null,
+  blackoutDates: string[],
+): boolean {
+  if (blackoutDates.length === 0) return false;
+  const blacked = new Set(blackoutDates);
+  const startUtc = Date.UTC(
+    arrival.getFullYear(),
+    arrival.getMonth(),
+    arrival.getDate(),
+  );
+  if (!departure || Number.isNaN(departure.getTime())) {
+    return blacked.has(utcToIso(startUtc));
+  }
+  const endUtc = Date.UTC(
+    departure.getFullYear(),
+    departure.getMonth(),
+    departure.getDate(),
+  );
+  if (endUtc <= startUtc) return blacked.has(utcToIso(startUtc));
+  const DAY_MS = 1000 * 60 * 60 * 24;
+  for (let night = startUtc; night < endUtc; night += DAY_MS) {
+    if (blacked.has(utcToIso(night))) return true;
+  }
+  return false;
+}
+
+/** yyyy-MM-dd from a UTC-midnight timestamp, read back in UTC. */
+function utcToIso(utcMs: number): string {
+  const d = new Date(utcMs);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function daysBetween(a: Date, b: Date): number {

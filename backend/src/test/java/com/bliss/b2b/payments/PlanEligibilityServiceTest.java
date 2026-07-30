@@ -3,6 +3,7 @@ package com.bliss.b2b.payments;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -643,6 +644,87 @@ class PlanEligibilityServiceTest {
                 AfterRetriesAction.TREAT_AS_CANCELLATION,
                 0,
                 List.of());
+    }
+
+    // --- Blackout dates (stage 3) ---------------------------------------
+
+    private static MerchantPlanRules withBlackout(List<LocalDate> dates) {
+        return new MerchantPlanRules(
+                6, null,
+                AllowedFrequencies.BOTH,
+                null, null, null,
+                false, null, null, null,
+                RefundPolicy.FULL, null,
+                false, null, null, null,
+                PaymentDuePolicy.AT_APPOINTMENT, null,
+                3, 3,
+                false, null, null, null,
+                AfterRetriesAction.TREAT_AS_CANCELLATION,
+                0,
+                dates);
+    }
+
+    // Dec 23-31 blacked out. Arrive Dec 22, depart Dec 26 -> nights are
+    // 22, 23, 24, 25; the 23rd is blacked out, so the stay is blocked.
+    @Test
+    void blackout_stayOverlappingBlackedOutNight_isBlocked() {
+        List<LocalDate> blackout = new ArrayList<>();
+        for (int d = 23; d <= 31; d++) blackout.add(LocalDate.of(2026, 12, d));
+        EligibilityResult result = service.evaluate(
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 12, 22),
+                LocalDate.of(2026, 12, 26),
+                PRICE_CENTS,
+                withBlackout(blackout));
+        assertThat(result.eligible()).isFalse();
+        assertThat(result.reason()).isEqualTo("stay_blacked_out");
+    }
+
+    // Departure day is not a night. Arrive Dec 21, depart Dec 23 -> nights are
+    // 21 and 22, neither blacked out, so the stay is allowed even though the
+    // departure day itself is blacked out.
+    @Test
+    void blackout_departureOnBlackedOutDay_isNotBlocked() {
+        EligibilityResult result = service.evaluate(
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 12, 21),
+                LocalDate.of(2026, 12, 23),
+                PRICE_CENTS,
+                withBlackout(List.of(LocalDate.of(2026, 12, 23))));
+        assertThat(result.eligible()).isTrue();
+    }
+
+    @Test
+    void blackout_nullDeparture_checksArrivalOnly() {
+        MerchantPlanRules rules = withBlackout(List.of(LocalDate.of(2026, 12, 22)));
+        EligibilityResult blocked = service.evaluate(
+                LocalDate.of(2026, 6, 1), LocalDate.of(2026, 12, 22), null, PRICE_CENTS, rules);
+        assertThat(blocked.eligible()).isFalse();
+        assertThat(blocked.reason()).isEqualTo("stay_blacked_out");
+
+        // The night after is blacked out but the arrival is not, and with no
+        // departure there is no length of stay to infer.
+        EligibilityResult allowed = service.evaluate(
+                LocalDate.of(2026, 6, 1), LocalDate.of(2026, 12, 21), null, PRICE_CENTS, rules);
+        assertThat(allowed.eligible()).isTrue();
+    }
+
+    @Test
+    void blackout_nullOrEmptyList_changesNothing() {
+        EligibilityResult empty = service.evaluate(
+                LocalDate.of(2026, 6, 1), LocalDate.of(2026, 12, 22),
+                LocalDate.of(2026, 12, 26), PRICE_CENTS, withBlackout(List.of()));
+        EligibilityResult nul = service.evaluate(
+                LocalDate.of(2026, 6, 1), LocalDate.of(2026, 12, 22),
+                LocalDate.of(2026, 12, 26), PRICE_CENTS, withBlackout(null));
+        EligibilityResult baseline = service.evaluate(
+                LocalDate.of(2026, 6, 1), LocalDate.of(2026, 12, 22),
+                LocalDate.of(2026, 12, 26), PRICE_CENTS, MerchantPlanRules.DEFAULTS);
+        assertThat(empty.eligible()).isTrue();
+        assertThat(nul.eligible()).isTrue();
+        assertThat(empty.reason()).isEqualTo(baseline.reason());
+        assertThat(nul.reason()).isEqualTo(baseline.reason());
+        assertThat(empty.options()).hasSameSizeAs(baseline.options());
     }
 
     private static PlanOption byFrequency(List<PlanOption> options, PlanFrequency frequency) {
