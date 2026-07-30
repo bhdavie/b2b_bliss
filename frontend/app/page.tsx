@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { BlissWordmark } from "@/components/BlissWordmark";
+import { Button } from "@/components/ui/Button";
 
 export default function HomePage() {
   return (
@@ -9,12 +9,12 @@ export default function HomePage() {
         Save-first payment plans for the booking economy.
       </p>
       <div className="mt-6 flex gap-3">
-        <Link href="/login" className="btn-primary">
+        <Button href="/login" variant="primary">
           Merchant sign in
-        </Link>
-        <Link href="/signup" className="btn-ghost">
+        </Button>
+        <Button href="/signup" variant="ghost">
           Create account
-        </Link>
+        </Button>
       </div>
     </main>
   );

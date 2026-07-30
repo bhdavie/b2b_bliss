@@ -1,4 +1,5 @@
 import { BlissWordmark } from "@/components/BlissWordmark";
+import { Card } from "@/components/ui/Card";
 
 type SearchParams = { email?: string };
 
@@ -17,14 +18,14 @@ export default async function CheckEmailPage(props: {
           <span className="text-ink font-medium">{email ?? "your inbox"}</span>.
           It expires in 15 minutes.
         </p>
-        <div className="mt-6 card-subtle text-left">
+        <Card variant="subtle" className="mt-6 text-left">
           <div className="text-xs text-ink-muted">Local dev tip</div>
           <p className="mt-1 text-xs text-ink-muted">
             Magic links are written to the backend log. Look for a line tagged{" "}
             <span className="font-mono">[email→...]</span> in your{" "}
             <span className="font-mono">mvn exec:java</span> output.
           </p>
-        </div>
+        </Card>
       </div>
     </main>
   );

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { requestMagicLink } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -38,13 +40,12 @@ export default function SignupPage() {
 
         <label className="flex flex-col gap-1.5">
           <span className="label">Email</span>
-          <input
+          <Input
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            className="input"
             autoComplete="email"
           />
         </label>
@@ -55,9 +56,9 @@ export default function SignupPage() {
           </div>
         ) : null}
 
-        <button type="submit" disabled={submitting} className="btn-primary">
+        <Button type="submit" disabled={submitting} variant="primary">
           {submitting ? "Sending" : "Continue"}
-        </button>
+        </Button>
 
         <p className="text-xs text-ink-muted text-center">
           Already have an account?{" "}
