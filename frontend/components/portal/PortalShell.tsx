@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BlissWordmark } from "@/components/BlissWordmark";
+import { Button } from "@/components/ui/Button";
 import { API_BASE_URL } from "@/lib/api";
 
 // Left-sidebar shell for the customer portal, mirroring the merchant dashboard
@@ -75,9 +76,9 @@ export function PortalShell({
             </div>
           ) : null}
           <form action={signOut} className="mt-2">
-            <button type="submit" className="btn-ghost">
+            <Button type="submit" variant="ghost">
               Sign out
-            </button>
+            </Button>
           </form>
         </div>
       </aside>
