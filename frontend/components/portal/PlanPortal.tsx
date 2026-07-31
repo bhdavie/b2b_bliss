@@ -111,6 +111,87 @@ export function PlanPortal({
           </section>
         ) : null}
 
+        <Card title="Schedule">
+          <ol className="divide-y divide-brand-neutral">
+            {labelSchedule(portal.schedule).map(({ entry, label }) => {
+              // As-of-today display: a row whose due date has passed reads paid.
+              const rowStatus =
+                entry.status === "canceled"
+                  ? "canceled"
+                  : entry.dueDate <= todayIso
+                    ? "paid"
+                    : "scheduled";
+              return (
+                <li
+                  key={entry.sequence}
+                  className="flex items-center justify-between gap-4 py-3 text-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <StatusPill status={rowStatus} />
+                    <div>
+                      <div className="text-ink">{label}</div>
+                      <div className="text-xs text-ink-muted">
+                        {rowStatus === "paid" ? "Due " : ""}
+                        {formatScheduleDateShort(entry.dueDate)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="font-semibold text-lg tabular-nums text-brand-navy">
+                    {formatDollars(entry.amountCents)}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </Card>
+
+        {hasUpcoming ? (
+          <Card title="Next payment">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
+              <div>
+                <div className="font-semibold text-3xl text-brand-navy">
+                  {formatDollars(nextDueAmount ?? 0)}
+                </div>
+                <div className="mt-1 text-xs text-ink-muted">
+                  Due {formatScheduleDateLong(nextDueDate ?? "")}
+                </div>
+              </div>
+              <PayEarlyButton
+                token={token}
+                amount={nextDueAmount ?? 0}
+                onPaid={refresh}
+              />
+            </div>
+          </Card>
+        ) : null}
+
+        {!planComplete ? (
+          <Card title="Payment method">
+            {portal.card ? (
+              <div className="flex items-center justify-between gap-4 text-sm">
+                <div>
+                  <div className="font-semibold text-lg text-brand-navy">
+                    {brandLabel(portal.card.brand)} •••• {portal.card.lastFour}
+                  </div>
+                  <div className="mt-1 text-xs text-ink-muted">
+                    Expires {String(portal.card.expMonth).padStart(2, "0")}/{String(portal.card.expYear).slice(-2)}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-ink-muted">No card on file.</p>
+            )}
+            <div className="mt-4">
+              <UpdateCardSection
+                token={token}
+                stripeConfigured={portal.stripe.configured}
+                stripePublishableKey={portal.stripe.publishableKey}
+                onReplaced={refresh}
+              />
+            </div>
+          </Card>
+        ) : null}
+
         <Card title="Booking">
           {portal.booking.customerNameHint ? (
             <Row label="Guest" value={portal.booking.customerNameHint} />
@@ -187,87 +268,6 @@ export function PlanPortal({
                   {formatDollars(portal.remainingCents)}
                 </div>
               </div>
-            </div>
-          </Card>
-        ) : null}
-
-        {hasUpcoming ? (
-          <Card title="Next payment">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
-              <div>
-                <div className="font-semibold text-3xl text-brand-navy">
-                  {formatDollars(nextDueAmount ?? 0)}
-                </div>
-                <div className="mt-1 text-xs text-ink-muted">
-                  Due {formatScheduleDateLong(nextDueDate ?? "")}
-                </div>
-              </div>
-              <PayEarlyButton
-                token={token}
-                amount={nextDueAmount ?? 0}
-                onPaid={refresh}
-              />
-            </div>
-          </Card>
-        ) : null}
-
-        <Card title="Schedule">
-          <ol className="divide-y divide-brand-neutral">
-            {labelSchedule(portal.schedule).map(({ entry, label }) => {
-              // As-of-today display: a row whose due date has passed reads paid.
-              const rowStatus =
-                entry.status === "canceled"
-                  ? "canceled"
-                  : entry.dueDate <= todayIso
-                    ? "paid"
-                    : "scheduled";
-              return (
-                <li
-                  key={entry.sequence}
-                  className="flex items-center justify-between gap-4 py-3 text-sm"
-                >
-                  <div className="flex items-center gap-3">
-                    <StatusPill status={rowStatus} />
-                    <div>
-                      <div className="text-ink">{label}</div>
-                      <div className="text-xs text-ink-muted">
-                        {rowStatus === "paid" ? "Due " : ""}
-                        {formatScheduleDateShort(entry.dueDate)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="font-semibold text-lg tabular-nums text-brand-navy">
-                    {formatDollars(entry.amountCents)}
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        </Card>
-
-        {!planComplete ? (
-          <Card title="Payment method">
-            {portal.card ? (
-              <div className="flex items-center justify-between gap-4 text-sm">
-                <div>
-                  <div className="font-semibold text-lg text-brand-navy">
-                    {brandLabel(portal.card.brand)} •••• {portal.card.lastFour}
-                  </div>
-                  <div className="mt-1 text-xs text-ink-muted">
-                    Expires {String(portal.card.expMonth).padStart(2, "0")}/{String(portal.card.expYear).slice(-2)}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-ink-muted">No card on file.</p>
-            )}
-            <div className="mt-4">
-              <UpdateCardSection
-                token={token}
-                stripeConfigured={portal.stripe.configured}
-                stripePublishableKey={portal.stripe.publishableKey}
-                onReplaced={refresh}
-              />
             </div>
           </Card>
         ) : null}
