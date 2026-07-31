@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DM_Serif_Display, Fraunces, Inter } from "next/font/google";
+import { DM_Serif_Display, Fraunces, Instrument_Sans } from "next/font/google";
 import "./globals.css";
 
 const dmSerif = DM_Serif_Display({
@@ -17,7 +17,10 @@ const fraunces = Fraunces({
   display: "swap",
 });
 
-const inter = Inter({
+// Bliss body face. Replaces Inter under the same `--font-body` variable, so
+// every `font-body` opt-in switches together. app/inn/ never opts in and keeps
+// the system stack.
+const instrumentSans = Instrument_Sans({
   subsets: ["latin"],
   variable: "--font-body",
   display: "swap",
@@ -36,7 +39,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${dmSerif.variable} ${fraunces.variable} ${inter.variable}`}
+      className={`${dmSerif.variable} ${fraunces.variable} ${instrumentSans.variable}`}
     >
       <body>{children}</body>
     </html>

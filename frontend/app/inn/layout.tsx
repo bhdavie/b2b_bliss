@@ -1,6 +1,7 @@
 /**
- * Pins the document root font-size to 14px for the whole /inn/ subtree, so the
- * demo funnels keep their current metrics when the app root moves to 16px.
+ * Pins the document root font-size to 14px and the inherited font-weight to
+ * 400 for the whole /inn/ subtree, so the demo funnels keep their current
+ * metrics and colour of text when the app tokens move underneath them.
  *
  * Marbrook is a structural replica of the Mews Distributor and has to render
  * exactly as built. Both of Tailwind's rem-based scales matter here, not just
@@ -17,6 +18,11 @@
  * globals.css. Pinning only `html` would keep `rem` correct but let `body`
  * take the new value, which would shift every piece of text that has no
  * explicit size class and inherits from body instead.
+ *
+ * `font-weight:400` is here for the same reason. globals.css now sets
+ * `body { font-weight: 500 }` as the app-wide default, which would otherwise
+ * inherit into every text node in this subtree that carries no weight class.
+ * The funnels were built against the browser default of 400.
  *
  * `html:root` scores (0,1,1) and `html:root body` (0,1,2), against globals.css
  * at (0,0,1), so both win on specificity rather than on source order.
@@ -36,7 +42,7 @@ export default function InnLayout({
 }) {
   return (
     <>
-      <style>{`html:root,html:root body{font-size:14px}`}</style>
+      <style>{`html:root,html:root body{font-size:14px;font-weight:400}`}</style>
       {children}
     </>
   );

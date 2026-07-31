@@ -40,3 +40,6 @@ logs/
 
 # Docker / local data
 .postgres-data/
+
+# Design exports (large image payloads, not source)
+design-export/
