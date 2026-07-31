@@ -54,8 +54,6 @@ export function PlanPortal({
   const hasUpcoming =
     !planComplete && nextDueAmount != null && nextDueDate != null;
   const displayStatus = planComplete ? "completed" : portal.plan.status;
-  const now = new Date();
-  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   // Hawthorn gets the on-brand regional close-out; other merchants get a
   // neutral fallback so the celebration UI works for any completed plan.
   const enjoyCopy =
@@ -114,13 +112,7 @@ export function PlanPortal({
         <Card title="Schedule">
           <ol className="divide-y divide-brand-neutral">
             {labelSchedule(portal.schedule).map(({ entry, label }) => {
-              // As-of-today display: a row whose due date has passed reads paid.
-              const rowStatus =
-                entry.status === "canceled"
-                  ? "canceled"
-                  : entry.dueDate <= todayIso
-                    ? "paid"
-                    : "scheduled";
+              const rowStatus = rowDisplayStatus(entry.status);
               return (
                 <li
                   key={entry.sequence}
@@ -353,6 +345,27 @@ function StatusPill({ status }: { status: string }) {
       {status}
     </span>
   );
+}
+
+/**
+ * Display bucket for a schedule row, read from the stored payment status
+ * rather than derived from the due date.
+ *
+ * The settled design gives the guest exactly three states and no failure
+ * state, so "processing", "failed" and "retrying" deliberately collapse into
+ * "scheduled" rather than surfacing a label the design does not define. The
+ * merchant screen keeps the full vocabulary; see scheduleDisplayStatus in
+ * app/(merchant)/(authenticated)/bookings/[id]/page.tsx.
+ */
+function rowDisplayStatus(status: string): "paid" | "canceled" | "scheduled" {
+  switch (status) {
+    case "paid":
+      return "paid";
+    case "canceled":
+      return "canceled";
+    default:
+      return "scheduled";
+  }
 }
 
 type ScheduleEntry = PublicPlanPortal["schedule"][number];
