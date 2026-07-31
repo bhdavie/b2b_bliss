@@ -24,55 +24,57 @@
 }
 
 @layer components {
-  .btn-primary {
-    @apply inline-flex items-center justify-center rounded-md bg-brand-navy px-4 py-2.5 text-white font-medium transition-colors;
-  }
-
-  .btn-primary:hover {
-    @apply bg-brand-navy-dark;
-  }
-
-  .btn-primary:disabled {
-    @apply opacity-60 cursor-not-allowed;
-  }
-
-  /* Merchant-only primary action button. Lavender fill, square corners per the
-     Bliss merchant color mapping. Scoped by usage to merchant components so it
-     never affects the guest portal or the Marbrook funnel. */
+  /* Single-accent system. The two primaries are deliberately identical: the
+     merchant/guest split no longer exists in the design, and writing them as
+     one selector makes the pending collapse into a single variant provably
+     safe. px-[30px] and the tracking are arbitrary because the spacing scale
+     has no 30px step and the tracking scale has no -0.01em step. */
+  .btn-primary,
   .btn-primary-merchant {
-    @apply inline-flex items-center justify-center rounded-md bg-brand-lavender px-4 py-2.5 text-white font-medium transition-colors;
+    @apply inline-flex items-center justify-center rounded-full bg-brand-violet px-[30px] py-4 text-base font-medium tracking-[-0.01em] text-white transition-colors;
   }
 
+  .btn-primary:hover,
   .btn-primary-merchant:hover {
-    @apply bg-brand-lavender/80;
+    @apply bg-brand-violet-deep;
   }
 
+  .btn-primary:disabled,
   .btn-primary-merchant:disabled {
     @apply opacity-60 cursor-not-allowed;
   }
 
   .btn-ghost {
-    @apply inline-flex items-center justify-center rounded-md border border-brand-neutral bg-transparent px-3 py-2 text-sm text-ink transition-colors;
+    @apply inline-flex items-center justify-center rounded-full border border-sand-500 bg-transparent px-7 py-3.5 text-base font-medium tracking-[-0.01em] text-brand-violet transition-colors;
   }
 
   .btn-ghost:hover {
-    @apply bg-brand-cream/60;
+    @apply bg-sand-50;
   }
 
+  .btn-ghost:disabled {
+    @apply opacity-60 cursor-not-allowed;
+  }
+
+  /* rounded-xl is Tailwind's stock 0.75rem, which is 12px at our 16px root —
+     the design's input radius exactly. The border is 2px at rest as well as on
+     focus so the field does not shift by a pixel when focused; the design only
+     ever draws the focused state. The halo is a raw rgba because an alpha of a
+     token has no utility outside ring-*, and the spec asks for a shadow. */
   .input {
-    @apply w-full rounded-md border border-brand-neutral bg-white px-3 py-2.5 text-sm placeholder:text-ink-muted focus:border-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-lavender/60;
+    @apply w-full rounded-xl border-2 border-sand-200 bg-white px-[17px] py-[15px] text-base placeholder:text-ink-400 focus:border-brand-violet focus:outline-none focus:shadow-[0_0_0_4px_rgba(90,27,181,0.10)];
   }
 
   .label {
-    @apply text-xs text-ink-muted;
+    @apply text-xs uppercase tracking-[0.08em] text-ink-400;
   }
 
   .card {
-    @apply rounded-lg bg-white shadow-card border border-brand-neutral;
+    @apply rounded-panel border border-sand-200 bg-white;
   }
 
   .card-subtle {
-    @apply rounded-md bg-brand-cream/50 p-4;
+    @apply rounded-panel border border-sand-200 bg-sand-50 p-4;
   }
 }
 
