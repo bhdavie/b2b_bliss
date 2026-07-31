@@ -7,7 +7,6 @@ import {
   fetchPlanPortal,
   formatDollars,
   formatScheduleDateLong,
-  formatScheduleDateShort,
   type PublicPlanPortal,
 } from "@/lib/publicApi";
 import { PayEarlyButton } from "./PayEarlyButton";
@@ -110,31 +109,7 @@ export function PlanPortal({
         ) : null}
 
         <Card title="Schedule">
-          <ol className="divide-y divide-brand-neutral">
-            {labelSchedule(portal.schedule).map(({ entry, label }) => {
-              const rowStatus = rowDisplayStatus(entry.status);
-              return (
-                <li
-                  key={entry.sequence}
-                  className="flex items-center justify-between gap-4 py-3 text-sm"
-                >
-                  <div className="flex items-center gap-3">
-                    <StatusPill status={rowStatus} />
-                    <div>
-                      <div className="text-ink">{label}</div>
-                      <div className="text-xs text-ink-muted">
-                        {rowStatus === "paid" ? "Due " : ""}
-                        {formatScheduleDateShort(entry.dueDate)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="font-semibold text-lg tabular-nums text-brand-navy">
-                    {formatDollars(entry.amountCents)}
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
+          <ScheduleTimeline schedule={portal.schedule} />
         </Card>
 
         {hasUpcoming ? (
@@ -330,23 +305,6 @@ function Line({
   );
 }
 
-function StatusPill({ status }: { status: string }) {
-  const cls = (() => {
-    if (status === "paid") return "bg-brand-purple text-white";
-    if (status === "scheduled") return "border border-brand-lavender bg-white text-brand-purple";
-    if (status === "failed" || status === "retrying") return "bg-red-100 text-red-800";
-    if (status === "canceled") return "bg-brand-neutral text-ink-muted";
-    return "border border-brand-lavender bg-white text-brand-purple";
-  })();
-  return (
-    <span
-      className={`inline-block rounded-none px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${cls}`}
-    >
-      {status}
-    </span>
-  );
-}
-
 /**
  * Display bucket for a schedule row, read from the stored payment status
  * rather than derived from the due date.
@@ -375,14 +333,148 @@ type ScheduleEntry = PublicPlanPortal["schedule"][number];
  * The deposit stays labeled "Deposit"; it is not Installment 0.
  */
 function labelSchedule(schedule: ScheduleEntry[]): { entry: ScheduleEntry; label: string }[] {
+  const installmentCount = schedule.filter((e) => e.kind !== "deposit").length;
   let installmentNumber = 0;
   return schedule.map((entry) => {
     if (entry.kind === "deposit") {
       return { entry, label: "Deposit" };
     }
     installmentNumber += 1;
-    return { entry, label: `Installment ${installmentNumber}` };
+    return { entry, label: `Installment ${installmentNumber} of ${installmentCount}` };
   });
+}
+
+/**
+ * "August 2, 2026" — the timeline's date format in the design. Neither shared
+ * formatter produces it: formatScheduleDateLong prepends the weekday and
+ * formatScheduleDateShort drops the year.
+ */
+function formatTimelineDate(iso: string): string {
+  const parts = iso.split("-").map(Number);
+  const y = parts[0] ?? 0;
+  const m = parts[1] ?? 1;
+  const d = parts[2] ?? 1;
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+type TimelineState = "paid" | "next" | "scheduled" | "canceled";
+
+function TimelineNode({ state }: { state: TimelineState }) {
+  if (state === "next") {
+    return (
+      <div className="h-3 w-3 flex-none rounded-full border-[3.5px] border-brand-violet bg-white" />
+    );
+  }
+  return (
+    <div
+      className={`h-3 w-3 flex-none rounded-full ${
+        state === "paid" ? "bg-brand-violet" : "bg-sand-400"
+      }`}
+    />
+  );
+}
+
+/**
+ * The settled design's schedule timeline: a 1.5px rail down the left with a
+ * 12px node per row. The lavender run marks the completed payments and the
+ * warm grey the remainder; the boundary is the ring node on the next payment.
+ *
+ * Each rail segment hangs below its own node and is omitted on the last row,
+ * which is how the export draws it. Continuity comes from every segment
+ * filling its row's height, not from a border between rows.
+ */
+function ScheduleTimeline({ schedule }: { schedule: ScheduleEntry[] }) {
+  const rows = labelSchedule(schedule);
+  const nextIndex = rows.findIndex(
+    ({ entry }) => rowDisplayStatus(entry.status) === "scheduled",
+  );
+
+  return (
+    <ol>
+      {rows.map(({ entry, label }, i) => {
+        const base = rowDisplayStatus(entry.status);
+        const state: TimelineState =
+          base === "scheduled" && i === nextIndex ? "next" : base;
+        const isLast = i === rows.length - 1;
+        return (
+          <li key={entry.sequence} className="flex gap-x-[26px]">
+            <div className="flex w-[26px] flex-none flex-col items-center pt-2">
+              <TimelineNode state={state} />
+              {isLast ? null : (
+                <div
+                  className={`min-h-9 w-[1.5px] flex-1 ${
+                    state === "paid" ? "bg-brand-lavender" : "bg-sand-300"
+                  }`}
+                />
+              )}
+            </div>
+
+            {state === "next" ? (
+              <div className="min-w-0 flex-1 pb-[34px]">
+                <div className="-ml-[22px] flex flex-col gap-2 border-l-2 border-brand-violet pb-[4px] pl-5 pt-[2px]">
+                  <div className="text-[13px] font-medium uppercase tracking-[0.05em] text-brand-violet">
+                    Next payment · scheduled
+                  </div>
+                  <div className="grid grid-cols-[200px_minmax(0,1fr)_110px] items-baseline gap-x-5">
+                    <div className="text-xl font-medium tracking-[-0.015em] text-ink-900">
+                      {label}
+                    </div>
+                    <div className="text-base text-ink-600">
+                      Automatic on {formatTimelineDate(entry.dueDate)}
+                    </div>
+                    <div />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div
+                className={`grid min-w-0 flex-1 grid-cols-[200px_minmax(0,1fr)_110px] items-baseline gap-x-5 ${
+                  isLast ? "" : "pb-[34px]"
+                }`}
+              >
+                <div className="flex flex-col gap-1.5">
+                  <div
+                    className={`text-[13px] uppercase tracking-[0.06em] ${
+                      state === "paid"
+                        ? "font-medium text-brand-violet"
+                        : "text-ink-400"
+                    }`}
+                  >
+                    {state === "paid"
+                      ? "Paid"
+                      : state === "canceled"
+                        ? "canceled"
+                        : "Scheduled"}
+                  </div>
+                  <div
+                    className={`text-xl font-medium tracking-[-0.015em] ${
+                      state === "paid" ? "text-ink-900" : "text-ink-700"
+                    }`}
+                  >
+                    {label}
+                  </div>
+                </div>
+                <div className="text-base text-ink-400">
+                  Due {formatTimelineDate(entry.dueDate)}
+                </div>
+                <div
+                  className={`text-right text-xl ${
+                    state === "paid" ? "text-ink-400" : "text-ink-700"
+                  }`}
+                >
+                  {formatDollars(entry.amountCents)}
+                </div>
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
 function brandLabel(brand: string): string {
