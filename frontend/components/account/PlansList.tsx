@@ -1,29 +1,37 @@
 import { type AccountPlanCard } from "@/lib/publicApi";
-import { PlanCard } from "./PlanCard";
+import { Panel } from "@/components/portal/primitives";
+import { PlanCard, type PlanOrigin } from "./PlanCard";
 
 export function PlansList({
   plans,
-  muted = false,
+  from,
   emptyTitle = "No plans yet",
   emptyBody = "When a merchant sends you a payment-plan link, your plan will appear here automatically.",
 }: {
   plans: AccountPlanCard[];
-  muted?: boolean;
+  /** Threaded through to each card so the plan screen knows the entry point. */
+  from?: PlanOrigin;
   emptyTitle?: string;
   emptyBody?: string;
 }) {
   if (plans.length === 0) {
+    // The export does not draw an empty state; styled to match the populated
+    // cards — same panel, same border and radius, quieter type.
     return (
-      <section className="rounded-none border border-brand-neutral bg-white p-10 text-center">
-        <h2 className="text-2xl font-bold text-brand-navy">{emptyTitle}</h2>
-        <p className="mt-2 text-sm text-ink-muted">{emptyBody}</p>
-      </section>
+      <Panel className="items-center px-10 py-16 text-center">
+        <div className="text-[22px] font-medium tracking-[-0.015em] text-ink-900">
+          {emptyTitle}
+        </div>
+        <p className="mt-2.5 max-w-[420px] text-[17px] text-ink-500">
+          {emptyBody}
+        </p>
+      </Panel>
     );
   }
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-5">
       {plans.map((plan) => (
-        <PlanCard key={plan.planId} plan={plan} muted={muted} />
+        <PlanCard key={plan.planId} plan={plan} from={from} />
       ))}
     </div>
   );

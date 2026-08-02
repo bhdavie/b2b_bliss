@@ -18,11 +18,17 @@ export function UpdateCardSection({
   stripeConfigured,
   stripePublishableKey,
   onReplaced,
+  variant = "inline",
 }: {
   token: string;
   stripeConfigured: boolean;
   stripePublishableKey: string | null;
   onReplaced: () => void | Promise<void>;
+  /**
+   * How the closed trigger renders. "inline" is the plan detail's text link
+   * sitting beside the card row; "block" is Settings' full-width outline pill.
+   */
+  variant?: "inline" | "block";
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -36,7 +42,11 @@ export function UpdateCardSection({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-sm font-medium text-brand-purple underline-offset-2 hover:underline"
+        className={
+          variant === "block"
+            ? "rounded-full border border-sand-500 p-4 text-center text-base font-medium tracking-[-0.01em] text-brand-violet transition-colors hover:bg-sand-50"
+            : "flex-none text-[15px] text-brand-violet underline-offset-2 hover:underline"
+        }
       >
         Update card
       </button>

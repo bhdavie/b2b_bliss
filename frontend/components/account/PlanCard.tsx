@@ -5,107 +5,110 @@ import {
   formatScheduleDateShort,
   type AccountPlanCard,
 } from "@/lib/publicApi";
+import { Panel } from "@/components/portal/primitives";
 
-// Bliss design language: Inter (font-body, inherited) headings, square corners,
-// navy / purple / lavender palette. The `muted` variant de-emphasizes past
-// plans on the History screen.
+/**
+ * Plan card for the guest portal lists, built to the settled design (turn 6a):
+ * a bordered 20px panel, merchant name at 30px over the service and date, a
+ * status pill top-right, a rule, then a single meta line of figures with the
+ * "View plan" pill beside it.
+ */
+/**
+ * Which list the guest is looking at. Travels to /plan/[token] as `?from=`, so
+ * the plan screen can light the tab they left and send them back to it.
+ */
+export type PlanOrigin = "home" | "history";
+
 export function PlanCard({
   plan,
-  muted = false,
+  from,
 }: {
   plan: AccountPlanCard;
-  muted?: boolean;
+  from?: PlanOrigin;
 }) {
+  const href = from
+    ? `/plan/${plan.bookingToken}?from=${from}`
+    : `/plan/${plan.bookingToken}`;
   const canceled = plan.status === "canceled";
   const complete = plan.complete;
-  const badgeStatus = canceled ? "canceled" : complete ? "completed" : "active";
   const dateRange = plan.checkoutDate
     ? `${formatScheduleDateShort(plan.appointmentDate)} to ${formatScheduleDateShort(plan.checkoutDate)}`
     : formatScheduleDateLong(plan.appointmentDate);
 
   return (
-    <Link
-      href={`/plan/${plan.bookingToken}`}
-      className={`group block rounded-none border p-6 no-underline transition hover:no-underline ${
-        muted
-          ? "border-brand-neutral bg-brand-neutral/10 hover:border-2 hover:border-brand-neutral hover:bg-brand-neutral/20"
-          : "border-brand-neutral bg-white hover:border-2 hover:border-brand-purple"
-      }`}
-    >
-      <div className="flex items-baseline justify-between gap-3">
-        <h2
-          className={`text-2xl font-bold group-hover:underline ${muted ? "text-ink-muted" : "text-brand-navy"}`}
-        >
-          {plan.merchantBusinessName}
-        </h2>
-        <div className="flex items-center gap-2">
-          {plan.refunded ? (
-            <span className="inline-flex items-center rounded-full bg-brand-purple px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
-              Refunded
-            </span>
-          ) : null}
-          <StatusBadge status={badgeStatus} />
+    <Panel className="px-10 pb-[30px] pt-9">
+      <div className="flex items-start justify-between gap-8">
+        <div className="flex min-w-0 flex-col gap-2.5">
+          <div className="text-[30px] font-medium leading-[1.1] tracking-[-0.025em] text-ink-900">
+            {plan.merchantBusinessName}
+          </div>
+          <div className="text-lg text-ink-500">{plan.serviceName}</div>
+          <div className="text-lg text-ink-500">{dateRange}</div>
+        </div>
+        <div className="flex flex-none items-center gap-2">
+          {plan.refunded ? <Pill tone="accent">Refunded</Pill> : null}
+          <Pill tone={canceled ? "neutral" : complete ? "accent" : "accent"}>
+            {canceled ? "Cancelled" : complete ? "Completed" : "Active"}
+          </Pill>
         </div>
       </div>
 
-      <p className="mt-1 text-sm text-ink-muted">{plan.serviceName}</p>
-      <p className="text-xs text-ink-muted">
-        {dateRange}
-      </p>
+      <div className="mb-6 mt-[30px] h-px bg-sand-200" />
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Metric label="Plan total" value={formatDollars(plan.totalWithFeeCents)} />
-        <Metric label="Paid to date" value={formatDollars(plan.paidCents)} />
-        <Metric
-          label={complete || canceled ? "Remaining" : "Next payment"}
-          value={
-            complete
-              ? formatDollars(0)
-              : canceled
-                ? formatDollars(plan.remainingCents)
-                : plan.nextDueDate && plan.nextDueAmountCents != null
-                  ? `${formatDollars(plan.nextDueAmountCents)} · ${formatScheduleDateShort(plan.nextDueDate)}`
-                  : formatDollars(plan.remainingCents)
-          }
-        />
+      <div className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center sm:gap-8">
+        <div className="flex flex-wrap items-baseline text-[17px] text-ink-500">
+          <span>
+            Plan total{" "}
+            <Figure>{formatDollars(plan.totalWithFeeCents)}</Figure>
+          </span>
+          <Dot />
+          <span>
+            Paid to date <Figure>{formatDollars(plan.paidCents)}</Figure>
+          </span>
+          <Dot />
+          <span>
+            Remaining <Figure>{formatDollars(plan.remainingCents)}</Figure>
+          </span>
+          <Dot />
+          <span>
+            {capitalize(plan.frequency)} · {plan.numPayments} installments
+          </span>
+        </div>
+        <Link
+          href={href}
+          className="flex-none rounded-full border border-sand-500 px-[26px] py-[13px] text-base font-medium tracking-[-0.01em] text-brand-violet no-underline transition-colors hover:bg-sand-50 hover:no-underline"
+        >
+          View plan
+        </Link>
       </div>
-
-      <div className="mt-4 flex items-center justify-between text-xs text-ink-muted">
-        <span>
-          {capitalize(plan.frequency)} · {plan.numPayments} installments
-        </span>
-        <span className="font-medium text-brand-purple">View plan</span>
-      </div>
-    </Link>
+    </Panel>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-none border border-brand-lavender bg-white px-3 py-2">
-      <div className="text-[10px] text-ink-muted">
-        {label}
-      </div>
-      <div className="mt-1 text-lg font-semibold tabular-nums text-brand-navy">
-        {value}
-      </div>
-    </div>
-  );
+function Figure({ children }: { children: React.ReactNode }) {
+  return <span className="font-medium text-ink-900">{children}</span>;
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    active: "border border-brand-lavender bg-white text-brand-purple",
-    completed: "bg-brand-lavender text-white",
-    canceled: "bg-brand-neutral text-ink-muted",
-  };
-  const cls = map[status] ?? "border border-brand-lavender bg-white text-brand-purple";
-  const label = status === "canceled" ? "cancelled" : status.replace(/_/g, " ");
+function Dot() {
+  return <span className="px-3 text-sand-600">·</span>;
+}
+
+function Pill({
+  children,
+  tone,
+}: {
+  children: React.ReactNode;
+  tone: "accent" | "neutral";
+}) {
   return (
     <span
-      className={`inline-flex items-center rounded-none px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${cls}`}
+      className={`flex-none rounded-full px-4 py-2 text-[13px] font-medium uppercase tracking-[0.06em] ${
+        tone === "accent"
+          ? "bg-brand-violet-tint text-brand-violet"
+          : "bg-[#F4F2EF] text-ink-500"
+      }`}
     >
-      {label}
+      {children}
     </span>
   );
 }

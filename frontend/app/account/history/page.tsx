@@ -2,6 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { fetchAccountPlans } from "@/lib/publicApi";
 import { PortalShell } from "@/components/portal/PortalShell";
+import { PageHeader } from "@/components/portal/primitives";
 import { PlansList } from "@/components/account/PlansList";
 
 export default async function AccountHistoryPage({
@@ -34,26 +35,27 @@ export default async function AccountHistoryPage({
 
   return (
     <PortalShell active="history" email={data.email}>
-      {canceledToken ? (
-        <div className="mb-6 rounded-none border border-brand-lavender bg-brand-lavender/15 px-5 py-4">
-          <div className="text-base font-bold text-brand-navy">
-            Cancellation confirmed
+      <div className="flex flex-col pb-[72px]">
+        {canceledToken ? (
+          <div className="mb-12 flex flex-col gap-2 rounded-panel border border-sand-200 px-8 py-6">
+            <div className="text-[22px] font-medium tracking-[-0.015em] text-ink-900">
+              Cancellation confirmed
+            </div>
+            <p className="text-[17px] text-ink-500">
+              Your plan has been cancelled and the remaining payments are
+              stopped.
+            </p>
           </div>
-          <p className="mt-1 text-sm text-ink-muted">
-            Your plan has been cancelled and the remaining payments are stopped.
-          </p>
-        </div>
-      ) : null}
-      <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
-        Plan history
-      </h1>
-      <p className="mt-1 text-sm text-ink-muted">
-        Plans that are paid off or cancelled.
-      </p>
-      <div className="mt-6">
+        ) : null}
+
+        <PageHeader
+          title="Plan history"
+          subtitle="Plans that are paid off or cancelled."
+        />
+
         <PlansList
           plans={past}
-          muted
+          from="history"
           emptyTitle="Nothing here yet"
           emptyBody="Completed and cancelled plans will appear here."
         />

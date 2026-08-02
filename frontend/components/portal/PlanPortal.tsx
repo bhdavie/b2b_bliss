@@ -59,188 +59,215 @@ export function PlanPortal({
     portal.merchant.slug === "hawthorn-camden"
       ? "Enjoy Maine."
       : "Enjoy your stay.";
+  const stay = formatStay(
+    portal.booking.appointmentDate,
+    portal.booking.checkoutDate,
+  );
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="flex flex-col">
+      {/* Header */}
+      <div className="mb-11 flex flex-col gap-3">
         {backHref ? (
           <Link
             href={backHref}
-            className="text-sm font-medium text-brand-purple no-underline hover:underline"
+            className="self-start text-[15px] text-brand-violet no-underline hover:underline"
           >
             Back to your plans
           </Link>
         ) : null}
-        <h1
-          className={`${backHref ? "mt-4 " : ""}text-4xl font-bold tracking-tight text-brand-navy`}
-        >
+        <div className="text-[42px] font-medium leading-[1.08] tracking-[-0.03em] text-ink-900">
           {portal.merchant.businessName}
-        </h1>
-        <p className="mt-1 text-sm text-ink-muted">
-          {portal.booking.serviceName}
-        </p>
+        </div>
+        <div className="text-lg text-ink-500">{portal.booking.serviceName}</div>
       </div>
 
-      <div className="space-y-6">
-        {portal.plan.refundedAt ? (
-          <section className="flex items-center gap-3 rounded-none border border-brand-purple/40 bg-brand-lavender/15 px-4 py-3">
-            <span className="inline-flex items-center bg-brand-purple px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-white">
-              Refunded
-            </span>
-            <span className="text-sm text-brand-navy">
-              {formatDollars(portal.plan.refundAmountCents ?? 0)} has been refunded to you.
-            </span>
-          </section>
-        ) : null}
+      {/* Plan-level notices. Not drawn in the design, which shows one active,
+          unrefunded plan; kept on the chrome-free treatment. */}
+      {portal.plan.refundedAt ? (
+        <div className="mb-11 flex items-center gap-3 rounded-panel border border-sand-200 px-7 py-5">
+          <span className="rounded-full bg-brand-violet-tint px-[15px] py-[7px] text-[13px] font-medium uppercase tracking-[0.06em] text-brand-violet">
+            Refunded
+          </span>
+          <span className="text-[17px] text-ink-500">
+            {formatDollars(portal.plan.refundAmountCents ?? 0)} has been
+            refunded to you.
+          </span>
+        </div>
+      ) : null}
 
-        {planComplete ? (
-          <section className="text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-none bg-brand-lavender text-white">
-              <CheckIcon />
-            </div>
-            <h1 className="mt-4 font-bold text-4xl text-brand-navy">
-              You&apos;re all set
-            </h1>
-            <p className="mt-2 text-sm text-ink-muted">
-              Your stay at {portal.merchant.businessName} is fully paid.{" "}
-              {enjoyCopy}
-            </p>
-          </section>
-        ) : null}
+      {planComplete ? (
+        <div className="mb-11 flex flex-col gap-3">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-lavender text-brand-violet-deep">
+            <CheckIcon />
+          </div>
+          <div className="text-[42px] font-medium leading-[1.08] tracking-[-0.03em] text-ink-900">
+            You&apos;re all set
+          </div>
+          <div className="text-lg text-ink-500">
+            Your stay at {portal.merchant.businessName} is fully paid.{" "}
+            {enjoyCopy}
+          </div>
+        </div>
+      ) : null}
 
-        <Card title="Schedule">
+      {/* Balance band */}
+      <div className="mb-14 flex flex-col gap-4 border-y border-sand-300 pb-9 pt-[34px]">
+        <SectionHeading>Remaining</SectionHeading>
+        <div className="text-[64px] font-medium leading-none tracking-[-0.04em] text-ink-900">
+          {formatDollars(portal.remainingCents)}
+        </div>
+        <div className="text-[17px] text-ink-500">
+          Paid to date{" "}
+          <span className="font-medium text-ink-900">
+            {formatDollars(portal.paidCents)}
+          </span>{" "}
+          of {formatDollars(totalDue)}
+        </div>
+      </div>
+
+      {/* Row 1 — schedule, with next payment and payment method beside it */}
+      <div className="mb-16 grid grid-cols-1 items-start gap-x-10 gap-y-12 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+        <div className="flex flex-col">
+          <SectionHeading className="mb-8">Schedule</SectionHeading>
           <ScheduleTimeline schedule={portal.schedule} />
-        </Card>
+        </div>
 
-        {hasUpcoming ? (
-          <Card title="Next payment">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
-              <div>
-                <div className="font-semibold text-3xl text-brand-navy">
-                  {formatDollars(nextDueAmount ?? 0)}
-                </div>
-                <div className="mt-1 text-xs text-ink-muted">
-                  Due {formatScheduleDateLong(nextDueDate ?? "")}
-                </div>
+        <div className="flex flex-col gap-5">
+          {hasUpcoming ? (
+            <div className="flex flex-col rounded-panel border border-sand-200 px-7 pb-8 pt-[30px]">
+              <SectionHeading className="mb-[18px] font-medium text-brand-violet">
+                Next payment
+              </SectionHeading>
+              <div className="mb-3 text-[44px] font-medium leading-none tracking-[-0.035em] text-ink-900">
+                {formatDollars(nextDueAmount ?? 0)}
+              </div>
+              <div className="mb-[26px] text-[17px] text-ink-500">
+                Due {formatTimelineDate(nextDueDate ?? "")}
               </div>
               <PayEarlyButton
                 token={token}
                 amount={nextDueAmount ?? 0}
                 onPaid={refresh}
               />
-            </div>
-          </Card>
-        ) : null}
-
-        {!planComplete ? (
-          <Card title="Payment method">
-            {portal.card ? (
-              <div className="flex items-center justify-between gap-4 text-sm">
-                <div>
-                  <div className="font-semibold text-lg text-brand-navy">
-                    {brandLabel(portal.card.brand)} •••• {portal.card.lastFour}
-                  </div>
-                  <div className="mt-1 text-xs text-ink-muted">
-                    Expires {String(portal.card.expMonth).padStart(2, "0")}/{String(portal.card.expYear).slice(-2)}
-                  </div>
-                </div>
+              <div className="mt-5 text-sm leading-[1.55] text-ink-400">
+                Nothing to do. We&apos;ll charge the card below automatically.
               </div>
-            ) : (
-              <p className="text-sm text-ink-muted">No card on file.</p>
-            )}
-            <div className="mt-4">
-              <UpdateCardSection
-                token={token}
-                stripeConfigured={portal.stripe.configured}
-                stripePublishableKey={portal.stripe.publishableKey}
-                onReplaced={refresh}
-              />
             </div>
-          </Card>
-        ) : null}
-
-        <Card title="Booking">
-          {portal.booking.customerNameHint ? (
-            <Row label="Guest" value={portal.booking.customerNameHint} />
           ) : null}
-          <Row label="Stay" value={portal.booking.serviceName} />
-          <Row
-            label="Check-in"
-            value={formatScheduleDateLong(portal.booking.appointmentDate)}
-          />
-          {portal.booking.checkoutDate ? (
-            <Row
-              label="Check-out"
-              value={formatScheduleDateLong(portal.booking.checkoutDate)}
-            />
-          ) : null}
-          <Row
-            label="Plan status"
-            value={
-              <span
-                className={
-                  planComplete
-                    ? "rounded-none bg-brand-lavender px-3 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
-                    : displayStatus === "active"
-                    ? "rounded-none border border-brand-lavender bg-white px-3 py-0.5 text-xs font-medium uppercase tracking-[0.12em] text-brand-purple"
-                    : "rounded-none bg-amber-100 px-3 py-0.5 text-xs font-medium uppercase tracking-[0.12em] text-amber-900"
-                }
-              >
-                {displayStatus.replace(/_/g, " ")}
-              </span>
-            }
-          />
-        </Card>
 
-        {!planComplete ? (
-          <Card title="Plan summary">
-            <div className="space-y-2 text-sm text-ink">
-              {hasDiscount && portal.booking.originalTotalAmountCents != null ? (
-                <>
-                  <Line label="Subtotal" value={formatDollars(portal.booking.originalTotalAmountCents)} />
-                  <Line
-                    label={`Plan discount (${savingsPercent}%)`}
-                    value={`−${formatDollars(savings)}`}
-                    emphasis="forest"
+          {!planComplete ? (
+            <div className="flex flex-col rounded-panel border border-sand-200 px-7 py-[30px]">
+              <SectionHeading className="mb-5">Payment method</SectionHeading>
+              {portal.card ? (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="h-7 w-[42px] flex-none rounded-[5px] bg-ink-900" />
+                    <div className="flex flex-col gap-[3px]">
+                      <div className="text-base text-ink-900">
+                        {brandLabel(portal.card.brand)} ····{" "}
+                        {portal.card.lastFour}
+                      </div>
+                      <div className="text-sm text-ink-400">
+                        Expires {String(portal.card.expMonth).padStart(2, "0")}/
+                        {String(portal.card.expYear).slice(-2)}
+                      </div>
+                    </div>
+                  </div>
+                  <UpdateCardSection
+                    token={token}
+                    stripeConfigured={portal.stripe.configured}
+                    stripePublishableKey={portal.stripe.publishableKey}
+                    onReplaced={refresh}
                   />
-                </>
+                </div>
               ) : (
-                <Line label="Subtotal" value={formatDollars(portal.plan.totalAmountCents)} />
+                <div className="flex items-center justify-between gap-4">
+                  <div className="text-base text-ink-400">No card on file.</div>
+                  <UpdateCardSection
+                    token={token}
+                    stripeConfigured={portal.stripe.configured}
+                    stripePublishableKey={portal.stripe.publishableKey}
+                    onReplaced={refresh}
+                  />
+                </div>
               )}
-              <Line
-                label="Processing fee"
-                value={`+${formatDollars(portal.processingFeeCents)}`}
-              />
             </div>
-            <div className="mt-3 flex items-baseline justify-between border-t border-brand-neutral pt-3">
-              <span className="font-semibold text-lg text-brand-navy">Total</span>
-              <span className="font-semibold text-2xl font-semibold text-brand-navy">
-                {formatDollars(totalDue)}
-              </span>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-none bg-brand-purple px-3 py-2">
-                <div className="text-[11px] text-white/80">
-                  Paid to date
-                </div>
-                <div className="mt-1 font-semibold text-lg text-white">
-                  {formatDollars(portal.paidCents)}
-                </div>
-              </div>
-              <div className="rounded-none border-2 border-brand-lavender bg-white px-3 py-2">
-                <div className="text-[11px] text-ink-muted">
-                  Remaining
-                </div>
-                <div className="mt-1 font-semibold text-lg text-brand-navy">
-                  {formatDollars(portal.remainingCents)}
-                </div>
-              </div>
-            </div>
-          </Card>
-        ) : null}
+          ) : null}
+        </div>
+      </div>
 
-        {!planComplete && portal.plan.status === "active" ? (
-          <Card title="Cancel plan">
+      <div className="mb-[52px] h-px bg-sand-300" />
+
+      {/* Row 2 — booking beside the accounting breakdown */}
+      <div className="grid grid-cols-1 items-start gap-x-10 gap-y-12 pb-14 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+        <div className="flex flex-col">
+          <SectionHeading className="mb-7">Booking</SectionHeading>
+          <div className="grid grid-cols-1 gap-x-12 gap-y-[30px] sm:grid-cols-2">
+            {portal.booking.customerNameHint ? (
+              <Field
+                label="Guest"
+                value={portal.booking.customerNameHint}
+              />
+            ) : null}
+            <Field label="Stay" value={stay ?? portal.booking.serviceName} />
+            <Field
+              label="Check-in"
+              value={formatScheduleDateLong(portal.booking.appointmentDate)}
+            />
+            <div className="flex flex-col gap-[7px]">
+              <div className="text-[15px] text-ink-400">Plan status</div>
+              <div className="flex">
+                <span className="rounded-full bg-brand-violet-tint px-[15px] py-[7px] text-[13px] font-medium uppercase tracking-[0.06em] text-brand-violet">
+                  {displayStatus.replace(/_/g, " ")}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col">
+          <SectionHeading className="mb-7">Plan summary</SectionHeading>
+          <div className="flex flex-col">
+            {hasDiscount && portal.booking.originalTotalAmountCents != null ? (
+              <>
+                <SummaryLine
+                  label="Subtotal"
+                  value={formatDollars(portal.booking.originalTotalAmountCents)}
+                />
+                <SummaryLine
+                  label={`Plan discount (${savingsPercent}%)`}
+                  value={`−${formatDollars(savings)}`}
+                />
+              </>
+            ) : (
+              <SummaryLine
+                label="Subtotal"
+                value={formatDollars(portal.plan.totalAmountCents)}
+              />
+            )}
+            <SummaryLine
+              label="Processing fee"
+              value={formatDollars(portal.processingFeeCents)}
+              last
+            />
+            <div className="h-px bg-sand-300" />
+            <div className="flex items-baseline justify-between pt-[18px]">
+              <div className="text-[17px] font-medium text-ink-900">Total</div>
+              <div className="text-2xl font-medium tracking-[-0.02em] text-ink-900">
+                {formatDollars(totalDue)}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Not drawn in the design, which shows no cancel affordance. Kept on the
+          chrome-free treatment, below the accounting. */}
+      {!planComplete && portal.plan.status === "active" ? (
+        <div className="flex flex-col pb-14">
+          <SectionHeading className="mb-7">Cancel plan</SectionHeading>
+          <div className="max-w-[560px]">
             <CancelPlanSection
               token={token}
               serviceName={portal.booking.serviceName}
@@ -248,61 +275,92 @@ export function PlanPortal({
               paidCents={portal.paidCents}
               processingFeeCents={portal.processingFeeCents}
             />
-          </Card>
-        ) : null}
+          </div>
+        </div>
+      ) : null}
 
-        <footer className="pt-4 pb-2 text-center text-xs text-ink-muted">
-          Powered by{" "}
-          <BlissWordmark />
-        </footer>
+      <div className="-mx-6 border-t border-sand-200 px-6 pb-8 pt-7 text-sm text-ink-400 xl:-mx-16 xl:px-16">
+        Powered by <BlissWordmark />
       </div>
     </div>
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function SectionHeading({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <section className="rounded-none border border-brand-neutral bg-white/70 p-6 shadow-sm backdrop-blur-sm">
-      <h2 className="mb-4 font-bold text-2xl text-brand-navy">{title}</h2>
+    <div
+      className={`text-[13px] uppercase tracking-[0.06em] text-ink-400 ${className}`}
+    >
       {children}
-    </section>
-  );
-}
-
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-brand-neutral py-2 last:border-b-0 text-sm">
-      <span className="text-xs text-ink-muted">
-        {label}
-      </span>
-      <span className="text-right text-ink">{value}</span>
     </div>
   );
 }
 
-function Line({
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-[7px]">
+      <div className="text-[15px] text-ink-400">{label}</div>
+      <div className="text-[19px] font-medium tracking-[-0.01em] text-ink-900">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function SummaryLine({
   label,
   value,
-  emphasis,
+  last = false,
 }: {
   label: string;
   value: string;
-  emphasis?: "forest";
+  last?: boolean;
 }) {
   return (
-    <div className="flex items-baseline justify-between">
-      <span className={emphasis === "forest" ? "text-emerald-700" : ""}>{label}</span>
-      <span
-        className={
-          emphasis === "forest"
-            ? "tabular-nums font-medium text-emerald-700"
-            : "tabular-nums"
-        }
-      >
-        {value}
-      </span>
+    <div
+      className={`flex justify-between text-[17px] ${last ? "pb-[18px]" : "pb-4"}`}
+    >
+      <div className="text-ink-500">{label}</div>
+      <div className="tabular-nums text-ink-900">{value}</div>
     </div>
   );
+}
+
+/**
+ * "Dec 25 – Dec 28, 2026 · 3 nights" from the stay's two dates.
+ *
+ * Returns null when there is no check-out date: neither the range nor the
+ * night count can be derived from check-in alone, and the caller falls back to
+ * the booking's service name rather than showing a half-formed value.
+ */
+function formatStay(checkIn: string, checkOut: string | null): string | null {
+  if (!checkOut) return null;
+  const a = parseIsoDate(checkIn);
+  const b = parseIsoDate(checkOut);
+  if (!a || !b) return null;
+  const nights = Math.round((b.getTime() - a.getTime()) / 86_400_000);
+  if (nights < 1) return null;
+  const short = (d: Date) =>
+    d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `${short(a)} – ${short(b)}, ${b.getFullYear()} · ${nights} ${
+    nights === 1 ? "night" : "nights"
+  }`;
+}
+
+function parseIsoDate(iso: string): Date | null {
+  const parts = iso.split("-").map(Number);
+  const y = parts[0];
+  const m = parts[1];
+  const d = parts[2];
+  if (!y || !m || !d) return null;
+  const dt = new Date(y, m - 1, d);
+  return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
 /**
@@ -419,7 +477,7 @@ function ScheduleTimeline({ schedule }: { schedule: ScheduleEntry[] }) {
                   <div className="text-[13px] font-medium uppercase tracking-[0.05em] text-brand-violet">
                     Next payment · scheduled
                   </div>
-                  <div className="grid grid-cols-[200px_minmax(0,1fr)_110px] items-baseline gap-x-5">
+                  <div className="grid grid-cols-[minmax(0,1fr)] items-baseline gap-x-5 sm:grid-cols-[200px_minmax(0,1fr)_110px]">
                     <div className="text-xl font-medium tracking-[-0.015em] text-ink-900">
                       {label}
                     </div>
@@ -432,7 +490,7 @@ function ScheduleTimeline({ schedule }: { schedule: ScheduleEntry[] }) {
               </div>
             ) : (
               <div
-                className={`grid min-w-0 flex-1 grid-cols-[200px_minmax(0,1fr)_110px] items-baseline gap-x-5 ${
+                className={`grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-5 sm:grid-cols-[200px_minmax(0,1fr)_110px] ${
                   isLast ? "" : "pb-[34px]"
                 }`}
               >
@@ -447,23 +505,30 @@ function ScheduleTimeline({ schedule }: { schedule: ScheduleEntry[] }) {
                     {state === "paid"
                       ? "Paid"
                       : state === "canceled"
-                        ? "canceled"
+                        ? "Canceled"
                         : "Scheduled"}
                   </div>
+                  {/* A canceled row is inactive, not merely unpaid: its title
+                      and amount drop to the muted tone the label already uses,
+                      so it reads as struck from the plan rather than pending. */}
                   <div
                     className={`text-xl font-medium tracking-[-0.015em] ${
-                      state === "paid" ? "text-ink-900" : "text-ink-700"
+                      state === "paid"
+                        ? "text-ink-900"
+                        : state === "canceled"
+                          ? "text-ink-400"
+                          : "text-ink-700"
                     }`}
                   >
                     {label}
                   </div>
                 </div>
-                <div className="text-base text-ink-400">
+                <div className="order-last col-span-2 text-base text-ink-400 sm:order-none sm:col-span-1">
                   Due {formatTimelineDate(entry.dueDate)}
                 </div>
                 <div
                   className={`text-right text-xl ${
-                    state === "paid" ? "text-ink-400" : "text-ink-700"
+                    state === "scheduled" ? "text-ink-700" : "text-ink-400"
                   }`}
                 >
                   {formatDollars(entry.amountCents)}

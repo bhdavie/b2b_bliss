@@ -32,12 +32,12 @@ export function PayEarlyButton({
 
   if (!confirming) {
     return (
-      <div className="flex flex-col items-end gap-1">
+      <div className="flex flex-col gap-2">
         <button
           type="button"
           onClick={() => setConfirming(true)}
           disabled={busy}
-          className="rounded-none bg-brand-purple px-5 py-3 text-sm font-medium text-white transition hover:bg-brand-purple-dark disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-full bg-brand-violet p-[19px] text-center text-[17px] font-medium tracking-[-0.01em] text-white transition-colors hover:bg-brand-violet-deep disabled:cursor-not-allowed disabled:opacity-50"
         >
           Pay early
         </button>
@@ -51,26 +51,26 @@ export function PayEarlyButton({
   }
 
   return (
-    <div className="flex flex-col items-end gap-2">
-      <div className="text-xs text-ink-muted">
+    <div className="flex flex-col gap-3">
+      <div className="text-sm leading-[1.55] text-ink-400">
         Charge your card on file {formatDollars(amount)} now?
       </div>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setConfirming(false)}
-          disabled={busy}
-          className="rounded-none border border-brand-neutral px-3 py-2 text-xs text-ink-muted hover:bg-brand-lavender/10 disabled:opacity-50"
-        >
-          Cancel
-        </button>
+      <div className="flex flex-col gap-2">
         <button
           type="button"
           onClick={handlePay}
           disabled={busy}
-          className="rounded-none bg-brand-purple px-4 py-2 text-xs font-medium text-white hover:bg-brand-purple-dark disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-full bg-brand-violet p-[19px] text-center text-[17px] font-medium tracking-[-0.01em] text-white transition-colors hover:bg-brand-violet-deep disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Charging…" : `Charge ${formatDollars(amount)}`}
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirming(false)}
+          disabled={busy}
+          className="rounded-full border border-sand-500 p-[15px] text-center text-[15px] font-medium tracking-[-0.01em] text-ink-500 transition-colors hover:bg-sand-50 disabled:opacity-50"
+        >
+          Cancel
         </button>
       </div>
       {error ? (

@@ -69,6 +69,7 @@ export default async function AccountPage() {
       <div className="mt-4">
         <PlansList
           plans={active}
+          from="home"
           emptyTitle={EMPTY_TITLE}
           emptyBody={EMPTY_BODY}
         />

@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { UpdateCardSection } from "./UpdateCardSection";
 
 // Client wrapper so Settings (a server component) can mount the existing
-// UpdateCardSection and refresh after a card swap.
+// UpdateCardSection and refresh after a card swap. Built to the settled design
+// (turn 6b): brand chip, 22px card line, rule, then a full-width outline pill.
 export function SettingsCardOnFile({
   token,
   card,
@@ -18,29 +19,33 @@ export function SettingsCardOnFile({
 }) {
   const router = useRouter();
   return (
-    <div>
+    <>
       {card ? (
-        <div className="text-sm">
-          <div className="text-lg font-semibold text-brand-navy">
-            {brandLabel(card.brand)} •••• {card.lastFour}
-          </div>
-          <div className="mt-1 text-xs text-ink-muted">
-            Expires {String(card.expMonth).padStart(2, "0")}/
-            {String(card.expYear).slice(-2)}
+        <div className="mb-[26px] flex items-center gap-4">
+          <div className="h-8 w-12 flex-none rounded-sm bg-ink-900" />
+          <div className="flex flex-col gap-[5px]">
+            <div className="text-[22px] font-medium tracking-[-0.015em] text-ink-900">
+              {brandLabel(card.brand)} ···· {card.lastFour}
+            </div>
+            <div className="text-base text-ink-400">
+              Expires {String(card.expMonth).padStart(2, "0")}/
+              {String(card.expYear).slice(-2)}
+            </div>
           </div>
         </div>
       ) : (
-        <p className="text-sm text-ink-muted">No card on file.</p>
+        // Not drawn in the export; kept on the same rhythm as the populated row.
+        <p className="mb-[26px] text-[17px] text-ink-500">No card on file.</p>
       )}
-      <div className="mt-4">
-        <UpdateCardSection
-          token={token}
-          stripeConfigured={stripeConfigured}
-          stripePublishableKey={stripePublishableKey}
-          onReplaced={() => router.refresh()}
-        />
-      </div>
-    </div>
+      <div className="mb-[26px] h-px bg-sand-200" />
+      <UpdateCardSection
+        token={token}
+        stripeConfigured={stripeConfigured}
+        stripePublishableKey={stripePublishableKey}
+        onReplaced={() => router.refresh()}
+        variant="block"
+      />
+    </>
   );
 }
 

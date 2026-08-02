@@ -2,6 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { fetchAccountPlans, fetchPlanPortal } from "@/lib/publicApi";
 import { PortalShell } from "@/components/portal/PortalShell";
+import { PageHeader, Panel, SectionHeading } from "@/components/portal/primitives";
 import { SettingsCardOnFile } from "@/components/portal/SettingsCardOnFile";
 
 export default async function AccountSettingsPage() {
@@ -24,51 +25,59 @@ export default async function AccountSettingsPage() {
 
   return (
     <PortalShell active="settings" email={data.email}>
-      <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
-        Settings
-      </h1>
-      <p className="mt-1 text-sm text-ink-muted">
-        Your account details and the card your installments run on.
-      </p>
+      <div className="flex flex-col pb-[72px]">
+        <PageHeader
+          title="Settings"
+          subtitle="Your account details and the card your installments run on."
+        />
 
-      <section className="mt-6 rounded-none border border-brand-neutral bg-white p-6">
-        <h2 className="text-2xl font-bold text-brand-navy">Account</h2>
-        <dl className="mt-4 space-y-3">
-          <Field label="Name" value={name ?? "Not on file"} />
-          <Field label="Email" value={data.email} />
-          <Field label="Phone" value="Not on file" />
-        </dl>
-      </section>
+        <div className="grid grid-cols-1 items-start gap-x-12 gap-y-12 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+          <div className="flex flex-col">
+            <SectionHeading className="mb-[26px]">Account</SectionHeading>
+            <div className="flex flex-col border-t border-sand-200">
+              <Field label="Name" value={name} />
+              <Field label="Email" value={data.email} />
+              <Field label="Phone" value={null} />
+            </div>
+          </div>
 
-      <section className="mt-6 rounded-none border border-brand-neutral bg-white p-6">
-        <h2 className="text-2xl font-bold text-brand-navy">Card on file</h2>
-        <div className="mt-4">
-          {portal ? (
-            <SettingsCardOnFile
-              token={anchor!.bookingToken}
-              card={portal.card}
-              stripeConfigured={portal.stripe.configured}
-              stripePublishableKey={portal.stripe.publishableKey}
-            />
-          ) : (
-            <p className="text-sm text-ink-muted">
-              No card on file yet. Your card is saved the first time you set up a
-              payment plan.
-            </p>
-          )}
+          <Panel className="px-8 pb-8 pt-[30px]">
+            <SectionHeading className="mb-6">Card on file</SectionHeading>
+            {portal && anchor ? (
+              <SettingsCardOnFile
+                token={anchor.bookingToken}
+                card={portal.card}
+                stripeConfigured={portal.stripe.configured}
+                stripePublishableKey={portal.stripe.publishableKey}
+              />
+            ) : (
+              <p className="text-[17px] text-ink-500">
+                No card on file yet. Your card is saved the first time you set
+                up a payment plan.
+              </p>
+            )}
+          </Panel>
         </div>
-      </section>
+      </div>
     </PortalShell>
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+/**
+ * A label/value row. A null value renders the design's muted "Not on file"
+ * treatment rather than the weighted value type.
+ */
+function Field({ label, value }: { label: string; value: string | null }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-brand-neutral pb-3 last:border-b-0 last:pb-0">
-      <dt className="text-xs text-ink-muted">
-        {label}
-      </dt>
-      <dd className="text-right text-sm text-ink">{value}</dd>
+    <div className="flex items-baseline justify-between gap-8 border-b border-sand-200 py-6">
+      <div className="text-[17px] text-ink-500">{label}</div>
+      {value ? (
+        <div className="text-right text-[19px] font-medium tracking-[-0.01em] text-ink-900">
+          {value}
+        </div>
+      ) : (
+        <div className="text-right text-[19px] text-ink-400">Not on file</div>
+      )}
     </div>
   );
 }
