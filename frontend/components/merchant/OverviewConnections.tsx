@@ -8,6 +8,7 @@ import {
   ProviderLogo,
   type Provider,
 } from "./ConnectionsContext";
+import { Panel } from "@/components/ui/primitives";
 import type {
   OnboardingCloudbeds,
   OnboardingMews,
@@ -43,7 +44,7 @@ export function OverviewConnections({
   const pmsChosen = onboardingState !== "created";
 
   return (
-    <div className="border-y border-brand-neutral">
+    <Panel className="px-7 py-2">
       {/* Payments: reflect the PMS rail when connected, else Stripe payouts. */}
       {mewsConnected ? (
         <Row
@@ -82,8 +83,6 @@ export function OverviewConnections({
         />
       )}
 
-      <div className="border-t border-brand-neutral" />
-
       {/* Property system: the chosen PMS. */}
       {mewsConnected ? (
         <Row
@@ -112,7 +111,7 @@ export function OverviewConnections({
       ) : (
         <Row label="Property system" right={<SetUp href="/onboarding/pms" />} />
       )}
-    </div>
+    </Panel>
   );
 }
 
@@ -128,24 +127,26 @@ function Row({
   right: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-3">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="min-w-0">
-          <div className="text-sm font-medium text-brand-navy">{label}</div>
-          {subtext ? (
-            <div className="mt-0.5 truncate text-xs text-brand-navy/55">{subtext}</div>
-          ) : null}
+    <div className="flex flex-col gap-3.5 border-b border-sand-100 py-6 last:border-b-0">
+      <div className="flex items-center justify-between gap-5">
+        <div className="text-[19px] font-medium tracking-[-0.012em] text-ink-900">
+          {label}
         </div>
-        {logo ? <ProviderLogo provider={logo} className="h-5" /> : null}
+        <div className="flex flex-none items-center gap-2">
+          {logo ? <ProviderLogo provider={logo} className="h-[22px]" /> : null}
+          {right}
+        </div>
       </div>
-      <div className="shrink-0">{right}</div>
+      {subtext ? (
+        <div className="truncate text-base text-ink-400">{subtext}</div>
+      ) : null}
     </div>
   );
 }
 
 function ConnectedTag() {
   return (
-    <span className="inline-flex items-center gap-1 text-sm text-brand-purple">
+    <span className="inline-flex items-center gap-1 text-base font-medium text-brand-violet">
       <CheckIcon className="h-4 w-4" />
       Connected
     </span>
@@ -153,16 +154,16 @@ function ConnectedTag() {
 }
 
 function InfoTag({ text }: { text: string }) {
-  return <span className="text-sm text-brand-navy/55">{text}</span>;
+  return <span className="text-base text-ink-400">{text}</span>;
 }
 
 function SetUp({ href }: { href: string }) {
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-2 text-sm text-brand-navy/55 transition-colors hover:text-brand-purple"
+      className="inline-flex items-center gap-2 text-base text-ink-400 no-underline transition-colors hover:text-brand-violet hover:no-underline"
     >
-      <span className="h-1.5 w-1.5 bg-brand-dusty" aria-hidden="true" />
+      <span className="h-1.5 w-1.5 rounded-full bg-sand-500" aria-hidden="true" />
       Not connected · Set up
     </Link>
   );

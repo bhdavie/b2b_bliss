@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { formatCents } from "@/lib/eligibility";
+import { Panel } from "@/components/ui/primitives";
 import type { Booking, DerivedBookingStatus } from "@/lib/api";
 
 type StatusFilter = "all" | DerivedBookingStatus;
@@ -25,25 +26,36 @@ const DATE_OPTIONS: { value: DateFilter; label: string }[] = [
   { value: "month", label: "This month" },
 ];
 
-// Status badge styling — Bliss palette only (navy / purple / lavender / cream /
-// dusty / neutral). Each state is visually distinct: active = solid lavender,
-// late = warm cream "attention", payments complete = soft purple (done, not
-// closed), booking complete = solid navy (closed/terminal), cancelled/other = muted.
+/**
+ * Status hierarchy from turn 10a: Late is the loudest thing on the screen, in
+ * near-black; Active is a violet-tint pill; everything terminal or neutral is
+ * plain muted text with a grey dot. The export draws only Late, Active, Other
+ * and Payments complete, so the three remaining statuses take the plain
+ * treatment their siblings use rather than inventing a fourth.
+ */
 const STATUS_BADGE: Record<DerivedBookingStatus, { label: string; className: string; dot: string }> = {
-  active: { label: "Active", className: "bg-brand-lavender text-white", dot: "bg-white" },
+  active: {
+    label: "Active",
+    className: "bg-brand-violet-tint text-brand-violet",
+    dot: "bg-brand-violet",
+  },
   late: {
     label: "Late",
-    className: "bg-brand-cream text-brand-navy ring-1 ring-inset ring-brand-dusty",
-    dot: "bg-brand-purple",
+    className: "bg-ink-900 text-white",
+    dot: "bg-brand-lavender",
   },
   payments_complete: {
     label: "Payments complete",
-    className: "bg-brand-lavender/25 text-brand-purple ring-1 ring-inset ring-brand-purple/30",
-    dot: "bg-brand-purple",
+    className: "text-ink-400",
+    dot: "bg-sand-500",
   },
-  booking_complete: { label: "Booking complete", className: "bg-brand-navy text-white", dot: "bg-white" },
-  cancelled: { label: "Cancelled", className: "bg-brand-neutral/50 text-ink-muted", dot: "bg-ink-muted" },
-  other: { label: "Other", className: "bg-brand-neutral/25 text-ink-muted", dot: "bg-ink-muted" },
+  booking_complete: {
+    label: "Booking complete",
+    className: "text-ink-400",
+    dot: "bg-sand-500",
+  },
+  cancelled: { label: "Cancelled", className: "text-ink-400", dot: "bg-sand-500" },
+  other: { label: "Other", className: "text-ink-400", dot: "bg-sand-500" },
 };
 
 // Tab membership is driven entirely by the live derived status — no stored
@@ -116,8 +128,8 @@ export function BookingsTable({ bookings }: { bookings: Booking[] }) {
   }, [sorted, tab, search, status, dateRange]);
 
   return (
-    <div className="mt-6">
-      <div className="inline-flex rounded-md border border-brand-neutral bg-brand-cream/40 p-1">
+    <div>
+      <div className="mb-7 inline-flex gap-1.5 self-start rounded-full bg-[#F4F2EF] p-[5px]">
         <TabButton active={tab === "active"} onClick={() => setTab("active")} count={counts.active}>
           Active
         </TabButton>
@@ -126,102 +138,105 @@ export function BookingsTable({ bookings }: { bookings: Booking[] }) {
         </TabButton>
       </div>
 
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-navy/40" />
+      <div className="mb-8 grid grid-cols-1 gap-5 sm:grid-cols-[minmax(0,1fr)_240px_200px]">
+        <div className="relative">
+          <SearchIcon className="pointer-events-none absolute left-[17px] top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search guest or package"
-            className="w-full rounded-md border border-brand-neutral bg-white py-2 pl-9 pr-3 text-sm text-ink placeholder:text-brand-navy/40 focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/50"
+            className="w-full rounded-xl border-2 border-sand-500 bg-white py-[15px] pl-[45px] pr-[17px] text-[17px] text-ink-900 placeholder:text-ink-300 focus:border-brand-violet focus:outline-none focus:shadow-[0_0_0_4px_rgba(90,27,181,0.10)]"
           />
         </div>
         <Select value={status} onChange={(v) => setStatus(v as StatusFilter)} options={STATUS_OPTIONS} />
         <Select value={dateRange} onChange={(v) => setDateRange(v as DateFilter)} options={DATE_OPTIONS} />
       </div>
 
-      <div className="mt-4 overflow-x-auto border border-brand-neutral">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="bg-brand-cream/70 text-left">
+      <Panel className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <div className="min-w-[860px]">
+            <div className="grid grid-cols-[minmax(0,1fr)_140px_125px_115px_170px] gap-x-4 border-b border-sand-200 bg-sand-50 px-8 py-[18px]">
               <Th>Booking package</Th>
               <Th>Guest</Th>
               <Th>Booking date</Th>
               <Th className="text-right">Total</Th>
               <Th>Status</Th>
-            </tr>
-          </thead>
-          <tbody>
+            </div>
             {filtered.map((b) => (
               <BookingRow key={b.id} booking={b} />
             ))}
             {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-12 text-center text-sm text-brand-navy/55">
-                  {tab === "active"
-                    ? "No active bookings match these filters."
-                    : "Nothing in the archive yet. Cancelled and completed bookings land here."}
-                </td>
-              </tr>
+              <div className="px-8 py-16 text-center text-[17px] text-ink-400">
+                {tab === "active"
+                  ? "No active bookings match these filters."
+                  : "Nothing in the archive yet. Cancelled and completed bookings land here."}
+              </div>
             ) : null}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        </div>
+      </Panel>
     </div>
   );
 }
 
 function BookingRow({ booking }: { booking: Booking }) {
-  const badge = STATUS_BADGE[booking.derivedStatus ?? "other"];
+  const status = booking.derivedStatus ?? "other";
+  const badge = STATUS_BADGE[status];
+  const plain = status !== "active" && status !== "late";
   return (
-    <tr className="border-t border-brand-neutral transition-colors hover:bg-brand-cream/40">
-      <td className="px-4 py-3.5">
-        <Link
-          href={`/bookings/${booking.id}`}
-          className="font-medium text-ink hover:text-brand-purple hover:underline"
-        >
-          {booking.serviceName}
-        </Link>
-      </td>
-      <td className="px-4 py-3.5 text-ink">
+    <Link
+      href={`/bookings/${booking.id}`}
+      className="grid grid-cols-[minmax(0,1fr)_140px_125px_115px_170px] items-center gap-x-4 border-b border-sand-100 px-8 py-[22px] no-underline transition-colors last:border-b-0 hover:bg-sand-50 hover:no-underline"
+    >
+      <div className="truncate text-[17px] font-medium tracking-[-0.012em] text-ink-900">
+        {booking.serviceName}
+      </div>
+      <div className="truncate text-[17px] text-ink-700">
         {booking.customerNameHint ?? booking.customerEmailHint ?? (
-          <span className="text-brand-navy/40">-</span>
+          <span className="text-ink-300">-</span>
         )}
-      </td>
-      <td className="px-4 py-3.5 text-ink tabular-nums">{formatBookingDate(booking.createdAt)}</td>
-      <td className="px-4 py-3.5 text-right tabular-nums text-ink">
+      </div>
+      <div className="text-[17px] text-ink-500">
+        {formatBookingDate(booking.createdAt)}
+      </div>
+      <div className="text-right text-lg font-medium tabular-nums text-ink-900">
         {booking.originalTotalAmountCents != null &&
         booking.originalTotalAmountCents > booking.totalAmountCents ? (
           <div className="flex flex-col items-end leading-tight">
-            <span className="font-medium">{formatCents(booking.totalAmountCents)}</span>
-            <span className="text-[10px] text-brand-navy/45 line-through">
+            <span>{formatCents(booking.totalAmountCents)}</span>
+            <span className="text-[13px] text-ink-400 line-through">
               {formatCents(booking.originalTotalAmountCents)}
             </span>
           </div>
         ) : (
-          <span className="font-medium">{formatCents(booking.totalAmountCents)}</span>
+          <span>{formatCents(booking.totalAmountCents)}</span>
         )}
-      </td>
-      <td className="px-4 py-3.5">
+      </div>
+      <div>
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${badge.className}`}
+          className={`inline-flex items-center gap-2 text-[15px] font-medium ${
+            plain ? "" : "rounded-full px-[15px] py-[7px]"
+          } ${badge.className}`}
         >
-          <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} aria-hidden="true" />
+          <span
+            className={`h-1.5 w-1.5 flex-none rounded-full ${badge.dot}`}
+            aria-hidden="true"
+          />
           {badge.label}
         </span>
-      </td>
-    </tr>
+      </div>
+    </Link>
   );
 }
 
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <th
-      className={`px-4 py-3 text-[13px] font-bold uppercase tracking-wide text-brand-navy ${className}`}
+    <div
+      className={`whitespace-nowrap text-xs uppercase tracking-[0.08em] text-ink-400 ${className}`}
     >
       {children}
-    </th>
+    </div>
   );
 }
 
@@ -241,16 +256,16 @@ function TabButton({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`inline-flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-semibold transition-colors ${
+      className={`inline-flex items-center gap-[9px] rounded-full px-5 py-[11px] text-base tracking-[-0.01em] transition-colors ${
         active
-          ? "bg-brand-lavender text-white shadow-sm"
-          : "text-brand-navy/70 hover:text-brand-navy"
+          ? "bg-brand-violet font-medium text-white"
+          : "text-ink-600 hover:text-ink-900"
       }`}
     >
       {children}
       <span
-        className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
-          active ? "bg-white/25 text-white" : "bg-brand-neutral/50 text-brand-navy/70"
+        className={`rounded-full px-[9px] py-0.5 text-sm tabular-nums ${
+          active ? "bg-white/[.22] text-white" : "bg-[#E6E2DD] text-ink-600"
         }`}
       >
         {count}
@@ -272,7 +287,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="rounded-md border border-brand-neutral bg-white px-3 py-2 text-sm text-ink focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/50"
+      className="rounded-xl border border-sand-500 bg-white px-[18px] py-4 text-[17px] text-ink-900 focus:border-brand-violet focus:outline-none focus:shadow-[0_0_0_4px_rgba(90,27,181,0.10)]"
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { activateOnboarding, type OnboardingStatus, type PmsType } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
+import { Panel } from "@/components/ui/primitives";
 
 // Setup checklist shown on the dashboard until the property reaches `active`.
 // Each step links to its page; the final step activates the property.
@@ -65,18 +66,20 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
   }
 
   return (
-    <section className="card card-subtle mb-10 p-6">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-lg font-semibold text-brand-navy">Finish setting up your property</h2>
-        <span className="text-xs text-brand-navy/60">
+    <Panel className="bg-sand-50 px-8 pb-8 pt-7">
+      <div className="flex items-baseline justify-between gap-6">
+        <h2 className="text-[22px] font-medium tracking-[-0.015em] text-ink-900">
+          Finish setting up your property
+        </h2>
+        <span className="flex-none text-base text-ink-400">
           {status.steps.filter((s) => s.done && s.key !== "active").length} of {items.length} done
         </span>
       </div>
-      <p className="mt-1 text-sm text-brand-navy/70">
+      <p className="mt-2 text-[17px] text-ink-500">
         A few quick steps and you can start taking payment plans.
       </p>
 
-      <ol className="mt-5 space-y-2">
+      <ol className="mt-6 space-y-2">
         {items.map((it, i) => {
           const isDone = done(it.key);
           const isCurrent = it.key === currentKey;
@@ -84,26 +87,30 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
             <li
               key={it.key}
               className={[
-                "flex items-center gap-3 rounded-md border px-4 py-3",
-                isCurrent ? "border-brand-purple bg-white" : "border-brand-neutral bg-white/60",
+                "flex items-center gap-4 rounded-xl border bg-white px-5 py-4",
+                isCurrent ? "border-brand-violet" : "border-sand-200",
               ].join(" ")}
             >
               <span
                 className={[
-                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
-                  isDone ? "bg-emerald-100 text-emerald-700" : isCurrent ? "bg-brand-lavender text-brand-navy-dark" : "bg-brand-cream text-ink-muted",
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+                  isDone
+                    ? "bg-brand-violet text-white"
+                    : isCurrent
+                      ? "bg-brand-lavender text-brand-violet-deep"
+                      : "bg-sand-200 text-ink-400",
                 ].join(" ")}
               >
                 {isDone ? "✓" : i + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-ink">{it.label}</div>
-                <div className="mt-0.5 truncate text-xs text-brand-navy/60">{it.hint}</div>
+                <div className="text-base font-medium text-ink-900">{it.label}</div>
+                <div className="mt-0.5 truncate text-sm text-ink-400">{it.hint}</div>
               </div>
               {!isDone && it.href ? (
                 <Button
                   href={it.href}
-                  variant={isCurrent ? "merchant" : "ghost"}
+                  variant={isCurrent ? "primary" : "ghost"}
                   className="shrink-0"
                 >
                   {isCurrent ? "Continue" : "Open"}
@@ -115,23 +122,25 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
       </ol>
 
       {error ? (
-        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-base text-red-700">{error}</p>
       ) : null}
 
-      <div className="mt-5 flex items-center gap-3">
+      <div className="mt-6 flex flex-wrap items-center gap-4">
         <Button
           type="button"
           onClick={handleActivate}
           disabled={!canActivate || activating}
-          variant="merchant"
+          variant="primary"
           className="disabled:opacity-50"
         >
           {activating ? "Going live" : "Go live"}
         </Button>
         {!canActivate ? (
-          <span className="text-xs text-brand-navy/55">Finish the steps above to go live.</span>
+          <span className="text-base text-ink-400">
+            Finish the steps above to go live.
+          </span>
         ) : null}
       </div>
-    </section>
+    </Panel>
   );
 }

@@ -11,13 +11,22 @@
 export function SectionHeading({
   children,
   className = "",
+  track = "0.06em",
 }: {
   children: React.ReactNode;
   className?: string;
+  /**
+   * The export uses 0.06em on the guest screens (turns 5-6) and 0.08em on the
+   * merchant ones (turns 9-13). Passed explicitly rather than overridden via
+   * className, so the winner does not depend on utility emission order.
+   */
+  track?: "0.06em" | "0.08em";
 }) {
   return (
     <div
-      className={`text-[13px] uppercase tracking-[0.06em] text-ink-400 ${className}`}
+      className={`text-[13px] uppercase text-ink-400 ${
+        track === "0.08em" ? "tracking-[0.08em]" : "tracking-[0.06em]"
+      } ${className}`}
     >
       {children}
     </div>
