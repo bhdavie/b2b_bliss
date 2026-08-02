@@ -9,6 +9,7 @@ import {
   formatScheduleDateLong,
   type PublicPlanPortal,
 } from "@/lib/publicApi";
+import { SectionHeading } from "@/components/ui/primitives";
 import { PayEarlyButton } from "./PayEarlyButton";
 import { UpdateCardSection } from "./UpdateCardSection";
 import { CancelPlanSection } from "./CancelPlanSection";
@@ -282,22 +283,6 @@ export function PlanPortal({
       <div className="-mx-6 border-t border-sand-200 px-6 pb-8 pt-7 text-sm text-ink-400 xl:-mx-16 xl:px-16">
         Powered by <BlissWordmark />
       </div>
-    </div>
-  );
-}
-
-function SectionHeading({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`text-[13px] uppercase tracking-[0.06em] text-ink-400 ${className}`}
-    >
-      {children}
     </div>
   );
 }

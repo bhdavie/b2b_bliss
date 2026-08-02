@@ -1,5 +1,5 @@
 import { type AccountPlanCard } from "@/lib/publicApi";
-import { Panel } from "@/components/portal/primitives";
+import { Panel } from "@/components/ui/primitives";
 import { PlanCard, type PlanOrigin } from "./PlanCard";
 
 export function PlansList({

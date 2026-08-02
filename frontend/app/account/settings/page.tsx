@@ -2,7 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { fetchAccountPlans, fetchPlanPortal } from "@/lib/publicApi";
 import { PortalShell } from "@/components/portal/PortalShell";
-import { PageHeader, Panel, SectionHeading } from "@/components/portal/primitives";
+import { PageHeader, Panel, SectionHeading } from "@/components/ui/primitives";
 import { SettingsCardOnFile } from "@/components/portal/SettingsCardOnFile";
 
 export default async function AccountSettingsPage() {

@@ -5,7 +5,7 @@ import {
   formatScheduleDateShort,
   type AccountPlanCard,
 } from "@/lib/publicApi";
-import { Panel } from "@/components/portal/primitives";
+import { Panel } from "@/components/ui/primitives";
 
 /**
  * Plan card for the guest portal lists, built to the settled design (turn 6a):

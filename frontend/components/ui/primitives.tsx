@@ -1,11 +1,11 @@
 /**
- * Shared chrome for the guest portal screens, matching the treatment landed on
- * the plan detail screen: no card wrappers around sections, small uppercase
+ * Shared page chrome for the settled design, used by the guest portal and the
+ * merchant dashboard alike: no card wrappers around sections, small uppercase
  * section labels instead of large headings, sand borders and ink type.
  *
- * PlanPortal.tsx still carries its own private copy of SectionHeading. Folding
- * that one into this file is a follow-up: it needs an edit to PlanPortal, which
- * was out of scope for the screens this file was created for.
+ * These sit alongside Button/Card/Input/Label rather than under either surface,
+ * because turns 5, 6 and 7-13 of the design export all draw the same page head,
+ * section label and panel.
  */
 
 export function SectionHeading({
