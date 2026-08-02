@@ -22,6 +22,7 @@ import {
   type StripeConnectStatus,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
+import { PageHeader, Panel } from "@/components/ui/primitives";
 
 export type AccountInitial = {
   hotelName: string;
@@ -50,31 +51,27 @@ export function AccountSettings({
   connections: AccountConnections;
 }) {
   return (
-    <div>
-      <header>
-        <h1 className="text-3xl font-bold text-brand-navy">Account settings</h1>
-        <p className="mt-1 text-brand-navy/70">
-          Manage your property details and the tools Bliss connects to.
-        </p>
-      </header>
+    <div className="flex max-w-[980px] flex-col">
+      <PageHeader
+        title="Account settings"
+        subtitle="Manage your property details and the tools Bliss connects to."
+      />
 
-      <div className="mt-4">
-        <AccountInformation initial={initial} />
+      <AccountInformation initial={initial} />
 
-        <StackedSection
-          title="Property management connection"
-          helper="Sync rooms, rates, and bookings from your property system."
-        >
-          <PropertyManagementSection connections={connections} />
-        </StackedSection>
+      <StackedSection
+        title="Property management connection"
+        helper="Sync rooms, rates, and bookings from your property system."
+      >
+        <PropertyManagementSection connections={connections} />
+      </StackedSection>
 
-        <StackedSection
-          title="Payment processor connection"
-          helper="Accept payments and installments, and route payouts to your bank."
-        >
-          <PaymentProcessorSection connections={connections} />
-        </StackedSection>
-      </div>
+      <StackedSection
+        title="Payment processor connection"
+        helper="Accept payments and installments, and route payouts to your bank."
+      >
+        <PaymentProcessorSection connections={connections} />
+      </StackedSection>
     </div>
   );
 }
@@ -131,6 +128,7 @@ function AccountInformation({ initial }: { initial: AccountInitial }) {
     <StackedSection
       title="Account information"
       helper="Your property details and how guests reach you."
+      dense
     >
       <FieldRow
           label="Hotel name"
@@ -204,16 +202,25 @@ function StackedSection({
   title,
   helper,
   children,
+  dense = false,
 }: {
   title: string;
   helper: string;
   children: React.ReactNode;
+  /** Account information holds ruled rows, so its panel takes tighter padding. */
+  dense?: boolean;
 }) {
   return (
-    <section className="border-t border-brand-neutral py-10">
-      <h2 className="text-2xl font-bold text-brand-navy">{title}</h2>
-      <p className="mt-1.5 text-sm text-brand-navy/55">{helper}</p>
-      <div className="mt-7 max-w-2xl sm:pl-6">{children}</div>
+    <section className="mb-14 flex flex-col">
+      <div className="mb-[22px] flex flex-col gap-2">
+        <h2 className="text-2xl font-medium tracking-[-0.02em] text-ink-900">
+          {title}
+        </h2>
+        <p className="text-[17px] text-ink-400">{helper}</p>
+      </div>
+      <Panel className={dense ? "px-8 py-1.5" : "px-8 pb-7 pt-[30px]"}>
+        {children}
+      </Panel>
     </section>
   );
 }
@@ -231,41 +238,44 @@ function FieldRow({
 }) {
   const [editing, setEditing] = useState(false);
   return (
-    <div className={`py-5 ${last ? "" : "border-b border-brand-neutral"}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <FieldLabel>{label}</FieldLabel>
-          {!editing ? (
-            <div className="mt-1 whitespace-pre-line break-words text-base text-ink">
-              {display !== "" ? display : <span className="text-brand-navy/40">Not set</span>}
-            </div>
-          ) : null}
-        </div>
-        {!editing ? (
+    <div
+      className={`flex flex-col gap-2 py-6 ${last ? "" : "border-b border-sand-100"}`}
+    >
+      <FieldLabel>{label}</FieldLabel>
+      {!editing ? (
+        // The edit control sits beside its value, not at the row's far edge.
+        <div className="flex items-baseline gap-[18px]">
+          <div className="min-w-0 whitespace-pre-line break-words text-xl tracking-[-0.012em] text-ink-900">
+            {display !== "" ? display : <span className="text-ink-300">Not set</span>}
+          </div>
           <button
             type="button"
             onClick={() => setEditing(true)}
             aria-label={`Edit ${label.toLowerCase()}`}
-            className="shrink-0 rounded-md p-1 text-brand-navy/45 transition-colors hover:text-brand-purple"
+            className="flex-none text-base font-medium text-brand-violet transition-colors hover:text-brand-violet-deep"
           >
-            <PencilIcon className="h-4 w-4" />
+            Edit
           </button>
-        ) : null}
-      </div>
-      {editing ? <div className="mt-3">{renderEditor({ close: () => setEditing(false) })}</div> : null}
+        </div>
+      ) : (
+        <div>{renderEditor({ close: () => setEditing(false) })}</div>
+      )}
     </div>
   );
 }
 
 function LockedRow({ label, display }: { label: string; display: string }) {
   return (
-    <div className="border-b border-brand-neutral py-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <FieldLabel>{label}</FieldLabel>
-          <div className="mt-1 break-words text-base text-ink">{display}</div>
+    <div className="flex flex-col gap-2 border-b border-sand-100 py-6">
+      <FieldLabel>{label}</FieldLabel>
+      <div className="flex items-baseline gap-[18px]">
+        <div className="min-w-0 break-words text-xl tracking-[-0.012em] text-ink-900">
+          {display}
         </div>
-        <LockIcon className="h-4 w-4 shrink-0 text-brand-navy/35" />
+        <span className="flex flex-none items-center gap-[7px] text-[15px] text-ink-400">
+          <LockIcon className="h-3.5 w-3.5" />
+          Locked
+        </span>
       </div>
     </div>
   );
@@ -273,7 +283,7 @@ function LockedRow({ label, display }: { label: string; display: string }) {
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[11px] font-medium uppercase tracking-wide text-brand-navy/55">
+    <div className="text-xs uppercase tracking-[0.08em] text-ink-400">
       {children}
     </div>
   );
@@ -382,24 +392,6 @@ function Input({
       autoFocus={autoFocus}
       className="w-full rounded-md border border-brand-neutral bg-white px-3 py-2.5 text-sm text-ink placeholder:text-brand-navy/35 focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/50"
     />
-  );
-}
-
-function PencilIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-    </svg>
   );
 }
 

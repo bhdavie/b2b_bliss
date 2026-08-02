@@ -1,4 +1,5 @@
 import { InstallSnippet } from "@/components/merchant/InstallSnippet";
+import { PageHeader, Panel } from "@/components/ui/primitives";
 import { fetchMerchantSession } from "@/lib/auth";
 
 /**
@@ -39,23 +40,18 @@ export default async function InstallPage() {
   const pms = session.pmsType;
 
   return (
-    <>
-      <header>
-        <h1 className="text-3xl font-bold text-brand-navy">Install</h1>
-        <p className="mt-1 text-brand-navy/70">
-          Add Bliss to your booking engine so guests see a payment plan while
-          they book.
-        </p>
-      </header>
+    <div className="flex max-w-[1000px] flex-col">
+      <PageHeader
+        title="Install"
+        subtitle="Add Bliss to your booking engine so guests see a payment plan while they book."
+      />
 
-      <section className="mt-8 space-y-4">
-        <h2 className="text-sm font-semibold text-brand-navy">
-          Your booking engine
-        </h2>
-        <p className="-mt-2 text-xs text-brand-navy/65">
+      <SubHeading>Your booking engine</SubHeading>
+      <Panel className="mb-14 px-8 pb-7 pt-[26px]">
+        <p className="text-lg leading-[1.55] text-ink-500">
           Bliss installs differently depending on which system takes your
           bookings. Yours is set up for{" "}
-          <span className="font-semibold text-brand-navy">
+          <span className="font-medium text-ink-900">
             {pms === "mews"
               ? "Mews"
               : pms === "cloudbeds"
@@ -64,70 +60,104 @@ export default async function InstallPage() {
           </span>
           .
         </p>
-      </section>
+      </Panel>
 
       {pms === "mews" ? (
-        <section className="mt-10 space-y-4 border-t border-brand-neutral pt-6">
-          <h2 className="text-sm font-semibold text-brand-navy">
+        <>
+          <SubHeading helper="This snippet carries your property's own identifier, so it picks up your plan rules automatically. If you change your plan settings later, the snippet does not need updating.">
             Add Bliss through Google Tag Manager
-          </h2>
-          <p className="-mt-2 text-xs text-brand-navy/65">
-            This snippet carries your property&apos;s own identifier, so it
-            picks up your plan rules automatically. If you change your plan
-            settings later, the snippet does not need updating.
-          </p>
-
-          <ol className="space-y-1.5 text-xs text-brand-navy/80">
-            {GTM_STEPS.map((step, i) => (
-              <li key={step} className="flex gap-2.5">
-                <span className="flex h-4 w-4 shrink-0 items-center justify-center bg-brand-lavender text-[10px] font-semibold text-brand-navy">
-                  {i + 1}
-                </span>
-                <span>{step}</span>
-              </li>
-            ))}
-          </ol>
-
-          <InstallSnippet snippet={mewsSnippet(session.slug)} />
-        </section>
+          </SubHeading>
+          <Panel className="px-10 pb-10 pt-9">
+            {GTM_STEPS.map((step, i) => {
+              const isLast = i === GTM_STEPS.length - 1;
+              return (
+                <div
+                  key={step}
+                  className="grid grid-cols-[36px_minmax(0,1fr)] gap-x-[22px]"
+                >
+                  <div className="flex flex-col items-center">
+                    <div className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-brand-violet text-base font-semibold text-white">
+                      {i + 1}
+                    </div>
+                    {isLast ? null : (
+                      <div className="min-h-4 w-[1.5px] flex-1 bg-brand-lavender" />
+                    )}
+                  </div>
+                  <div
+                    className={`text-[19px] leading-[1.45] text-ink-900 ${
+                      isLast ? "pt-1.5" : "pb-[26px] pt-1.5"
+                    }`}
+                  >
+                    {step}
+                    {i === 2 ? (
+                      <div className="mt-4">
+                        <InstallSnippet snippet={mewsSnippet(session.slug)} />
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </Panel>
+        </>
       ) : null}
 
       {pms === "cloudbeds" ? (
-        <section className="mt-10 space-y-4 border-t border-brand-neutral pt-6">
-          <h2 className="text-sm font-semibold text-brand-navy">
-            Add Bliss to your booking engine
-          </h2>
-          <p className="-mt-2 text-xs text-brand-navy/65">
+        <>
+          <SubHeading>Add Bliss to your booking engine</SubHeading>
+          <Panel className="px-8 pb-7 pt-[26px]">
             {/* The Cloudbeds equivalent is Booking Engine Extensions rather than
                 a Tag Manager container, so the snippet shape and the injection
-                point both differ from Mews. Not built yet — no snippet is shown
+                point both differ from Mews. Not built yet; no snippet is shown
                 rather than one that would not load. */}
-            The Cloudbeds install uses Booking Engine Extensions rather than a
-            tag container. We are still building it, so there is nothing to
-            paste yet. We will be in touch as soon as it is ready.
-          </p>
-        </section>
+            <p className="text-lg leading-[1.55] text-ink-500">
+              The Cloudbeds install uses Booking Engine Extensions rather than a
+              tag container. We are still building it, so there is nothing to
+              paste yet. We will be in touch as soon as it is ready.
+            </p>
+          </Panel>
+        </>
       ) : null}
 
       {pms === "stripe" ? (
-        <section className="mt-10 space-y-4 border-t border-brand-neutral pt-6 opacity-60">
-          <h2 className="text-sm font-semibold text-brand-navy">
-            Add Bliss to your booking engine
-          </h2>
-          <p className="-mt-2 text-xs text-brand-navy/65">
-            You have not connected a booking engine yet, so there is nothing to
-            install. Your guests can still pay over time through the payment
-            links you send them.
-          </p>
-          <p className="text-xs text-brand-navy/65">
-            Connect Mews or Cloudbeds in{" "}
-            <span className="font-semibold text-brand-navy">
-              Account settings
-            </span>{" "}
-            to show plans inside your booking engine.
-          </p>
-        </section>
+        <>
+          <SubHeading>Add Bliss to your booking engine</SubHeading>
+          <Panel className="gap-4 px-8 pb-7 pt-[26px]">
+            <p className="text-lg leading-[1.55] text-ink-500">
+              You have not connected a booking engine yet, so there is nothing
+              to install. Your guests can still pay over time through the
+              payment links you send them.
+            </p>
+            <p className="text-lg leading-[1.55] text-ink-500">
+              Connect Mews or Cloudbeds in{" "}
+              <span className="font-medium text-ink-900">Account settings</span>{" "}
+              to show plans inside your booking engine.
+            </p>
+          </Panel>
+        </>
       ) : null}
-    </>
+    </div>
+  );
+}
+
+/** 24px section title over an optional 17px helper line, per turns 11 and 13. */
+function SubHeading({
+  children,
+  helper,
+}: {
+  children: React.ReactNode;
+  helper?: string;
+}) {
+  return (
+    <div className="mb-[22px] flex flex-col gap-2.5">
+      <h2 className="text-2xl font-medium tracking-[-0.02em] text-ink-900">
+        {children}
+      </h2>
+      {helper ? (
+        <p className="max-w-[760px] text-[17px] leading-[1.55] text-ink-400">
+          {helper}
+        </p>
+      ) : null}
+    </div>
   );
 }

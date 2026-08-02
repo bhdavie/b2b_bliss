@@ -1,5 +1,5 @@
-import { Card } from "@/components/ui/Card";
 import { fetchMerchantSession } from "@/lib/auth";
+import { Panel } from "@/components/ui/primitives";
 
 export default async function PayoutsPage() {
   const session = await fetchMerchantSession();
@@ -10,24 +10,21 @@ export default async function PayoutsPage() {
   const isMews = session?.pmsType === "mews";
 
   return (
-    <>
-      <header>
-        <h1 className="text-3xl font-bold">Payouts</h1>
-        <p className="mt-1 text-ink-muted">
+    <div className="flex max-w-[980px] flex-col">
+      <h1 className="mb-11 text-[44px] font-medium leading-[1.05] tracking-[-0.035em] text-ink-900">
+        Payouts
+      </h1>
+
+      <Panel className="items-center gap-5 bg-sand-50 px-16 pb-20 pt-[76px] text-center">
+        <div className="text-[28px] font-medium tracking-[-0.02em] text-ink-900">
+          No payouts yet
+        </div>
+        <p className="max-w-[560px] text-lg leading-[1.6] text-ink-500">
           {isMews
             ? "Your guests are charged through Mews, so payments settle directly to your property's own account. Bliss does not hold or route these funds."
-            : "Payouts route through Stripe Connect once you complete onboarding."}
+            : "Payouts route through Stripe Connect once you complete onboarding. You will see plans pay out here once a plan completes."}
         </p>
-      </header>
-
-      <Card padding="2xl" className="mt-8 text-center">
-        <div className="text-sm font-medium">No payouts yet</div>
-        <p className="mt-1 text-ink-muted text-sm">
-          {isMews
-            ? "Mews-rail plans settle straight to your property, so there is nothing to route here."
-            : "You will see plans pay out here once a plan completes."}
-        </p>
-      </Card>
-    </>
+      </Panel>
+    </div>
   );
 }

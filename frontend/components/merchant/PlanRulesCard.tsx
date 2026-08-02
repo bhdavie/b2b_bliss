@@ -161,7 +161,7 @@ export function PlanRulesCard({
   const bothAllowed = form.allowedFrequencies === "both";
 
   return (
-    <form onSubmit={handleSubmit} className="card p-6 space-y-6">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-8 rounded-panel border border-sand-200 px-8 py-8">
       <Row label="Lead time" hint="How far in advance bookings must be to qualify for a plan.">
         <div className="grid grid-cols-2 gap-3">
           <NumberInput
@@ -341,13 +341,13 @@ export function PlanRulesCard({
       </Row>
 
       {error ? (
-        <div className="text-xs text-red-600" role="alert">
+        <div className="text-base text-red-700" role="alert">
           {error}
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between border-t border-brand-neutral pt-4">
-        <div className="text-xs text-brand-navy">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-t border-sand-100 pt-6">
+        <div className="text-[17px] text-ink-400">
           {savedAt ? "Rules saved" : "Customers see these on their hosted page."}
         </div>
         <button
@@ -419,9 +419,9 @@ function Row({
   return (
     <section className="grid gap-3 sm:grid-cols-[180px_1fr]">
       <div>
-        <div className="text-sm font-medium text-ink">{label}</div>
+        <div className="text-[19px] font-medium tracking-[-0.012em] text-ink-900">{label}</div>
         {hint ? (
-          <div className="mt-1 text-xs text-brand-navy leading-snug">{hint}</div>
+          <div className="mt-2 text-base leading-[1.5] text-ink-400">{hint}</div>
         ) : null}
       </div>
       <div>{children}</div>
@@ -444,7 +444,7 @@ function NumberInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-brand-navy">{label}</span>
+      <span className="text-base text-ink-500">{label}</span>
       <Input
         type="number"
         inputMode="numeric"
@@ -471,7 +471,7 @@ function DollarInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-brand-navy">{label}</span>
+      <span className="text-base text-ink-500">{label}</span>
       <div className="relative mt-1.5">
         <span
           className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-ink-muted"
@@ -509,7 +509,7 @@ function PercentInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-brand-navy">{label}</span>
+      <span className="text-base text-ink-500">{label}</span>
       <div className="relative mt-1.5">
         <Input
           type="number"

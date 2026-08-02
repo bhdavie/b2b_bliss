@@ -10,8 +10,8 @@ import {
   type PlanRules,
   type RefundPolicy,
 } from "@/lib/api";
-import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { Panel } from "@/components/ui/primitives";
 
 type FormState = {
   refundPolicy: RefundPolicy;
@@ -73,15 +73,32 @@ const AFTER_RETRIES_OPTIONS: { value: AfterRetriesAction; label: string; body: s
   },
 ];
 
+/**
+ * Which of the three panels to render. The settled design splits Payment
+ * settings into tabs, and tabs 3-5 are this component's three panels; passing a
+ * section renders just that one. Omitting it renders all three, which is what
+ * the onboarding funnel still does.
+ *
+ * The form state, validation and save handler are shared and unchanged in every
+ * case: whichever panel is on screen, saving PUTs the same full PlanRules
+ * payload built from `initial` plus this component's own form state.
+ */
+export type PoliciesSection = "cancellation" | "deadline" | "failed";
+
 export function PoliciesCard({
   initial,
   saveButtonClassName = "btn-primary-merchant",
+  section,
 }: {
   initial: PlanRules;
   saveButtonClassName?: string;
+  section?: PoliciesSection;
 }) {
   const [form, setForm] = useState<FormState>(toForm(initial));
   const [saving, setSaving] = useState(false);
+  // Every panel when no section is named (the onboarding funnel still mounts it
+  // that way), or only the named one (the tabbed Payment settings screen).
+  const show = (s: PoliciesSection) => section === undefined || section === s;
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -210,8 +227,9 @@ export function PoliciesCard({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
-      <Card padding="lg" className="space-y-6">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-8">
+      {show("cancellation") ? (
+      <Panel className="gap-7 px-8 pb-8 pt-7">
         <SectionTitle>Cancellation policies</SectionTitle>
 
         <Row label="Refund policy" hint="What customers get back if they cancel a plan in progress.">
@@ -290,9 +308,11 @@ export function PoliciesCard({
             ) : null}
           </div>
         </Row>
-      </Card>
+      </Panel>
+      ) : null}
 
-      <Card padding="lg" className="space-y-6">
+      {show("deadline") ? (
+      <Panel className="gap-7 px-8 pb-8 pt-7">
         <SectionTitle>Payment deadline</SectionTitle>
 
         <Row
@@ -322,9 +342,11 @@ export function PoliciesCard({
             </div>
           ) : null}
         </Row>
-      </Card>
+      </Panel>
+      ) : null}
 
-      <Card padding="lg" className="space-y-6">
+      {show("failed") ? (
+      <Panel className="gap-7 px-8 pb-8 pt-7">
         <SectionTitle>Failed payment handling</SectionTitle>
 
         <Row label="Retry policy" hint="How aggressively to retry a failed installment.">
@@ -421,16 +443,17 @@ export function PoliciesCard({
             ))}
           </div>
         </Row>
-      </Card>
+      </Panel>
+      ) : null}
 
       {error ? (
-        <div className="text-xs text-red-600" role="alert">
+        <div className="text-base text-red-700" role="alert">
           {error}
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-brand-navy">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="text-[17px] text-ink-400">
           {savedAt ? "Policies saved" : "These show on the customer's hosted page as trust signals."}
         </div>
         <button type="submit" disabled={saving} className={saveButtonClassName}>
@@ -492,7 +515,7 @@ function parseDollarsOrNull(input: string): number | null | undefined {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-sm font-medium text-ink border-b border-brand-neutral pb-2">
+    <h3 className="border-b border-sand-100 pb-4 text-2xl font-medium tracking-[-0.02em] text-ink-900">
       {children}
     </h3>
   );

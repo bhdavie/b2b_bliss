@@ -159,7 +159,7 @@ export function BlackoutDatesCard({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card p-6 space-y-6">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-8 rounded-panel border border-sand-200 px-8 py-8">
       <section className="grid gap-3 sm:grid-cols-[180px_1fr]">
         <div>
           <div className="text-sm font-medium text-ink">Blackout dates</div>
@@ -225,13 +225,13 @@ export function BlackoutDatesCard({
       </section>
 
       {error ? (
-        <div className="text-xs text-red-600" role="alert">
+        <div className="text-base text-red-700" role="alert">
           {error}
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between border-t border-brand-neutral pt-4">
-        <div className="text-xs text-brand-navy">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-t border-sand-100 pt-6">
+        <div className="text-[17px] text-ink-400">
           {savedAt ? "Blackout dates saved" : "Guests see no plan option on these stays."}
         </div>
         <button type="submit" disabled={saving} className={saveButtonClassName}>
