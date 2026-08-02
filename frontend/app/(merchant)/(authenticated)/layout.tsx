@@ -15,10 +15,12 @@ export default async function AuthenticatedLayout({
   // see a setup checklist (rendered on /home) until they go live.
 
   return (
-    <div className="min-h-screen bg-white font-body">
-      <Sidebar email={session.email} />
-      <main className="md:pl-60">
-        <div className="max-w-4xl mx-auto px-6 py-8">{children}</div>
+    <div className="min-h-screen bg-white font-body text-ink-900">
+      <Sidebar email={session.email} businessName={session.businessName} />
+      <main className="md:pl-[264px]">
+        <div className="mx-auto max-w-[1136px] px-6 pb-[72px] pt-16 xl:px-16">
+          {children}
+        </div>
       </main>
     </div>
   );

@@ -17,44 +17,65 @@ const NAV: NavItem[] = [
   { href: "/install", label: "Install" },
 ];
 
-export function Sidebar({ email }: { email: string }) {
+export function Sidebar({
+  email,
+  businessName,
+}: {
+  email: string;
+  /** Seeds the avatar initial, as the design does ("M" for Marbrook House). */
+  businessName?: string | null;
+}) {
   const pathname = usePathname();
+  const initial = (
+    businessName?.trim()?.[0] ??
+    email.trim()[0] ??
+    "?"
+  ).toUpperCase();
 
   return (
-    <aside className="md:fixed md:inset-y-0 md:left-0 md:w-60 md:border-r md:border-brand-neutral md:bg-white flex flex-col">
-      <div className="px-5 py-5 flex items-center justify-between md:block">
-        <BlissWordmark className="text-lg tracking-tight text-brand-purple" />
-        <div className="text-xs text-ink-muted mt-0.5 hidden md:block">
-          Merchant dashboard
+    <aside className="flex flex-col justify-between border-sand-200 bg-sand-50 py-[34px] md:fixed md:inset-y-0 md:left-0 md:w-[264px] md:border-r">
+      <div className="flex flex-col">
+        <div className="flex flex-col gap-[5px] px-7 pb-10">
+          <BlissWordmark className="text-[22px] tracking-[-0.005em] text-brand-violet" />
+          <div className="text-sm text-ink-400">Merchant dashboard</div>
         </div>
+
+        <nav className="flex flex-col gap-0.5 px-4">
+          {NAV.map((item) => {
+            const active =
+              pathname === item.href || pathname.startsWith(item.href + "/");
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center rounded-md px-3 py-[13px] text-base no-underline transition-colors ${
+                  active
+                    ? "bg-brand-violet-tint font-medium text-brand-violet"
+                    : "text-ink-600 hover:bg-brand-violet-tint/60"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
       </div>
 
-      <nav className="px-2 flex flex-col gap-0.5">
-        {NAV.map((item) => {
-          const active =
-            pathname === item.href || pathname.startsWith(item.href + "/");
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-2 rounded-none px-3 py-2 text-sm font-medium transition-colors ${
-                active
-                  ? "bg-brand-lavender/20 text-brand-purple"
-                  : "text-brand-navy/60 hover:bg-brand-cream/50 hover:text-brand-navy"
-              }`}
+      <div className="hidden px-5 md:block">
+        <div className="mx-2 mb-5 h-px bg-sand-200" />
+        <div className="flex items-center gap-3 px-2 py-2.5">
+          <div className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full bg-brand-lavender text-sm font-semibold text-brand-violet-deep">
+            {initial}
+          </div>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <div
+              className="truncate text-sm font-medium text-ink-900"
+              title={email}
             >
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="mt-auto px-4 py-4 border-t border-brand-neutral hidden md:block">
-        <div className="text-xs text-ink-muted truncate" title={email}>
-          {email}
-        </div>
-        <div className="mt-2">
-          <SignOutButton />
+              {email}
+            </div>
+            <SignOutButton variant="plain" />
+          </div>
         </div>
       </div>
     </aside>
