@@ -36,6 +36,13 @@ export function PlanPortal({
   }
 
   const totalDue = portal.plan.totalAmountCents + portal.processingFeeCents;
+  // Fill share for the progress bar, from the same two values the old balance
+  // band printed. Clamped so a rounding drift or an overpayment cannot push the
+  // fill past its track.
+  const paidPercent =
+    totalDue > 0
+      ? Math.min(100, Math.max(0, (portal.paidCents / totalDue) * 100))
+      : 0;
   const hasDiscount =
     portal.booking.originalTotalAmountCents != null
     && portal.booking.originalTotalAmountCents > portal.plan.totalAmountCents;
@@ -112,18 +119,62 @@ export function PlanPortal({
         </div>
       ) : null}
 
-      {/* Balance band */}
-      <div className="mb-14 flex flex-col gap-4 border-y border-sand-300 pb-9 pt-[34px]">
-        <SectionHeading>Remaining</SectionHeading>
-        <div className="text-[64px] font-medium leading-none tracking-[-0.04em] text-ink-900">
-          {formatDollars(portal.remainingCents)}
+      {/* Booking — full content width, directly above the schedule. The four
+          fields run across the row rather than stacking in two columns, since
+          they now have the whole width the schedule uses. */}
+      <div className="mb-16 flex flex-col">
+        <SectionHeading className="mb-7">Booking</SectionHeading>
+        <div className="grid grid-cols-2 gap-x-12 gap-y-[30px] sm:grid-cols-4">
+          {portal.booking.customerNameHint ? (
+            <Field
+              label="Guest"
+              value={portal.booking.customerNameHint}
+            />
+          ) : null}
+          <Field label="Stay" value={stay ?? portal.booking.serviceName} />
+          <Field
+            label="Check-in"
+            value={formatScheduleDateLong(portal.booking.appointmentDate)}
+          />
+          <div className="flex flex-col gap-[7px]">
+            <div className="text-[15px] text-ink-400">Plan status</div>
+            <div className="flex">
+              <span className="rounded-full bg-brand-violet-tint px-[15px] py-[7px] text-[13px] font-medium uppercase tracking-[0.06em] text-brand-violet">
+                {displayStatus.replace(/_/g, " ")}
+              </span>
+            </div>
+          </div>
         </div>
-        <div className="text-[17px] text-ink-500">
-          Paid to date{" "}
-          <span className="font-medium text-ink-900">
-            {formatDollars(portal.paidCents)}
-          </span>{" "}
-          of {formatDollars(totalDue)}
+      </div>
+
+      <div className="mb-[52px] h-px bg-sand-300" />
+
+      {/* Plan progress — replaces the balance band. Decorative: the two figures
+          it encodes are printed underneath, so the bar itself is hidden from
+          assistive tech rather than carrying a redundant progressbar role. */}
+      <div className="mb-16 flex flex-col gap-4">
+        <div
+          aria-hidden="true"
+          className="h-2 w-full overflow-hidden rounded-full bg-sand-200"
+        >
+          <div
+            className="h-full rounded-full bg-brand-violet"
+            style={{ width: `${paidPercent}%` }}
+          />
+        </div>
+        <div className="flex items-start justify-between gap-6">
+          <div className="flex flex-col gap-[7px]">
+            <div className="text-[15px] text-ink-400">Paid to date</div>
+            <div className="text-[17px] font-medium text-ink-900">
+              {formatDollars(portal.paidCents)}
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-[7px]">
+            <div className="text-[15px] text-ink-400">Remaining</div>
+            <div className="text-[17px] font-medium text-ink-900">
+              {formatDollars(portal.remainingCents)}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -198,34 +249,17 @@ export function PlanPortal({
 
       <div className="mb-[52px] h-px bg-sand-300" />
 
-      {/* Row 2 — booking beside the accounting breakdown */}
-      <div className="grid grid-cols-1 items-start gap-x-10 gap-y-12 pb-14 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
-        <div className="flex flex-col">
-          <SectionHeading className="mb-7">Booking</SectionHeading>
-          <div className="grid grid-cols-1 gap-x-12 gap-y-[30px] sm:grid-cols-2">
-            {portal.booking.customerNameHint ? (
-              <Field
-                label="Guest"
-                value={portal.booking.customerNameHint}
-              />
-            ) : null}
-            <Field label="Stay" value={stay ?? portal.booking.serviceName} />
-            <Field
-              label="Check-in"
-              value={formatScheduleDateLong(portal.booking.appointmentDate)}
-            />
-            <div className="flex flex-col gap-[7px]">
-              <div className="text-[15px] text-ink-400">Plan status</div>
-              <div className="flex">
-                <span className="rounded-full bg-brand-violet-tint px-[15px] py-[7px] text-[13px] font-medium uppercase tracking-[0.06em] text-brand-violet">
-                  {displayStatus.replace(/_/g, " ")}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Row 2 — the accounting breakdown, in the column it has always occupied,
+          with Cancel plan beside it in the left column. Cancel used to sit in a
+          band of its own below this row, which left a tall gap under the
+          shortened schedule.
 
-        <div className="flex flex-col">
+          Explicit col/row placement rather than DOM order: the summary keeps
+          its column via col-start, and Cancel is pinned to row 1 of column 1 so
+          the two tops line up. Leaving DOM order as summary-then-cancel keeps
+          the single-column stacking below xl exactly as it reads today. */}
+      <div className="grid grid-cols-1 items-start gap-x-10 gap-y-12 pb-14 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+        <div className="flex flex-col xl:col-start-2 xl:row-start-1">
           <SectionHeading className="mb-7">Plan summary</SectionHeading>
           <div className="flex flex-col">
             {hasDiscount && portal.booking.originalTotalAmountCents != null ? (
@@ -259,24 +293,25 @@ export function PlanPortal({
             </div>
           </div>
         </div>
+
+        {/* Not drawn in the design, which shows no cancel affordance. Kept on
+            the chrome-free treatment, now beside the accounting. */}
+        {!planComplete && portal.plan.status === "active" ? (
+          <div className="flex flex-col xl:col-start-1 xl:row-start-1">
+            <SectionHeading className="mb-7">Cancel plan</SectionHeading>
+            <div className="max-w-[560px]">
+              <CancelPlanSection
+                token={token}
+                serviceName={portal.booking.serviceName}
+                appointmentDate={portal.booking.appointmentDate}
+                paidCents={portal.paidCents}
+                processingFeeCents={portal.processingFeeCents}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
 
-      {/* Not drawn in the design, which shows no cancel affordance. Kept on the
-          chrome-free treatment, below the accounting. */}
-      {!planComplete && portal.plan.status === "active" ? (
-        <div className="flex flex-col pb-14">
-          <SectionHeading className="mb-7">Cancel plan</SectionHeading>
-          <div className="max-w-[560px]">
-            <CancelPlanSection
-              token={token}
-              serviceName={portal.booking.serviceName}
-              appointmentDate={portal.booking.appointmentDate}
-              paidCents={portal.paidCents}
-              processingFeeCents={portal.processingFeeCents}
-            />
-          </div>
-        </div>
-      ) : null}
 
       <div className="-mx-6 border-t border-sand-200 px-6 pb-8 pt-7 text-sm text-ink-400 xl:-mx-16 xl:px-16">
         Powered by <BlissWordmark />
@@ -441,83 +476,60 @@ function ScheduleTimeline({ schedule }: { schedule: ScheduleEntry[] }) {
         const state: TimelineState =
           base === "scheduled" && i === nextIndex ? "next" : base;
         const isLast = i === rows.length - 1;
+
+        // Line two, assembled from the same strings the rows used before: the
+        // dated phrase, then the status, joined by a middle dot. The next
+        // payment keeps its "Next payment" marker inline rather than as an
+        // eyebrow above the row.
+        const statusWord =
+          state === "paid"
+            ? "Paid"
+            : state === "canceled"
+              ? "Canceled"
+              : "Scheduled";
+        const meta =
+          state === "next"
+            ? `Automatic on ${formatTimelineDate(entry.dueDate)} · Next payment · ${statusWord}`
+            : `Due ${formatTimelineDate(entry.dueDate)} · ${statusWord}`;
+
         return (
           <li key={entry.sequence} className="flex gap-x-[26px]">
-            <div className="flex w-[26px] flex-none flex-col items-center pt-2">
+            <div className="flex w-[26px] flex-none flex-col items-center pt-1.5">
               <TimelineNode state={state} />
               {isLast ? null : (
                 <div
-                  className={`min-h-9 w-[1.5px] flex-1 ${
+                  className={`min-h-4 w-[1.5px] flex-1 ${
                     state === "paid" ? "bg-brand-lavender" : "bg-sand-300"
                   }`}
                 />
               )}
             </div>
 
-            {state === "next" ? (
-              <div className="min-w-0 flex-1 pb-[34px]">
-                <div className="-ml-[22px] flex flex-col gap-2 border-l-2 border-brand-violet pb-[4px] pl-5 pt-[2px]">
-                  <div className="text-[13px] font-medium uppercase tracking-[0.05em] text-brand-violet">
-                    Next payment · scheduled
-                  </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)] items-baseline gap-x-5 sm:grid-cols-[200px_minmax(0,1fr)_110px]">
-                    <div className="text-xl font-medium tracking-[-0.015em] text-ink-900">
-                      {label}
-                    </div>
-                    <div className="text-base text-ink-600">
-                      Automatic on {formatTimelineDate(entry.dueDate)}
-                    </div>
-                    <div />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div
-                className={`grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-5 sm:grid-cols-[200px_minmax(0,1fr)_110px] ${
-                  isLast ? "" : "pb-[34px]"
-                }`}
-              >
-                <div className="flex flex-col gap-1.5">
-                  <div
-                    className={`text-[13px] uppercase tracking-[0.06em] ${
-                      state === "paid"
-                        ? "font-medium text-brand-violet"
-                        : "text-ink-400"
-                    }`}
-                  >
-                    {state === "paid"
-                      ? "Paid"
-                      : state === "canceled"
-                        ? "Canceled"
-                        : "Scheduled"}
-                  </div>
-                  {/* A canceled row is inactive, not merely unpaid: its title
-                      and amount drop to the muted tone the label already uses,
-                      so it reads as struck from the plan rather than pending. */}
-                  <div
-                    className={`text-xl font-medium tracking-[-0.015em] ${
-                      state === "paid"
-                        ? "text-ink-900"
-                        : state === "canceled"
-                          ? "text-ink-400"
-                          : "text-ink-700"
-                    }`}
-                  >
-                    {label}
-                  </div>
-                </div>
-                <div className="order-last col-span-2 text-base text-ink-400 sm:order-none sm:col-span-1">
-                  Due {formatTimelineDate(entry.dueDate)}
+            <div className={`min-w-0 flex-1 ${isLast ? "" : "pb-4"}`}>
+              {/* Line one: label left, amount right, both at body size. */}
+              <div className="flex items-baseline justify-between gap-4">
+                {/* A canceled row is inactive, not merely unpaid: its label and
+                    amount drop to the muted tone, so it reads as struck from
+                    the plan rather than pending. */}
+                <div
+                  className={`min-w-0 text-[17px] font-medium tracking-[-0.01em] ${
+                    state === "canceled" ? "text-ink-400" : "text-ink-900"
+                  }`}
+                >
+                  {label}
                 </div>
                 <div
-                  className={`text-right text-xl ${
-                    state === "scheduled" ? "text-ink-700" : "text-ink-400"
+                  className={`flex-none text-right text-[17px] ${
+                    state === "canceled" ? "text-ink-400" : "text-ink-700"
                   }`}
                 >
                   {formatDollars(entry.amountCents)}
                 </div>
               </div>
-            )}
+
+              {/* Line two: date and status together, muted and smaller. */}
+              <div className="mt-1 text-[13px] text-ink-400">{meta}</div>
+            </div>
           </li>
         );
       })}
