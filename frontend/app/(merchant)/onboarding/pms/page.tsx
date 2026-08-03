@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { BlissWordmark } from "@/components/BlissWordmark";
+import { InstallSteps } from "@/components/merchant/InstallSteps";
 import { PmsSelectStep } from "@/components/merchant/PmsSelectStep";
 import { PageHeader } from "@/components/ui/primitives";
-import { fetchMerchantSession } from "@/lib/auth";
+import { fetchMerchantSession, fetchOnboardingServer } from "@/lib/auth";
 
 // Onboarding step: choose a PMS. Lives outside the (authenticated) group so the
 // focused single-column layout applies, but still requires a session.
@@ -14,6 +15,7 @@ export default async function ChoosePmsPage() {
   if (!session) {
     redirect("/login");
   }
+  const onboarding = await fetchOnboardingServer();
 
   return (
     <main className="min-h-screen bg-white font-body text-ink-900">
@@ -24,6 +26,10 @@ export default async function ChoosePmsPage() {
           title="Choose your PMS"
           subtitle={`Where do you want to take and charge payments for ${session.businessName ?? "your property"}?`}
         />
+
+        <div className="mb-14">
+          <InstallSteps status={onboarding} />
+        </div>
 
         <PmsSelectStep currentPms={session.pmsType} />
 

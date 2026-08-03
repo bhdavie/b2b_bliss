@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { BlissWordmark } from "@/components/BlissWordmark";
 import { ConnectMewsStep } from "@/components/merchant/ConnectMewsStep";
+import { InstallSteps } from "@/components/merchant/InstallSteps";
 import { fetchMerchantSession, fetchOnboardingServer } from "@/lib/auth";
 
 // Onboarding step: connect Mews with Connector API tokens. Session-gated.
@@ -30,6 +31,10 @@ export default async function ConnectMewsPage() {
         <p className="mb-12 text-lg text-ink-500">
           Connecting Mews · {session.businessName ?? "your property"}
         </p>
+
+        <div className="mb-14">
+          <InstallSteps status={onboarding} />
+        </div>
 
         <ConnectMewsStep alreadyConnected={already} />
 

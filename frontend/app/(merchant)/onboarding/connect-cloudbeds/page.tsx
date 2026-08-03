@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { BlissWordmark } from "@/components/BlissWordmark";
 import { ConnectCloudbedsStep } from "@/components/merchant/ConnectCloudbedsStep";
+import { InstallSteps } from "@/components/merchant/InstallSteps";
 import { fetchMerchantSession, fetchOnboardingServer } from "@/lib/auth";
 
 // Onboarding step: connect Cloudbeds via OAuth. Session-gated. Mirrors the Mews
@@ -29,6 +30,10 @@ export default async function ConnectCloudbedsPage() {
         <p className="mb-12 text-lg text-ink-500">
           Connecting Cloudbeds · {session.businessName ?? "your property"}
         </p>
+
+        <div className="mb-14">
+          <InstallSteps status={onboarding} />
+        </div>
 
         <ConnectCloudbedsStep alreadyConnected={already} />
 

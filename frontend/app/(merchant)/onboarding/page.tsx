@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { BlissWordmark } from "@/components/BlissWordmark";
+import { InstallSteps } from "@/components/merchant/InstallSteps";
 import { OnboardingWizard } from "@/components/merchant/OnboardingWizard";
 import { PageHeader } from "@/components/ui/primitives";
-import { fetchMerchantSession } from "@/lib/auth";
+import { fetchMerchantSession, fetchOnboardingServer } from "@/lib/auth";
 
 // Page frame is plan-rules' frame, character for character: the (authenticated)
 // shell's surface and rhythm, the same 1136px column centred with mx-auto since
@@ -16,6 +17,7 @@ export default async function OnboardingPage() {
   if (session.onboardingComplete) {
     redirect("/home");
   }
+  const onboarding = await fetchOnboardingServer();
 
   return (
     <main className="min-h-screen bg-white font-body text-ink-900">
@@ -26,6 +28,10 @@ export default async function OnboardingPage() {
           title="Set up your business"
           subtitle="Three quick steps to get your property set up."
         />
+
+        <div className="mb-14">
+          <InstallSteps status={onboarding} />
+        </div>
 
         <OnboardingWizard
           initial={{

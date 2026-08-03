@@ -6,7 +6,11 @@ import { PoliciesCard } from "@/components/merchant/PoliciesCard";
 import { Button } from "@/components/ui/Button";
 import { PageHeader, SectionHeading } from "@/components/ui/primitives";
 import { DEFAULT_PLAN_RULES } from "@/lib/api";
-import { fetchMerchantSession, fetchPlanRulesServer } from "@/lib/auth";
+import {
+  fetchMerchantSession,
+  fetchOnboardingServer,
+  fetchPlanRulesServer,
+} from "@/lib/auth";
 
 // Final setup step: initial plan rules. Reuses the same PlanRulesCard +
 // PoliciesCard the /settings page uses (each saves on its own). A fresh
@@ -29,6 +33,7 @@ export default async function OnboardingPlanRulesPage() {
     redirect("/login");
   }
   const planRules = await fetchPlanRulesServer();
+  const onboarding = await fetchOnboardingServer();
 
   return (
     <main className="min-h-screen bg-white font-body text-ink-900">
@@ -41,7 +46,7 @@ export default async function OnboardingPlanRulesPage() {
         />
 
         <div className="mb-14">
-          <InstallSteps current="rules" />
+          <InstallSteps status={onboarding} />
         </div>
 
         <SectionHeading track="0.08em" className="mb-5">

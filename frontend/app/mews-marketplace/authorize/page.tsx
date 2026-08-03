@@ -65,7 +65,16 @@ export default function AuthorizePage() {
       });
       setPhase("redirecting");
       // Brief beat so the "redirecting back to Bliss" state is visible.
-      setTimeout(() => router.push("/onboarding/connect-stripe"), 900);
+      //
+      // Hands off to the Mews connect step, not Stripe: a property arriving
+      // from the Mews marketplace has already declared its rail, and on the
+      // Mews rail the PMS charges the card, so there is no Stripe account to
+      // connect. NOTE this screen does not itself store a Mews connection or
+      // call selectPms — it only dev-logs in and writes the property details.
+      // The seeded demo property already carries a validated Mews connection,
+      // so it lands on the connected state; a property without one is asked
+      // for Connector tokens the marketplace flow never supplied.
+      setTimeout(() => router.push("/onboarding/connect-mews"), 900);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Could not authorize. Try again.",

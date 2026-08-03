@@ -4,8 +4,11 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { selectPms, type PmsType } from "@/lib/api";
 
-// Property picks where it takes payments. Mews, Cloudbeds, and Stripe are all
-// connectable now.
+// Property picks which property system it runs on. Mews and Cloudbeds are the
+// two options: on either rail the PMS executes the charge through its own
+// gateway, so connecting it is the whole payment setup. Stripe is not offered
+// here — it is the demo and no-PMS rail, reached from account settings, not a
+// step in this funnel.
 //
 // The rows are the settled selectable-row treatment: OnboardingChecklist's
 // 12px-radius row with a violet border on the one you are on, filled with the
@@ -31,11 +34,6 @@ const OPTIONS: Option[] = [
     key: "cloudbeds",
     name: "Cloudbeds",
     blurb: "Charge cards from your Cloudbeds property. Connect with OAuth.",
-  },
-  {
-    key: "stripe",
-    name: "Stripe only",
-    blurb: "No PMS. Collect and charge cards directly with Stripe.",
   },
 ];
 

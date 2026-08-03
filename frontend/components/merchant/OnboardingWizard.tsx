@@ -254,45 +254,34 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
   );
 }
 
-// Same rail the funnel's other stepper (InstallSteps) draws, so the two step
-// indicators in the flow read as one component: violet chip for a completed
-// step, the violet-tint-on-violet active pill for the step you are on, sand for
-// what is ahead, and a connector that is violet behind and sand-300 in front.
+// The three panes of THIS form, not the funnel's four steps. The funnel rail
+// (InstallSteps) now sits directly above this panel on the same screen, so this
+// deliberately drops the numbered chips and the connector that would make the
+// two read as the same indicator: it is the settled tab treatment instead, an
+// underlined label row inside the panel it belongs to.
+//
+// Behaviour is untouched. The panes are still driven by the wizard's own local
+// index, and they are still spans, not buttons: nothing here is clickable, and
+// which pane is on screen is still moved only by Back and Continue.
 function Stepper({ current }: { current: number }) {
   return (
-    <ol className="flex flex-wrap items-center gap-x-3 gap-y-2 text-base">
+    <ol className="-mt-1 flex gap-9 overflow-x-auto border-b border-sand-300">
       {STEPS.map((s, i) => {
         const state =
           i < current ? "done" : i === current ? "active" : "pending";
         return (
-          <li key={s.id} className="flex items-center gap-3">
-            <span
-              className={`flex h-7 w-7 flex-none items-center justify-center rounded-full text-sm font-semibold ${
-                state === "done"
-                  ? "bg-brand-violet text-white"
-                  : state === "active"
-                    ? "bg-brand-violet-tint text-brand-violet"
-                    : "bg-sand-200 text-ink-400"
-              }`}
-            >
-              {i + 1}
-            </span>
-            <span
-              className={
-                state === "active"
-                  ? "font-medium text-ink-900"
+          <li
+            key={s.id}
+            aria-current={state === "active" ? "step" : undefined}
+            className={`whitespace-nowrap px-0.5 pb-4 text-[17px] ${
+              state === "active"
+                ? "font-medium tracking-[-0.01em] text-brand-violet shadow-[inset_0_-2px_0_#5A1BB5]"
+                : state === "done"
+                  ? "text-ink-900"
                   : "text-ink-400"
-              }
-            >
-              {s.title}
-            </span>
-            {i < STEPS.length - 1 && (
-              <span
-                className={`mx-1 h-px w-8 ${
-                  state === "done" ? "bg-brand-violet" : "bg-sand-300"
-                }`}
-              />
-            )}
+            }`}
+          >
+            {s.title}
           </li>
         );
       })}
