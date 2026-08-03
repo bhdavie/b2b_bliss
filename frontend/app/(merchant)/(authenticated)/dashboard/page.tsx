@@ -6,9 +6,15 @@ import { fetchMerchantSession, fetchOnboardingServer } from "@/lib/auth";
 // comes from the same real onboarding/pms data the Overview uses, not a
 // simulated store.
 export default async function AccountSettingsPage() {
-  const session = await fetchMerchantSession();
+  // Independent reads, so they go out together rather than one after the other.
+  // fetchOnboardingServer returns null on 401 instead of throwing, so firing it
+  // before the session check is safe; the layout is what redirects a signed-out
+  // request anyway.
+  const [session, onboarding] = await Promise.all([
+    fetchMerchantSession(),
+    fetchOnboardingServer(),
+  ]);
   if (!session) return null;
-  const onboarding = await fetchOnboardingServer();
 
   return (
     <AccountSettings
