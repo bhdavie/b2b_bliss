@@ -60,12 +60,12 @@ export default async function AccountPage() {
 
   return (
     <PortalShell active="home" email={data.email}>
-      <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
+      <h1 className="text-4xl font-bold tracking-tight text-ink-900">
         {firstName ? `Welcome back, ${firstName}` : "Welcome back"}
       </h1>
-      <p className="mt-1 text-sm text-ink-muted">Signed in as {data.email}</p>
+      <p className="mt-1 text-sm text-ink-500">Signed in as {data.email}</p>
 
-      <h2 className="mt-10 text-2xl font-bold text-brand-navy">Your plans</h2>
+      <h2 className="mt-10 text-2xl font-bold text-ink-900">Your plans</h2>
       <div className="mt-4">
         <PlansList
           plans={active}

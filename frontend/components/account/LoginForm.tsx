@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { attemptCustomerLogin } from "@/lib/publicApi";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 export function LoginForm() {
   const router = useRouter();
@@ -28,29 +30,27 @@ export function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <label className="block">
-        <span className="mb-1 block text-xs text-ink-muted">
+        <span className="label mb-1 block">
           Email
         </span>
-        <input
+        <Input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           autoComplete="email"
           required
-          className="w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 focus:border-brand-navy focus:outline-none"
         />
       </label>
       <label className="block">
-        <span className="mb-1 block text-xs text-ink-muted">
+        <span className="label mb-1 block">
           Password
         </span>
-        <input
+        <Input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
           required
-          className="w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 focus:border-brand-navy focus:outline-none"
         />
       </label>
 
@@ -60,15 +60,11 @@ export function LoginForm() {
         </div>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={busy}
-        className="w-full rounded-none bg-brand-purple px-4 py-3 text-center text-sm font-medium text-white shadow-sm transition hover:bg-brand-purple-dark disabled:cursor-not-allowed disabled:opacity-50"
-      >
+      <Button type="submit" disabled={busy} variant="primary" className="w-full">
         {busy ? "Signing in…" : "Sign in"}
-      </button>
+      </Button>
 
-      <p className="text-center text-xs text-ink-muted">
+      <p className="text-center text-xs text-ink-400">
         Demo: any password works. Authentication only validates the email.
       </p>
     </form>

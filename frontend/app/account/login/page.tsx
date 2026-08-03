@@ -9,23 +9,23 @@ export default async function AccountLoginPage() {
     redirect("/account");
   }
   return (
-    <div className="min-h-screen bg-white text-ink font-body">
-      <header className="border-b border-brand-neutral">
+    <div className="min-h-screen bg-white text-ink-900 font-body">
+      <header className="border-b border-sand-200">
         <div className="mx-auto max-w-md px-6 py-6 text-center">
-          <BlissWordmark className="text-2xl text-brand-purple" />
+          <BlissWordmark className="text-2xl text-brand-violet" />
         </div>
       </header>
       <main className="mx-auto max-w-md px-6 py-12">
-        <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
+        <h1 className="text-4xl font-bold tracking-tight text-ink-900">
           Welcome back
         </h1>
-        <p className="mt-2 text-sm text-ink-muted">
+        <p className="mt-2 text-sm text-ink-500">
           Sign in to see your payment plans across every Bliss merchant.
         </p>
-        <section className="mt-6 rounded-none border border-brand-neutral bg-white p-6">
+        <section className="mt-6 rounded-panel border border-sand-200 bg-white p-6">
           <LoginForm />
         </section>
-        <p className="mt-6 text-center text-xs text-ink-muted">
+        <p className="mt-6 text-center text-xs text-ink-400">
           Don&rsquo;t have an account yet? Your account is created automatically
           the first time a merchant sends you a payment-plan link.
         </p>

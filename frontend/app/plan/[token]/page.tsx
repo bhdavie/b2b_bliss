@@ -40,10 +40,10 @@ export default async function PlanPortalPage(props: {
     return (
       <PortalShell active={origin.active}>
         <div className="py-16 text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-brand-navy">
+          <h1 className="text-4xl font-bold tracking-tight text-ink-900">
             Plan not found
           </h1>
-          <p className="mt-3 text-sm text-ink-muted">
+          <p className="mt-3 text-sm text-ink-500">
             This link is no longer active or the plan has been canceled. If you
             think this is a mistake, contact the merchant who sent you the link.
           </p>

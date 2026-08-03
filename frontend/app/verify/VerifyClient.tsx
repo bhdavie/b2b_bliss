@@ -40,12 +40,12 @@ export function VerifyClient() {
   return (
     <main className="min-h-screen flex items-center justify-center px-6 font-body">
       <div className="w-full max-w-sm text-center">
-        <BlissWordmark className="text-xl tracking-tight text-brand-navy" />
+        <BlissWordmark className="text-xl tracking-tight text-brand-violet" />
         {status === "verifying" && (
-          <p className="mt-6 text-ink-muted">Signing you in</p>
+          <p className="mt-6 text-ink-500">Signing you in</p>
         )}
         {status === "success" && (
-          <p className="mt-6 text-ink-muted">Signed in. Redirecting</p>
+          <p className="mt-6 text-ink-500">Signed in. Redirecting</p>
         )}
         {status === "error" && (
           <div className="mt-6">

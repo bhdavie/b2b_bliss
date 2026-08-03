@@ -105,7 +105,7 @@ function Pill({
       className={`flex-none rounded-full px-4 py-2 text-[13px] font-medium uppercase tracking-[0.06em] ${
         tone === "accent"
           ? "bg-brand-violet-tint text-brand-violet"
-          : "bg-[#F4F2EF] text-ink-500"
+          : "bg-sand-100 text-ink-500"
       }`}
     >
       {children}
