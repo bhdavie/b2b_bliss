@@ -57,7 +57,7 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-brand-cream/40 px-6 font-body">
       <div className="w-full max-w-sm">
         <div className="text-center">
-          <BlissWordmark className="text-3xl tracking-tight text-brand-purple" />
+          <BlissWordmark className="text-3xl tracking-tight text-brand-violet" />
         </div>
 
         <div className="mt-6 rounded-none border border-brand-neutral bg-white p-8 shadow-sm">
