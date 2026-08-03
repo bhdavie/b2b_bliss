@@ -431,20 +431,25 @@
      *
      * The modal keeps the sampled theme — it is a surface of its own and
      * benefits from looking native to the distributor it covers.
+     *
+     * These are the settled Bliss palette: violet #5A1BB5 for the accent and
+     * the primary action, the warm sand ramp for dividers, and the ink ramp for
+     * type. The names say what the values are, so a value change here cannot
+     * leave a token called "lavender" holding a violet.
      */
     brand: {
-      lavender: "#C9AFFA", // accent, selected state
-      // The RECOMMENDED chip only. #C9AFFA composited over white at 27.5% and
-      // flattened to a literal hex, so it is fully opaque — an rgba fill or an
-      // opacity property would let the card behind it show through, and would
-      // drag the chip's navy text down with it.
-      lavenderTint: "#F0E9FE",
-      navy: "#51576A", // primary text
-      dustyBlue: "#97ACC8", // secondary text and borders
-      deepPurple: "#6A629E", // primary button background
-      onDeepPurple: "#ffffff", // primary button text
+      violet: "#5A1BB5", // accent: selected option, focus ring, tick, CTA fill
+      // The RECOMMENDED chip only. The palette's violet wash, opaque by
+      // definition rather than composited — an rgba fill or an opacity property
+      // would let the card behind it show through, and would drag the chip's
+      // ink text down with it. Violet sits on this at 8.25:1.
+      violetTint: "#F4EFFF",
+      ink: "#111112", // primary text
+      inkMuted: "#8A8A8F", // secondary text (never a border; see divider)
+      ctaBg: "#5A1BB5", // primary button background
+      onCta: "#ffffff", // primary button text, and the tick glyph on violet
       surface: "#ffffff",
-      divider: "#D9D9D9", // dividers and inactive borders
+      divider: "#E8E5E0", // dividers and inactive borders
       // Every corner in the overlay. Matches Freehand's own button radius; the
       // sampled host radius it replaced was producing pills on the option rows
       // and the primary button.
@@ -1448,9 +1453,9 @@
   }
 
   function triggerCss(theme) {
-    var lavender = CONFIG.brand.lavender;
-    var navy = CONFIG.brand.navy;
-    var dustyBlue = CONFIG.brand.dustyBlue;
+    var violet = CONFIG.brand.violet;
+    var ink = CONFIG.brand.ink;
+    var inkMuted = CONFIG.brand.inkMuted;
     var radius = CONFIG.brand.radius;
     return (
       baseCss(theme) +
@@ -1464,28 +1469,30 @@
       // line now takes a second row instead of being cut off. A button element
       // also needs its UA background and border explicitly cleared.
       ".trig{display:block;width:100%;margin:0;padding:0;background:none;border:0;" +
-      "border-radius:0;box-shadow:none;color:" + navy + ";font-size:12px;line-height:1.45;" +
+      "border-radius:0;box-shadow:none;color:" + ink + ";font-size:12px;line-height:1.45;" +
       "cursor:pointer;text-align:left;white-space:normal;overflow-wrap:break-word}" +
       ".trig:hover .amt{text-decoration:underline}" +
-      ".trig:focus-visible{outline:2px solid " + lavender + ";outline-offset:2px}" +
+      ".trig:focus-visible{outline:2px solid " + violet + ";outline-offset:2px}" +
+      // Glyph is white, not ink: the tick's fill moved from lavender to violet,
+      // and ink on violet is 2.03:1. White on violet is 9.3:1.
       ".tick{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;" +
-      "border-radius:" + radius + ";background:" + lavender + ";color:" + navy + ";font-size:10px;" +
+      "border-radius:" + radius + ";background:" + violet + ";color:" + CONFIG.brand.onCta + ";font-size:10px;" +
       "margin-right:7px;vertical-align:middle}" +
       ".sep{margin:0 5px;opacity:.55}" +
       ".amt{font-weight:600}" +
       // Supporting line under the rate-card main line. display:block is what
       // puts it on its own row beneath the inline main line.
-      ".sub{display:block;margin-top:2px;font-size:11px;font-weight:400;color:" + dustyBlue + "}" +
+      ".sub{display:block;margin-top:2px;font-size:11px;font-weight:400;color:" + inkMuted + "}" +
       // Details step: "See details" reads as a link beneath the main line, not
       // as another button competing with the host's Next control.
       ".link{display:block;margin-top:3px;padding:0;background:none;border:0;font-size:11px;" +
-      "font-weight:600;color:" + navy + ";text-decoration:underline;cursor:pointer;text-align:left}" +
+      "font-weight:600;color:" + ink + ";text-decoration:underline;cursor:pointer;text-align:left}" +
       // Details block: right-aligned to sit under the "You'll pay later" line
       // rather than at the card's left edge. Declared AFTER .trig and .link so
       // it wins on order at equal specificity. Sets colour explicitly because
       // State A's container is not a .trig and would otherwise inherit the
       // initial black from :host{all:initial}.
-      ".details{text-align:right;color:" + navy + "}" +
+      ".details{text-align:right;color:" + ink + "}" +
       // text-align on .details cannot move this: .link is display:block, and
       // text-align only positions INLINE-level content. A <button> also uses
       // shrink-to-fit sizing even when block, so the box hugs its text and sits
@@ -1520,55 +1527,56 @@
       ".scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.44);" +
       "display:flex;align-items:center;justify-content:center;padding:16px}" +
       ".bliss-card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:" + b.surface +
-      ";color:" + b.navy + ";border:1px solid " + b.divider + ";border-radius:" + b.radius +
+      ";color:" + b.ink + ";border:1px solid " + b.divider + ";border-radius:" + b.radius +
       ";box-shadow:0 18px 56px rgba(0,0,0,.32)}" +
       ".bliss-card:focus{outline:none}" +
       ".head{display:flex;align-items:flex-start;gap:12px;padding:22px 24px;border-bottom:1px solid " + b.divider + "}" +
       ".head h2{font-size:17px;font-weight:600;line-height:1.3}" +
-      ".head p{font-size:13px;color:" + b.dustyBlue + ";margin-top:4px;line-height:1.4}" +
-      ".x{margin-left:auto;background:none;border:0;cursor:pointer;font-size:20px;line-height:1;color:" + b.dustyBlue + "}" +
+      ".head p{font-size:13px;color:" + b.inkMuted + ";margin-top:4px;line-height:1.4}" +
+      ".x{margin-left:auto;background:none;border:0;cursor:pointer;font-size:20px;line-height:1;color:" + b.inkMuted + "}" +
       ".body{padding:20px 24px 24px}" +
-      ".ctx{font-size:13px;color:" + b.dustyBlue + ";margin-bottom:2px;line-height:1.5}" +
+      ".ctx{font-size:13px;color:" + b.inkMuted + ";margin-bottom:2px;line-height:1.5}" +
       // Fine print under the summary line, tracking the step's basis.
-      ".fine{font-size:11px;color:" + b.dustyBlue + ";margin-bottom:12px;line-height:1.4}" +
+      ".fine{font-size:11px;color:" + b.inkMuted + ";margin-bottom:12px;line-height:1.4}" +
       // Collapsed-by-default schedule disclosure.
       ".disc{display:block;width:100%;text-align:left;margin:2px 0 8px;padding:8px 0;background:none;" +
-      "border:0;border-top:1px solid " + b.divider + ";color:" + b.navy +
+      "border:0;border-top:1px solid " + b.divider + ";color:" + b.ink +
       ";font-size:12px;font-weight:600;cursor:pointer}" +
       ".sched{margin:0 0 12px;border:1px solid " + b.divider + ";border-radius:" + b.radius + "}" +
       ".sched .row{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12px;" +
       "border-bottom:1px solid " + b.divider + "}" +
       ".sched .row:last-child{border-bottom:0}" +
-      ".sched .n{width:18px;color:" + b.dustyBlue + "}" +
-      ".sched .d{color:" + b.navy + "}" +
-      ".sched .v{margin-left:auto;font-weight:600;color:" + b.navy + "}" +
+      ".sched .n{width:18px;color:" + b.inkMuted + "}" +
+      ".sched .d{color:" + b.ink + "}" +
+      ".sched .v{margin-left:auto;font-weight:600;color:" + b.ink + "}" +
       ".opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 12px;margin-bottom:8px;" +
-      "background:transparent;color:" + b.navy + ";border:1px solid " + b.divider +
+      "background:transparent;color:" + b.ink + ";border:1px solid " + b.divider +
       ";border-radius:" + b.radius + ";cursor:pointer}" +
-      ".opt[aria-pressed=\"true\"]{border-color:" + b.lavender + ";border-width:2px;padding:10px 11px}" +
+      ".opt[aria-pressed=\"true\"]{border-color:" + b.violet + ";border-width:2px;padding:10px 11px}" +
       ".opt .lbl{font-size:13px;font-weight:600}" +
-      ".opt .sub{font-size:11px;color:" + b.dustyBlue + ";margin-top:2px}" +
+      ".opt .sub{font-size:11px;color:" + b.inkMuted + ";margin-top:2px}" +
       ".opt .amt{margin-left:auto;text-align:right}" +
       ".opt .amt b{font-size:14px;font-weight:600;display:block}" +
-      ".opt .amt span{font-size:11px;color:" + b.dustyBlue + "}" +
+      ".opt .amt span{font-size:11px;color:" + b.inkMuted + "}" +
       ".tag{display:inline-block;font-size:9px;letter-spacing:.4px;text-transform:uppercase;padding:2px 6px;" +
-      "border-radius:" + b.radius + ";background:" + b.lavenderTint +
-      ";border:1px solid " + b.lavender + ";color:" + b.navy +
+      "border-radius:" + b.radius + ";background:" + b.violetTint +
+      ";border:1px solid " + b.violet + ";color:" + b.ink +
       ";margin-left:6px;vertical-align:middle}" +
-      ".cta{width:100%;padding:12px;border:0;border-radius:" + b.radius + ";background:" + b.deepPurple +
-      ";color:" + b.onDeepPurple + ";font-size:13px;font-weight:600;cursor:pointer;margin-top:4px}" +
+      ".cta{width:100%;padding:12px;border:0;border-radius:" + b.radius + ";background:" + b.ctaBg +
+      ";color:" + b.onCta + ";font-size:13px;font-weight:600;cursor:pointer;margin-top:4px}" +
       ".cta[disabled]{opacity:.5;cursor:default}" +
-      ".note{font-size:11px;color:" + b.dustyBlue + ";margin-top:10px;line-height:1.45}" +
-      ".msg{font-size:12px;color:" + b.dustyBlue + ";line-height:1.5}" +
+      ".note{font-size:11px;color:" + b.inkMuted + ";margin-top:10px;line-height:1.45}" +
+      ".msg{font-size:12px;color:" + b.inkMuted + ";line-height:1.5}" +
       // A button, not a div: it toggles the confirmation off, so it has to be
       // reachable by keyboard. UA button styling is cleared explicitly.
       ".done{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:12px;" +
-      "background:transparent;color:inherit;cursor:pointer;border:1px solid " + b.lavender +
+      "background:transparent;color:inherit;cursor:pointer;border:1px solid " + b.violet +
       ";border-radius:" + b.radius + ";margin-bottom:10px}" +
-      ".done .tick{width:20px;height:20px;border-radius:" + b.radius + ";background:" + b.lavender + ";color:" + b.navy +
+      // White glyph, same reason as the trigger tick: ink on violet is 2.03:1.
+      ".done .tick{width:20px;height:20px;border-radius:" + b.radius + ";background:" + b.violet + ";color:" + b.onCta +
       ";display:flex;align-items:center;justify-content:center;font-size:12px;flex:none}" +
       ".done .t{font-size:13px;font-weight:600}" +
-      ".done .s{font-size:11px;color:" + b.dustyBlue + ";margin-top:1px}" +
+      ".done .s{font-size:11px;color:" + b.inkMuted + ";margin-top:1px}" +
       // Below the phone breakpoint the modal becomes a bottom sheet.
       "@media (max-width:420px){.scrim{align-items:flex-end;padding:0}" +
       ".bliss-card{width:100%;max-width:100%;max-height:88vh;border-radius:" + b.radius + " " + b.radius + " 0 0}}"
