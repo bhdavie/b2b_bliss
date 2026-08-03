@@ -1,20 +1,27 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BlissWordmark } from "@/components/BlissWordmark";
 import { InstallSteps } from "@/components/merchant/InstallSteps";
 import { PlanRulesCard } from "@/components/merchant/PlanRulesCard";
 import { PoliciesCard } from "@/components/merchant/PoliciesCard";
+import { Button } from "@/components/ui/Button";
+import { PageHeader, SectionHeading } from "@/components/ui/primitives";
 import { DEFAULT_PLAN_RULES } from "@/lib/api";
 import { fetchMerchantSession, fetchPlanRulesServer } from "@/lib/auth";
 
 // Final setup step: initial plan rules. Reuses the same PlanRulesCard +
 // PoliciesCard the /settings page uses (each saves on its own). A fresh
 // merchant has no rules row yet, so the cards open on DEFAULT_PLAN_RULES.
-
-// Lavender primary-button treatment, unified with the merchant color mapping
-// via the shared .btn-primary-merchant class (lavender fill, white label,
-// square corners).
-const LAVENDER_BTN = "btn-primary-merchant";
+//
+// The funnel has no design turn of its own, so the chrome is inherited from the
+// settled merchant screens: the (authenticated) shell's surface and rhythm
+// (bg-white, font-body, ink-900, pt-16), PageHeader for the head, SectionHeading
+// for the section kickers, and the same 980px column /settings uses — these
+// cards were sized inside that column. There is no sidebar here, so the column
+// is centred with mx-auto and its contents stay left-aligned.
+//
+// The cards' save buttons are left on their own default (btn-primary-merchant),
+// which is now the settled violet pill — the same class the old local constant
+// pointed at, so no button changes appearance by dropping the override.
 
 export default async function OnboardingPlanRulesPage() {
   const session = await fetchMerchantSession();
@@ -24,49 +31,34 @@ export default async function OnboardingPlanRulesPage() {
   const planRules = await fetchPlanRulesServer();
 
   return (
-    <main className="min-h-screen bg-white px-6 py-10 font-body">
-      <div className="mx-auto max-w-2xl">
-        <header className="text-center">
-          <BlissWordmark className="text-xl tracking-tight text-brand-purple" />
-          <h1 className="mt-4 text-2xl font-medium text-brand-navy">Set your plan rules</h1>
-          <p className="mt-1 text-brand-navy">
-            These control which stays can offer a plan and what your guests see.
-            The defaults are sensible. Tweak anything and Save, or keep them and
-            finish.
-          </p>
-        </header>
+    <main className="min-h-screen bg-white font-body text-ink-900">
+      <div className="mx-auto flex max-w-[1136px] flex-col px-6 pb-[72px] pt-16 xl:px-16">
+        <BlissWordmark className="mb-12 text-[22px] tracking-[-0.005em] text-brand-violet" />
 
-        <div className="mt-8">
+        <PageHeader
+          title="Set your plan rules"
+          subtitle="These control which stays can offer a plan and what your guests see. The defaults are sensible. Tweak anything and save, or keep them and finish."
+        />
+
+        <div className="mb-14">
           <InstallSteps current="rules" />
         </div>
 
-        <section className="mt-8 space-y-4">
-          <h2 className="text-xs font-medium uppercase tracking-wide text-brand-navy">
-            Eligibility & plans
-          </h2>
-          <PlanRulesCard
-            initial={planRules ?? DEFAULT_PLAN_RULES}
-            saveButtonClassName={LAVENDER_BTN}
-          />
-        </section>
+        <SectionHeading track="0.08em" className="mb-5">
+          Eligibility &amp; plans
+        </SectionHeading>
+        <PlanRulesCard initial={planRules ?? DEFAULT_PLAN_RULES} />
 
-        <section className="mt-10 space-y-4">
-          <h2 className="text-xs font-medium uppercase tracking-wide text-brand-navy">
-            Cancellation & policies
-          </h2>
-          <PoliciesCard
-            initial={planRules ?? DEFAULT_PLAN_RULES}
-            saveButtonClassName={LAVENDER_BTN}
-          />
-        </section>
+        <SectionHeading track="0.08em" className="mb-5 mt-14">
+          Cancellation &amp; policies
+        </SectionHeading>
+        <PoliciesCard initial={planRules ?? DEFAULT_PLAN_RULES} />
 
-        <div className="mt-10 flex items-center justify-between border-t border-brand-neutral pt-6">
-          <p className="text-sm text-brand-navy">
+        <div className="mt-14 flex flex-wrap items-center justify-between gap-4 border-t border-sand-200 pt-8">
+          <p className="text-[17px] text-ink-400">
             You can change any of this later in Payment settings.
           </p>
-          <Link href="/home" className={LAVENDER_BTN}>
-            Finish setup
-          </Link>
+          <Button href="/home">Finish setup</Button>
         </div>
       </div>
     </main>
