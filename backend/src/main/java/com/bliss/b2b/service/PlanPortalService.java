@@ -29,6 +29,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -202,6 +204,165 @@ public class PlanPortalService {
     }
 
     /**
+     * Customer-initiated payoff of the whole outstanding balance from the plan
+     * portal. Distinct from {@link #payNextInstallment}, which settles exactly
+     * one row: this sums every unsettled row and charges them together.
+     *
+     * <p>ALL-OR-NOTHING. One PaymentIntent covers the whole balance, and the
+     * rows are marked paid only after it succeeds, inside the same transaction.
+     * A decline marks nothing and leaves the plan exactly as it was — there is
+     * no state in which some rows settled and others did not.
+     *
+     * <p>NO FEE RECALCULATION. The processing fee already rode on the deposit,
+     * so each remaining row is charged at the amount it already carries and the
+     * guest pays the same total either way. The charge is the arithmetic sum of
+     * those rows, never a recomputed balance.
+     *
+     * <p>A row already {@code processing} with the rail blocks the payoff: its
+     * outcome is unknown, and charging over it could take the guest's money
+     * twice for the same installment.
+     */
+    public PayResult payRemainingBalance(String bookingToken) {
+        if (!stripeService.isConfigured()) {
+            return payRemainingBalanceDemo(bookingToken);
+        }
+        return jdbi.inTransaction(handle -> {
+            Lookup look = resolveOrThrow(handle, bookingToken);
+            if (look.plan.status() != PaymentPlanStatus.ACTIVE) {
+                throw new PortalException(PortalErrorCode.PLAN_NOT_ACTIVE,
+                        "plan is not active (status=" + look.plan.status().wire() + ")");
+            }
+            PaymentScheduleDao scheduleDao = handle.attach(PaymentScheduleDao.class);
+            List<PaymentScheduleEntry> unsettled = requirePayableBalance(
+                    scheduleDao.listUnsettledForPlan(look.plan.id()));
+            long amountCents = sumAmounts(unsettled);
+
+            CustomerCard card = handle.attach(CustomerCardDao.class)
+                    .findDefaultForCustomer(look.plan.customerId())
+                    .orElseThrow(() -> new PortalException(PortalErrorCode.NO_CARD_ON_FILE,
+                            "no card on file for this plan"));
+
+            StripePaymentsService.Destination destination = new StripePaymentsService.Destination(
+                    stripeConnectResolver.resolveOrNull(look.booking.merchantId()),
+                    handle.attach(MerchantDao.class)
+                            .findFeePercentage(look.booking.merchantId()).orElse(null));
+            PaymentIntent intent;
+            try {
+                intent = stripeService.firePaymentOffSession(
+                        amountCents,
+                        look.customer.stripeCustomerId(),
+                        card.stripePaymentMethodId(),
+                        // The row id is no longer a unique key for this charge —
+                        // it covers several. Key on the plan plus the exact set
+                        // of rows, so a double submit is idempotent while a
+                        // later payoff of a different set is not blocked.
+                        payoffIdempotencyKey(look.plan.id(), unsettled),
+                        Map.of(
+                                "bliss_payment_plan_id", look.plan.id().toString(),
+                                "bliss_booking_id", look.booking.id().toString(),
+                                "bliss_payment_schedule_ids", joinIds(unsettled),
+                                "bliss_rows_settled", String.valueOf(unsettled.size()),
+                                "bliss_source", "portal_pay_remaining"),
+                        destination,
+                        StripePaymentsService.SessionMode.OFF_SESSION);
+            } catch (CardException e) {
+                throw new PortalException(PortalErrorCode.CARD_DECLINED,
+                        e.getStripeError() != null && e.getStripeError().getMessage() != null
+                                ? e.getStripeError().getMessage()
+                                : "your card was declined");
+            } catch (StripeException e) {
+                log.warn("Stripe error in pay-remaining: {}", e.getMessage());
+                throw new PortalException(PortalErrorCode.STRIPE_ERROR, "payment processor error");
+            }
+
+            String wireStatus = intent.getStatus() == null ? "" : intent.getStatus();
+            PaymentScheduleStatus newStatus = PlanCreationService.mapIntentToStatus(wireStatus);
+            // Nothing is written before this point, so throwing here rolls the
+            // transaction back with every row untouched.
+            if (newStatus != PaymentScheduleStatus.PAID) {
+                if (newStatus == PaymentScheduleStatus.SCHEDULED) {
+                    throw new PortalException(PortalErrorCode.CARD_REQUIRES_ACTION,
+                            "card requires authentication; please use a different card");
+                }
+                throw new PortalException(PortalErrorCode.CARD_DECLINED,
+                        "payment was not completed (status=" + wireStatus + ")");
+            }
+            settleAll(handle, look.plan, unsettled, intent.getId());
+            log.info("Plan {} paid off early: {} rows, {}c, intent {}",
+                    look.plan.id(), unsettled.size(), amountCents, intent.getId());
+            return new PayResult(intent.getId(), wireStatus);
+        });
+    }
+
+    private PayResult payRemainingBalanceDemo(String bookingToken) {
+        return jdbi.inTransaction(handle -> {
+            Lookup look = resolveOrThrow(handle, bookingToken);
+            if (look.plan.status() != PaymentPlanStatus.ACTIVE) {
+                throw new PortalException(PortalErrorCode.PLAN_NOT_ACTIVE,
+                        "plan is not active (status=" + look.plan.status().wire() + ")");
+            }
+            PaymentScheduleDao scheduleDao = handle.attach(PaymentScheduleDao.class);
+            List<PaymentScheduleEntry> unsettled = requirePayableBalance(
+                    scheduleDao.listUnsettledForPlan(look.plan.id()));
+            // One synthesized intent id for the whole payoff, derived from the
+            // first row so it stays traceable in raw tables, and written to
+            // every row it settled — the same shape the real branch leaves.
+            String demoIntentId = StripeIds.intentIdFor(unsettled.get(0).id());
+            settleAll(handle, look.plan, unsettled, demoIntentId);
+            log.info("Plan {} paid off early (demo): {} rows, {}c, intent {}",
+                    look.plan.id(), unsettled.size(), sumAmounts(unsettled), demoIntentId);
+            return new PayResult(demoIntentId, "succeeded");
+        });
+    }
+
+    /** Rejects an empty or in-flight balance before any charge is attempted. */
+    private static List<PaymentScheduleEntry> requirePayableBalance(
+            List<PaymentScheduleEntry> unsettled) {
+        if (unsettled.isEmpty()) {
+            throw new PortalException(PortalErrorCode.NO_NEXT_INSTALLMENT,
+                    "no outstanding balance remaining");
+        }
+        boolean anyInFlight = unsettled.stream()
+                .anyMatch(e -> e.status() == PaymentScheduleStatus.PROCESSING);
+        if (anyInFlight) {
+            throw new PortalException(PortalErrorCode.PAYMENT_IN_FLIGHT,
+                    "a payment on this plan is still processing; try again shortly");
+        }
+        return unsettled;
+    }
+
+    private static long sumAmounts(List<PaymentScheduleEntry> rows) {
+        return rows.stream().mapToLong(PaymentScheduleEntry::amountCents).sum();
+    }
+
+    private static String joinIds(List<PaymentScheduleEntry> rows) {
+        return rows.stream().map(e -> e.id().toString()).collect(Collectors.joining(","));
+    }
+
+    /**
+     * Idempotency key for a payoff. Includes the row ids, so re-submitting the
+     * same payoff is deduplicated by Stripe while a genuinely different payoff
+     * (a later one, over a different set of rows) is not swallowed.
+     */
+    private static String payoffIdempotencyKey(UUID planId, List<PaymentScheduleEntry> rows) {
+        return "payoff:" + planId + ":" + joinIds(rows);
+    }
+
+    /** Marks every settled row paid under one intent id, then completes the plan. */
+    private void settleAll(
+            org.jdbi.v3.core.Handle handle,
+            PaymentPlan plan,
+            List<PaymentScheduleEntry> rows,
+            String intentId) {
+        PaymentScheduleDao scheduleDao = handle.attach(PaymentScheduleDao.class);
+        Instant now = Instant.now(clock);
+        for (PaymentScheduleEntry row : rows) {
+            scheduleDao.markPaidNow(row.id(), intentId, now);
+        }
+        maybeCompletePlan(handle, plan, rows.get(rows.size() - 1));
+    }
+
+    /**
      * Attach a freshly-vaulted PaymentMethod to the customer and mark it as
      * the new default. Existing default is flagged non-default first so the
      * portal's card-on-file lookup picks the new one. Demo mode skips the
@@ -341,6 +502,8 @@ public class PlanPortalService {
         STRIPE_ERROR,
         INVALID_INPUT,
         SETUP_INTENT_NOT_AVAILABLE_IN_DEMO,
+        /** A charge on this plan is already in flight with the rail. */
+        PAYMENT_IN_FLIGHT,
     }
 
     public static class PortalException extends RuntimeException {

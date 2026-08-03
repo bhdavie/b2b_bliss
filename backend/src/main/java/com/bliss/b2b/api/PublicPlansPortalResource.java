@@ -82,6 +82,29 @@ public class PublicPlansPortalResource {
         }
     }
 
+    /**
+     * Pay off the whole outstanding balance in one charge. Takes no body: the
+     * amount is the sum of the plan's unsettled rows, computed server-side, so
+     * a client can never dictate what it is charged. All-or-nothing — see
+     * PlanPortalService#payRemainingBalance.
+     */
+    @POST
+    @Path("/{token}/pay-remaining")
+    public Response payRemaining(@PathParam("token") String token) {
+        try {
+            PayResult result = portalService.payRemainingBalance(token);
+            return Response.ok(Map.of(
+                    "status", "ok",
+                    "paymentIntentId", result.paymentIntentId(),
+                    "intentStatus", result.status())).build();
+        } catch (PortalException e) {
+            return mapError(e);
+        } catch (RuntimeException e) {
+            log.error("Unexpected error in pay-remaining for token={}", token, e);
+            return Response.status(500).entity(Map.of("error", "internal_error")).build();
+        }
+    }
+
     @POST
     @Path("/{token}/cancel")
     public Response cancel(@PathParam("token") String token) {
@@ -208,7 +231,8 @@ public class PublicPlansPortalResource {
         PortalErrorCode code = e.code();
         int status = switch (code) {
             case NOT_FOUND -> 404;
-            case PLAN_NOT_ACTIVE, NO_NEXT_INSTALLMENT, SETUP_INTENT_NOT_AVAILABLE_IN_DEMO -> 409;
+            case PLAN_NOT_ACTIVE, NO_NEXT_INSTALLMENT, SETUP_INTENT_NOT_AVAILABLE_IN_DEMO,
+                 PAYMENT_IN_FLIGHT -> 409;
             case NO_CARD_ON_FILE, INVALID_INPUT -> 400;
             case CARD_DECLINED, CARD_REQUIRES_ACTION -> 402;
             case STRIPE_ERROR -> 502;

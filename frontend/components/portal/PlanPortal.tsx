@@ -149,11 +149,9 @@ export function PlanPortal({
               <PayEarlyButton
                 token={token}
                 amount={nextDueAmount ?? 0}
+                remaining={portal.remainingCents}
                 onPaid={refresh}
               />
-              <div className="mt-5 text-sm leading-[1.55] text-ink-400">
-                Nothing to do. We&apos;ll charge the card below automatically.
-              </div>
             </div>
           ) : null}
 

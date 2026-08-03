@@ -61,6 +61,26 @@ public interface PaymentScheduleDao {
             """)
     Optional<PaymentScheduleEntry> findNextScheduled(@Bind("paymentPlanId") UUID paymentPlanId);
 
+    /**
+     * Every row of a plan that is still owed: not paid, and not struck from the
+     * plan by a cancellation. Feeds the portal's pay-the-whole-balance path,
+     * which settles all of them under one PaymentIntent, so the same predicate
+     * has to define both the amount charged and the rows marked paid.
+     *
+     * <p>Deliberately wider than {@link #findNextScheduled}'s {@code scheduled}:
+     * a {@code failed} or {@code retrying} row is still owed and is included. A
+     * {@code processing} row is in flight with the rail and is included too —
+     * see the caller, which refuses to run while one exists rather than risk
+     * double-charging it.
+     */
+    @SqlQuery("""
+            SELECT * FROM payment_schedule
+            WHERE payment_plan_id = :paymentPlanId
+              AND status NOT IN ('paid', 'canceled')
+            ORDER BY sequence ASC
+            """)
+    List<PaymentScheduleEntry> listUnsettledForPlan(@Bind("paymentPlanId") UUID paymentPlanId);
+
     @SqlUpdate("""
             UPDATE payment_schedule
             SET status = :status,

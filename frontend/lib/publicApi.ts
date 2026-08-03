@@ -536,6 +536,37 @@ export async function payNextInstallment(
 }
 
 /**
+ * Pay off the whole outstanding balance in one charge. Sends no body on
+ * purpose: the amount is the sum of the plan's unsettled rows, computed
+ * server-side, so the client never dictates what is charged. All-or-nothing —
+ * a decline settles nothing and leaves the plan unchanged.
+ */
+export async function payRemainingBalance(
+  token: string,
+): Promise<{ ok: true; paymentIntentId: string; intentStatus: string } | { ok: false; error: PortalActionError; status: number }> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/public/plans/${encodeURIComponent(token)}/pay-remaining`,
+    { method: "POST", headers: { "Content-Type": "application/json" } },
+  );
+  const body = await res.json().catch(() => ({} as Record<string, unknown>));
+  if (!res.ok) {
+    return {
+      ok: false,
+      status: res.status,
+      error: {
+        error: (body as { error?: string }).error ?? "unknown_error",
+        message: (body as { message?: string }).message ?? `Payment failed (${res.status})`,
+      },
+    };
+  }
+  return {
+    ok: true,
+    paymentIntentId: (body as { paymentIntentId?: string }).paymentIntentId ?? "",
+    intentStatus: (body as { intentStatus?: string }).intentStatus ?? "",
+  };
+}
+
+/**
  * Customer-initiated cancellation. State transition only on the backend (marks
  * the plan canceled and stops the remaining schedule rows). No Stripe refund is
  * posted; the refund figure shown to the guest is computed client-side from the
