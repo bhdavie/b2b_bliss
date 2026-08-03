@@ -41,22 +41,28 @@ export default async function AccountSettingsPage() {
             </div>
           </div>
 
-          <Panel className="px-8 pb-8 pt-[30px]">
-            <SectionHeading className="mb-6">Card on file</SectionHeading>
-            {portal && anchor ? (
-              <SettingsCardOnFile
-                token={anchor.bookingToken}
-                card={portal.card}
-                stripeConfigured={portal.stripe.configured}
-                stripePublishableKey={portal.stripe.publishableKey}
-              />
-            ) : (
-              <p className="text-[17px] text-ink-500">
-                No card on file yet. Your card is saved the first time you set
-                up a payment plan.
-              </p>
-            )}
-          </Panel>
+          {/* The heading and the Panel live inside SettingsCardOnFile: the open
+              editor replaces that panel rather than nesting inside it, the way
+              the plan detail does. The no-plan fallback keeps them here, since
+              it has no editor to open. */}
+          {portal && anchor ? (
+            <SettingsCardOnFile
+              token={anchor.bookingToken}
+              card={portal.card}
+              stripeConfigured={portal.stripe.configured}
+              stripePublishableKey={portal.stripe.publishableKey}
+            />
+          ) : (
+            <div className="flex flex-col">
+              <SectionHeading className="mb-6">Card on file</SectionHeading>
+              <Panel className="px-8 pb-8 pt-[30px]">
+                <p className="text-[17px] text-ink-500">
+                  No card on file yet. Your card is saved the first time you set
+                  up a payment plan.
+                </p>
+              </Panel>
+            </div>
+          )}
         </div>
       </div>
     </PortalShell>
