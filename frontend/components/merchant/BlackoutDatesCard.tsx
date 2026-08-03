@@ -162,32 +162,32 @@ export function BlackoutDatesCard({
     <form onSubmit={handleSubmit} className="flex flex-col gap-8 rounded-panel border border-sand-200 px-8 py-8">
       <section className="grid gap-3 sm:grid-cols-[180px_1fr]">
         <div>
-          <div className="text-sm font-medium text-ink">Blackout dates</div>
-          <div className="mt-1 text-xs text-brand-navy leading-snug">
+          <div className="text-sm font-medium text-ink-900">Blackout dates</div>
+          <div className="mt-1 text-xs text-ink-400 leading-snug">
             Blackout dates apply to the nights your guest is staying, not the day
             they book. If any night of a stay falls on a blackout date, no plan
             is offered for that stay.
           </div>
-          <div className="mt-3 text-xs font-medium text-brand-navy">
+          <div className="mt-3 text-xs font-medium text-ink-700">
             {selected.size} {selected.size === 1 ? "day" : "days"} selected
           </div>
-          <div className="mt-1 text-xs text-brand-navy/60 leading-snug">
+          <div className="mt-1 text-xs text-ink-400 leading-snug">
             Click a day to toggle it. Shift-click to select a run of days.
           </div>
         </div>
 
-        <div className="max-h-96 overflow-y-auto rounded-md border border-brand-neutral p-3">
+        <div className="max-h-96 overflow-y-auto rounded-md border border-sand-200 p-3">
           <div className="space-y-5">
             {months.map((month) => (
               <div key={month.key}>
-                <div className="text-xs font-semibold text-brand-navy">
+                <div className="text-xs font-semibold text-ink-700">
                   {month.label}
                 </div>
                 <div className="mt-2 grid grid-cols-7 gap-1">
                   {WEEKDAYS.map((w, i) => (
                     <div
                       key={`${month.key}-wd-${i}`}
-                      className="text-center text-[10px] text-brand-navy/45"
+                      className="text-center text-[10px] text-ink-400"
                     >
                       {w}
                     </div>
@@ -207,10 +207,10 @@ export function BlackoutDatesCard({
                         onClick={(ev) => toggle(d.iso, ev.shiftKey)}
                         className={`h-7 rounded text-xs tabular-nums transition ${
                           !d.selectable
-                            ? "cursor-default text-brand-navy/20"
+                            ? "cursor-default text-ink-300"
                             : isSelected
-                              ? "bg-brand-purple font-medium text-white"
-                              : "text-brand-navy hover:bg-brand-lavender/30"
+                              ? "border border-brand-violet bg-brand-violet-tint font-medium text-brand-violet"
+                              : "text-ink-700 hover:bg-sand-100"
                         }`}
                       >
                         {d.day}

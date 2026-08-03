@@ -267,7 +267,7 @@ export function PoliciesCard({
               onChange={(v) => update("cancellationFeeEnabled", v)}
             />
             {form.cancellationFeeEnabled ? (
-              <div className="rounded-md bg-brand-lavender/20 p-3 space-y-3">
+              <div className="rounded-md bg-sand-50 p-3 space-y-3">
                 <div className="grid grid-cols-2 gap-2 max-w-md">
                   <PillToggle
                     label="Percentage"
@@ -359,7 +359,7 @@ export function PoliciesCard({
               placeholder="3"
             />
             <label className="block">
-              <span className="text-xs text-brand-navy">Spacing (days)</span>
+              <span className="text-xs text-ink-400">Spacing (days)</span>
               <select
                 value={form.retrySpacingDays}
                 onChange={(e) => update("retrySpacingDays", e.target.value as "1" | "3" | "7")}
@@ -381,7 +381,7 @@ export function PoliciesCard({
               onChange={(v) => update("lateFeeEnabled", v)}
             />
             {form.lateFeeEnabled ? (
-              <div className="rounded-md bg-brand-lavender/20 p-3 space-y-3">
+              <div className="rounded-md bg-sand-50 p-3 space-y-3">
                 <div className="grid grid-cols-2 gap-2 max-w-md">
                   <PillToggle
                     label="Percentage"
@@ -411,7 +411,7 @@ export function PoliciesCard({
                     />
                   )}
                   <label className="block">
-                    <span className="text-xs text-brand-navy">Apply</span>
+                    <span className="text-xs text-ink-400">Apply</span>
                     <select
                       value={form.lateFeeScope}
                       onChange={(e) => update("lateFeeScope", e.target.value as LateFeeScope)}
@@ -533,8 +533,8 @@ function Row({
   return (
     <section className="grid gap-3 sm:grid-cols-[200px_1fr]">
       <div>
-        <div className="text-sm font-medium text-ink">{label}</div>
-        {hint ? <div className="mt-1 text-xs text-brand-navy leading-snug">{hint}</div> : null}
+        <div className="text-sm font-medium text-ink-900">{label}</div>
+        {hint ? <div className="mt-1 text-xs text-ink-400 leading-snug">{hint}</div> : null}
       </div>
       <div>{children}</div>
     </section>
@@ -559,14 +559,14 @@ function OptionCard({
       aria-pressed={selected}
       className={`text-left rounded-md p-3 transition-colors ${
         selected
-          ? "border-2 border-[#97ACC8] bg-[#97ACC8]/20"
-          : "border border-brand-neutral bg-white hover:border-brand-dusty"
+          ? "border-2 border-brand-violet bg-brand-violet-tint"
+          : "border border-sand-200 bg-white hover:border-brand-violet"
       }`}
     >
-      <div className={`text-sm font-medium ${selected ? "text-[#51576A]" : "text-ink"}`}>
+      <div className={`text-sm font-medium ${selected ? "text-brand-violet" : "text-ink-900"}`}>
         {label}
       </div>
-      <div className="mt-0.5 text-xs text-brand-navy leading-snug">{body}</div>
+      <div className="mt-0.5 text-xs text-ink-400 leading-snug">{body}</div>
     </button>
   );
 }
@@ -587,8 +587,8 @@ function PillToggle({
       aria-pressed={selected}
       className={`rounded-md py-2 text-sm transition-colors ${
         selected
-          ? "bg-brand-lavender text-white"
-          : "border border-brand-neutral bg-white text-ink hover:border-brand-dusty"
+          ? "border border-brand-violet bg-brand-violet-tint text-brand-violet"
+          : "border border-sand-200 bg-white text-ink-900 hover:border-brand-violet"
       }`}
     >
       {label}
@@ -619,7 +619,7 @@ function Toggle({
           }
         }}
         className={`relative inline-flex h-5 w-9 flex-none rounded-full transition-colors ${
-          on ? "bg-brand-lavender" : "bg-brand-neutral"
+          on ? "bg-brand-violet" : "bg-sand-300"
         }`}
       >
         <span
@@ -628,7 +628,7 @@ function Toggle({
           }`}
         />
       </span>
-      <span className="text-sm text-ink">{label}</span>
+      <span className="text-sm text-ink-900">{label}</span>
     </label>
   );
 }
@@ -648,7 +648,7 @@ function NumberInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-brand-navy">{label}</span>
+      <span className="text-xs text-ink-400">{label}</span>
       <Input
         type="number"
         inputMode="numeric"
@@ -675,7 +675,7 @@ function PercentInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-brand-navy">{label}</span>
+      <span className="text-xs text-ink-400">{label}</span>
       <div className="relative mt-1.5">
         <Input
           type="number"
@@ -688,7 +688,7 @@ function PercentInput({
           placeholder={placeholder}
         />
         <span
-          className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-ink-muted"
+          className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-ink-400"
           aria-hidden="true"
         >
           %
@@ -711,10 +711,10 @@ function DollarInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-brand-navy">{label}</span>
+      <span className="text-xs text-ink-400">{label}</span>
       <div className="relative mt-1.5">
         <span
-          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-ink-muted"
+          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-ink-400"
           aria-hidden="true"
         >
           $

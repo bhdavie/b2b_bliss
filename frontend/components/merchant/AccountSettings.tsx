@@ -390,7 +390,7 @@ function Input({
       maxLength={maxLength}
       autoComplete={autoComplete}
       autoFocus={autoFocus}
-      className="w-full rounded-md border border-brand-neutral bg-white px-3 py-2.5 text-sm text-ink placeholder:text-brand-navy/35 focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/50"
+      className="w-full rounded-md border border-sand-200 bg-white px-3 py-2.5 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-violet focus:outline-none focus:shadow-[0_0_0_4px_rgba(90,27,181,0.10)]"
     />
   );
 }
@@ -462,7 +462,7 @@ function PropertyManagementSection({ connections }: { connections: AccountConnec
             type="button"
             onClick={handleDisconnect}
             disabled={disconnecting}
-            className="text-xs font-medium text-brand-navy/60 transition-colors hover:text-brand-purple disabled:opacity-60"
+            className="text-xs font-medium text-ink-400 transition-colors hover:text-brand-violet disabled:opacity-60"
           >
             {disconnecting ? "Disconnecting" : "Disconnect"}
           </button>
@@ -505,7 +505,7 @@ function PropertyManagementSection({ connections }: { connections: AccountConnec
   if (pmsType === "cloudbeds") {
     return (
       <div>
-        <p className="text-sm text-brand-navy/65">
+        <p className="text-sm text-ink-500">
           Authorize Bliss in your Cloudbeds account to charge cards through Cloudbeds.
         </p>
         {/* OAuth start: full-page navigation to the backend endpoint. */}
@@ -558,7 +558,7 @@ function PaymentProcessorSection({ connections }: { connections: AccountConnecti
 
   if (mewsConnected) {
     return (
-      <p className="text-sm text-brand-navy/65">
+      <p className="text-sm text-ink-500">
         Payments run through your Mews connection. Cards are charged in Mews, so there is no
         separate processor to connect.
       </p>
@@ -600,7 +600,7 @@ function PaymentProcessorSection({ connections }: { connections: AccountConnecti
       <div className="flex items-center gap-3">
         <ProviderLogo provider={STRIPE} className="h-8" />
       </div>
-      <p className="mt-3 text-sm text-brand-navy/65">
+      <p className="mt-3 text-sm text-ink-500">
         {resuming
           ? "Your Stripe onboarding is not finished. Pick up where you left off to start taking payments."
           : "Connect Stripe to accept payments and installments, and route payouts to your bank."}
@@ -636,14 +636,14 @@ function ConnectedHeader({ provider, subtext }: { provider: { name: string; logo
     <div className="flex items-center gap-4">
       <ProviderLogo provider={provider} className="h-10" />
       <div>
-        <div className="flex items-center gap-2 text-lg font-semibold text-brand-navy">
+        <div className="flex items-center gap-2 text-lg font-semibold text-ink-900">
           {provider.name}
-          <span className="inline-flex items-center gap-1 text-brand-purple">
+          <span className="inline-flex items-center gap-1 text-brand-violet">
             <CheckIcon className="h-3.5 w-3.5" />
             Connected
           </span>
         </div>
-        <div className="mt-0.5 text-sm text-brand-navy/65">{subtext}</div>
+        <div className="mt-0.5 text-sm text-ink-500">{subtext}</div>
       </div>
     </div>
   );
@@ -653,7 +653,7 @@ function ConnectedHeader({ provider, subtext }: { provider: { name: string; logo
 function ConnectPrompt({ text, href, label }: { text: string; href: string; label: string }) {
   return (
     <div>
-      <p className="text-sm text-brand-navy/65">{text}</p>
+      <p className="text-sm text-ink-500">{text}</p>
       <Button href={href} variant="merchant" className="mt-5 inline-block">
         {label}
       </Button>

@@ -258,7 +258,7 @@ export function PlanRulesCard({
                 }
               }}
               className={`relative inline-flex h-5 w-9 flex-none rounded-full transition-colors ${
-                form.depositRequired ? "bg-[#C9AFFA]" : "bg-brand-neutral"
+                form.depositRequired ? "bg-brand-violet" : "bg-sand-300"
               }`}
             >
               <span
@@ -267,13 +267,13 @@ export function PlanRulesCard({
                 }`}
               />
             </span>
-            <span className="text-sm text-ink">
+            <span className="text-sm text-ink-900">
               Require a deposit at booking
             </span>
           </label>
 
           {form.depositRequired ? (
-            <div className="space-y-3 rounded-md bg-brand-lavender/20 p-3">
+            <div className="space-y-3 rounded-md bg-sand-50 p-3">
               <div className="grid grid-cols-2 gap-2 max-w-md">
                 {(
                   [
@@ -314,7 +314,7 @@ export function PlanRulesCard({
                 />
               </div>
 
-              <p className="text-[11px] text-brand-navy leading-snug">
+              <p className="text-[11px] text-ink-400 leading-snug">
                 {form.depositType === "percentage"
                   ? "A percentage of the booking total is charged at signup. The optional cap protects against runaway deposits on big-ticket bookings."
                   : "A fixed dollar amount is charged at signup. If the booking total is smaller than the deposit, the plan flow rejects so you don't accidentally charge above the booking price."}
@@ -474,7 +474,7 @@ function DollarInput({
       <span className="text-base text-ink-500">{label}</span>
       <div className="relative mt-1.5">
         <span
-          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-ink-muted"
+          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-ink-400"
           aria-hidden="true"
         >
           $
@@ -522,7 +522,7 @@ function PercentInput({
           placeholder={placeholder}
         />
         <span
-          className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-ink-muted"
+          className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-ink-400"
           aria-hidden="true"
         >
           %
@@ -552,14 +552,14 @@ function FrequencyOption({
       aria-pressed={selected}
       className={`text-left rounded-md p-3 transition-colors ${
         selected
-          ? "border-2 border-[#97ACC8] bg-[#97ACC8]/20"
-          : "border border-brand-neutral bg-white hover:border-brand-dusty"
+          ? "border-2 border-brand-violet bg-brand-violet-tint"
+          : "border border-sand-200 bg-white hover:border-brand-violet"
       }`}
     >
-      <div className={`text-sm font-medium ${selected ? "text-[#51576A]" : "text-ink"}`}>
+      <div className={`text-sm font-medium ${selected ? "text-brand-violet" : "text-ink-900"}`}>
         {label}
       </div>
-      <div className="mt-0.5 text-xs text-brand-navy leading-snug">{body}</div>
+      <div className="mt-0.5 text-xs text-ink-400 leading-snug">{body}</div>
       <input
         type="radio"
         name="allowed_frequencies"
@@ -589,8 +589,8 @@ function PillToggle({
       aria-pressed={selected}
       className={`rounded-md py-2 text-sm transition-colors ${
         selected
-          ? "bg-[#C9AFFA] text-white"
-          : "border border-brand-neutral bg-white text-ink hover:border-brand-dusty"
+          ? "border border-brand-violet bg-brand-violet-tint text-brand-violet"
+          : "border border-sand-200 bg-white text-ink-900 hover:border-brand-violet"
       }`}
     >
       {label}
