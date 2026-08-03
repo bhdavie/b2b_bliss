@@ -222,13 +222,16 @@ public interface PaymentPlanDao {
     List<PlanScheduleSummary> summarizeSchedules(@BindList("planIds") List<UUID> planIds);
 
     /**
-     * Raw schedule rows (due date + amount) for a set of plans, so the account
-     * list can run the same as-of-today PlanProgress derivation the portal uses.
+     * Raw schedule rows (due date + amount + status) for a set of plans, so the
+     * account list can run the same PlanProgress derivation the portal uses.
+     * Status is selected because progress follows each row's own status rather
+     * than its due date.
      */
     @SqlQuery("""
             SELECT payment_plan_id AS paymentPlanId,
                    due_date AS dueDate,
-                   amount_cents AS amountCents
+                   amount_cents AS amountCents,
+                   status AS status
             FROM payment_schedule
             WHERE payment_plan_id IN (<planIds>)
             ORDER BY payment_plan_id, sequence
@@ -239,7 +242,8 @@ public interface PaymentPlanDao {
     record ScheduleRow(
             UUID paymentPlanId,
             LocalDate dueDate,
-            long amountCents
+            long amountCents,
+            String status
     ) {}
 
     /**

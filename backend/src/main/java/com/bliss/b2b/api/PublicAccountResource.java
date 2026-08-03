@@ -115,7 +115,8 @@ public class PublicAccountResource {
                 for (ScheduleRow r : planDao.scheduleRowsForPlans(planIds)) {
                     rowsByPlan
                             .computeIfAbsent(r.paymentPlanId(), k -> new ArrayList<>())
-                            .add(new PlanProgress.Row(r.dueDate(), r.amountCents()));
+                            .add(new PlanProgress.Row(
+                                    r.dueDate(), r.amountCents(), r.status()));
                 }
                 LocalDate today = LocalDate.now(clock);
                 for (PaymentPlanListItem item : items) {

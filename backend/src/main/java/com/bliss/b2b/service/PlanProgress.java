@@ -4,19 +4,41 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * As-of-today derivation of plan progress from the installment schedule. Single
- * source of truth shared by the /account list and the /plan portal so the
- * numbers reconcile across every screen.
+ * Plan progress derived from the installment schedule. Single source of truth
+ * shared by the /account list and the /plan portal so the numbers reconcile
+ * across every screen.
  *
- * <p>Display/derivation only: every installment whose due date is on or before
- * {@code today} is treated as paid on time. No rows are written, no charges are
- * synthesized; this never touches Stripe or the database.
+ * <p>Progress follows each row's OWN status, never its due date. A row counts as
+ * paid when its status is {@code paid} — i.e. when a charge actually settled
+ * against it — so a row dated in the future that has been paid counts, and a row
+ * dated in the past that has not been charged does not. The previous rule
+ * ("every row due on or before today is treated as paid on time") inferred
+ * payment from the calendar, which disagreed with the schedule's own PAID labels
+ * whenever the two diverged: a plan whose dates had been moved forward showed
+ * three paid installments alongside a zero paid-to-date figure.
+ *
+ * <p>{@code canceled} and {@code failed} rows are not paid. A canceled row is
+ * also not outstanding — it is struck from the plan, so it never surfaces as the
+ * next payment. A failed row is still owed and remains eligible to be the next
+ * payment, since it will be retried.
+ *
+ * <p>Display/derivation only: no rows are written, no charges are synthesized;
+ * this never touches Stripe or the database.
  */
 public final class PlanProgress {
 
     private PlanProgress() {}
 
-    public record Row(LocalDate dueDate, long amountCents) {}
+    private static final String PAID = "paid";
+    private static final String CANCELED = "canceled";
+
+    /**
+     * @param dueDate     when the row is due
+     * @param amountCents the row's amount
+     * @param status      the row's own wire status ('scheduled', 'processing',
+     *                    'paid', 'failed', 'retrying', 'canceled')
+     */
+    public record Row(LocalDate dueDate, long amountCents, String status) {}
 
     public record Snapshot(
             long paidCents,
@@ -29,16 +51,17 @@ public final class PlanProgress {
     ) {}
 
     /**
-     * @param rows               every schedule row (due date + amount)
+     * @param rows               every schedule row (due date + amount + status)
      * @param totalWithFeeCents  what the customer pays in full (plan total + fee)
-     * @param today              server date to evaluate against
+     * @param today              retained for call-site compatibility and no
+     *                           longer read: progress comes from row status, not
+     *                           from the date. Kept so the two callers do not
+     *                           have to change signature alongside this fix.
      * @param planStatus         wire status of the plan ('active', 'completed',
      *                           'canceled', ...). Terminal states win over the
-     *                           date rule: a completed plan is fully paid with no
-     *                           upcoming payment; a canceled plan never surfaces a
-     *                           next payment. The as-of-today rule applies to the
-     *                           in-flight (active) case, which is the bug being
-     *                           fixed.
+     *                           row rule: a completed plan is fully paid with no
+     *                           upcoming payment; a canceled plan never surfaces
+     *                           a next payment.
      */
     public static Snapshot asOf(
             List<Row> rows, long totalWithFeeCents, LocalDate today, String planStatus) {
@@ -52,11 +75,13 @@ public final class PlanProgress {
         int upcomingCount = 0;
         Row next = null;
         for (Row r : rows) {
-            if (!r.dueDate().isAfter(today)) {
-                // Due on or before today -> treated as paid on time.
+            if (PAID.equals(r.status())) {
                 paidCents += r.amountCents();
                 paidCount++;
-            } else {
+            } else if (!CANCELED.equals(r.status())) {
+                // Anything not paid and not struck from the plan is still owed:
+                // scheduled, processing, failed and retrying all qualify, and the
+                // earliest of them by due date is the next payment.
                 upcomingCount++;
                 if (next == null || r.dueDate().isBefore(next.dueDate())) {
                     next = r;
@@ -72,7 +97,10 @@ public final class PlanProgress {
                     paidCents, remainingCents, paidCount, 0, null, null, false);
         }
 
-        boolean complete = !rows.isEmpty() && upcomingCount == 0;
+        // Complete means every row settled, not that the calendar passed the
+        // last due date. A plan carrying a canceled row is therefore not
+        // complete, which is what the modification flow already implies.
+        boolean complete = !rows.isEmpty() && paidCount == rows.size();
         return new Snapshot(
                 paidCents,
                 remainingCents,

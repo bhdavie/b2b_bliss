@@ -95,10 +95,11 @@ public class PlanPortalService {
             Customer customer = handle.attach(CustomerDao.class).findById(plan.customerId()).orElse(null);
             CustomerCard card = handle.attach(CustomerCardDao.class)
                     .findDefaultForCustomer(plan.customerId()).orElse(null);
-            // As-of-today progress: due-on-or-before-today rows are treated paid.
+            // Progress from each row's own status (see PlanProgress).
             PlanProgress.Snapshot progress = PlanProgress.asOf(
                     schedule.stream()
-                            .map(e -> new PlanProgress.Row(e.dueDate(), e.amountCents()))
+                            .map(e -> new PlanProgress.Row(
+                                    e.dueDate(), e.amountCents(), e.status().wire()))
                             .toList(),
                     plan.totalAmountCents() + plan.processingFeeCents(),
                     LocalDate.now(clock),
