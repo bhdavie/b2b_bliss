@@ -139,7 +139,6 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
           type="submit"
           disabled={submitting || !clientToken.trim() || !accessToken.trim()}
           variant="merchant"
-          className="disabled:opacity-60"
         >
           {submitting ? "Validating with Mews" : "Validate and connect"}
         </Button>

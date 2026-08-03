@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { BlissWordmark } from "@/components/BlissWordmark";
+import { BlackoutDatesCard } from "@/components/merchant/BlackoutDatesCard";
 import { InstallSteps } from "@/components/merchant/InstallSteps";
 import { PlanRulesCard } from "@/components/merchant/PlanRulesCard";
 import { PoliciesCard } from "@/components/merchant/PoliciesCard";
@@ -12,9 +13,13 @@ import {
   fetchPlanRulesServer,
 } from "@/lib/auth";
 
-// Final setup step: initial plan rules. Reuses the same PlanRulesCard +
-// PoliciesCard the /settings page uses (each saves on its own). A fresh
-// merchant has no rules row yet, so the cards open on DEFAULT_PLAN_RULES.
+// Final setup step: initial plan rules. Reuses the same PlanRulesCard,
+// BlackoutDatesCard and PoliciesCard the /settings page uses (each saves on its
+// own). A fresh merchant has no rules row yet, so the cards open on
+// DEFAULT_PLAN_RULES.
+//
+// All three read the same single fetchPlanRulesServer() result, exactly as the
+// settings page hands one PlanRules object to all five of its tabs.
 //
 // The funnel has no design turn of its own, so the chrome is inherited from the
 // settled merchant screens: the (authenticated) shell's surface and rhythm
@@ -53,6 +58,11 @@ export default async function OnboardingPlanRulesPage() {
           Eligibility &amp; plans
         </SectionHeading>
         <PlanRulesCard initial={planRules ?? DEFAULT_PLAN_RULES} />
+
+        <SectionHeading track="0.08em" className="mb-5 mt-14">
+          Blackout dates
+        </SectionHeading>
+        <BlackoutDatesCard initial={planRules ?? DEFAULT_PLAN_RULES} />
 
         <SectionHeading track="0.08em" className="mb-5 mt-14">
           Cancellation &amp; policies

@@ -73,7 +73,6 @@ export function ConnectCloudbedsStep({
           onClick={connect}
           disabled={redirecting}
           variant="merchant"
-          className="disabled:opacity-60"
         >
           {redirecting ? "Redirecting to Cloudbeds" : "Connect Cloudbeds"}
         </Button>

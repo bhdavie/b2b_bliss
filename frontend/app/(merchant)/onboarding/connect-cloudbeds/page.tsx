@@ -27,9 +27,7 @@ export default async function ConnectCloudbedsPage() {
       <div className="mx-auto flex max-w-[1136px] flex-col px-6 pb-[72px] pt-16 xl:px-16">
         <BlissWordmark className="mb-12 text-[22px] tracking-[-0.005em] text-brand-violet" />
 
-        <p className="mb-12 text-lg text-ink-500">
-          Connecting Cloudbeds · {session.businessName ?? "your property"}
-        </p>
+        <p className="mb-12 text-lg text-ink-500">Connecting Cloudbeds</p>
 
         <div className="mb-14">
           <InstallSteps status={onboarding} />
