@@ -3,13 +3,18 @@
 import { useState } from "react";
 import { connectMews, type MewsConnectResult } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
+import { Panel } from "@/components/ui/primitives";
 
 // Property enters its Mews Connector tokens; we validate them against Mews
 // (Get configuration) before storing. On success we show the enterprise we
 // resolved and let them continue.
+//
+// Chrome is plan-rules': a Panel with the settled title, `.label` fields and a
+// ruled action row at the foot. The two actions are the Save/Cancel pairing
+// account settings uses, violet pill beside ghost pill, rather than a full-width
+// button over a text link.
 
 const DEMO_PLATFORM_URL = "https://api.mews-demo.com";
 // Public Mews demo credentials (Gross pricing UK demo property). Safe to ship:
@@ -52,30 +57,32 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
 
   if (result) {
     return (
-      <Card padding="xl" className="text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+      <Panel className="mx-auto w-full max-w-[560px] items-center gap-5 px-10 pb-10 pt-9 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-violet text-xl text-white">
           ✓
         </div>
-        <h2 className="mt-4 text-lg font-medium text-brand-navy">Mews connected</h2>
-        <p className="mt-1 text-sm text-ink-muted">
-          Linked to <span className="font-medium text-ink">{result.enterpriseName}</span>
+        <h2 className="text-[28px] font-medium tracking-[-0.02em] text-ink-900">
+          Mews connected
+        </h2>
+        <p className="max-w-[560px] text-lg leading-[1.6] text-ink-500">
+          Linked to <span className="font-medium text-ink-900">{result.enterpriseName}</span>
           {result.currency ? ` · charging in ${result.currency}` : ""}.
         </p>
-        <Button href="/onboarding/plan-rules" variant="merchant" className="mt-6 inline-block">
+        <Button href="/onboarding/plan-rules" variant="merchant" className="mt-2">
           Continue
         </Button>
-      </Card>
+      </Panel>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card p-8">
-      <h2 className="text-lg font-medium text-brand-navy">Connect Mews</h2>
-      <p className="mt-1 text-sm text-ink-muted">
+    <form onSubmit={handleSubmit} className="flex flex-col rounded-panel border border-sand-200 px-8 pb-8 pt-[30px]">
+      <h2 className="text-2xl font-medium tracking-[-0.02em] text-ink-900">Connect Mews</h2>
+      <p className="mt-2.5 max-w-[760px] text-[17px] leading-[1.55] text-ink-500">
         Enter your Mews Connector API tokens. We check them against Mews before saving.
       </p>
 
-      <div className="mt-6 space-y-4">
+      <div className="mt-7 space-y-5">
         <div>
           <Label htmlFor="platformUrl">
             Platform URL
@@ -87,8 +94,9 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
             value={platformUrl}
             onChange={(e) => setPlatformUrl(e.target.value)}
             autoComplete="off"
+            className="mt-1.5"
           />
-          <p className="mt-1 text-xs text-brand-navy/55">
+          <p className="mt-2 text-base text-ink-400">
             Leave blank to use the Mews demo environment.
           </p>
         </div>
@@ -103,6 +111,7 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
             onChange={(e) => setClientToken(e.target.value)}
             autoComplete="off"
             required
+            className="mt-1.5"
           />
         </div>
         <div>
@@ -116,30 +125,29 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
             onChange={(e) => setAccessToken(e.target.value)}
             autoComplete="off"
             required
+            className="mt-1.5"
           />
         </div>
       </div>
 
       {error ? (
-        <p className="mt-5 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        <p className="mt-6 rounded-xl bg-red-50 px-4 py-3 text-base text-red-700">{error}</p>
       ) : null}
 
-      <Button
-        type="submit"
-        disabled={submitting || !clientToken.trim() || !accessToken.trim()}
-        variant="merchant"
-        className="mt-6 w-full disabled:opacity-60"
-      >
-        {submitting ? "Validating with Mews" : "Validate and connect"}
-      </Button>
+      <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-sand-100 pt-6">
+        <Button
+          type="submit"
+          disabled={submitting || !clientToken.trim() || !accessToken.trim()}
+          variant="merchant"
+          className="disabled:opacity-60"
+        >
+          {submitting ? "Validating with Mews" : "Validate and connect"}
+        </Button>
 
-      <button
-        type="button"
-        onClick={fillDemo}
-        className="mt-3 w-full text-center text-xs font-medium text-brand-purple hover:underline"
-      >
-        Use demo credentials
-      </button>
+        <Button type="button" onClick={fillDemo} variant="ghost">
+          Use demo credentials
+        </Button>
+      </div>
     </form>
   );
 }

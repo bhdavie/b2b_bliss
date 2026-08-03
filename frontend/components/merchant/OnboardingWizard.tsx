@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { updateMerchant, type UpdateMerchantPayload } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { Panel } from "@/components/ui/primitives";
 
 type FormState = {
   businessName: string;
@@ -91,13 +91,13 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
   }
 
   return (
-    <Card padding="lg" className="mt-10">
+    <Panel className="px-8 pb-8 pt-[30px]">
       <Stepper current={step} />
 
       {step === 0 && (
-        <section className="mt-6 space-y-4">
+        <section className="mt-8 space-y-5">
           <label className="block">
-            <span className="label text-brand-navy">Business name</span>
+            <span className="label">Business name</span>
             <Input
               className="mt-1.5"
               value={form.businessName}
@@ -106,7 +106,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
             />
           </label>
           <label className="block">
-            <span className="label text-brand-navy">Business type</span>
+            <span className="label">Business type</span>
             <select
               className="input mt-1.5 bg-white"
               value={form.businessType}
@@ -121,7 +121,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
             </select>
           </label>
           <label className="block">
-            <span className="label text-brand-navy">Number of rooms</span>
+            <span className="label">Number of rooms</span>
             <select
               className="input mt-1.5 bg-white"
               value={form.numberOfRooms}
@@ -139,9 +139,9 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
       )}
 
       {step === 1 && (
-        <section className="mt-6 space-y-4">
+        <section className="mt-8 space-y-5">
           <label className="block">
-            <span className="label text-brand-navy">Phone (optional)</span>
+            <span className="label">Phone (optional)</span>
             <Input
               className="mt-1.5"
               value={form.phone}
@@ -150,7 +150,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
               type="tel"
             />
           </label>
-          <p className="text-xs text-brand-navy">
+          <p className="text-base text-ink-400">
             We will not text customers from your number. This is for your account
             only.
           </p>
@@ -158,9 +158,9 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
       )}
 
       {step === 2 && (
-        <section className="mt-6 space-y-4">
+        <section className="mt-8 space-y-5">
           <label className="block">
-            <span className="label text-brand-navy">Street address</span>
+            <span className="label">Street address</span>
             <Input
               className="mt-1.5"
               value={form.addressLine1}
@@ -169,7 +169,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
             />
           </label>
           <label className="block">
-            <span className="label text-brand-navy">Suite or unit (optional)</span>
+            <span className="label">Suite or unit (optional)</span>
             <Input
               className="mt-1.5"
               value={form.addressLine2}
@@ -177,9 +177,9 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
               autoComplete="address-line2"
             />
           </label>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-4">
             <label className="block col-span-1">
-              <span className="label text-brand-navy">City</span>
+              <span className="label">City</span>
               <Input
                 className="mt-1.5"
                 value={form.addressCity}
@@ -188,7 +188,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
               />
             </label>
             <label className="block col-span-1">
-              <span className="label text-brand-navy">State</span>
+              <span className="label">State</span>
               <Input
                 className="mt-1.5"
                 value={form.addressState}
@@ -199,7 +199,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
               />
             </label>
             <label className="block col-span-1">
-              <span className="label text-brand-navy">Zip</span>
+              <span className="label">Zip</span>
               <Input
                 className="mt-1.5"
                 value={form.addressZip}
@@ -208,7 +208,7 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
               />
             </label>
           </div>
-          <p className="text-xs text-brand-navy">
+          <p className="text-base text-ink-400">
             EIN, banking, and KYB go directly to Stripe Connect in the next
             phase. We do not store any of that here.
           </p>
@@ -216,12 +216,12 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
       )}
 
       {error ? (
-        <div className="mt-4 text-xs text-red-600" role="alert">
+        <div className="mt-6 text-base text-red-700" role="alert">
           {error}
         </div>
       ) : null}
 
-      <div className="mt-6 flex justify-between">
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-sand-100 pt-6">
         <Button
           type="button"
           variant="ghost"
@@ -250,38 +250,48 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
           </Button>
         )}
       </div>
-    </Card>
+    </Panel>
   );
 }
 
+// Same rail the funnel's other stepper (InstallSteps) draws, so the two step
+// indicators in the flow read as one component: violet chip for a completed
+// step, the violet-tint-on-violet active pill for the step you are on, sand for
+// what is ahead, and a connector that is violet behind and sand-300 in front.
 function Stepper({ current }: { current: number }) {
   return (
-    <ol className="flex items-center gap-3 text-xs">
+    <ol className="flex flex-wrap items-center gap-x-3 gap-y-2 text-base">
       {STEPS.map((s, i) => {
         const state =
           i < current ? "done" : i === current ? "active" : "pending";
         return (
-          <li key={s.id} className="flex items-center gap-2">
+          <li key={s.id} className="flex items-center gap-3">
             <span
-              className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-medium ${
-                state === "active"
-                  ? "bg-brand-lavender text-white"
-                  : state === "done"
-                    ? "bg-brand-lavender text-white"
-                    : "bg-brand-cream/60 text-ink-muted"
+              className={`flex h-7 w-7 flex-none items-center justify-center rounded-full text-sm font-semibold ${
+                state === "done"
+                  ? "bg-brand-violet text-white"
+                  : state === "active"
+                    ? "bg-brand-violet-tint text-brand-violet"
+                    : "bg-sand-200 text-ink-400"
               }`}
             >
               {i + 1}
             </span>
             <span
-              className={`${
-                state === "pending" ? "text-ink-muted" : "text-ink"
-              } ${state === "active" ? "font-medium" : ""}`}
+              className={
+                state === "active"
+                  ? "font-medium text-ink-900"
+                  : "text-ink-400"
+              }
             >
               {s.title}
             </span>
             {i < STEPS.length - 1 && (
-              <span className="w-6 h-px bg-brand-neutral" />
+              <span
+                className={`mx-1 h-px w-8 ${
+                  state === "done" ? "bg-brand-violet" : "bg-sand-300"
+                }`}
+              />
             )}
           </li>
         );

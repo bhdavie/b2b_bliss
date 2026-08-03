@@ -6,6 +6,13 @@ import { selectPms, type PmsType } from "@/lib/api";
 
 // Property picks where it takes payments. Mews, Cloudbeds, and Stripe are all
 // connectable now.
+//
+// The rows are the settled selectable-row treatment: OnboardingChecklist's
+// 12px-radius row with a violet border on the one you are on, filled with the
+// violet tint the sidebar and bookings table use for an active item. The name
+// and blurb take the Overview connection row's sizes. The coming-soon tag is
+// sand-on-ink rather than violet, so it stays legible on the tinted selected
+// row (no option sets the flag today).
 
 type Option = {
   key: PmsType;
@@ -60,7 +67,7 @@ export function PmsSelectStep({ currentPms }: { currentPms: PmsType }) {
   return (
     <div>
       {error ? (
-        <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        <p className="mb-5 rounded-xl bg-red-50 px-4 py-3 text-base text-red-700">{error}</p>
       ) : null}
 
       <div className="space-y-3">
@@ -74,23 +81,27 @@ export function PmsSelectStep({ currentPms }: { currentPms: PmsType }) {
               onClick={() => choose(opt.key)}
               disabled={submitting !== null}
               className={[
-                "flex w-full items-center gap-4 rounded-lg border px-5 py-4 text-left transition-colors",
-                active ? "border-brand-purple bg-brand-cream/40" : "border-brand-neutral bg-white hover:border-brand-purple/50",
+                "flex w-full items-center gap-5 rounded-xl border px-7 py-6 text-left transition-colors",
+                active
+                  ? "border-brand-violet bg-brand-violet-tint"
+                  : "border-sand-200 bg-white hover:border-brand-violet",
                 submitting !== null && !busy ? "opacity-60" : "",
               ].join(" ")}
             >
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-base font-semibold text-brand-navy">{opt.name}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-[19px] font-medium tracking-[-0.012em] text-ink-900">
+                    {opt.name}
+                  </span>
                   {opt.comingSoon ? (
-                    <span className="rounded-full bg-brand-cream px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                    <span className="rounded-full bg-sand-100 px-[15px] py-[7px] text-[13px] font-medium uppercase tracking-[0.06em] text-ink-400">
                       Coming soon
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-1 text-sm text-brand-navy/65">{opt.blurb}</p>
+                <p className="mt-2 text-base text-ink-400">{opt.blurb}</p>
               </div>
-              <span className="shrink-0 text-sm font-medium text-brand-purple">
+              <span className="shrink-0 text-base font-medium text-brand-violet">
                 {busy ? "Saving" : opt.comingSoon ? "Select" : "Connect"}
               </span>
             </button>

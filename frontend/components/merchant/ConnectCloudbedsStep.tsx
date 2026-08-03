@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { cloudbedsOAuthStartUrl } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { Panel } from "@/components/ui/primitives";
 
 // Cloudbeds connects via OAuth, so "connect" is a full-page redirect to the
 // backend start endpoint (which 302s to the Cloudbeds authorize page), not a
 // token form like Mews. On return the onboarding status reports the connection
 // and this step renders its connected state.
+//
+// Both states take the Mews step's chrome, since the two screens are the same
+// screen with a different provider in it.
 
 export type CloudbedsConnected = {
   propertyName: string | null;
@@ -31,46 +34,50 @@ export function ConnectCloudbedsStep({
 
   if (alreadyConnected) {
     return (
-      <Card padding="xl" className="text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+      <Panel className="mx-auto w-full max-w-[560px] items-center gap-5 px-10 pb-10 pt-9 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-violet text-xl text-white">
           ✓
         </div>
-        <h2 className="mt-4 text-lg font-medium text-brand-navy">Cloudbeds connected</h2>
-        <p className="mt-1 text-sm text-ink-muted">
+        <h2 className="text-[28px] font-medium tracking-[-0.02em] text-ink-900">
+          Cloudbeds connected
+        </h2>
+        <p className="max-w-[560px] text-lg leading-[1.6] text-ink-500">
           {alreadyConnected.propertyName ? (
             <>
               Linked to{" "}
-              <span className="font-medium text-ink">{alreadyConnected.propertyName}</span>
+              <span className="font-medium text-ink-900">{alreadyConnected.propertyName}</span>
             </>
           ) : (
             "Your Cloudbeds property is connected"
           )}
           {alreadyConnected.currency ? ` · charging in ${alreadyConnected.currency}` : ""}.
         </p>
-        <Button href="/onboarding/plan-rules" variant="merchant" className="mt-6 inline-block">
+        <Button href="/onboarding/plan-rules" variant="merchant" className="mt-2">
           Continue
         </Button>
-      </Card>
+      </Panel>
     );
   }
 
   return (
-    <Card padding="xl">
-      <h2 className="text-lg font-medium text-brand-navy">Connect Cloudbeds</h2>
-      <p className="mt-1 text-sm text-ink-muted">
+    <Panel className="px-8 pb-8 pt-[30px]">
+      <h2 className="text-2xl font-medium tracking-[-0.02em] text-ink-900">Connect Cloudbeds</h2>
+      <p className="mt-2.5 max-w-[760px] text-[17px] leading-[1.55] text-ink-500">
         Authorize Bliss in your Cloudbeds account. You will be sent to Cloudbeds to sign in
         and approve access, then returned here.
       </p>
 
-      <Button
-        type="button"
-        onClick={connect}
-        disabled={redirecting}
-        variant="merchant"
-        className="mt-6 w-full disabled:opacity-60"
-      >
-        {redirecting ? "Redirecting to Cloudbeds" : "Connect Cloudbeds"}
-      </Button>
-    </Card>
+      <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-sand-100 pt-6">
+        <Button
+          type="button"
+          onClick={connect}
+          disabled={redirecting}
+          variant="merchant"
+          className="disabled:opacity-60"
+        >
+          {redirecting ? "Redirecting to Cloudbeds" : "Connect Cloudbeds"}
+        </Button>
+      </div>
+    </Panel>
   );
 }

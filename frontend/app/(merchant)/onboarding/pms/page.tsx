@@ -1,10 +1,14 @@
 import { redirect } from "next/navigation";
 import { BlissWordmark } from "@/components/BlissWordmark";
 import { PmsSelectStep } from "@/components/merchant/PmsSelectStep";
+import { PageHeader } from "@/components/ui/primitives";
 import { fetchMerchantSession } from "@/lib/auth";
 
 // Onboarding step: choose a PMS. Lives outside the (authenticated) group so the
 // focused single-column layout applies, but still requires a session.
+//
+// Frame, wordmark and head are plan-rules'; the closing link takes plan-rules'
+// footer rule so every screen in the funnel ends the same way.
 export default async function ChoosePmsPage() {
   const session = await fetchMerchantSession();
   if (!session) {
@@ -12,25 +16,25 @@ export default async function ChoosePmsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white px-6 py-10 font-body">
-      <div className="mx-auto max-w-xl">
-        <header className="text-center">
-          <BlissWordmark className="text-xl tracking-tight text-brand-navy" />
-          <h1 className="mt-6 text-2xl font-bold text-brand-navy">Choose your PMS</h1>
-          <p className="mt-1 text-sm text-ink-muted">
-            Where do you want to take and charge payments for {session.businessName ?? "your property"}?
-          </p>
-        </header>
+    <main className="min-h-screen bg-white font-body text-ink-900">
+      <div className="mx-auto flex max-w-[1136px] flex-col px-6 pb-[72px] pt-16 xl:px-16">
+        <BlissWordmark className="mb-12 text-[22px] tracking-[-0.005em] text-brand-violet" />
 
-        <div className="mt-8">
-          <PmsSelectStep currentPms={session.pmsType} />
-        </div>
+        <PageHeader
+          title="Choose your PMS"
+          subtitle={`Where do you want to take and charge payments for ${session.businessName ?? "your property"}?`}
+        />
 
-        <p className="mt-8 text-center text-sm">
-          <a href="/home" className="text-brand-purple hover:underline">
+        <PmsSelectStep currentPms={session.pmsType} />
+
+        <div className="mt-14 border-t border-sand-200 pt-8">
+          <a
+            href="/home"
+            className="text-[17px] font-medium text-brand-violet no-underline transition-colors hover:text-brand-violet-deep hover:underline"
+          >
             Back to dashboard
           </a>
-        </p>
+        </div>
       </div>
     </main>
   );

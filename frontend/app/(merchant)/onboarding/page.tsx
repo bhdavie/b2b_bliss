@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
 import { BlissWordmark } from "@/components/BlissWordmark";
 import { OnboardingWizard } from "@/components/merchant/OnboardingWizard";
+import { PageHeader } from "@/components/ui/primitives";
 import { fetchMerchantSession } from "@/lib/auth";
+
+// Page frame is plan-rules' frame, character for character: the (authenticated)
+// shell's surface and rhythm, the same 1136px column centred with mx-auto since
+// the funnel has no sidebar, the same wordmark and the same PageHeader.
 
 export default async function OnboardingPage() {
   const session = await fetchMerchantSession();
@@ -13,15 +18,14 @@ export default async function OnboardingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white py-10 px-6 font-body">
-      <div className="max-w-xl mx-auto">
-        <header className="text-center">
-          <BlissWordmark className="text-xl tracking-tight text-brand-purple" />
-          <h1 className="mt-6 text-2xl font-medium text-brand-navy">Set up your business</h1>
-          <p className="mt-1 text-brand-navy">
-            Three quick steps to get your property set up.
-          </p>
-        </header>
+    <main className="min-h-screen bg-white font-body text-ink-900">
+      <div className="mx-auto flex max-w-[1136px] flex-col px-6 pb-[72px] pt-16 xl:px-16">
+        <BlissWordmark className="mb-12 text-[22px] tracking-[-0.005em] text-brand-violet" />
+
+        <PageHeader
+          title="Set up your business"
+          subtitle="Three quick steps to get your property set up."
+        />
 
         <OnboardingWizard
           initial={{
