@@ -21,7 +21,6 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,8 +43,6 @@ import org.slf4j.LoggerFactory;
 public class PublicAccountResource {
 
     public static final String COOKIE_NAME = "bliss_customer_session";
-    private static final int COOKIE_MAX_AGE_SECONDS =
-            (int) Duration.ofDays(30).toSeconds();
 
     private static final Logger log = LoggerFactory.getLogger(PublicAccountResource.class);
 
@@ -54,18 +51,27 @@ public class PublicAccountResource {
     private final CustomerDao customerDao;
     private final Clock clock;
     private final CookieOptions cookieOptions;
+    private final int cookieMaxAgeSeconds;
 
     public PublicAccountResource(
             CustomerAuthService authService,
             PaymentPlanDao planDao,
             CustomerDao customerDao,
             Clock clock,
-            CookieOptions cookieOptions) {
+            CookieOptions cookieOptions,
+            int jwtTtlMinutes) {
         this.authService = authService;
         this.planDao = planDao;
         this.customerDao = customerDao;
         this.clock = clock;
         this.cookieOptions = cookieOptions;
+        // Derived from the JWT TTL rather than fixed, matching AuthResource. The
+        // cookie used to live 30 days while the token inside it lived one hour,
+        // so for the other 29 days the browser held a session that could not
+        // verify: /account bounced to the login screen, which bounced back.
+        // Tying the two together means the cookie disappears exactly when the
+        // token it carries stops being worth anything.
+        this.cookieMaxAgeSeconds = jwtTtlMinutes * 60;
     }
 
     @POST
@@ -82,7 +88,7 @@ public class PublicAccountResource {
         }
         LoginResult.Ok ok = (LoginResult.Ok) result;
         String setCookie = SessionCookies.buildSetCookie(
-                COOKIE_NAME, ok.token(), COOKIE_MAX_AGE_SECONDS, cookieOptions);
+                COOKIE_NAME, ok.token(), cookieMaxAgeSeconds, cookieOptions);
         return Response.ok(Map.of("status", "ok", "email", ok.email()))
                 .header(HttpHeaders.SET_COOKIE, setCookie)
                 .build();

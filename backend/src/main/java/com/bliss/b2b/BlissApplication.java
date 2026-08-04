@@ -267,7 +267,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new PublicPlansPortalResource(
                 planPortalService, stripePaymentsService, stripeConnectResolver, mewsCheckoutService));
         environment.jersey().register(new PublicAccountResource(
-                customerAuthService, paymentPlanDao, customerDao, clock, cookieOptions));
+                customerAuthService, paymentPlanDao, customerDao, clock, cookieOptions,
+                sessionTtlMinutes));
         environment.jersey().register(new PlanRulesResource(planRulesService, onboardingService));
         environment.jersey().register(new PropertyOnboardingResource(onboardingService));
         environment.jersey().register(new com.bliss.b2b.api.CloudbedsOAuthResource(
