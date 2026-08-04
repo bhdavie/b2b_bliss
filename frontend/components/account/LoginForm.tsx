@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/Input";
 
 export function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("john@example.com");
-  const [password, setPassword] = useState("demo");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,10 +63,6 @@ export function LoginForm() {
       <Button type="submit" disabled={busy} variant="primary" className="w-full">
         {busy ? "Signing in…" : "Sign in"}
       </Button>
-
-      <p className="text-center text-xs text-ink-400">
-        Demo: any password works. Authentication only validates the email.
-      </p>
     </form>
   );
 }

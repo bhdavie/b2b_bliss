@@ -23,9 +23,8 @@ type Mode = "demo" | "magic-link" | null;
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(null);
-  // Demo defaults: both fields are pre-filled so signing in needs no typing.
-  const [email, setEmail] = useState("demo@marbrookhouse.com");
-  const [password, setPassword] = useState("1234");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

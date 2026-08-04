@@ -91,7 +91,7 @@ type Address = {
 function AccountInformation({ initial }: { initial: AccountInitial }) {
   const [values, setValues] = useState({
     hotelName: initial.hotelName,
-    password: "1234",
+    password: "",
     phone: initial.phone,
     addressLine1: initial.addressLine1,
     addressLine2: initial.addressLine2,

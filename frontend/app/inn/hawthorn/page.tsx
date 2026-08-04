@@ -80,8 +80,8 @@ export default function HawthornInnPage() {
   const [roomId, setRoomId] = useState(DEFAULT_ROOM_ID);
   const [checkin, setCheckin] = useState(defaultCheckin);
   const [checkout, setCheckout] = useState(defaultCheckout);
-  const [name, setName] = useState("John Doe");
-  const [email, setEmail] = useState("john@example.com");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [merchant, setMerchant] = useState<PublicMerchant | null>(null);
   const discountBasisPoints = merchant?.policies.discountBasisPoints ?? 0;
