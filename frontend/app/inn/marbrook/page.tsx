@@ -963,7 +963,6 @@ export default function MarbrookHousePage() {
                   addressZip={addressZip}
                   setAddressZip={setAddressZip}
                   rate={rate}
-                  paymentMethod={paymentMethod}
                   confirmedPlan={confirmedPlan}
                   onConfirmedChange={setConfirmedPlan}
                   onConfirmPlan={confirmPlan}
@@ -2633,6 +2632,22 @@ const BLISS_CSS = `
 .bliss-ui .sep{margin:0 5px;opacity:.55}
 .bliss-ui .amt{font-weight:600}
 .bliss-ui .sub{display:block;margin-top:2px;font-size:11px;font-weight:400;color:#8A8A8F}
+/* mews-overlay.js:1501-1502. Details step: "See details" reads as a link
+   beneath the main line, not as another button competing with the host's Next
+   control. display:block is what puts it on its own row — without this rule the
+   two strings ran together as one line of text. */
+.bliss-ui .link{display:block;margin-top:3px;padding:0;background:none;border:0;font-size:11px;font-weight:600;color:#111112;text-decoration:underline;cursor:pointer;text-align:left}
+/* mews-overlay.js:1508. Right-aligned so the block sits under the Total figure,
+   in the same column as "Tax included", rather than at the panel's left edge.
+   Declared AFTER .trig so it wins on order at equal specificity. */
+.bliss-ui .details{text-align:right;color:#111112}
+/* mews-overlay.js:1515. text-align on .details cannot move this: .link is
+   display:block, and text-align only positions INLINE-level content. A <button>
+   also uses shrink-to-fit sizing even when block, so the box hugs its text and
+   sits flush left — and right-aligning text inside a box exactly as wide as its
+   text is a no-op. Give the box a definite width so the auto left margin
+   resolves, and it is pushed right as a box. */
+.bliss-ui .details .link{display:block;width:fit-content;margin-left:auto;margin-right:0;text-align:right}
 .bliss-ui .trig[disabled]{cursor:default}
 
 .bliss-ui .scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.44);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -3522,7 +3537,6 @@ function CheckoutStep(props: {
   addressZip: string;
   setAddressZip: (v: string) => void;
   rate: Rate;
-  paymentMethod: PaymentMethod;
   /** The stay's one confirmation (mews-overlay.js:1330 state.planChoice). */
   confirmedPlan: PublicPlanFrequency | null;
   onConfirmedChange: (frequency: PublicPlanFrequency | null) => void;
@@ -3560,7 +3574,6 @@ function CheckoutStep(props: {
     addressZip,
     setAddressZip,
     rate,
-    paymentMethod,
     confirmedPlan,
     onConfirmedChange,
     onConfirmPlan,
@@ -4115,11 +4128,12 @@ function CheckoutStep(props: {
         type="button"
         onClick={onBookNow}
         disabled={submitting}
-        className={`mt-5 w-full rounded-none px-6 py-3.5 text-center text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
-          paymentMethod === "bliss"
-            ? "bg-[#C9AFFA] hover:bg-[#BBA0F4]"
-            : "bg-[#1A56DB] hover:bg-[#1545B0]"
-        }`}
+        // Marbrook's blue in every state, including with a plan confirmed. This
+        // is the hotel's own primary CTA on a page impersonating the hotel's
+        // booking engine, so it does not take a Bliss colour to signal the
+        // payment method — the Bliss block above it already does that. It has
+        // held both a lavender and a violet fill here; both were wrong.
+        className="mt-5 w-full rounded-none bg-[#1A56DB] px-6 py-3.5 text-center text-sm font-medium text-white transition hover:bg-[#1545B0] disabled:cursor-not-allowed disabled:opacity-60"
       >
         <span data-test-textkey="Confirm" data-non-sensitive="true">
           {bookLabel}
