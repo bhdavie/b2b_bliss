@@ -28,6 +28,7 @@ import {
   dueDateCopy,
   failedPaymentCopy,
 } from "@/components/consumer/PolicyDisclosure";
+import { BlissWordmark } from "@/components/BlissWordmark";
 import { DEMO_HOTEL } from "@/lib/mewsDemo";
 
 // Guest-facing sample booking site for the Marbrook House demo merchant.
@@ -2683,6 +2684,14 @@ const BLISS_CSS = `
 .bliss-ui .textbtn:hover{text-decoration:underline}
 .bliss-ui .note{font-size:11px;color:#8A8A8F;margin-top:10px;line-height:1.45}
 .bliss-ui .msg{font-size:12px;color:#8A8A8F;line-height:1.5}
+/* Attribution footer, outside .body so it renders under both the receipt and
+   the picker. The body's own 24px bottom padding is the space above it. */
+.bliss-ui .pwr{padding:0 24px 20px;text-align:center;font-size:11px;font-weight:400;color:#8A8A8F;line-height:1.4}
+/* Colour only. BlissWordmark carries Georgia/700 as an inline style, which
+   outranks the font-family:inherit reset at the top of this sheet; size comes
+   from .pwr. The overlay names all three values directly because it has no
+   component to reach for. */
+.bliss-ui .pwr .wm{color:#5A1BB5}
 
 @media (max-width:420px){
 .bliss-ui .scrim{align-items:flex-end;padding:0}
@@ -3159,6 +3168,12 @@ function BlissModal({
           )}
         </div>
         )}
+
+        {/* Attribution. Sibling of the two body branches, so it renders in the
+            receipt state and the picker state alike. */}
+        <div className="pwr">
+          Powered by <BlissWordmark className="wm" />
+        </div>
         </div>
       </div>
     </div>,

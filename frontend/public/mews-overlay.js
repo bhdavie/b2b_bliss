@@ -1599,6 +1599,16 @@
       ".textbtn{display:block;width:100%;margin-top:10px;padding:6px 0;background:none;border:0;" +
       "font-size:13px;line-height:1.45;color:" + b.inkMuted + ";cursor:pointer;text-align:center}" +
       ".textbtn:hover{text-decoration:underline}" +
+      // Attribution footer, outside .body so it renders under both the receipt
+      // and the picker. The body's own 24px bottom padding is the space above.
+      ".pwr{padding:0 24px 20px;text-align:center;font-size:11px;font-weight:400;" +
+      "color:" + b.inkMuted + ";line-height:1.4}" +
+      // The wordmark treatment, named here because injected JS cannot reach
+      // components/BlissWordmark.tsx: ALWAYS Georgia bold, in violet. The
+      // family must be stated explicitly — baseCss points everything at the
+      // sampled host font, and this rule outranks that `*` selector. Keep these
+      // three values in step with the port's `.pwr .wm` + BlissWordmark.
+      ".pwr .wm{font-family:Georgia,serif;font-weight:700;color:" + b.violet + "}" +
       // Below the phone breakpoint the modal becomes a bottom sheet.
       "@media (max-width:420px){.scrim{align-items:flex-end;padding:0}" +
       ".bliss-card{width:100%;max-width:100%;max-height:88vh;border-radius:" + b.radiusCard + " " + b.radiusCard + " 0 0}}"
@@ -2229,7 +2239,14 @@
   }
 
   function mountModalCard(h, head, body) {
-    var card = h("div", { class: "bliss-card", role: "dialog", "aria-modal": "true", tabindex: "-1" }, [head, body]);
+    // Attribution. Built here rather than in either render path, so it lands
+    // under the receipt state and the picker state alike — both mount through
+    // this one function. `text` is applied before kids are appended, so the
+    // label sits ahead of the wordmark span.
+    var pwr = h("div", { class: "pwr", text: "Powered by " }, [
+      h("span", { class: "wm", text: "Bliss" }),
+    ]);
+    var card = h("div", { class: "bliss-card", role: "dialog", "aria-modal": "true", tabindex: "-1" }, [head, body, pwr]);
     card.addEventListener("click", function (ev) {
       ev.stopPropagation();
     });
