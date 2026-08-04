@@ -2609,6 +2609,10 @@ const BLISS_CSS = `
 .bliss-ui .tag{display:inline-block;font-size:9px;letter-spacing:.4px;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:#F4EFFF;border:1px solid #5A1BB5;color:#111112;margin-left:6px;vertical-align:middle}
 .bliss-ui .cta{width:100%;padding:12px;border:0;border-radius:999px;background:#3F0F87;color:#ffffff;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px}
 .bliss-ui .cta[disabled]{background:#E8E5E0;color:#8A8A8F;cursor:default}
+.bliss-ui .plan{margin:2px 0 0;font-size:14px;font-weight:600;line-height:1.4;color:#111112}
+.bliss-ui .confirmed{margin-top:4px;padding:12px 0;border-top:1px solid #E8E5E0;font-size:13px;line-height:1.45;color:#111112}
+.bliss-ui .textbtn{display:block;width:100%;margin-top:10px;padding:6px 0;background:none;border:0;font-size:13px;line-height:1.45;color:#8A8A8F;cursor:pointer;text-align:center}
+.bliss-ui .textbtn:hover{text-decoration:underline}
 .bliss-ui .note{font-size:11px;color:#8A8A8F;margin-top:10px;line-height:1.45}
 .bliss-ui .msg{font-size:12px;color:#8A8A8F;line-height:1.5}
 
@@ -2646,6 +2650,9 @@ function BlissTeaser({
   policies?: MerchantPolicies | null;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
+  // mews-overlay.js:2103 t.confirmed — per stay, not per modal session, so
+  // reopening the modal lands on the reopened state rather than State 1.
+  const [confirmed, setConfirmed] = useState<PublicPlanFrequency | null>(null);
 
   if (!preview || !preview.eligible || preview.options.length === 0) return null;
 
@@ -2698,14 +2705,9 @@ function BlissTeaser({
       checkinIso={checkinIso}
       nights={nights}
       policies={policies}
-      onConfirm={
-        onConfirm
-          ? (f) => {
-              onConfirm(f);
-              setModalOpen(false);
-            }
-          : undefined
-      }
+      confirmed={confirmed}
+      onConfirmedChange={setConfirmed}
+      onConfirm={onConfirm}
       onClose={() => setModalOpen(false)}
     />
   ) : null;
@@ -2787,6 +2789,29 @@ function BlissTeaser({
   );
 }
 
+/** mews-overlay.js planLabel: the option row's own wording. */
+function planLabel(frequency: PublicPlanFrequency): string {
+  return frequency === "biweekly" ? "Every 2 weeks" : "Monthly";
+}
+
+/**
+ * mews-overlay.js planSummary — the receipt line: the same three facts the
+ * option row carried, plus the final due date it showed, stated once instead of
+ * side by side with the alternative.
+ */
+function planSummary(option: TeaserOption): string {
+  const last = option.dueDates[option.dueDates.length - 1];
+  return (
+    planLabel(option.frequency) +
+    ", " +
+    option.numPayments +
+    (option.numPayments === 1 ? " payment of " : " payments of ") +
+    formatUsd(option.perPaymentCents) +
+    " through " +
+    shortDate(last!)
+  );
+}
+
 // Structural port of the overlay's modal, mews-overlay.js:1954-2138.
 function BlissModal({
   preview,
@@ -2794,6 +2819,8 @@ function BlissModal({
   checkinIso,
   nights,
   policies,
+  confirmed,
+  onConfirmedChange,
   onConfirm,
   onClose,
 }: {
@@ -2802,6 +2829,9 @@ function BlissModal({
   checkinIso: string;
   nights: number;
   policies?: MerchantPolicies | null;
+  /** mews-overlay.js:2103 t.confirmed. Owned by the trigger so it outlives a close. */
+  confirmed: PublicPlanFrequency | null;
+  onConfirmedChange: (frequency: PublicPlanFrequency | null) => void;
   // mews-overlay.js:2197 confirmPlan. Optional: the rate-card trigger has no
   // confirm target yet, so its CTA stays inert as before.
   onConfirm?: (frequency: PublicPlanFrequency) => void;
@@ -2813,8 +2843,17 @@ function BlissModal({
   );
   // mews-overlay.js:1920 sets no scheduleOpen key, so it starts falsy.
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  // mews-overlay.js:1936 state.modal.justConfirmed — per modal SESSION, so it
+  // starts false on every open and separates "just confirmed" from "reopened".
+  const [justConfirmed, setJustConfirmed] = useState(false);
 
   const chosen = preview.options.find((o) => o.frequency === selected) ?? null;
+  // mews-overlay.js confirmedOption: the option the confirmation points at,
+  // which is not necessarily `chosen` once the guest starts browsing again.
+  const confirmedOpt =
+    confirmed != null
+      ? preview.options.find((o) => o.frequency === confirmed) ?? null
+      : null;
 
   // mews-overlay.js:1964-1970.
   const ctxBits: string[] = [];
@@ -2850,6 +2889,38 @@ function BlissModal({
           </button>
         </div>
 
+        {/* Confirmed: the modal becomes a receipt. mews-overlay.js:2024-2075
+            drops the plan rows, the schedule disclosure, the basis line and the
+            policy list rather than leaving the guest to re-read the decision
+            they just made. Only the head above stays. */}
+        {confirmedOpt ? (
+          <div className="body">
+            <div className="plan">{planSummary(confirmedOpt)}</div>
+            <div className="confirmed">
+              {justConfirmed
+                ? "Plan selected. Continue to checkout and pay with your card as usual."
+                : `You selected the ${planLabel(confirmedOpt.frequency)} plan. Continue to checkout to finish.`}
+            </div>
+            <button type="button" className="cta" onClick={onClose}>
+              Back to booking
+            </button>
+            {justConfirmed ? null : (
+              <button
+                type="button"
+                className="textbtn"
+                onClick={() => {
+                  // Clears the CONFIRMATION only, not the selection: State 1
+                  // comes back with the chosen row still selected and the
+                  // button live, never a disabled dead end.
+                  onConfirmedChange(null);
+                  setJustConfirmed(false);
+                }}
+              >
+                Cancel plan
+              </button>
+            )}
+          </div>
+        ) : (
         <div className="body">
           <div className="ctx">{ctxBits.join(" · ") || "Waiting for dates"}</div>
           {/* mews-overlay.js:1972-1976. The "details" variant does not apply:
@@ -2880,6 +2951,10 @@ function BlissModal({
                     onClick={() => {
                       // mews-overlay.js:2019-2022: clicking the selected row
                       // toggles it off rather than being a no-op.
+                      // Changing the plan un-confirms it, so the button comes
+                      // back and the guest can select the row they moved to.
+                      onConfirmedChange(null);
+                      setJustConfirmed(false);
                       setSelected(isSel ? null : opt.frequency);
                     }}
                   >
@@ -2966,24 +3041,31 @@ function BlissModal({
                 </>
               ) : null}
 
-              {/* mews-overlay.js:2118-2124. Label follows the selection. */}
+              {/* mews-overlay.js:2103-2136. The confirmation takes the
+                  button's place, and the note goes with the button: it says
+                  nearly the same thing and would read as a duplicate. */}
+              {/* State 1 tail: the action, then the note. The confirmed states
+                  never reach here — they render the receipt body above. */}
               <button
                 type="button"
                 className="cta"
                 disabled={!chosen}
                 onClick={() => {
-                  if (chosen && onConfirm) onConfirm(chosen.frequency);
+                  if (!chosen) return;
+                  onConfirmedChange(chosen.frequency);
+                  setJustConfirmed(true);
+                  if (onConfirm) onConfirm(chosen.frequency);
                 }}
               >
-                {chosen ? "Update this plan" : "Continue with this plan"}
+                {chosen ? "Select this plan" : "Continue with this plan"}
               </button>
-              {/* mews-overlay.js:2136. */}
               <div className="note">
                 No card needed here. You will finish checkout the usual way.
               </div>
             </>
           )}
         </div>
+        )}
         </div>
       </div>
     </div>,

@@ -465,8 +465,12 @@
       radiusPill: "999px",
     },
 
-    /** Set false to leave the modal open after the guest confirms. */
-    closeModalOnConfirm: true,
+    /**
+     * The confirmation now renders in place of the button, with the plan rows
+     * still on screen so the guest can see and change what they picked, so the
+     * modal stays open. Set true to close it on confirm instead.
+     */
+    closeModalOnConfirm: false,
   };
 
   // =========================================================================
@@ -1579,16 +1583,22 @@
       ".cta[disabled]{background:" + b.divider + ";color:" + b.inkMuted + ";cursor:default}" +
       ".note{font-size:11px;color:" + b.inkMuted + ";margin-top:10px;line-height:1.45}" +
       ".msg{font-size:12px;color:" + b.inkMuted + ";line-height:1.5}" +
-      // A button, not a div: it toggles the confirmation off, so it has to be
-      // reachable by keyboard. UA button styling is cleared explicitly.
-      ".done{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:12px;" +
-      "background:transparent;color:inherit;cursor:pointer;border:1px solid " + b.violet +
-      ";border-radius:" + b.radius + ";margin-bottom:10px}" +
-      // White glyph, same reason as the trigger tick: ink on violet is 2.03:1.
-      ".done .tick{width:20px;height:20px;border-radius:" + b.radius + ";background:" + b.violet + ";color:" + b.onCta +
-      ";display:flex;align-items:center;justify-content:center;font-size:12px;flex:none}" +
-      ".done .t{font-size:13px;font-weight:600}" +
-      ".done .s{font-size:11px;color:" + b.inkMuted + ";margin-top:1px}" +
+      // Sits where the button was: same top margin and vertical padding, so the
+      // card does not resize when the button is swapped for it. Body copy in
+      // the secondary ink, no chrome and no glyph.
+      // The receipt's subject line. 14px matches the option row's amount, the
+      // largest thing in the body it replaces.
+      ".plan{margin:2px 0 0;font-size:14px;font-weight:600;line-height:1.4;color:" + b.ink + "}" +
+      // Primary ink, and ruled off the disclaimer list above it with the same
+      // hairline .disc uses above Payment schedule, so it reads as a change of
+      // state rather than a fourth disclaimer.
+      ".confirmed{margin-top:4px;padding:12px 0;border-top:1px solid " + b.divider +
+      ";font-size:13px;line-height:1.45;color:" + b.ink + "}" +
+      // Text control, not a filled button: it is the quieter of the two actions
+      // in the reopened state. UA button styling cleared explicitly.
+      ".textbtn{display:block;width:100%;margin-top:10px;padding:6px 0;background:none;border:0;" +
+      "font-size:13px;line-height:1.45;color:" + b.inkMuted + ";cursor:pointer;text-align:center}" +
+      ".textbtn:hover{text-decoration:underline}" +
       // Below the phone breakpoint the modal becomes a bottom sheet.
       "@media (max-width:420px){.scrim{align-items:flex-end;padding:0}" +
       ".bliss-card{width:100%;max-width:100%;max-height:88vh;border-radius:" + b.radiusCard + " " + b.radiusCard + " 0 0}}"
@@ -1937,7 +1947,15 @@
   function openModal(triggerId) {
     var t = triggerById(triggerId);
     if (!t) return;
-    state.modal = { triggerId: triggerId, selected: defaultSelected(t.preview) };
+    // justConfirmed is per modal SESSION, unlike t.confirmed which is per stay:
+    // it is what distinguishes the state right after clicking Select this plan
+    // from reopening a modal whose plan was already chosen. A fresh open always
+    // starts false, so a reopen lands on the reopened state.
+    state.modal = {
+      triggerId: triggerId,
+      selected: defaultSelected(t.preview),
+      justConfirmed: false,
+    };
     ensureModalHost();
     if (!modalHostEl) return;
     modalHostEl.style.display = "block";
@@ -2003,6 +2021,56 @@
       return;
     }
 
+    // Confirmed: the modal becomes a receipt. Everything the guest used to make
+    // the decision — the plan rows, the schedule disclosure, the basis line and
+    // the policy list — is dropped rather than left for them to re-read. Only
+    // the head above stays.
+    var confirmedOpt = confirmedOption(t);
+    if (confirmedOpt) {
+      var reopened = !state.modal.justConfirmed;
+      body.appendChild(
+        h("div", { class: "plan", text: planSummary(confirmedOpt, currency) })
+      );
+      body.appendChild(
+        h("div", {
+          class: "confirmed",
+          text: reopened
+            ? "You selected the " + planLabel(confirmedOpt.frequency) +
+              " plan. Continue to checkout to finish."
+            : "Plan selected. Continue to checkout and pay with your card as usual.",
+        })
+      );
+      body.appendChild(
+        h("button", { class: "cta", type: "button", text: "Back to booking", onClick: closeModal })
+      );
+      if (reopened) {
+        body.appendChild(
+          h("button", {
+            class: "textbtn",
+            type: "button",
+            text: "Cancel plan",
+            onClick: function () {
+              // Clears the CONFIRMATION only, not the selection. clearSelection
+              // would drop both and leave State 1 with no row selected and a
+              // disabled button, which is a dead end for the guest.
+              state.planChoice = null;
+              state.triggers.forEach(function (x) {
+                x.confirmed = null;
+              });
+              state.modal.justConfirmed = false;
+              // The Details trigger DERIVES confirmed from state.planChoice, so
+              // re-derive before rendering, as clearSelection does.
+              recompute();
+              renderAllTriggers();
+              renderModal();
+            },
+          })
+        );
+      }
+      mountModalCard(h, head, body);
+      return;
+    }
+
     if (preview.depositAmountCents > 0) {
       body.appendChild(
         h("div", {
@@ -2043,6 +2111,17 @@
               if (isSel) {
                 clearSelection(t);
                 return;
+              }
+              // Changing the plan un-confirms it, so the button comes back and
+              // the guest can select the row they just moved to. Cleared on
+              // every trigger, matching clearSelection: one plan per stay.
+              if (t.confirmed || state.planChoice) {
+                state.planChoice = null;
+                state.triggers.forEach(function (x) {
+                  x.confirmed = null;
+                });
+                state.modal.justConfirmed = false;
+                renderAllTriggers();
               }
               state.modal.selected = opt.frequency;
               renderModal();
@@ -2099,48 +2178,13 @@
       }
     }
 
-    // Confirmation row sits BELOW the options and above the CTA, so the order
-    // reads: choose, review the schedule, see what is selected, act. Its figure
-    // is derived from the live option, never from the confirmation, so it
-    // always matches the option row above it on whichever basis is in play.
-    var confirmedOpt = confirmedOption(t);
-    if (confirmedOpt) {
-      body.appendChild(
-        h(
-          "button",
-          {
-            class: "done",
-            type: "button",
-            "aria-pressed": "true",
-            onClick: function () {
-              clearSelection(t);
-            },
-          },
-          [
-            h("div", { class: "tick", text: "✓" }),
-            h("div", {}, [
-              h("div", { class: "t", text: "Plan selected" }),
-              h("div", {
-                class: "s",
-                text:
-                  confirmedOpt.numPayments +
-                  " payments of " +
-                  money(confirmedOpt.perPaymentAmountCents, currency) +
-                  ". Continue checkout as normal.",
-              }),
-            ]),
-          ]
-        )
-      );
-    }
-
+    // State 1 tail: the action, then the note. The confirmed states never reach
+    // here — they return a receipt body above.
     body.appendChild(
       h("button", {
         class: "cta",
         type: "button",
-        // Label follows the SELECTION, not the confirmation, so it stays in
-        // step with the rows above it once either can be toggled off.
-        text: chosen ? "Update this plan" : "Continue with this plan",
+        text: chosen ? "Select this plan" : "Continue with this plan",
         disabled: chosen ? null : "disabled",
         onClick: function () {
           // Re-resolve at click time rather than trusting the option captured
@@ -2209,6 +2253,29 @@
    * exactly the divergence this removes. Only the frequency is durable; every
    * figure is derived at render.
    */
+  /**
+   * The receipt line: the same three facts the option row carried — cadence,
+   * count and per-payment amount — plus the final due date it showed, stated
+   * once instead of side by side with the alternative.
+   */
+  function planSummary(option, currency) {
+    var last = option.dueDates[option.dueDates.length - 1];
+    return (
+      planLabel(option.frequency) +
+      ", " +
+      option.numPayments +
+      (option.numPayments === 1 ? " payment of " : " payments of ") +
+      money(option.perPaymentAmountCents, currency) +
+      " through " +
+      shortDate(last)
+    );
+  }
+
+  /** The option row's own wording, so the confirmation names what was clicked. */
+  function planLabel(frequency) {
+    return frequency === "biweekly" ? "Every 2 weeks" : "Monthly";
+  }
+
   function confirmedOption(t) {
     if (!t || !t.confirmed || !t.preview) return null;
     return optionByFrequency(t.preview, t.confirmed.frequency);
@@ -2264,6 +2331,7 @@
     // minimal shape: the full `choice` above keeps the amounts for the record,
     // but nothing rendered reads them.
     state.planChoice = t.confirmed;
+    if (state.modal) state.modal.justConfirmed = true;
     renderAllTriggers();
     if (CONFIG.closeModalOnConfirm) closeModal();
     else renderModal();
