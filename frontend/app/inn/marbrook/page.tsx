@@ -502,8 +502,14 @@ export default function MarbrookHousePage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [frequency, setFrequency] = useState<PublicPlanFrequency>("biweekly");
+  // mews-overlay.js:1330 state.planChoice. One confirmation per stay, held at
+  // page level rather than inside a teaser: each step's subtree is mounted
+  // conditionally, so a confirmation owned by the rate-card teaser dies the
+  // moment the guest leaves the rates step. Both teasers read this one value.
+  const [confirmedPlan, setConfirmedPlan] = useState<PublicPlanFrequency | null>(
+    null,
+  );
 
   // Editable stay: dates + guests. Everything downstream (nights, subtotal,
   // tax, destination fee, total, teasers, schedule) derives from these.
@@ -634,6 +640,21 @@ export default function MarbrookHousePage() {
     );
   }, [pricing, checkinIso, checkoutIso, planRules]);
 
+  // mews-overlay.js:1767 — the checkout step reads the stay's one confirmation
+  // rather than a flag of its own, validated against this step's own preview on
+  // the same rule the teasers apply: a cadence the current dates no longer
+  // offer is not a live plan.
+  const checkoutPlan =
+    confirmedPlan != null &&
+    checkoutPreview?.options.some((o) => o.frequency === confirmedPlan)
+      ? confirmedPlan
+      : null;
+  // Derived, not stored. A plan is confirmed or it is not, and the Book CTA and
+  // the booking path follow that one fact — so cancelling in the modal returns
+  // the details block to State B and the CTA to the hotel's blue with nothing
+  // left to reset. As a second state this stuck on "bliss" after a cancel.
+  const paymentMethod: PaymentMethod = checkoutPlan != null ? "bliss" : "card";
+
   // --- Mews distributor dataLayer feed -------------------------------------
   // Emits the four events the Bliss overlay reads. Kept as effects rather than
   // folded into the click handlers so each event fires from the state it
@@ -694,6 +715,15 @@ export default function MarbrookHousePage() {
   function goToCheckout() {
     setStep("checkout");
     window.scrollTo({ top: 0 });
+  }
+
+  // mews-overlay.js:2197 confirmPlan. Both teasers confirm through here, so a
+  // plan chosen on the rate card arrives at checkout the same way one chosen in
+  // the details block does. Previously only the details teaser had a target and
+  // the rate-card CTA wrote nowhere at all. The confirmation itself is recorded
+  // by onConfirmedChange; this carries the cadence the booking is written with.
+  function confirmPlan(f: PublicPlanFrequency) {
+    setFrequency(f);
   }
 
   function onBookNow() {
@@ -872,6 +902,9 @@ export default function MarbrookHousePage() {
                 nights={nights}
                 adults={adults}
                 guestChildren={children}
+                confirmedPlan={confirmedPlan}
+                onConfirmedChange={setConfirmedPlan}
+                onConfirmPlan={confirmPlan}
                 onEditStay={() => {
                   setStep("dates");
                   window.scrollTo({ top: 0 });
@@ -931,8 +964,9 @@ export default function MarbrookHousePage() {
                   setAddressZip={setAddressZip}
                   rate={rate}
                   paymentMethod={paymentMethod}
-                  setPaymentMethod={setPaymentMethod}
-                  setFrequency={setFrequency}
+                  confirmedPlan={confirmedPlan}
+                  onConfirmedChange={setConfirmedPlan}
+                  onConfirmPlan={confirmPlan}
                   policies={policies}
 
                   cardFields={{
@@ -2267,6 +2301,9 @@ function RatesView({
   nights,
   adults,
   guestChildren,
+  confirmedPlan,
+  onConfirmedChange,
+  onConfirmPlan,
   onEditStay,
   onSelectRate,
 }: {
@@ -2279,6 +2316,10 @@ function RatesView({
   nights: number;
   adults: number;
   guestChildren: number;
+  /** The stay's one confirmation (mews-overlay.js:1330 state.planChoice). */
+  confirmedPlan: PublicPlanFrequency | null;
+  onConfirmedChange: (frequency: PublicPlanFrequency | null) => void;
+  onConfirmPlan: (frequency: PublicPlanFrequency) => void;
   onEditStay: () => void;
   onSelectRate: (id: string) => void;
 }) {
@@ -2339,6 +2380,9 @@ function RatesView({
                     preview={previewByRateId[r.id] ?? null}
                     checkinIso={checkinIso}
                     nights={nights}
+                    confirmedPlan={confirmedPlan}
+                    onConfirmedChange={onConfirmedChange}
+                    onConfirmPlan={onConfirmPlan}
                     onSelect={onSelectRate}
                   />
                 ))}
@@ -2425,6 +2469,9 @@ function RateItem({
   preview,
   checkinIso,
   nights,
+  confirmedPlan,
+  onConfirmedChange,
+  onConfirmPlan,
   onSelect,
 }: {
   rate: Rate;
@@ -2432,6 +2479,9 @@ function RateItem({
   preview: TeaserPreview | null;
   checkinIso: string;
   nights: number;
+  confirmedPlan: PublicPlanFrequency | null;
+  onConfirmedChange: (frequency: PublicPlanFrequency | null) => void;
+  onConfirmPlan: (frequency: PublicPlanFrequency) => void;
   onSelect: (id: string) => void;
 }) {
   return (
@@ -2534,6 +2584,9 @@ function RateItem({
             rateName={rate.name}
             checkinIso={checkinIso}
             nights={nights}
+            confirmedPlan={confirmedPlan}
+            onConfirmedChange={onConfirmedChange}
+            onConfirm={onConfirmPlan}
           />
         </div>
 
@@ -2633,7 +2686,8 @@ function BlissTeaser({
   checkinIso,
   nights,
   variant = "rate-card",
-  selected = false,
+  confirmedPlan,
+  onConfirmedChange,
   onConfirm,
   policies,
 }: {
@@ -2645,16 +2699,34 @@ function BlissTeaser({
   // mews-overlay.js branches on t.kind: "rate-card" triggers vs the "details"
   // block on the checkout step. Same component, the overlay's two states.
   variant?: "rate-card" | "details";
-  selected?: boolean;
-  onConfirm?: (frequency: PublicPlanFrequency) => void;
+  /**
+   * mews-overlay.js:1330 state.planChoice. The stay's one confirmation, owned
+   * by the page. Not local state: every step's subtree is mounted
+   * conditionally, so a confirmation held here is destroyed on the first
+   * navigation away and the guest comes back to an empty modal.
+   */
+  confirmedPlan: PublicPlanFrequency | null;
+  onConfirmedChange: (frequency: PublicPlanFrequency | null) => void;
+  // mews-overlay.js:2197 confirmPlan.
+  onConfirm: (frequency: PublicPlanFrequency) => void;
   policies?: MerchantPolicies | null;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
-  // mews-overlay.js:2103 t.confirmed — per stay, not per modal session, so
-  // reopening the modal lands on the reopened state rather than State 1.
-  const [confirmed, setConfirmed] = useState<PublicPlanFrequency | null>(null);
 
   if (!preview || !preview.eligible || preview.options.length === 0) return null;
+
+  // mews-overlay.js:2693-2694 and 2697-2703. Each trigger validates the shared
+  // choice against its OWN options at render, so this is derived and never
+  // stored: there is no stale per-teaser copy to fall out of step. Invalidate
+  // only when the CADENCE is no longer offered. A changed rate, date or amount
+  // is not grounds to drop it — every figure re-derives from the new basis, and
+  // the cadence is a preference about how the guest pays, not about which rate
+  // they picked.
+  const confirmed =
+    confirmedPlan != null &&
+    preview.options.some((o) => o.frequency === confirmedPlan)
+      ? confirmedPlan
+      : null;
 
   const spread = spreadOption(preview);
   const fallback = fallbackOption(preview);
@@ -2706,7 +2778,7 @@ function BlissTeaser({
       nights={nights}
       policies={policies}
       confirmed={confirmed}
-      onConfirmedChange={setConfirmed}
+      onConfirmedChange={onConfirmedChange}
       onConfirm={onConfirm}
       onClose={() => setModalOpen(false)}
     />
@@ -2714,7 +2786,11 @@ function BlissTeaser({
 
   // mews-overlay.js:1704-1777, the details block.
   if (variant === "details") {
-    if (selected) {
+    // mews-overlay.js:1767 — State A is driven by the stay's confirmation
+    // itself, so cancelling the plan in the modal drops straight back to State
+    // B. It used to key off the checkout step's payment-method flag, which
+    // nothing ever set back.
+    if (confirmed != null) {
       // STATE A (mews-overlay.js:1738-1748).
       return (
         <div className="bliss-ui">
@@ -2829,12 +2905,14 @@ function BlissModal({
   checkinIso: string;
   nights: number;
   policies?: MerchantPolicies | null;
-  /** mews-overlay.js:2103 t.confirmed. Owned by the trigger so it outlives a close. */
+  /**
+   * mews-overlay.js:2103 t.confirmed, derived by the trigger from the page's
+   * one choice so it outlives both a close and a step change.
+   */
   confirmed: PublicPlanFrequency | null;
   onConfirmedChange: (frequency: PublicPlanFrequency | null) => void;
-  // mews-overlay.js:2197 confirmPlan. Optional: the rate-card trigger has no
-  // confirm target yet, so its CTA stays inert as before.
-  onConfirm?: (frequency: PublicPlanFrequency) => void;
+  // mews-overlay.js:2197 confirmPlan. Both triggers now carry a confirm target.
+  onConfirm: (frequency: PublicPlanFrequency) => void;
   onClose: () => void;
 }) {
   // mews-overlay.js:1920 — seeded on open, not left null.
@@ -3054,7 +3132,7 @@ function BlissModal({
                   if (!chosen) return;
                   onConfirmedChange(chosen.frequency);
                   setJustConfirmed(true);
-                  if (onConfirm) onConfirm(chosen.frequency);
+                  onConfirm(chosen.frequency);
                 }}
               >
                 {chosen ? "Select this plan" : "Continue with this plan"}
@@ -3445,8 +3523,10 @@ function CheckoutStep(props: {
   setAddressZip: (v: string) => void;
   rate: Rate;
   paymentMethod: PaymentMethod;
-  setPaymentMethod: (v: PaymentMethod) => void;
-  setFrequency: (v: PublicPlanFrequency) => void;
+  /** The stay's one confirmation (mews-overlay.js:1330 state.planChoice). */
+  confirmedPlan: PublicPlanFrequency | null;
+  onConfirmedChange: (frequency: PublicPlanFrequency | null) => void;
+  onConfirmPlan: (frequency: PublicPlanFrequency) => void;
   policies: MerchantPolicies | null;
   cardFields: CardFieldState;
   onBack: () => void;
@@ -3481,8 +3561,9 @@ function CheckoutStep(props: {
     setAddressZip,
     rate,
     paymentMethod,
-    setPaymentMethod,
-    setFrequency,
+    confirmedPlan,
+    onConfirmedChange,
+    onConfirmPlan,
     policies,
     cardFields,
     onBack,
@@ -3943,13 +4024,10 @@ function CheckoutStep(props: {
                 rateName={rate.name}
                 checkinIso={checkinIso}
                 nights={nights}
-                selected={paymentMethod === "bliss"}
                 policies={policies}
-                onConfirm={(f) => {
-                  // mews-overlay.js:2197 confirmPlan.
-                  setFrequency(f);
-                  setPaymentMethod("bliss");
-                }}
+                confirmedPlan={confirmedPlan}
+                onConfirmedChange={onConfirmedChange}
+                onConfirm={onConfirmPlan}
               />
             </div>
           </div>
