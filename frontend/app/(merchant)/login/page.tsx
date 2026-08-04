@@ -1,18 +1,24 @@
 "use client";
 
-import { BlissWordmark } from "@/components/BlissWordmark";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { devLogin, fetchDevAuthStatus, requestMagicLink } from "@/lib/api";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import {
+  AuthError,
+  AuthField,
+  AuthForm,
+  AuthShell,
+  AuthSubmit,
+} from "@/components/auth/AuthShell";
 
-// Chrome is signup's, so the two auth screens read as one product: no card, the
-// form straight on the page in a centred max-w-sm column, the same header stack
-// (wordmark, 18px title, muted line), `.label` + `.input` fields, and the shared
-// violet pill for the primary action. Single column by design — the two-panel
-// split and the plan preview are signup's alone.
+// Chrome comes entirely from AuthShell, shared with the guest sign-in at
+// app/account/login so the two cannot drift again. This page owns only the
+// dev-status probe, the field set and the submit handler.
+//
+// Signup still carries the older left-aligned max-w-sm chrome this page used to
+// share with it, along with its two-panel plan preview. That is the next screen
+// to move onto the shell, together with verify and check-email.
 //
 // Which sign-in the backend is currently offering. Read at runtime from
 // /api/v1/auth/dev-status rather than baked in at build time, so flipping
@@ -61,64 +67,46 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6 py-16 font-body">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm flex flex-col gap-4">
-        <header>
-          <BlissWordmark className="text-xl tracking-tight text-brand-violet" />
-          <h1 className="mt-4 text-lg font-medium">Sign in</h1>
-          <p className="mt-1 text-ink-muted">
-            {mode === "magic-link"
-              ? "We will email you a link to sign in."
-              : "Sign in to your property dashboard."}
-          </p>
-        </header>
-
-        <label className="flex flex-col gap-1.5">
-          <span className="label">Email</span>
-          <Input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-          />
-        </label>
-
-        {mode === "demo" ? (
-          <label className="flex flex-col gap-1.5">
-            <span className="label">Password</span>
-            <Input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-          </label>
-        ) : null}
-
-        {error ? (
-          <div className="text-xs text-red-600" role="alert">
-            {error}
-          </div>
-        ) : null}
-
-        <Button
-          type="submit"
-          disabled={submitting || mode === null}
-          variant="primary"
-        >
-          {buttonLabel(mode, submitting)}
-        </Button>
-
-        <p className="text-xs text-ink-muted text-center">
+    <AuthShell
+      heading="Welcome back"
+      subhead="Sign in to your property dashboard."
+      footer={
+        <>
           New here?{" "}
           <Link href="/signup" className="font-medium text-brand-violet">
             Create an account
           </Link>
-        </p>
-      </form>
-    </main>
+        </>
+      }
+    >
+      <AuthForm onSubmit={handleSubmit}>
+        <AuthField
+          label="Email"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+        />
+
+        {mode === "demo" ? (
+          <AuthField
+            label="Password"
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+          />
+        ) : null}
+
+        {error ? <AuthError>{error}</AuthError> : null}
+
+        <AuthSubmit disabled={submitting || mode === null}>
+          {buttonLabel(mode, submitting)}
+        </AuthSubmit>
+      </AuthForm>
+    </AuthShell>
   );
 }
 

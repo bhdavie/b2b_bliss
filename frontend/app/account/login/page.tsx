@@ -3,8 +3,12 @@ import { redirect } from "next/navigation";
 import { fetchAccountPlans } from "@/lib/publicApi";
 import { ClearStaleSession } from "@/components/account/ClearStaleSession";
 import { LoginForm } from "@/components/account/LoginForm";
-import { BlissWordmark } from "@/components/BlissWordmark";
+import { AuthShell } from "@/components/auth/AuthShell";
 
+// Stays an async server component: the session check below has to run before
+// anything renders. AuthShell carries no "use client", so it renders here on
+// the server with the client <LoginForm/> slotted in as children — the same
+// shell the merchant sign-in renders inside a fully client page.
 export default async function AccountLoginPage() {
   const cookieStore = await cookies();
   const hasCookie = Boolean(cookieStore.get("bliss_customer_session")?.value);
@@ -34,30 +38,23 @@ export default async function AccountLoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-ink-900 font-body">
+    <>
       {/* Present but unverifiable: drop it rather than leave a dead session in
           the browser for whatever remains of its Max-Age. */}
       {hasCookie ? <ClearStaleSession /> : null}
-      <header className="border-b border-sand-200">
-        <div className="mx-auto max-w-md px-6 py-6 text-center">
-          <BlissWordmark className="text-2xl text-brand-violet" />
-        </div>
-      </header>
-      <main className="mx-auto max-w-md px-6 py-12">
-        <h1 className="text-4xl font-bold tracking-tight text-ink-900">
-          Welcome back
-        </h1>
-        <p className="mt-2 text-sm text-ink-500">
-          Sign in to see your payment plans across every Bliss merchant.
-        </p>
-        <section className="mt-6 rounded-panel border border-sand-200 bg-white p-6">
-          <LoginForm />
-        </section>
-        <p className="mt-6 text-center text-xs text-ink-400">
-          Don&rsquo;t have an account yet? Your account is created automatically
-          the first time a merchant sends you a payment-plan link.
-        </p>
-      </main>
-    </div>
+      <AuthShell
+        heading="Welcome back"
+        subhead="Sign in to see your payment plans across every Bliss merchant."
+        footer={
+          <>
+            Don&rsquo;t have an account yet? Your account is created
+            automatically the first time a merchant sends you a payment-plan
+            link.
+          </>
+        }
+      >
+        <LoginForm />
+      </AuthShell>
+    </>
   );
 }

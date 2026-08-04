@@ -91,6 +91,20 @@ const config: Config = {
           "Arial",
           "sans-serif",
         ],
+        // Auth-screen body face (Inter). Scoped on purpose: `--font-inter` is
+        // set by components/auth/AuthShell.tsx on its own root, not by the root
+        // layout, so `font-inter` resolves only inside the sign-in shell and
+        // every other screen keeps `font-body` / `font-sans` untouched.
+        inter: [
+          "var(--font-inter)",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "Roboto",
+          "Helvetica",
+          "Arial",
+          "sans-serif",
+        ],
         // Bliss heading face (DM Serif Display).
         display: ["var(--font-display)", "ui-serif", "Georgia", "serif"],
         // Bliss editorial accent (Fraunces italic 600). Pair with `italic`.
