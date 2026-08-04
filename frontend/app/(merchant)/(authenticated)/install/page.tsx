@@ -47,7 +47,7 @@ export default async function InstallPage() {
       />
 
       <SubHeading>Your booking engine</SubHeading>
-      <Panel className="mb-14 px-8 pb-7 pt-[26px]">
+      <Panel variant="filled" className="mb-7 px-7 py-[30px]">
         <p className="text-lg leading-[1.55] text-ink-500">
           Bliss installs differently depending on which system takes your
           bookings. Yours is set up for{" "}
@@ -67,7 +67,7 @@ export default async function InstallPage() {
           <SubHeading helper="This snippet carries your property's own identifier, so it picks up your plan rules automatically. If you change your plan settings later, the snippet does not need updating.">
             Add Bliss through Google Tag Manager
           </SubHeading>
-          <Panel className="px-10 pb-10 pt-9">
+          <Panel variant="filled" className="px-7 py-[30px]">
             {GTM_STEPS.map((step, i) => {
               const isLast = i === GTM_STEPS.length - 1;
               return (
@@ -105,7 +105,7 @@ export default async function InstallPage() {
       {pms === "cloudbeds" ? (
         <>
           <SubHeading>Add Bliss to your booking engine</SubHeading>
-          <Panel className="px-8 pb-7 pt-[26px]">
+          <Panel variant="filled" className="px-7 py-[30px]">
             {/* The Cloudbeds equivalent is Booking Engine Extensions rather than
                 a Tag Manager container, so the snippet shape and the injection
                 point both differ from Mews. Not built yet; no snippet is shown
@@ -122,7 +122,7 @@ export default async function InstallPage() {
       {pms === "stripe" ? (
         <>
           <SubHeading>Add Bliss to your booking engine</SubHeading>
-          <Panel className="gap-4 px-8 pb-7 pt-[26px]">
+          <Panel variant="filled" className="gap-4 px-7 py-[30px]">
             <p className="text-lg leading-[1.55] text-ink-500">
               You have not connected a booking engine yet, so there is nothing
               to install. Your guests can still pay over time through the
@@ -149,7 +149,7 @@ function SubHeading({
   helper?: string;
 }) {
   return (
-    <div className="mb-[22px] flex flex-col gap-2.5">
+    <div className="mb-5 flex flex-col gap-2.5">
       <h2 className="text-2xl font-medium tracking-[-0.02em] text-ink-900">
         {children}
       </h2>

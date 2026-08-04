@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { updatePlanRules, type PlanRules } from "@/lib/api";
+import { Panel, SectionTitle } from "@/components/ui/primitives";
 
 // Rolling window the merchant can pick from: today through today + 365 days.
 const WINDOW_DAYS = 365;
@@ -159,7 +160,12 @@ export function BlackoutDatesCard({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-8 rounded-panel border border-sand-200 px-8 py-8">
+    // Panel owns the filled surface and the padding; the form keeps only its
+    // own row rhythm. Body indentation is left as it was so the change stays a
+    // few lines rather than a whole-file reflow.
+    <Panel variant="filled" className="gap-7 px-7 py-[30px]">
+      <SectionTitle>Blackout dates</SectionTitle>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-8">
       <section className="grid gap-3 sm:grid-cols-[180px_1fr]">
         <div>
           <div className="text-sm font-medium text-ink-900">Blackout dates</div>
@@ -176,7 +182,7 @@ export function BlackoutDatesCard({
           </div>
         </div>
 
-        <div className="max-h-96 overflow-y-auto rounded-md border border-sand-200 p-3">
+        <div className="max-h-96 overflow-y-auto rounded-md border border-sand-200 bg-white p-3">
           <div className="space-y-5">
             {months.map((month) => (
               <div key={month.key}>
@@ -239,5 +245,6 @@ export function BlackoutDatesCard({
         </button>
       </div>
     </form>
+    </Panel>
   );
 }

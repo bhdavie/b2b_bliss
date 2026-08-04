@@ -33,27 +33,30 @@ export default async function HomePage() {
       />
 
       {showChecklist ? (
-        <div className="mb-14">
+        <div className="mb-7">
           <OnboardingChecklist status={onboarding} />
         </div>
       ) : null}
 
-      {/* At a glance, promoted to a header rollup above the columns. */}
-      <div className="mb-14 flex flex-col gap-4 border-y border-sand-300 pb-7 pt-[26px]">
+      {/* At a glance, promoted to a header rollup above the columns. The
+          border-y band it used to sit in is gone: the fill separates it now. */}
+      <Panel variant="filled" className="mb-7 gap-5 px-7 py-[30px]">
         <SectionHeading track="0.08em">At a glance</SectionHeading>
         <div className="flex flex-wrap items-baseline gap-x-14 gap-y-4">
           <Stat value={String(bookingsTotal)} label="Bookings" />
           <Stat value={String(needsAttention)} label="Needs attention" />
         </div>
-      </div>
+      </Panel>
 
-      <div className="grid grid-cols-1 items-start gap-x-12 gap-y-12 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-        <section className="flex flex-col">
-          <SectionHeading track="0.08em" className="mb-5">
-            Recent bookings
-          </SectionHeading>
+      <div className="grid grid-cols-1 items-start gap-x-12 gap-y-7 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+        {/* The section IS the filled block, heading included — the inner Panel
+            it used to wrap is gone rather than nested. Bottom padding is pulled
+            back to pb-2 because the last child (a row, or the View-all link)
+            carries its own. */}
+        <Panel variant="filled" className="px-7 pb-2 pt-[30px]">
+          <SectionHeading track="0.08em">Recent bookings</SectionHeading>
           {recent.length === 0 ? (
-            <Panel className="items-start px-8 py-10">
+            <div className="flex flex-col items-start pb-7 pt-5">
               <div className="text-xl font-medium tracking-[-0.015em] text-ink-900">
                 No bookings yet
               </div>
@@ -66,9 +69,9 @@ export default async function HomePage() {
               >
                 New booking
               </Link>
-            </Panel>
+            </div>
           ) : (
-            <Panel className="px-8 py-2">
+            <>
               {recent.map((b) => (
                 <BookingRow key={b.id} booking={b} />
               ))}
@@ -78,15 +81,17 @@ export default async function HomePage() {
               >
                 View all bookings
               </Link>
-            </Panel>
+            </>
           )}
-        </section>
+        </Panel>
 
-        <div className="flex flex-col gap-10">
-          <section className="flex flex-col">
-            <SectionHeading track="0.08em" className="mb-5">
-              Connections
-            </SectionHeading>
+        <div className="flex flex-col gap-7">
+          {/* OverviewConnections no longer draws its own panel; this one holds
+              the heading and the rows together, the way Booking and Schedule do
+              on the guest plan screen. Rows carry their own py-6, so the bottom
+              padding comes back to pb-2. */}
+          <Panel variant="filled" className="px-7 pb-2 pt-[30px]">
+            <SectionHeading track="0.08em">Connections</SectionHeading>
             <OverviewConnections
               pmsType={session.pmsType}
               onboardingState={session.onboardingState}
@@ -94,19 +99,17 @@ export default async function HomePage() {
               cloudbeds={onboarding?.cloudbeds ?? null}
               stripeConnectStatus={session.stripeConnectStatus}
             />
-          </section>
+          </Panel>
 
-          <section className="flex flex-col">
+          <Panel variant="filled" className="px-7 py-[30px]">
             <SectionHeading track="0.08em" className="mb-5">
               Next payout
             </SectionHeading>
-            <Panel className="bg-sand-50 px-7 pb-[30px] pt-7">
-              <p className="text-[17px] leading-[1.5] text-ink-500">
-                No payouts scheduled yet. Payouts appear here once a plan
-                completes.
-              </p>
-            </Panel>
-          </section>
+            <p className="text-[17px] leading-[1.5] text-ink-500">
+              No payouts scheduled yet. Payouts appear here once a plan
+              completes.
+            </p>
+          </Panel>
         </div>
       </div>
     </div>

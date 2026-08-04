@@ -9,7 +9,7 @@ import {
   formatScheduleDateLong,
   type PublicPlanPortal,
 } from "@/lib/publicApi";
-import { SectionHeading } from "@/components/ui/primitives";
+import { Panel, SectionHeading } from "@/components/ui/primitives";
 import { PayEarlyButton } from "./PayEarlyButton";
 import { UpdateCardSection } from "./UpdateCardSection";
 import { CancelPlanSection } from "./CancelPlanSection";
@@ -75,7 +75,7 @@ export function PlanPortal({
   return (
     <div className="flex flex-col">
       {/* Header */}
-      <div className="mb-11 flex flex-col gap-3">
+      <div className="mb-8 flex flex-col gap-3">
         {backHref ? (
           <Link
             href={backHref}
@@ -93,7 +93,7 @@ export function PlanPortal({
       {/* Plan-level notices. Not drawn in the design, which shows one active,
           unrefunded plan; kept on the chrome-free treatment. */}
       {portal.plan.refundedAt ? (
-        <div className="mb-11 flex items-center gap-3 rounded-panel border border-sand-200 px-7 py-5">
+        <div className="mb-8 flex items-center gap-3 rounded-panel border border-sand-200 px-7 py-5">
           <span className="rounded-full bg-brand-violet-tint px-[15px] py-[7px] text-[13px] font-medium uppercase tracking-[0.06em] text-brand-violet">
             Refunded
           </span>
@@ -105,7 +105,7 @@ export function PlanPortal({
       ) : null}
 
       {planComplete ? (
-        <div className="mb-11 flex flex-col gap-3">
+        <div className="mb-8 flex flex-col gap-3">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-lavender text-brand-violet-deep">
             <CheckIcon />
           </div>
@@ -122,9 +122,9 @@ export function PlanPortal({
       {/* Booking — full content width, directly above the schedule. The four
           fields run across the row rather than stacking in two columns, since
           they now have the whole width the schedule uses. */}
-      <div className="mb-16 flex flex-col">
-        <SectionHeading className="mb-7">Booking</SectionHeading>
-        <div className="grid grid-cols-2 gap-x-12 gap-y-[30px] sm:grid-cols-4">
+      <Panel variant="filled" className="mb-7 px-7 py-[30px]">
+        <SectionHeading className="mb-5">Booking</SectionHeading>
+        <div className="grid grid-cols-2 gap-x-12 gap-y-6 sm:grid-cols-4">
           {portal.booking.customerNameHint ? (
             <Field
               label="Guest"
@@ -145,14 +145,12 @@ export function PlanPortal({
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="mb-[52px] h-px bg-sand-300" />
+      </Panel>
 
       {/* Plan progress — replaces the balance band. Decorative: the two figures
           it encodes are printed underneath, so the bar itself is hidden from
           assistive tech rather than carrying a redundant progressbar role. */}
-      <div className="mb-16 flex flex-col gap-4">
+      <div className="mb-9 flex flex-col gap-4">
         <div
           aria-hidden="true"
           className="h-2 w-full overflow-hidden rounded-full bg-sand-200"
@@ -179,15 +177,15 @@ export function PlanPortal({
       </div>
 
       {/* Row 1 — schedule, with next payment and payment method beside it */}
-      <div className="mb-16 grid grid-cols-1 items-start gap-x-10 gap-y-12 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
-        <div className="flex flex-col">
-          <SectionHeading className="mb-8">Schedule</SectionHeading>
+      <div className="mb-7 grid grid-cols-1 items-start gap-x-10 gap-y-9 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+        <Panel variant="filled" className="px-7 py-[30px]">
+          <SectionHeading className="mb-5">Schedule</SectionHeading>
           <ScheduleTimeline schedule={portal.schedule} />
-        </div>
+        </Panel>
 
         <div className="flex flex-col gap-5">
           {hasUpcoming ? (
-            <div className="flex flex-col rounded-panel border border-sand-200 px-7 pb-8 pt-[30px]">
+            <Panel variant="filled" className="px-7 pb-8 pt-[30px]">
               <SectionHeading className="mb-[18px] font-medium text-brand-violet">
                 Next payment
               </SectionHeading>
@@ -203,11 +201,11 @@ export function PlanPortal({
                 remaining={portal.remainingCents}
                 onPaid={refresh}
               />
-            </div>
+            </Panel>
           ) : null}
 
           {!planComplete ? (
-            <div className="flex flex-col rounded-panel border border-sand-200 px-7 py-[30px]">
+            <Panel variant="filled" className="px-7 py-[30px]">
               <SectionHeading className="mb-5">Payment method</SectionHeading>
               {portal.card ? (
                 <div className="flex items-center justify-between gap-4">
@@ -242,12 +240,10 @@ export function PlanPortal({
                   />
                 </div>
               )}
-            </div>
+            </Panel>
           ) : null}
         </div>
       </div>
-
-      <div className="mb-[52px] h-px bg-sand-300" />
 
       {/* Row 2 — the accounting breakdown, in the column it has always occupied,
           with Cancel plan beside it in the left column. Cancel used to sit in a
@@ -258,9 +254,12 @@ export function PlanPortal({
           its column via col-start, and Cancel is pinned to row 1 of column 1 so
           the two tops line up. Leaving DOM order as summary-then-cancel keeps
           the single-column stacking below xl exactly as it reads today. */}
-      <div className="grid grid-cols-1 items-start gap-x-10 gap-y-12 pb-14 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
-        <div className="flex flex-col xl:col-start-2 xl:row-start-1">
-          <SectionHeading className="mb-7">Plan summary</SectionHeading>
+      <div className="grid grid-cols-1 items-start gap-x-10 gap-y-9 pb-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+        <Panel
+          variant="filled"
+          className="px-7 py-[30px] xl:col-start-2 xl:row-start-1"
+        >
+          <SectionHeading className="mb-5">Plan summary</SectionHeading>
           <div className="flex flex-col">
             {hasDiscount && portal.booking.originalTotalAmountCents != null ? (
               <>
@@ -292,13 +291,13 @@ export function PlanPortal({
               </div>
             </div>
           </div>
-        </div>
+        </Panel>
 
         {/* Not drawn in the design, which shows no cancel affordance. Kept on
             the chrome-free treatment, now beside the accounting. */}
         {!planComplete && portal.plan.status === "active" ? (
           <div className="flex flex-col xl:col-start-1 xl:row-start-1">
-            <SectionHeading className="mb-7">Cancel plan</SectionHeading>
+            <SectionHeading className="mb-5">Cancel plan</SectionHeading>
             <div className="max-w-[560px]">
               <CancelPlanSection
                 token={token}

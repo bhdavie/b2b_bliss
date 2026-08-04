@@ -20,7 +20,7 @@ export default async function StripeReturnPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white py-10 px-6 font-body">
+    <main className="min-h-screen bg-white py-10 px-6 font-inter">
       <div className="max-w-xl mx-auto">
         <header className="text-center">
           <BlissWordmark className="text-xl tracking-tight text-brand-navy" />

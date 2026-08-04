@@ -13,8 +13,8 @@
  * the screen changes the instant a nav item is clicked, not that it entertains.
  *
  * Geometry mirrors PageHeader (44px title, 2.5 gap, 18px subtitle, mb-12) and
- * Panel (20px radius, sand-200 border), so the real page lands on the same marks
- * the skeleton was holding.
+ * Panel's filled variant (20px radius, sand-50 fill, no border), so the real
+ * page lands on the same marks the skeleton was holding.
  */
 export default function MerchantLoading() {
   return (
@@ -31,7 +31,7 @@ export default function MerchantLoading() {
 
       {/* Section kicker, then the first panel. */}
       <div className="mb-5 h-[13px] w-[120px] rounded-md bg-sand-100" />
-      <div className="flex flex-col gap-5 rounded-panel border border-sand-200 px-8 py-8">
+      <div className="flex flex-col gap-5 rounded-panel bg-sand-50 px-7 py-[30px]">
         <div className="h-[15px] w-[180px] rounded-md bg-sand-100" />
         <div className="h-px w-full bg-sand-100" />
         <div className="h-[15px] w-[320px] max-w-full rounded-md bg-sand-100" />

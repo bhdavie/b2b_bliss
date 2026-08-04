@@ -23,7 +23,7 @@ import {
 //
 // The funnel has no design turn of its own, so the chrome is inherited from the
 // settled merchant screens: the (authenticated) shell's surface and rhythm
-// (bg-white, font-body, ink-900, pt-16), PageHeader for the head, SectionHeading
+// (bg-white, font-inter, ink-900, pt-16), PageHeader for the head, SectionHeading
 // for the section kickers, and the same 980px column /settings uses — these
 // cards were sized inside that column. There is no sidebar here, so the column
 // is centred with mx-auto and its contents stay left-aligned.
@@ -41,7 +41,7 @@ export default async function OnboardingPlanRulesPage() {
   const onboarding = await fetchOnboardingServer();
 
   return (
-    <main className="min-h-screen bg-white font-body text-ink-900">
+    <main className="min-h-screen bg-white font-inter text-ink-900">
       <div className="mx-auto flex max-w-[1136px] flex-col px-6 pb-[72px] pt-16 xl:px-16">
         <BlissWordmark className="mb-12 text-[22px] tracking-[-0.005em] text-brand-violet" />
 

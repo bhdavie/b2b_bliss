@@ -2,7 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { fetchAccountPlans } from "@/lib/publicApi";
 import { PortalShell } from "@/components/portal/PortalShell";
-import { PageHeader } from "@/components/ui/primitives";
+import { PageHeader, Panel } from "@/components/ui/primitives";
 import { PlansList } from "@/components/account/PlansList";
 
 export default async function AccountHistoryPage({
@@ -37,7 +37,7 @@ export default async function AccountHistoryPage({
     <PortalShell active="history" email={data.email}>
       <div className="flex flex-col pb-[72px]">
         {canceledToken ? (
-          <div className="mb-12 flex flex-col gap-2 rounded-panel border border-sand-200 px-8 py-6">
+          <Panel variant="filled" className="mb-7 gap-2 px-7 py-[30px]">
             <div className="text-[22px] font-medium tracking-[-0.015em] text-ink-900">
               Cancellation confirmed
             </div>
@@ -45,7 +45,7 @@ export default async function AccountHistoryPage({
               Your plan has been cancelled and the remaining payments are
               stopped.
             </p>
-          </div>
+          </Panel>
         ) : null}
 
         <PageHeader

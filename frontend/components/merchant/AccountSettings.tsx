@@ -211,14 +211,17 @@ function StackedSection({
   dense?: boolean;
 }) {
   return (
-    <section className="mb-14 flex flex-col">
-      <div className="mb-[22px] flex flex-col gap-2">
+    <section className="mb-7 flex flex-col">
+      <div className="mb-5 flex flex-col gap-2">
         <h2 className="text-2xl font-medium tracking-[-0.02em] text-ink-900">
           {title}
         </h2>
         <p className="text-[17px] text-ink-400">{helper}</p>
       </div>
-      <Panel className={dense ? "px-8 py-1.5" : "px-8 pb-7 pt-[30px]"}>
+      <Panel
+        variant="filled"
+        className={dense ? "px-7 py-1.5" : "px-7 py-[30px]"}
+      >
         {children}
       </Panel>
     </section>

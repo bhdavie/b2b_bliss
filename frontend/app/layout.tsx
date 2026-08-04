@@ -1,5 +1,11 @@
 import type { Metadata } from "next";
-import { DM_Serif_Display, Fraunces, Instrument_Sans } from "next/font/google";
+import {
+  Archivo,
+  DM_Serif_Display,
+  Fraunces,
+  Instrument_Sans,
+  Inter,
+} from "next/font/google";
 import "./globals.css";
 
 const dmSerif = DM_Serif_Display({
@@ -26,6 +32,25 @@ const instrumentSans = Instrument_Sans({
   display: "swap",
 });
 
+// Inter, under `--font-inter`. Declared here rather than on a component so the
+// variable is in scope document-wide and any surface can opt in with
+// `font-inter`. Like the others it only registers a variable — it sets no
+// family on its own, so nothing changes font by this being loaded.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+// Archivo, under `--font-archivo`. Same deal as Inter above: registers a
+// variable document-wide and sets no family itself, so surfaces opt in with
+// `font-archivo`.
+const archivo = Archivo({
+  subsets: ["latin"],
+  variable: "--font-archivo",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Bliss",
   description: "Save-first payment plans for the booking economy.",
@@ -39,7 +64,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${dmSerif.variable} ${fraunces.variable} ${instrumentSans.variable}`}
+      className={`${dmSerif.variable} ${fraunces.variable} ${instrumentSans.variable} ${inter.variable} ${archivo.variable}`}
     >
       <body>{children}</body>
     </html>

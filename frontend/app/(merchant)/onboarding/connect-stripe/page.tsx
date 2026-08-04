@@ -23,7 +23,7 @@ export default async function ConnectStripePage() {
   }
 
   return (
-    <main className="min-h-screen bg-white font-body text-ink-900">
+    <main className="min-h-screen bg-white font-inter text-ink-900">
       <div className="mx-auto flex max-w-[1136px] flex-col px-6 pb-[72px] pt-16 xl:px-16">
         <BlissWordmark className="mb-12 text-[22px] tracking-[-0.005em] text-brand-violet" />
 

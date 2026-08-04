@@ -34,7 +34,7 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="min-h-screen font-body lg:grid lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
+    <main className="min-h-screen font-inter lg:grid lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
       <div className="flex min-h-screen items-center justify-center px-6 py-16 lg:min-h-0">
         <form onSubmit={handleSubmit} className="w-full max-w-sm flex flex-col gap-4">
           <header>

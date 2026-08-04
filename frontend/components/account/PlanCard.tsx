@@ -9,9 +9,12 @@ import { Panel } from "@/components/ui/primitives";
 
 /**
  * Plan card for the guest portal lists, built to the settled design (turn 6a):
- * a bordered 20px panel, merchant name at 30px over the service and date, a
+ * a filled 20px panel, merchant name at 30px over the service and date, a
  * status pill top-right, a rule, then a single meta line of figures with the
  * "View plan" pill beside it.
+ *
+ * Fill rather than border, matching the plan detail screen: sand-50 on the
+ * white page, no edge, no shadow.
  */
 /**
  * Which list the guest is looking at. Travels to /plan/[token] as `?from=`, so
@@ -36,7 +39,7 @@ export function PlanCard({
     : formatScheduleDateLong(plan.appointmentDate);
 
   return (
-    <Panel className="px-10 pb-[30px] pt-9">
+    <Panel variant="filled" className="px-10 pb-[30px] pt-9">
       <div className="flex items-start justify-between gap-8">
         <div className="flex min-w-0 flex-col gap-2.5">
           <div className="text-[30px] font-medium leading-[1.1] tracking-[-0.025em] text-ink-900">
@@ -76,7 +79,7 @@ export function PlanCard({
         </div>
         <Link
           href={href}
-          className="flex-none rounded-full border border-sand-500 px-[26px] py-[13px] text-base font-medium tracking-[-0.01em] text-brand-violet no-underline transition-colors hover:bg-sand-50 hover:no-underline"
+          className="flex-none rounded-full border border-sand-500 px-[26px] py-[13px] text-base font-medium tracking-[-0.01em] text-brand-violet no-underline transition-colors hover:bg-sand-100 hover:no-underline"
         >
           View plan
         </Link>

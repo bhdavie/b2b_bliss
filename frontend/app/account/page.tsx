@@ -65,8 +65,8 @@ export default async function AccountPage() {
       </h1>
       <p className="mt-1 text-sm text-ink-500">Signed in as {data.email}</p>
 
-      <h2 className="mt-10 text-2xl font-bold text-ink-900">Your plans</h2>
-      <div className="mt-4">
+      <h2 className="mt-7 text-2xl font-bold text-ink-900">Your plans</h2>
+      <div className="mt-5">
         <PlansList
           plans={active}
           from="home"

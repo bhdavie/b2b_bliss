@@ -42,7 +42,7 @@ export function PortalShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-white font-body text-ink-900">
+    <div className="min-h-screen bg-white font-inter text-ink-900">
       <aside className="flex flex-col justify-between border-sand-200 bg-sand-50 py-[34px] md:fixed md:inset-y-0 md:left-0 md:w-[264px] md:border-r">
         <div className="flex flex-col">
           <div className="flex flex-col gap-[5px] px-7 pb-10">

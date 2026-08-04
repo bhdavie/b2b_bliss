@@ -36,7 +36,7 @@ export default async function BookingsPage() {
       </header>
 
       {bookings.length === 0 ? (
-        <Panel className="items-center px-10 py-16 text-center">
+        <Panel variant="filled" className="items-center px-10 py-16 text-center">
           <div className="text-[22px] font-medium tracking-[-0.015em] text-ink-900">
             No bookings yet
           </div>

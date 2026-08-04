@@ -3,7 +3,7 @@ import { BlissWordmark } from "@/components/BlissWordmark";
 
 export function PageChrome({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-white text-ink font-body">
+    <div className="min-h-screen bg-white text-ink font-inter">
       <Header />
       <main className="mx-auto w-full max-w-[480px] px-5 pb-16 pt-4 sm:pt-6">
         {children}

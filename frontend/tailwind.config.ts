@@ -91,12 +91,22 @@ const config: Config = {
           "Arial",
           "sans-serif",
         ],
-        // Auth-screen body face (Inter). Scoped on purpose: `--font-inter` is
-        // set by components/auth/AuthShell.tsx on its own root, not by the root
-        // layout, so `font-inter` resolves only inside the sign-in shell and
-        // every other screen keeps `font-body` / `font-sans` untouched.
+        // Inter. `--font-inter` is registered document-wide by app/layout.tsx,
+        // so this is opt-in per surface — currently the sign-in shell only.
         inter: [
           "var(--font-inter)",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "Roboto",
+          "Helvetica",
+          "Arial",
+          "sans-serif",
+        ],
+        // Archivo. Same arrangement as `inter`: `--font-archivo` is registered
+        // document-wide by app/layout.tsx and surfaces opt in per wrapper.
+        archivo: [
+          "var(--font-archivo)",
           "-apple-system",
           "BlinkMacSystemFont",
           "Segoe UI",

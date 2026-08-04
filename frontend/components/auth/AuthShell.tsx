@@ -1,4 +1,3 @@
-import { Inter } from "next/font/google";
 import type { InputHTMLAttributes, ReactNode } from "react";
 import { BlissWordmark } from "@/components/BlissWordmark";
 import { Button } from "@/components/ui/Button";
@@ -28,17 +27,6 @@ import { Input } from "@/components/ui/Input";
  * column of this shape.
  */
 
-// Inter is declared here rather than in app/layout.tsx so it is downloaded only
-// on routes that import this shell. Loading it at the root would put an unused
-// font on every page including the app/inn/ funnels, which are pinned to the
-// system stack on purpose. `--font-inter` is applied to the shell root below,
-// so `font-inter` resolves for everything inside and nowhere else.
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-});
-
 export function AuthShell({
   heading,
   subhead,
@@ -52,7 +40,7 @@ export function AuthShell({
 }) {
   return (
     <main
-      className={`${inter.variable} font-inter flex min-h-screen items-center justify-center bg-sand-100 px-6 py-16`}
+      className="font-inter flex min-h-screen items-center justify-center bg-sand-100 px-6 py-16"
     >
       <div className="w-full max-w-md">
         {/* Wordmark sits above the card, centred, and stays Georgia bold via

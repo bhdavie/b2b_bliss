@@ -15,7 +15,10 @@ export default async function PayoutsPage() {
         Payouts
       </h1>
 
-      <Panel className="items-center gap-5 bg-sand-50 px-16 pb-20 pt-[76px] text-center">
+      <Panel
+        variant="filled"
+        className="items-center gap-5 px-16 pb-20 pt-[76px] text-center"
+      >
         <div className="text-[28px] font-medium tracking-[-0.02em] text-ink-900">
           No payouts yet
         </div>

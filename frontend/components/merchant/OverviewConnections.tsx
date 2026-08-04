@@ -8,7 +8,6 @@ import {
   ProviderLogo,
   type Provider,
 } from "./ConnectionsContext";
-import { Panel } from "@/components/ui/primitives";
 import type {
   OnboardingCloudbeds,
   OnboardingMews,
@@ -44,7 +43,10 @@ export function OverviewConnections({
   const pmsChosen = onboardingState !== "created";
 
   return (
-    <Panel className="px-7 py-2">
+    // No panel of its own: the Overview wraps this in the filled section block
+    // together with the heading, so drawing one here would nest sand-50 inside
+    // sand-50.
+    <div className="flex flex-col">
       {/* Payments: reflect the PMS rail when connected, else Stripe payouts. */}
       {mewsConnected ? (
         <Row
@@ -111,7 +113,7 @@ export function OverviewConnections({
       ) : (
         <Row label="Property system" right={<SetUp href="/onboarding/pms" />} />
       )}
-    </Panel>
+    </div>
   );
 }
 

@@ -66,7 +66,7 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
   }
 
   return (
-    <Panel className="bg-sand-50 px-8 pb-8 pt-7">
+    <Panel variant="filled" className="px-7 py-[30px]">
       <div className="flex items-baseline justify-between gap-6">
         <h2 className="text-[22px] font-medium tracking-[-0.015em] text-ink-900">
           Finish setting up your property

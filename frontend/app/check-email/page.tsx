@@ -9,7 +9,7 @@ export default async function CheckEmailPage(props: {
   const { email } = await props.searchParams;
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-6 font-body">
+    <main className="min-h-screen flex items-center justify-center px-6 font-inter">
       <div className="w-full max-w-sm text-center">
         <BlissWordmark className="text-xl tracking-tight text-brand-violet" />
         <h1 className="mt-6 text-lg font-medium">Check your email</h1>

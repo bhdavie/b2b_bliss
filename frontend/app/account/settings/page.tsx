@@ -31,15 +31,15 @@ export default async function AccountSettingsPage() {
           subtitle="Your account details and the card your installments run on."
         />
 
-        <div className="grid grid-cols-1 items-start gap-x-12 gap-y-12 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-          <div className="flex flex-col">
-            <SectionHeading className="mb-[26px]">Account</SectionHeading>
+        <div className="grid grid-cols-1 items-start gap-x-12 gap-y-7 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+          <Panel variant="filled" className="px-7 py-[30px]">
+            <SectionHeading className="mb-5">Account</SectionHeading>
             <div className="flex flex-col border-t border-sand-200">
               <Field label="Name" value={name} />
               <Field label="Email" value={data.email} />
               <Field label="Phone" value={null} />
             </div>
-          </div>
+          </Panel>
 
           {/* The heading and the Panel live inside SettingsCardOnFile: the open
               editor replaces that panel rather than nesting inside it, the way
@@ -53,15 +53,13 @@ export default async function AccountSettingsPage() {
               stripePublishableKey={portal.stripe.publishableKey}
             />
           ) : (
-            <div className="flex flex-col">
-              <SectionHeading className="mb-6">Card on file</SectionHeading>
-              <Panel className="px-8 pb-8 pt-[30px]">
-                <p className="text-[17px] text-ink-500">
-                  No card on file yet. Your card is saved the first time you set
-                  up a payment plan.
-                </p>
-              </Panel>
-            </div>
+            <Panel variant="filled" className="px-7 py-[30px]">
+              <SectionHeading className="mb-5">Card on file</SectionHeading>
+              <p className="text-[17px] text-ink-500">
+                No card on file yet. Your card is saved the first time you set
+                up a payment plan.
+              </p>
+            </Panel>
           )}
         </div>
       </div>

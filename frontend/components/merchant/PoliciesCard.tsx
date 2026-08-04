@@ -11,7 +11,7 @@ import {
   type RefundPolicy,
 } from "@/lib/api";
 import { Input } from "@/components/ui/Input";
-import { Panel } from "@/components/ui/primitives";
+import { Panel, SectionTitle } from "@/components/ui/primitives";
 
 type FormState = {
   refundPolicy: RefundPolicy;
@@ -229,7 +229,7 @@ export function PoliciesCard({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-8">
       {show("cancellation") ? (
-      <Panel className="gap-7 px-8 pb-8 pt-7">
+      <Panel variant="filled" className="gap-7 px-7 py-[30px]">
         <SectionTitle>Cancellation policies</SectionTitle>
 
         <Row label="Refund policy" hint="What customers get back if they cancel a plan in progress.">
@@ -312,7 +312,7 @@ export function PoliciesCard({
       ) : null}
 
       {show("deadline") ? (
-      <Panel className="gap-7 px-8 pb-8 pt-7">
+      <Panel variant="filled" className="gap-7 px-7 py-[30px]">
         <SectionTitle>Payment deadline</SectionTitle>
 
         <Row
@@ -346,7 +346,7 @@ export function PoliciesCard({
       ) : null}
 
       {show("failed") ? (
-      <Panel className="gap-7 px-8 pb-8 pt-7">
+      <Panel variant="filled" className="gap-7 px-7 py-[30px]">
         <SectionTitle>Failed payment handling</SectionTitle>
 
         <Row label="Retry policy" hint="How aggressively to retry a failed installment.">
@@ -513,13 +513,6 @@ function parseDollarsOrNull(input: string): number | null | undefined {
   return cents;
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h3 className="border-b border-sand-100 pb-4 text-2xl font-medium tracking-[-0.02em] text-ink-900">
-      {children}
-    </h3>
-  );
-}
 
 function Row({
   label,

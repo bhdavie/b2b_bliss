@@ -51,17 +51,51 @@ export function PageHeader({
   );
 }
 
-/** The bordered, 20px-radius panel used for cards on both screens. */
+/**
+ * 24px card title with a hairline under it, the head each Payment settings tab
+ * draws inside its own card. Distinct from SectionHeading above, which is the
+ * 13px uppercase eyebrow — this is the larger in-card title.
+ *
+ * Lifted here from PoliciesCard once PlanRulesCard and BlackoutDatesCard needed
+ * the same head; the markup is unchanged from that original.
+ */
+export function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="border-b border-sand-100 pb-4 text-2xl font-medium tracking-[-0.02em] text-ink-900">
+      {children}
+    </h3>
+  );
+}
+
+/**
+ * The 20px-radius panel used for cards on both screens.
+ *
+ * Two treatments, same radius and same no-shadow rule:
+ *  - "outlined" (default) — sand-200 hairline on the page background. What
+ *    every existing call site renders, unchanged.
+ *  - "filled" — sand-50 fill plus the same sand-200 hairline. The fill alone is
+ *    only a 1.05:1 step off white, so the border is what actually draws the
+ *    edge; the fill separates the block's interior from the page.
+ */
+export type PanelVariant = "outlined" | "filled";
+
+const PANEL_VARIANT_CLASS: Record<PanelVariant, string> = {
+  outlined: "border border-sand-200",
+  filled: "border border-sand-200 bg-sand-50",
+};
+
 export function Panel({
   children,
   className = "",
+  variant = "outlined",
 }: {
   children: React.ReactNode;
   className?: string;
+  variant?: PanelVariant;
 }) {
   return (
     <div
-      className={`flex flex-col rounded-panel border border-sand-200 ${className}`}
+      className={`flex flex-col rounded-panel ${PANEL_VARIANT_CLASS[variant]} ${className}`}
     >
       {children}
     </div>

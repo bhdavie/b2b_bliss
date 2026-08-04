@@ -84,7 +84,7 @@ export default function AuthorizePage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#EAEEF4] px-6 font-body text-[#51576A]">
+    <div className="flex min-h-screen items-center justify-center bg-[#EAEEF4] px-6 font-inter text-[#51576A]">
       <div className="w-full max-w-md">
         <div className="mb-6 flex items-center justify-center gap-2">
           <span className="text-lg font-semibold tracking-tight text-neutral-800">mews</span>
