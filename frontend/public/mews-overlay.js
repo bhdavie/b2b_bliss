@@ -446,14 +446,23 @@
       violetTint: "#F4EFFF",
       ink: "#111112", // primary text
       inkMuted: "#8A8A8F", // secondary text (never a border; see divider)
-      ctaBg: "#5A1BB5", // primary button background
+      // Deep violet, one step down from `violet`. The primary action and the
+      // selected state are different levels and should not share a fill: the
+      // option border and the RECOMMENDED chip keep #5A1BB5.
+      ctaBg: "#3F0F87", // primary button background
       onCta: "#ffffff", // primary button text, and the tick glyph on violet
       surface: "#ffffff",
       divider: "#E8E5E0", // dividers and inactive borders
-      // Every corner in the overlay. Matches Freehand's own button radius; the
-      // sampled host radius it replaced was producing pills on the option rows
-      // and the primary button.
+      // Default corner for the smaller chrome: the schedule box, the chip and
+      // the tick. Matches Freehand's own button radius; the sampled host radius
+      // it replaced was producing pills on the option rows.
       radius: "4px",
+      // The modal shell and the plan option cards, which read as cards rather
+      // than as controls and carry a softer corner than the chrome inside them.
+      radiusCard: "16px",
+      // The primary button only. Fully rounded, matching the pill every settled
+      // Bliss surface uses for its primary action.
+      radiusPill: "999px",
     },
 
     /** Set false to leave the modal open after the guest confirms. */
@@ -1527,7 +1536,7 @@
       ".scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.44);" +
       "display:flex;align-items:center;justify-content:center;padding:16px}" +
       ".bliss-card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:" + b.surface +
-      ";color:" + b.ink + ";border:1px solid " + b.divider + ";border-radius:" + b.radius +
+      ";color:" + b.ink + ";border:1px solid " + b.divider + ";border-radius:" + b.radiusCard +
       ";box-shadow:0 18px 56px rgba(0,0,0,.32)}" +
       ".bliss-card:focus{outline:none}" +
       ".head{display:flex;align-items:flex-start;gap:12px;padding:22px 24px;border-bottom:1px solid " + b.divider + "}" +
@@ -1551,7 +1560,7 @@
       ".sched .v{margin-left:auto;font-weight:600;color:" + b.ink + "}" +
       ".opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 12px;margin-bottom:8px;" +
       "background:transparent;color:" + b.ink + ";border:1px solid " + b.divider +
-      ";border-radius:" + b.radius + ";cursor:pointer}" +
+      ";border-radius:" + b.radiusCard + ";cursor:pointer}" +
       ".opt[aria-pressed=\"true\"]{border-color:" + b.violet + ";border-width:2px;padding:10px 11px}" +
       ".opt .lbl{font-size:13px;font-weight:600}" +
       ".opt .sub{font-size:11px;color:" + b.inkMuted + ";margin-top:2px}" +
@@ -1562,9 +1571,12 @@
       "border-radius:" + b.radius + ";background:" + b.violetTint +
       ";border:1px solid " + b.violet + ";color:" + b.ink +
       ";margin-left:6px;vertical-align:middle}" +
-      ".cta{width:100%;padding:12px;border:0;border-radius:" + b.radius + ";background:" + b.ctaBg +
+      ".cta{width:100%;padding:12px;border:0;border-radius:" + b.radiusPill + ";background:" + b.ctaBg +
       ";color:" + b.onCta + ";font-size:13px;font-weight:600;cursor:pointer;margin-top:4px}" +
-      ".cta[disabled]{opacity:.5;cursor:default}" +
+      // Sand fill with muted ink, not a half-opacity violet: at .5 the pill
+      // composited to a pale lavender under white text, which is both a
+      // failing pair and a tint-only colour used as a fill.
+      ".cta[disabled]{background:" + b.divider + ";color:" + b.inkMuted + ";cursor:default}" +
       ".note{font-size:11px;color:" + b.inkMuted + ";margin-top:10px;line-height:1.45}" +
       ".msg{font-size:12px;color:" + b.inkMuted + ";line-height:1.5}" +
       // A button, not a div: it toggles the confirmation off, so it has to be
@@ -1579,7 +1591,7 @@
       ".done .s{font-size:11px;color:" + b.inkMuted + ";margin-top:1px}" +
       // Below the phone breakpoint the modal becomes a bottom sheet.
       "@media (max-width:420px){.scrim{align-items:flex-end;padding:0}" +
-      ".bliss-card{width:100%;max-width:100%;max-height:88vh;border-radius:" + b.radius + " " + b.radius + " 0 0}}"
+      ".bliss-card{width:100%;max-width:100%;max-height:88vh;border-radius:" + b.radiusCard + " " + b.radiusCard + " 0 0}}"
     );
   }
 
