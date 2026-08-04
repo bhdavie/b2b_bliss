@@ -2657,9 +2657,9 @@ function BlissTeaser({
   // reconcile with the modal.
   const line =
     spread != null
-      ? "Pay installments over time starting at " +
+      ? "From " +
         perNightInstallmentLabel(nightlyCents, spread.numPayments) +
-        "/night"
+        "/night over time"
       : null;
 
   // mews-overlay.js:1646-1647.
@@ -2676,11 +2676,13 @@ function BlissTeaser({
     spread != null
       ? summaryPerNightCents(preview.amountCents, nights, spread.numPayments)
       : null;
+  // Same wording as the rate-card line above, so the two teasers read as one
+  // offer rather than two. Only the basis differs, and that is what the
+  // sublabels carry: the rate card says "Pre-tax", this figure does not. A
+  // deliberate divergence from the overlay's phrasing at :1670-1671.
   const detailsLine =
     detailsPerNight != null
-      ? "Pay installments over time starting at " +
-        formatUsd(detailsPerNight) +
-        "/night"
+      ? "From " + formatUsd(detailsPerNight) + "/night over time"
       : null;
 
   const openModal = (e: React.MouseEvent) => {

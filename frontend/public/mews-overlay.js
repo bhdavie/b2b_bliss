@@ -1643,7 +1643,7 @@
     // Rate cards quote a per-night teaser off the card's own displayed price,
     // divided by the payment count that yields the SMALLEST per-payment figure
     // — biweekly where offered, otherwise whichever eligible option has the
-    // most payments. That is what makes "starting at" truthful: no other
+    // most payments. That is what makes the "From" claim truthful: no other
     // cadence produces a lower number.
     //
     // The numerator is the scraped tax-exclusive nightly price, not
@@ -1660,7 +1660,7 @@
         }
       }
       var perNight = Math.round(t.scrapedNightlyCents / spread.numPayments);
-      return "Pay installments over time starting at " + money(perNight, cur(t)) + "/night";
+      return "From " + money(perNight, cur(t)) + "/night over time";
     }
 
     var unit = opt.frequency === "monthly" ? "/mo" : " every 2 weeks";
