@@ -69,7 +69,7 @@ export default function LoginPage() {
           <p className="mt-1 text-ink-muted">
             {mode === "magic-link"
               ? "We will email you a link to sign in."
-              : "Sign in to your Marbrook House dashboard."}
+              : "Sign in to your property dashboard."}
           </p>
         </header>
 
