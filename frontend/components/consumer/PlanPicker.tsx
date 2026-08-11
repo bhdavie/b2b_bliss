@@ -64,7 +64,7 @@ function PlanCard({
       aria-pressed={visuallySelected}
       className={`relative w-full rounded-none px-4 py-3.5 text-left transition-colors ${
         visuallySelected
-          ? "border-2 border-[#C9AFFA] bg-brand-lavender/20"
+          ? "border-2 border-[#D6C8FB] bg-brand-lavender/20"
           : "border-[0.5px] border-brand-neutral bg-white hover:border-brand-dusty"
       }`}
     >

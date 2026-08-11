@@ -275,7 +275,7 @@ function Stepper({ current }: { current: number }) {
             aria-current={state === "active" ? "step" : undefined}
             className={`whitespace-nowrap px-0.5 pb-4 text-[17px] ${
               state === "active"
-                ? "font-medium tracking-[-0.01em] text-brand-violet shadow-[inset_0_-2px_0_#5A1BB5]"
+                ? "font-medium tracking-[-0.01em] text-brand-violet shadow-[inset_0_-2px_0_#8B5CF6]"
                 : state === "done"
                   ? "text-ink-900"
                   : "text-ink-400"

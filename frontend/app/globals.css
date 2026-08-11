@@ -59,10 +59,11 @@
   /* rounded-xl is Tailwind's stock 0.75rem, which is 12px at our 16px root —
      the design's input radius exactly. The border is 2px at rest as well as on
      focus so the field does not shift by a pixel when focused; the design only
-     ever draws the focused state. The halo is a raw rgba because an alpha of a
-     token has no utility outside ring-*, and the spec asks for a shadow. */
+     ever draws the focused state. The halo needs an alpha, which no ring-* or
+     shadow-* token can express inline, so it is a named boxShadow in the
+     Tailwind config (shadow-focus-ring) built from brand.violet. */
   .input {
-    @apply w-full rounded-xl border-2 border-sand-200 bg-white px-[17px] py-[15px] text-base placeholder:text-ink-400 focus:border-brand-violet focus:outline-none focus:shadow-[0_0_0_4px_rgba(90,27,181,0.10)];
+    @apply w-full rounded-xl border-2 border-sand-200 bg-white px-[17px] py-[15px] text-base placeholder:text-ink-400 focus:border-brand-violet focus:outline-none focus:shadow-focus-ring;
   }
 
   .label {

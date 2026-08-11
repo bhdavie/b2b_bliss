@@ -96,7 +96,7 @@ export default function AuthorizePage() {
         <div className="rounded-2xl border border-[#97ACC8]/30 bg-white p-7 shadow-sm">
           {/* App identity */}
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#C9AFFA] px-1 text-center leading-none">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#D6C8FB] px-1 text-center leading-none">
               <BlissWordmark className="text-[11px] text-white" />
             </div>
             <div className="text-2xl text-[#97ACC8]">→</div>
@@ -148,7 +148,7 @@ export default function AuthorizePage() {
               type="button"
               onClick={handleAuthorize}
               disabled={phase !== "consent"}
-              className="w-full rounded-lg bg-[#C9AFFA] px-6 py-3 font-medium text-white transition-colors hover:bg-[#BBA0F4] disabled:opacity-60"
+              className="w-full rounded-lg bg-[#D6C8FB] px-6 py-3 font-medium text-white transition-colors hover:bg-brand-lavender-hover disabled:opacity-60"
             >
               {phase === "consent"
                 ? "Authorize"

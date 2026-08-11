@@ -1585,7 +1585,7 @@ function CheckoutStep(props: {
         disabled={submitting}
         className={`mt-5 w-full rounded-none px-6 py-3.5 text-center text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
           paymentMethod === "bliss"
-            ? "bg-[#C9AFFA] hover:bg-[#BBA0F4]"
+            ? "bg-[#D6C8FB] hover:bg-brand-lavender-hover"
             : "bg-[#1A56DB] hover:bg-[#1545B0]"
         }`}
       >
@@ -1770,7 +1770,7 @@ function PlanChoice({
       aria-pressed={selected}
       className={`relative rounded-none p-3 text-left transition-colors ${
         selected
-          ? "border-2 border-[#C9AFFA] bg-brand-lavender/20"
+          ? "border-2 border-[#D6C8FB] bg-brand-lavender/20"
           : "border-[0.5px] border-brand-neutral bg-white hover:border-brand-dusty"
       }`}
     >
@@ -1901,14 +1901,14 @@ function PaymentOption({
 }) {
   const ring = selected
     ? accent === "bliss"
-      ? "border border-[#C9AFFA] ring-1 ring-[#C9AFFA] bg-[#C9AFFA]/8"
+      ? "border border-[#D6C8FB] ring-1 ring-[#D6C8FB] bg-[#D6C8FB]/8"
       : "border border-[#1A56DB] ring-1 ring-[#1A56DB]/30 bg-[#1A56DB]/5"
     : accent === "bliss"
-      ? "border border-[#C9AFFA] bg-white hover:border-[#97ACC8]"
+      ? "border border-[#D6C8FB] bg-white hover:border-[#97ACC8]"
       : "border border-[#1A56DB] bg-white hover:border-[#1545B0]";
   const dot = selected
     ? accent === "bliss"
-      ? "border-[#97ACC8] bg-[#C9AFFA]"
+      ? "border-[#97ACC8] bg-[#D6C8FB]"
       : "border-[#1A56DB] bg-[#1A56DB]"
     : "border-[#23262e]/30 bg-white";
   return (

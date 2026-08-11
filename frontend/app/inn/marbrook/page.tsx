@@ -1751,11 +1751,13 @@ function CategoryCard({
   category: RoomCategory;
   onSelect: (id: string) => void;
 }) {
+  // overflow-hidden clips RoomPhoto's square corners to this card's own
+  // rounded-[8px], rather than restating the radius on the photo.
   return (
     <div
       data-test-id="category-card"
       data-mds-element="true"
-      className="flex h-full flex-col rounded-[8px] border border-[#1A56DB] bg-white"
+      className="flex h-full flex-col overflow-hidden rounded-[8px] border border-[#1A56DB] bg-white"
     >
       <div data-mds-element="true" className="flex h-full flex-col">
         <RoomPhoto categoryName={category.name} />
@@ -2627,21 +2629,21 @@ function RateItem({
 const BLISS_CSS = `
 .bliss-ui *{box-sizing:border-box;margin:0;padding:0;font-family:inherit}
 
-.bliss-ui .trig{display:block;width:100%;margin:0;padding:0;background:none;border:0;border-radius:0;box-shadow:none;color:#111112;font-size:12px;line-height:1.45;cursor:pointer;text-align:left;white-space:normal;overflow-wrap:break-word}
+.bliss-ui .trig{display:block;width:100%;margin:0;padding:0;background:none;border:0;border-radius:0;box-shadow:none;color:#17131C;font-size:12px;line-height:1.45;cursor:pointer;text-align:left;white-space:normal;overflow-wrap:break-word}
 .bliss-ui .trig:hover .amt{text-decoration:underline}
-.bliss-ui .trig:focus-visible{outline:2px solid #5A1BB5;outline-offset:2px}
+.bliss-ui .trig:focus-visible{outline:2px solid #8B5CF6;outline-offset:2px}
 .bliss-ui .sep{margin:0 5px;opacity:.55}
 .bliss-ui .amt{font-weight:600}
-.bliss-ui .sub{display:block;margin-top:2px;font-size:11px;font-weight:400;color:#8A8A8F}
+.bliss-ui .sub{display:block;margin-top:2px;font-size:11px;font-weight:400;color:#6E6878}
 /* mews-overlay.js:1501-1502. Details step: "See details" reads as a link
    beneath the main line, not as another button competing with the host's Next
    control. display:block is what puts it on its own row — without this rule the
    two strings ran together as one line of text. */
-.bliss-ui .link{display:block;margin-top:3px;padding:0;background:none;border:0;font-size:11px;font-weight:600;color:#111112;text-decoration:underline;cursor:pointer;text-align:left}
+.bliss-ui .link{display:block;margin-top:3px;padding:0;background:none;border:0;font-size:11px;font-weight:600;color:#17131C;text-decoration:underline;cursor:pointer;text-align:left}
 /* mews-overlay.js:1508. Right-aligned so the block sits under the Total figure,
    in the same column as "Tax included", rather than at the panel's left edge.
    Declared AFTER .trig so it wins on order at equal specificity. */
-.bliss-ui .details{text-align:right;color:#111112}
+.bliss-ui .details{text-align:right;color:#17131C}
 /* mews-overlay.js:1515. text-align on .details cannot move this: .link is
    display:block, and text-align only positions INLINE-level content. A <button>
    also uses shrink-to-fit sizing even when block, so the box hugs its text and
@@ -2652,46 +2654,46 @@ const BLISS_CSS = `
 .bliss-ui .trig[disabled]{cursor:default}
 
 .bliss-ui .scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.44);display:flex;align-items:center;justify-content:center;padding:16px}
-.bliss-ui .bliss-card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:#ffffff;color:#111112;border:1px solid #E8E5E0;border-radius:16px;box-shadow:0 18px 56px rgba(0,0,0,.32)}
+.bliss-ui .bliss-card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:#ffffff;color:#17131C;border:1px solid #E9E5E1;border-radius:16px;box-shadow:0 18px 56px rgba(0,0,0,.32)}
 .bliss-ui .bliss-card:focus{outline:none}
-.bliss-ui .head{display:flex;align-items:flex-start;gap:12px;padding:22px 24px;border-bottom:1px solid #E8E5E0}
+.bliss-ui .head{display:flex;align-items:flex-start;gap:12px;padding:22px 24px;border-bottom:1px solid #E9E5E1}
 .bliss-ui .head h2{font-size:17px;font-weight:600;line-height:1.3}
-.bliss-ui .head p{font-size:13px;color:#8A8A8F;margin-top:4px;line-height:1.4}
-.bliss-ui .x{margin-left:auto;background:none;border:0;cursor:pointer;font-size:20px;line-height:1;color:#8A8A8F}
+.bliss-ui .head p{font-size:13px;color:#6E6878;margin-top:4px;line-height:1.4}
+.bliss-ui .x{margin-left:auto;background:none;border:0;cursor:pointer;font-size:20px;line-height:1;color:#6E6878}
 .bliss-ui .body{padding:20px 24px 24px}
-.bliss-ui .ctx{font-size:13px;color:#8A8A8F;margin-bottom:2px;line-height:1.5}
-.bliss-ui .fine{font-size:11px;color:#8A8A8F;margin-bottom:12px;line-height:1.4}
-.bliss-ui .disc{display:block;width:100%;text-align:left;margin:2px 0 8px;padding:8px 0;background:none;border:0;border-top:1px solid #E8E5E0;color:#111112;font-size:12px;font-weight:600;cursor:pointer}
-.bliss-ui .sched{margin:0 0 12px;border:1px solid #E8E5E0;border-radius:4px}
-.bliss-ui .sched .row{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12px;border-bottom:1px solid #E8E5E0}
+.bliss-ui .ctx{font-size:13px;color:#6E6878;margin-bottom:2px;line-height:1.5}
+.bliss-ui .fine{font-size:11px;color:#6E6878;margin-bottom:12px;line-height:1.4}
+.bliss-ui .disc{display:block;width:100%;text-align:left;margin:2px 0 8px;padding:8px 0;background:none;border:0;border-top:1px solid #E9E5E1;color:#17131C;font-size:12px;font-weight:600;cursor:pointer}
+.bliss-ui .sched{margin:0 0 12px;border:1px solid #E9E5E1;border-radius:4px}
+.bliss-ui .sched .row{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12px;border-bottom:1px solid #E9E5E1}
 .bliss-ui .sched .row:last-child{border-bottom:0}
-.bliss-ui .sched .n{width:18px;color:#8A8A8F}
-.bliss-ui .sched .d{color:#111112}
-.bliss-ui .sched .v{margin-left:auto;font-weight:600;color:#111112}
-.bliss-ui .opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 12px;margin-bottom:8px;background:transparent;color:#111112;border:1px solid #E8E5E0;border-radius:16px;cursor:pointer}
-.bliss-ui .opt[aria-pressed="true"]{border-color:#5A1BB5;border-width:2px;padding:10px 11px}
+.bliss-ui .sched .n{width:18px;color:#6E6878}
+.bliss-ui .sched .d{color:#17131C}
+.bliss-ui .sched .v{margin-left:auto;font-weight:600;color:#17131C}
+.bliss-ui .opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 12px;margin-bottom:8px;background:transparent;color:#17131C;border:1px solid #E9E5E1;border-radius:16px;cursor:pointer}
+.bliss-ui .opt[aria-pressed="true"]{border-color:#8B5CF6;border-width:2px;padding:10px 11px}
 .bliss-ui .opt .lbl{font-size:13px;font-weight:600}
-.bliss-ui .opt .sub{font-size:11px;color:#8A8A8F;margin-top:2px}
+.bliss-ui .opt .sub{font-size:11px;color:#6E6878;margin-top:2px}
 .bliss-ui .opt .amt{margin-left:auto;text-align:right}
 .bliss-ui .opt .amt b{font-size:14px;font-weight:600;display:block}
-.bliss-ui .opt .amt span{font-size:11px;color:#8A8A8F}
-.bliss-ui .tag{display:inline-block;font-size:9px;letter-spacing:.4px;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:#F4EFFF;border:1px solid #5A1BB5;color:#111112;margin-left:6px;vertical-align:middle}
-.bliss-ui .cta{width:100%;padding:12px;border:0;border-radius:999px;background:#3F0F87;color:#ffffff;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px}
-.bliss-ui .cta[disabled]{background:#E8E5E0;color:#8A8A8F;cursor:default}
-.bliss-ui .plan{margin:2px 0 0;font-size:14px;font-weight:600;line-height:1.4;color:#111112}
-.bliss-ui .confirmed{margin-top:4px;padding:12px 0;border-top:1px solid #E8E5E0;font-size:13px;line-height:1.45;color:#111112}
-.bliss-ui .textbtn{display:block;width:100%;margin-top:10px;padding:6px 0;background:none;border:0;font-size:13px;line-height:1.45;color:#8A8A8F;cursor:pointer;text-align:center}
+.bliss-ui .opt .amt span{font-size:11px;color:#6E6878}
+.bliss-ui .tag{display:inline-block;font-size:9px;letter-spacing:.4px;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:#F3EEFE;border:1px solid #8B5CF6;color:#17131C;margin-left:6px;vertical-align:middle}
+.bliss-ui .cta{width:100%;padding:12px;border:0;border-radius:999px;background:#8B5CF6;color:#ffffff;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px}
+.bliss-ui .cta[disabled]{background:#E9E5E1;color:#6E6878;cursor:default}
+.bliss-ui .plan{margin:2px 0 0;font-size:14px;font-weight:600;line-height:1.4;color:#17131C}
+.bliss-ui .confirmed{margin-top:4px;padding:12px 0;border-top:1px solid #E9E5E1;font-size:13px;line-height:1.45;color:#17131C}
+.bliss-ui .textbtn{display:block;width:100%;margin-top:10px;padding:6px 0;background:none;border:0;font-size:13px;line-height:1.45;color:#6E6878;cursor:pointer;text-align:center}
 .bliss-ui .textbtn:hover{text-decoration:underline}
-.bliss-ui .note{font-size:11px;color:#8A8A8F;margin-top:10px;line-height:1.45}
-.bliss-ui .msg{font-size:12px;color:#8A8A8F;line-height:1.5}
+.bliss-ui .note{font-size:11px;color:#6E6878;margin-top:10px;line-height:1.45}
+.bliss-ui .msg{font-size:12px;color:#6E6878;line-height:1.5}
 /* Attribution footer, outside .body so it renders under both the receipt and
    the picker. The body's own 24px bottom padding is the space above it. */
-.bliss-ui .pwr{padding:0 24px 20px;text-align:center;font-size:11px;font-weight:400;color:#8A8A8F;line-height:1.4}
+.bliss-ui .pwr{padding:0 24px 20px;text-align:center;font-size:11px;font-weight:400;color:#6E6878;line-height:1.4}
 /* Colour only. BlissWordmark carries Georgia/700 as an inline style, which
    outranks the font-family:inherit reset at the top of this sheet; size comes
    from .pwr. The overlay names all three values directly because it has no
    component to reach for. */
-.bliss-ui .pwr .wm{color:#5A1BB5}
+.bliss-ui .pwr .wm{color:#8B5CF6}
 
 @media (max-width:420px){
 .bliss-ui .scrim{align-items:flex-end;padding:0}
@@ -4407,7 +4409,7 @@ function BookedPanel({
             Track and manage your payments{" "}
             <Link
               href={`/plan/${booked.plan.bookingToken}`}
-              className="text-[#6A629E] underline underline-offset-2 hover:text-[#564E89]"
+              className="text-[#6E6878] underline underline-offset-2 hover:text-[#5B21B6]"
             >
               here
             </Link>

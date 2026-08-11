@@ -129,7 +129,7 @@ export function BookingsTable({ bookings }: { bookings: Booking[] }) {
 
   return (
     <div>
-      <div className="mb-7 inline-flex gap-1.5 self-start rounded-full bg-[#F4F2EF] p-[5px]">
+      <div className="mb-7 inline-flex gap-1.5 self-start rounded-full bg-sand-track p-[5px]">
         <TabButton active={tab === "active"} onClick={() => setTab("active")} count={counts.active}>
           Active
         </TabButton>
@@ -146,7 +146,7 @@ export function BookingsTable({ bookings }: { bookings: Booking[] }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search guest or package"
-            className="w-full rounded-xl border-2 border-sand-500 bg-white py-[15px] pl-[45px] pr-[17px] text-[17px] text-ink-900 placeholder:text-ink-300 focus:border-brand-violet focus:outline-none focus:shadow-[0_0_0_4px_rgba(90,27,181,0.10)]"
+            className="w-full rounded-xl border-2 border-sand-500 bg-white py-[15px] pl-[45px] pr-[17px] text-[17px] text-ink-900 placeholder:text-ink-300 focus:border-brand-violet focus:outline-none focus:shadow-focus-ring"
           />
         </div>
         <Select value={status} onChange={(v) => setStatus(v as StatusFilter)} options={STATUS_OPTIONS} />
@@ -265,7 +265,7 @@ function TabButton({
       {children}
       <span
         className={`rounded-full px-[9px] py-0.5 text-sm tabular-nums ${
-          active ? "bg-white/[.22] text-white" : "bg-[#E6E2DD] text-ink-600"
+          active ? "bg-white/[.22] text-white" : "bg-sand-badge text-ink-600"
         }`}
       >
         {count}
@@ -287,7 +287,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="rounded-xl border border-sand-500 bg-white px-[18px] py-4 text-[17px] text-ink-900 focus:border-brand-violet focus:outline-none focus:shadow-[0_0_0_4px_rgba(90,27,181,0.10)]"
+      className="rounded-xl border border-sand-500 bg-white px-[18px] py-4 text-[17px] text-ink-900 focus:border-brand-violet focus:outline-none focus:shadow-focus-ring"
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>

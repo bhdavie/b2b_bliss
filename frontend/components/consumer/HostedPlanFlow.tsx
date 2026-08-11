@@ -104,7 +104,7 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
           <button
             type="button"
             onClick={() => setStep("card")}
-            className="mt-6 w-full rounded-none bg-[#C9AFFA] px-6 py-3.5 text-[15px] font-medium text-white transition hover:bg-[#BBA0F4] disabled:opacity-60"
+            className="mt-6 w-full rounded-none bg-[#D6C8FB] px-6 py-3.5 text-[15px] font-medium text-white transition hover:bg-brand-lavender-hover disabled:opacity-60"
           >
             Book now
           </button>

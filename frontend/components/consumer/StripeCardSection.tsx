@@ -4,21 +4,26 @@ import { CardElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import type { StripeCardElementOptions } from "@stripe/stripe-js";
 import { useState } from "react";
 
+import { STRIPE_ELEMENT_COLORS } from "@/lib/stripeElementColors";
+
 // Styles mirror the brand token system so the Stripe iframe blends in
-// with the rest of the hosted page.
+// with the rest of the hosted page. The colours come from the palette in
+// tailwind.config.ts via lib/stripeElementColors — the iframe is cross-origin
+// and cannot take a utility class, so this is the one place they arrive as
+// literal strings.
 const CARD_OPTIONS: StripeCardElementOptions = {
   style: {
     base: {
       fontSize: "15px",
-      color: "#111111",
+      color: STRIPE_ELEMENT_COLORS.text,
       fontFamily:
         "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-      "::placeholder": { color: "#6B6B6B" },
-      iconColor: "#51576A",
+      "::placeholder": { color: STRIPE_ELEMENT_COLORS.placeholder },
+      iconColor: STRIPE_ELEMENT_COLORS.icon,
     },
     invalid: {
-      color: "#b91c1c",
-      iconColor: "#b91c1c",
+      color: STRIPE_ELEMENT_COLORS.invalid,
+      iconColor: STRIPE_ELEMENT_COLORS.invalid,
     },
   },
 };
@@ -132,7 +137,7 @@ export function StripeCardSection({
         <button
           type="submit"
           disabled={disabled}
-          className="w-full rounded-none bg-[#C9AFFA] px-6 py-3.5 text-[15px] font-medium text-white transition hover:bg-[#BBA0F4] disabled:opacity-60"
+          className="w-full rounded-none bg-[#D6C8FB] px-6 py-3.5 text-[15px] font-medium text-white transition hover:bg-brand-lavender-hover disabled:opacity-60"
         >
           {submitting || busy ? "Setting up plan..." : ctaLabel}
         </button>

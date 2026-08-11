@@ -393,7 +393,7 @@ function Input({
       maxLength={maxLength}
       autoComplete={autoComplete}
       autoFocus={autoFocus}
-      className="w-full rounded-md border border-sand-200 bg-white px-3 py-2.5 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-violet focus:outline-none focus:shadow-[0_0_0_4px_rgba(90,27,181,0.10)]"
+      className="w-full rounded-md border border-sand-200 bg-white px-3 py-2.5 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-violet focus:outline-none focus:shadow-focus-ring"
     />
   );
 }

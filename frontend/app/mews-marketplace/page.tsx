@@ -76,7 +76,7 @@ export default function MewsMarketplaceListing() {
         {/* Listing header */}
         <section className="mt-7 flex flex-col gap-6 border-b border-[#E6E8EC] pb-10 md:flex-row md:items-start md:justify-between">
           <div className="flex gap-5">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#C9AFFA] px-2 text-center leading-none">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#D6C8FB] px-2 text-center leading-none">
               <BlissWordmark className="text-lg text-white" />
             </div>
             <div>
