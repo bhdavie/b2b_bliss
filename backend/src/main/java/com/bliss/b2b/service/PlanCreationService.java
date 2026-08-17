@@ -286,7 +286,8 @@ public class PlanCreationService {
         // endpoints. It never reaches the Stripe demo branch below.
         if (merchant.pmsType() == PmsType.MEWS) {
             return acceptForBookingMews(handle, booking, merchant,
-                    customerEmail, customerFirstName, customerLastName, requestedFrequency);
+                    customerEmail, customerFirstName, customerLastName, requestedFrequency,
+                    demoCard);
         }
         if (merchant.pmsType() == PmsType.CLOUDBEDS) {
             // Third rail recognized. End-to-end plan acceptance needs a vaulted
@@ -617,12 +618,22 @@ public class PlanCreationService {
 
     /**
      * Mews-rail counterpart of {@link #acceptForBooking}: creates the plan and
-     * schedule in {@code pending_card} status and stops there. No Stripe calls,
-     * no first charge, no card yet — the card is captured out-of-band by the
-     * Mews checkout endpoints, which then charge the first installment and flip
-     * the plan to {@code active}. The property must have a validated Mews
-     * connection. A placeholder {@code customer_cards} row satisfies the plan's
-     * NOT NULL {@code customer_card_id}; card-confirm fills in its Mews id.
+     * schedule. No Stripe calls, no first charge, no real card — the card is
+     * normally captured out-of-band by the Mews checkout endpoints, which then
+     * charge the first installment and flip the plan to {@code active}. The
+     * property must have a validated Mews connection. A placeholder
+     * {@code customer_cards} row satisfies the plan's NOT NULL
+     * {@code customer_card_id}; card-confirm fills in its Mews id.
+     *
+     * <p><b>DEMO OVERRIDE:</b> the plan is inserted {@code active} rather than
+     * {@code pending_card}, so the guest portal renders it as a normal plan with
+     * a schedule and a next payment instead of a card-pending stub. The
+     * placeholder card is accepted as-is and nothing is charged. Consequences
+     * while this is in place: {@code mews-card-confirm} rejects these plans with
+     * {@code plan_not_pending} (it requires {@code PENDING_CARD}), and the due
+     * charge sweep skips their installments because the placeholder has no
+     * {@code mews_credit_card_id}. Revert by restoring the
+     * {@code insertPendingMews} call and the {@code PENDING_CARD} return below.
      */
     private Outcome acceptForBookingMews(
             Handle handle,
@@ -631,7 +642,8 @@ public class PlanCreationService {
             String customerEmail,
             String customerFirstName,
             String customerLastName,
-            PlanFrequency requestedFrequency
+            PlanFrequency requestedFrequency,
+            DemoCard demoCard
     ) {
         boolean connected = handle.attach(MerchantMewsConnectionDao.class)
                 .findByMerchant(merchant.id())
@@ -680,8 +692,24 @@ public class PlanCreationService {
         // Placeholder card. stripe_payment_method_id is NOT NULL UNIQUE, so a
         // synthetic value stands in until card-confirm writes mews_credit_card_id
         // and the real masked metadata onto this same row.
+        //
+        // The masked metadata comes from the demo card fields the client already
+        // posts, resolved exactly as the demo branch resolves them, so the portal
+        // shows the digits the guest typed rather than 0000 / 01 / 2099. Absent
+        // fields fall back to the same 4242 / 12 / 2030 / visa the demo branch
+        // uses. Card-confirm still overwrites all of this with the real Mews
+        // masked values.
+        String placeholderLastFour = demoCard != null && demoCard.lastFour() != null
+                ? demoCard.lastFour() : "4242";
+        int placeholderExpMonth = demoCard != null && demoCard.expMonth() != null
+                ? demoCard.expMonth() : 12;
+        int placeholderExpYear = demoCard != null && demoCard.expYear() != null
+                ? demoCard.expYear() : 2030;
+        String placeholderBrand = demoCard != null && demoCard.brand() != null
+                ? demoCard.brand() : "visa";
         String placeholderPm = "mews_pending_" + UUID.randomUUID();
-        cardDao.insert(customer.id(), placeholderPm, "0000", 1, 2099, "card", true);
+        cardDao.insert(customer.id(), placeholderPm, placeholderLastFour,
+                placeholderExpMonth, placeholderExpYear, placeholderBrand, true);
         CustomerCard storedCard = cardDao.findByPaymentMethodId(placeholderPm).orElseThrow();
 
         long depositAmount = eligibility.depositAmountCents();
@@ -698,10 +726,13 @@ public class PlanCreationService {
         }
 
         long feeCents = feeFor(discountedTotal);
-        planDao.insertPendingMews(
+        // DEMO OVERRIDE: insert() writes status 'active'; insertPendingMews()
+        // wrote 'pending_card'. Same columns otherwise, and railFor(merchant) is
+        // 'mews' here, matching the rail the pending insert hardcoded.
+        planDao.insert(
                 booking.id(), customer.id(), storedCard.id(),
                 discountedTotal, installmentCount, option.frequency().wire(),
-                startDate, endDate, depositAmount, feeCents);
+                startDate, endDate, depositAmount, feeCents, railFor(merchant));
         PaymentPlan plan = planDao.findLatestForBooking(booking.id())
                 .orElseThrow(() -> new IllegalStateException("plan insert disappeared"));
 
@@ -715,9 +746,10 @@ public class PlanCreationService {
         }
 
         List<PaymentScheduleEntry> schedule = scheduleDao.listForPlan(plan.id());
-        // No charge, no intent id; the plan stays pending_card until card-confirm.
+        // No charge and no intent id: nothing was collected. DEMO OVERRIDE — the
+        // plan still reports active so the portal treats it as a live plan.
         return new Outcome(merchant, customer, booking, plan, schedule,
-                null, PaymentPlanStatus.PENDING_CARD.wire());
+                null, PaymentPlanStatus.ACTIVE.wire());
     }
 
     /** payment_rail written at plan creation; only Mews is a non-Stripe rail. */

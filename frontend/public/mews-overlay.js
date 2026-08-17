@@ -145,6 +145,45 @@
   var BLISS_FEE_RATE = 0.05;
 
   // =========================================================================
+  // PALETTE
+  //
+  // The current Bliss palette, and the ONLY place a colour is written in this
+  // file. Every rule in triggerCss and modalCss reads from here, so a palette
+  // change is an edit to this object and nothing else.
+  //
+  // Keys are the palette's own names rather than role names, so a value change
+  // here cannot leave a token called "lavender" holding something that is not
+  // lavender. What each one is used for is noted alongside it.
+  //
+  // Deliberately NOT the sampled host accent: the overlay is Bliss speaking
+  // inside the property's page, so it should read as ours rather than as
+  // another of the host's controls. Only the host FONT is still sampled, which
+  // is what keeps both surfaces sitting in the page's typography without
+  // borrowing its colour. See sampleHostTheme.
+  // =========================================================================
+  var BLISS_COLORS = {
+    // Accent: primary action, selected option border, focus ring, tick, wordmark.
+    amethyst: "#8B5CF6",
+    // Primary action, hover only.
+    amethystHover: "#7C4DEF",
+    tint40: "#D6C8FB",
+    // Selected option fill, and the RECOMMENDED chip fill.
+    wash: "#F3EEFE",
+    // Modal surface, and the unselected option fill.
+    bone: "#FDFCFB",
+    // Inset and secondary surfaces: the schedule box.
+    sunken: "#F6F4F1",
+    // Dividers, the header underline, and inactive borders.
+    hairline: "#E9E5E1",
+    // Primary text: headings, plan names, amounts.
+    ink: "#17131C",
+    // Secondary text (never a border; see hairline).
+    muted: "#6E6878",
+    // The label on the primary action, and the tick glyph on amethyst.
+    white: "#FFFFFF",
+  };
+
+  // =========================================================================
   // CONFIG — paste over this block per property.
   // =========================================================================
   var CONFIG = {
@@ -423,36 +462,11 @@
     merchantSlug: null,
 
     /**
-     * Bliss brand colours for the trigger line. Deliberately NOT the sampled
-     * host accent: the trigger is Bliss speaking inside the property's page,
-     * so it should read as ours rather than as another of the host's controls.
-     * The host font family is still inherited, so it sits in the page's
-     * typography without borrowing its colour.
-     *
-     * The modal keeps the sampled theme — it is a surface of its own and
-     * benefits from looking native to the distributor it covers.
-     *
-     * These are the settled Bliss palette: violet #5A1BB5 for the accent and
-     * the primary action, the warm sand ramp for dividers, and the ink ramp for
-     * type. The names say what the values are, so a value change here cannot
-     * leave a token called "lavender" holding a violet.
+     * Corner radii for the trigger line and the modal. Colour is not here: it
+     * lives in BLISS_COLORS at the top of this file, which is the single place
+     * a palette change is made.
      */
     brand: {
-      violet: "#5A1BB5", // accent: selected option, focus ring, tick, CTA fill
-      // The RECOMMENDED chip only. The palette's violet wash, opaque by
-      // definition rather than composited — an rgba fill or an opacity property
-      // would let the card behind it show through, and would drag the chip's
-      // ink text down with it. Violet sits on this at 8.25:1.
-      violetTint: "#F4EFFF",
-      ink: "#111112", // primary text
-      inkMuted: "#8A8A8F", // secondary text (never a border; see divider)
-      // Deep violet, one step down from `violet`. The primary action and the
-      // selected state are different levels and should not share a fill: the
-      // option border and the RECOMMENDED chip keep #5A1BB5.
-      ctaBg: "#3F0F87", // primary button background
-      onCta: "#ffffff", // primary button text, and the tick glyph on violet
-      surface: "#ffffff",
-      divider: "#E8E5E0", // dividers and inactive borders
       // Default corner for the smaller chrome: the schedule box, the chip and
       // the tick. Matches Freehand's own button radius; the sampled host radius
       // it replaced was producing pills on the option rows.
@@ -1290,6 +1304,15 @@
     invalid_input: "Pick your dates to see payment plan options.",
   };
 
+  // PLACEHOLDER. Deliberately shouty so it cannot be mistaken for shipped copy:
+  // the real plan terms have not been written yet, and inventing them here
+  // would put terms a guest could rely on onto a live booking page.
+  var PLAN_TERMS_LINES = [
+    "PLACEHOLDER LINE ONE",
+    "PLACEHOLDER LINE TWO",
+    "PLACEHOLDER LINE THREE",
+  ];
+
   // =========================================================================
   // OVERLAY
   //
@@ -1466,9 +1489,7 @@
   }
 
   function triggerCss(theme) {
-    var violet = CONFIG.brand.violet;
-    var ink = CONFIG.brand.ink;
-    var inkMuted = CONFIG.brand.inkMuted;
+    var c = BLISS_COLORS;
     var radius = CONFIG.brand.radius;
     return (
       baseCss(theme) +
@@ -1482,30 +1503,30 @@
       // line now takes a second row instead of being cut off. A button element
       // also needs its UA background and border explicitly cleared.
       ".trig{display:block;width:100%;margin:0;padding:0;background:none;border:0;" +
-      "border-radius:0;box-shadow:none;color:" + ink + ";font-size:12px;line-height:1.45;" +
+      "border-radius:0;box-shadow:none;color:" + c.ink + ";font-size:12px;line-height:1.45;" +
       "cursor:pointer;text-align:left;white-space:normal;overflow-wrap:break-word}" +
       ".trig:hover .amt{text-decoration:underline}" +
-      ".trig:focus-visible{outline:2px solid " + violet + ";outline-offset:2px}" +
-      // Glyph is white, not ink: the tick's fill moved from lavender to violet,
-      // and ink on violet is 2.03:1. White on violet is 9.3:1.
+      ".trig:focus-visible{outline:2px solid " + c.amethyst + ";outline-offset:2px}" +
+      // Glyph is white, not ink: white is the label colour on every amethyst
+      // fill, and the tick is a fill of exactly that kind.
       ".tick{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;" +
-      "border-radius:" + radius + ";background:" + violet + ";color:" + CONFIG.brand.onCta + ";font-size:10px;" +
+      "border-radius:" + radius + ";background:" + c.amethyst + ";color:" + c.white + ";font-size:10px;" +
       "margin-right:7px;vertical-align:middle}" +
       ".sep{margin:0 5px;opacity:.55}" +
       ".amt{font-weight:600}" +
       // Supporting line under the rate-card main line. display:block is what
       // puts it on its own row beneath the inline main line.
-      ".sub{display:block;margin-top:2px;font-size:11px;font-weight:400;color:" + inkMuted + "}" +
+      ".sub{display:block;margin-top:2px;font-size:11px;font-weight:400;color:" + c.muted + "}" +
       // Details step: "See details" reads as a link beneath the main line, not
       // as another button competing with the host's Next control.
       ".link{display:block;margin-top:3px;padding:0;background:none;border:0;font-size:11px;" +
-      "font-weight:600;color:" + ink + ";text-decoration:underline;cursor:pointer;text-align:left}" +
+      "font-weight:600;color:" + c.ink + ";text-decoration:underline;cursor:pointer;text-align:left}" +
       // Details block: right-aligned to sit under the "You'll pay later" line
       // rather than at the card's left edge. Declared AFTER .trig and .link so
       // it wins on order at equal specificity. Sets colour explicitly because
       // State A's container is not a .trig and would otherwise inherit the
       // initial black from :host{all:initial}.
-      ".details{text-align:right;color:" + ink + "}" +
+      ".details{text-align:right;color:" + c.ink + "}" +
       // text-align on .details cannot move this: .link is display:block, and
       // text-align only positions INLINE-level content. A <button> also uses
       // shrink-to-fit sizing even when block, so the box hugs its text and sits
@@ -1529,86 +1550,106 @@
    * Only `theme` for the FONT is still consulted (via baseCss), so the modal
    * sits in the page's typography while staying in Bliss colours.
    *
-   * The badges and the summary pill still sample: they sit inside the host's
-   * own layout and need its surface and hairline to look placed rather than
-   * pasted on. See triggerCss.
+   * The badges do not sample either: they take the same BLISS_COLORS palette,
+   * so the two surfaces cannot drift apart. See triggerCss.
    */
   function modalCss(theme) {
     var b = CONFIG.brand;
+    var c = BLISS_COLORS;
     return (
       baseCss(theme) +
       ".scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.44);" +
       "display:flex;align-items:center;justify-content:center;padding:16px}" +
-      ".bliss-card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:" + b.surface +
-      ";color:" + b.ink + ";border:1px solid " + b.divider + ";border-radius:" + b.radiusCard +
+      ".bliss-card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:" + c.bone +
+      ";color:" + c.ink + ";border:1px solid " + c.hairline + ";border-radius:" + b.radiusCard +
       ";box-shadow:0 18px 56px rgba(0,0,0,.32)}" +
       ".bliss-card:focus{outline:none}" +
-      ".head{display:flex;align-items:flex-start;gap:12px;padding:22px 24px;border-bottom:1px solid " + b.divider + "}" +
+      ".head{display:flex;align-items:flex-start;gap:12px;padding:22px 24px;border-bottom:1px solid " + c.hairline + "}" +
       ".head h2{font-size:17px;font-weight:600;line-height:1.3}" +
-      ".head p{font-size:13px;color:" + b.inkMuted + ";margin-top:4px;line-height:1.4}" +
-      ".x{margin-left:auto;background:none;border:0;cursor:pointer;font-size:20px;line-height:1;color:" + b.inkMuted + "}" +
+      ".head p{font-size:13px;color:" + c.muted + ";margin-top:4px;line-height:1.4}" +
+      ".x{margin-left:auto;background:none;border:0;cursor:pointer;font-size:20px;line-height:1;color:" + c.muted + "}" +
       ".body{padding:20px 24px 24px}" +
-      ".ctx{font-size:13px;color:" + b.inkMuted + ";margin-bottom:2px;line-height:1.5}" +
+      ".ctx{font-size:13px;color:" + c.muted + ";margin-bottom:2px;line-height:1.5}" +
       // Fine print under the summary line, tracking the step's basis.
-      ".fine{font-size:11px;color:" + b.inkMuted + ";margin-bottom:12px;line-height:1.4}" +
-      // Collapsed-by-default schedule disclosure.
+      ".fine{font-size:11px;color:" + c.muted + ";margin-bottom:12px;line-height:1.4}" +
+      // Collapsed-by-default disclosure header. Shared by the payment schedule
+      // and the plan terms, so the two read as one control repeated rather than
+      // as two different treatments.
       ".disc{display:block;width:100%;text-align:left;margin:2px 0 8px;padding:8px 0;background:none;" +
-      "border:0;border-top:1px solid " + b.divider + ";color:" + b.ink +
+      "border:0;border-top:1px solid " + c.hairline + ";color:" + c.ink +
       ";font-size:12px;font-weight:600;cursor:pointer}" +
-      ".sched{margin:0 0 12px;border:1px solid " + b.divider + ";border-radius:" + b.radius + "}" +
+      // The inset surfaces in the modal, so they take the sunken fill rather
+      // than the card's own bone.
+      ".sched{margin:0 0 12px;background:" + c.sunken + ";border:1px solid " + c.hairline +
+      ";border-radius:" + b.radius + "}" +
       ".sched .row{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12px;" +
-      "border-bottom:1px solid " + b.divider + "}" +
+      "border-bottom:1px solid " + c.hairline + "}" +
       ".sched .row:last-child{border-bottom:0}" +
-      ".sched .n{width:18px;color:" + b.inkMuted + "}" +
-      ".sched .d{color:" + b.ink + "}" +
-      ".sched .v{margin-left:auto;font-weight:600;color:" + b.ink + "}" +
+      ".sched .n{width:18px;color:" + c.muted + "}" +
+      ".sched .d{color:" + c.ink + "}" +
+      ".sched .v{margin-left:auto;font-weight:600;color:" + c.ink + "}" +
+      // Plan terms: the schedule box's own rules, at the row type size, in the
+      // muted ink the schedule uses for its secondary column. One line per row,
+      // so there is no .n/.d/.v split to mirror.
+      ".terms{margin:0 0 12px;background:" + c.sunken + ";border:1px solid " + c.hairline +
+      ";border-radius:" + b.radius + "}" +
+      ".terms .row{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12px;color:" + c.muted +
+      ";border-bottom:1px solid " + c.hairline + "}" +
+      ".terms .row:last-child{border-bottom:0}" +
       ".opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 12px;margin-bottom:8px;" +
-      "background:transparent;color:" + b.ink + ";border:1px solid " + b.divider +
+      "background:" + c.bone + ";color:" + c.ink + ";border:1px solid " + c.hairline +
       ";border-radius:" + b.radiusCard + ";cursor:pointer}" +
-      ".opt[aria-pressed=\"true\"]{border-color:" + b.violet + ";border-width:2px;padding:10px 11px}" +
+      ".opt[aria-pressed=\"true\"]{background:" + c.wash + ";border-color:" + c.amethyst +
+      ";border-width:2px;padding:10px 11px}" +
       ".opt .lbl{font-size:13px;font-weight:600}" +
-      ".opt .sub{font-size:11px;color:" + b.inkMuted + ";margin-top:2px}" +
+      ".opt .sub{font-size:11px;color:" + c.muted + ";margin-top:2px}" +
       ".opt .amt{margin-left:auto;text-align:right}" +
       ".opt .amt b{font-size:14px;font-weight:600;display:block}" +
-      ".opt .amt span{font-size:11px;color:" + b.inkMuted + "}" +
+      ".opt .amt span{font-size:11px;color:" + c.muted + "}" +
+      // The wash is opaque by definition rather than composited — an rgba fill
+      // or an opacity property would let the card behind it show through, and
+      // would drag the chip's ink text down with it.
       ".tag{display:inline-block;font-size:9px;letter-spacing:.4px;text-transform:uppercase;padding:2px 6px;" +
-      "border-radius:" + b.radius + ";background:" + b.violetTint +
-      ";border:1px solid " + b.violet + ";color:" + b.ink +
+      "border-radius:" + b.radius + ";background:" + c.wash +
+      ";border:1px solid " + c.amethyst + ";color:" + c.ink +
       ";margin-left:6px;vertical-align:middle}" +
-      ".cta{width:100%;padding:12px;border:0;border-radius:" + b.radiusPill + ";background:" + b.ctaBg +
-      ";color:" + b.onCta + ";font-size:13px;font-weight:600;cursor:pointer;margin-top:4px}" +
-      // Sand fill with muted ink, not a half-opacity violet: at .5 the pill
-      // composited to a pale lavender under white text, which is both a
-      // failing pair and a tint-only colour used as a fill.
-      ".cta[disabled]{background:" + b.divider + ";color:" + b.inkMuted + ";cursor:default}" +
-      ".note{font-size:11px;color:" + b.inkMuted + ";margin-top:10px;line-height:1.45}" +
-      ".msg{font-size:12px;color:" + b.inkMuted + ";line-height:1.5}" +
+      ".cta{width:100%;padding:12px;border:0;border-radius:" + b.radiusPill + ";background:" + c.amethyst +
+      ";color:" + c.white + ";font-size:13px;font-weight:600;cursor:pointer;margin-top:4px}" +
+      ".cta:hover{background:" + c.amethystHover + "}" +
+      // Hairline fill with muted ink, not a half-opacity accent: at .5 the pill
+      // composited to a pale tint under white text, which is both a failing
+      // pair and a tint-only colour used as a fill. Declared after .cta:hover,
+      // which it ties with on specificity, so a disabled pill cannot light up
+      // on hover.
+      ".cta[disabled]{background:" + c.hairline + ";color:" + c.muted + ";cursor:default}" +
+      ".note{font-size:11px;color:" + c.muted + ";margin-top:10px;line-height:1.45}" +
+      ".msg{font-size:12px;color:" + c.muted + ";line-height:1.5}" +
       // Sits where the button was: same top margin and vertical padding, so the
       // card does not resize when the button is swapped for it. Body copy in
       // the secondary ink, no chrome and no glyph.
       // The receipt's subject line. 14px matches the option row's amount, the
       // largest thing in the body it replaces.
-      ".plan{margin:2px 0 0;font-size:14px;font-weight:600;line-height:1.4;color:" + b.ink + "}" +
+      ".plan{margin:2px 0 0;font-size:14px;font-weight:600;line-height:1.4;color:" + c.ink + "}" +
       // Primary ink, and ruled off the disclaimer list above it with the same
       // hairline .disc uses above Payment schedule, so it reads as a change of
       // state rather than a fourth disclaimer.
-      ".confirmed{margin-top:4px;padding:12px 0;border-top:1px solid " + b.divider +
-      ";font-size:13px;line-height:1.45;color:" + b.ink + "}" +
+      ".confirmed{margin-top:4px;padding:12px 0;border-top:1px solid " + c.hairline +
+      ";font-size:13px;line-height:1.45;color:" + c.ink + "}" +
       // Text control, not a filled button: it is the quieter of the two actions
       // in the reopened state. UA button styling cleared explicitly.
       ".textbtn{display:block;width:100%;margin-top:10px;padding:6px 0;background:none;border:0;" +
-      "font-size:13px;line-height:1.45;color:" + b.inkMuted + ";cursor:pointer;text-align:center}" +
+      "font-size:13px;line-height:1.45;color:" + c.muted + ";cursor:pointer;text-align:center}" +
       ".textbtn:hover{text-decoration:underline}" +
       // Attribution footer, outside .body so it renders under both the receipt
       // and the picker. The body's own 24px bottom padding is the space above.
       ".pwr{padding:0 24px 20px;text-align:center;font-size:11px;font-weight:400;" +
-      "color:" + b.inkMuted + ";line-height:1.4}" +
+      "color:" + c.muted + ";line-height:1.4}" +
       // The wordmark treatment, named here because injected JS cannot reach
-      // components/BlissWordmark.tsx: ALWAYS Georgia bold, in violet. The
+      // components/BlissWordmark.tsx: ALWAYS Georgia bold, in amethyst. The
       // family must be stated explicitly — baseCss points everything at the
       // sampled host font, and this rule outranks that `*` selector. Keep these
       // three values in step with the port's `.pwr .wm` + BlissWordmark.
-      ".pwr .wm{font-family:Georgia,serif;font-weight:700;color:" + b.violet + "}" +
+      ".pwr .wm{font-family:Georgia,serif;font-weight:700;color:" + c.amethyst + "}" +
       // Below the phone breakpoint the modal becomes a bottom sheet.
       "@media (max-width:420px){.scrim{align-items:flex-end;padding:0}" +
       ".bliss-card{width:100%;max-width:100%;max-height:88vh;border-radius:" + b.radiusCard + " " + b.radiusCard + " 0 0}}"
@@ -1663,7 +1704,7 @@
     // Rate cards quote a per-night teaser off the card's own displayed price,
     // divided by the payment count that yields the SMALLEST per-payment figure
     // — biweekly where offered, otherwise whichever eligible option has the
-    // most payments. That is what makes the "From" claim truthful: no other
+    // most payments. That is what makes the teaser claim truthful: no other
     // cadence produces a lower number.
     //
     // The numerator is the scraped tax-exclusive nightly price, not
@@ -1680,7 +1721,7 @@
         }
       }
       var perNight = Math.round(t.scrapedNightlyCents / spread.numPayments);
-      return "From " + money(perNight, cur(t)) + "/night over time";
+      return "or " + money(perNight, cur(t)) + "/night over time";
     }
 
     var unit = opt.frequency === "monthly" ? "/mo" : " every 2 weeks";
@@ -2188,6 +2229,33 @@
       }
     }
 
+    // Plan terms, collapsed by default. Built as the schedule disclosure above
+    // is, down to the caret and the toggle, so the two are one pattern used
+    // twice. Its own flag, so opening either leaves the other as it was.
+    //
+    // Not gated on `chosen`, unlike the schedule: the terms describe the plan
+    // rather than the selected cadence, so they stay readable when the guest
+    // has deselected and the schedule has nothing to show.
+    body.appendChild(
+      h("button", {
+        class: "disc",
+        type: "button",
+        "aria-expanded": state.modal.termsOpen ? "true" : "false",
+        text: (state.modal.termsOpen ? "▾" : "▸") + "  Plan terms and conditions",
+        onClick: function () {
+          state.modal.termsOpen = !state.modal.termsOpen;
+          renderModal();
+        },
+      })
+    );
+    if (state.modal.termsOpen) {
+      var terms = h("div", { class: "terms" });
+      PLAN_TERMS_LINES.forEach(function (line) {
+        terms.appendChild(h("div", { class: "row", text: line }));
+      });
+      body.appendChild(terms);
+    }
+
     // State 1 tail: the action, then the note. The confirmed states never reach
     // here — they return a receipt body above.
     body.appendChild(
@@ -2207,7 +2275,7 @@
       })
     );
     body.appendChild(
-      h("div", { class: "note", text: "No card needed here. You will finish checkout the usual way." })
+      h("div", { class: "note", text: "Choose your plan and finish checkout as usual." })
     );
 
     mountModalCard(h, head, body);

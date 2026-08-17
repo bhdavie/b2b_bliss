@@ -31,6 +31,11 @@ import {
 import { BlissWordmark } from "@/components/BlissWordmark";
 import { DEMO_HOTEL } from "@/lib/mewsDemo";
 
+// Guest-facing property name. Only ever rendered to the screen. Every backend
+// use of DEMO_HOTEL (slug, email, the fields sent to updateMerchant) still
+// identifies the demo merchant record and must not be swapped for this.
+const AYRES_DISPLAY_NAME = "Ayres Hotel Anaheim";
+
 // Guest-facing sample booking site for the Marbrook House demo merchant.
 // This is a neutral boutique-hotel funnel (room + rate -> your stay -> checkout)
 // modeled on a SynXis-style direct booking flow. The whole payment flow happens
@@ -45,10 +50,10 @@ const DEFAULT_CHECKOUT_ISO = "2026-09-13";
 const DEFAULT_ADULTS = 2;
 const DEFAULT_CHILDREN = 0;
 
-// New York lodging occupancy tax, charged on the room subtotal.
-const OCCUPANCY_TAX_RATE = 0.08875;
-// Flat house destination fee, per night.
-const DESTINATION_FEE_PER_NIGHT_CENTS = 3000;
+// Anaheim transient occupancy tax, charged on the room subtotal.
+const OCCUPANCY_TAX_RATE = 0.15;
+// Ayres charges no destination fee. At 0 the fee rows do not render at all.
+const DESTINATION_FEE_PER_NIGHT_CENTS = 0;
 
 // --- Date helpers (local-time, no library) ---
 function parseIso(iso: string): Date {
@@ -145,7 +150,8 @@ const RATES: Rate[] = [
     id: "advance",
     name: "Advance purchase rate",
     detail: "Pay in full to lock in the lowest rate. Non-refundable.",
-    nightlyCents: 38500,
+    nightlyCents: 17900,
+    strikeCents: 19900,
     // Temporary alignment with the Bliss installment policy so the page never
     // shows two contradicting cancellation statements. Per-hotel policies come
     // later.
@@ -153,9 +159,9 @@ const RATES: Rate[] = [
   },
   {
     id: "flexible",
-    name: "Best flexible rate",
+    name: "Best available rate",
     detail: "Free cancellation up to 48 hours before arrival.",
-    nightlyCents: 42900,
+    nightlyCents: 19900,
     cancellationPolicy: "Free cancellation up to 48 hours before check-in.",
   },
 ];
@@ -192,23 +198,21 @@ const ALL_RATE_IDS = RATES.map((r) => r.id);
 
 const ROOM_CATEGORIES: RoomCategory[] = [
   {
-    id: "king-terrace",
-    // Marbrook's original single room. Name, description and specs are the
-    // former ROOM constant's strings, verbatim.
-    name: "King with Terrace",
+    id: "king",
+    name: "King Room",
     description:
-      "A corner room with a private terrace overlooking the courtyard gardens. Soaking tub, walk-in rain shower, and a writing nook framed by tall windows.",
-    specs: "1 King bed · Sleeps 2 · 260 sq ft",
+      "A quiet room with a king bed, sitting area, and a work desk by the window. Complimentary full breakfast and parking included.",
+    specs: "1 King bed · Sleeps 2 · 435 sq ft",
     sleeps: 2,
     rateIds: ALL_RATE_IDS,
     fromPriceCents: lowestNightlyCents(ALL_RATE_IDS),
   },
   {
-    id: "garden-double",
-    name: "Garden Double",
+    id: "double-queen",
+    name: "Two Queen Beds",
     description:
-      "A ground-floor room opening onto the walled garden. Two double beds, a wet room, and a seating corner by the window.",
-    specs: "2 Double beds · Sleeps 4",
+      "A larger room with two queen beds, a microwave and refrigerator, and a seating corner. Complimentary full breakfast and parking included.",
+    specs: "2 Queen beds · Sleeps 4 · 435 sq ft",
     sleeps: 4,
     rateIds: ALL_RATE_IDS,
     fromPriceCents: lowestNightlyCents(ALL_RATE_IDS),
@@ -495,7 +499,7 @@ type CardFieldState = {
   setCardName: (v: string) => void;
 };
 
-export default function MarbrookHousePage() {
+export default function AyresHotelPage() {
   // Opens on Dates, step 1, as the real Distributor does.
   const [step, setStep] = useState<Step>("dates");
   const [rateId, setRateId] = useState<string | null>(null);
@@ -1160,18 +1164,15 @@ function DistributorToolbar() {
             className="distributor-property-logo flex items-center text-[#23262e]"
             aria-hidden="true"
           >
-            <span
-              className="text-4xl leading-none"
-              style={{ fontFamily: "var(--font-caveat), cursive", fontWeight: 700 }}
-            >
-              MH
-            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element -- plain
+                <img> to match the decoration nodes elsewhere in this funnel. */}
+            <img src="/ayres-logo.png" alt="" className="h-10 w-auto" />
           </div>
           <div
             data-mds-element="true"
             className="distributor-property-name font-serif text-xl leading-tight tracking-tight text-[#23262e]"
           >
-            {DEMO_HOTEL.businessName}
+            {AYRES_DISPLAY_NAME}
           </div>
         </div>
 
@@ -1347,7 +1348,7 @@ function DistributorStepper({
                         data-mds-element="true"
                         className={
                           filled
-                            ? "distributor-step-number flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[#1A56DB] text-[15px] font-medium tabular-nums text-white"
+                            ? "distributor-step-number flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[#1B3A6B] text-[15px] font-medium tabular-nums text-white"
                             : "distributor-step-number block h-[10px] w-[10px] rounded-full border-2 border-[#C8CCD2] bg-white"
                         }
                       >
@@ -1491,14 +1492,16 @@ function DatesView({
         data-mds-element="true"
         ref={heroRef}
         className="dates-decoration-image relative w-full"
-        style={{ height: heroHeight }}
+        // Solid ground under the photo so a missing file reads as a deliberate
+        // dark panel rather than a broken white block.
+        style={{ height: heroHeight, backgroundColor: "#1B3A6B" }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- the capture's
             decoration node is a plain <img>; next/image would wrap it. */}
         <img
           sizes="100vw"
           data-mds-element="true"
-          src="/hud_valley_pic.jpg"
+          src="/ayres-hero.jpg"
           alt=""
           className="absolute inset-0 h-full w-full object-cover"
         />
@@ -1538,7 +1541,7 @@ function DatesView({
                 aria-label="Next"
                 type="submit"
                 data-mds-element="true"
-                className="mt-[20px] h-[46px] w-full rounded-[6px] bg-[#1A56DB] text-[16px] font-medium text-white"
+                className="mt-[20px] h-[46px] w-full rounded-[6px] bg-[#1B3A6B] text-[16px] font-medium text-white"
                 onClick={onNext}
               >
                 <span data-test-textkey="Next" data-non-sensitive="true">
@@ -1649,7 +1652,7 @@ function DatesOccupancyHeader({
     <div
       data-test-id="dates-occupancy-header"
       data-mds-element="true"
-      className="mt-5 rounded-[8px] border border-[#1A56DB] bg-white p-5"
+      className="mt-5 rounded-[8px] border border-[#1B3A6B] bg-white p-5"
     >
       <div
         data-mds-element="true"
@@ -1731,7 +1734,7 @@ function DatesOccupancyHeader({
         <button
           type="submit"
           data-mds-element="true"
-          className="shrink-0 border border-[#1A56DB] px-5 py-2 text-sm text-[#1A56DB]"
+          className="shrink-0 border border-[#1B3A6B] px-5 py-2 text-sm text-[#1B3A6B]"
           onClick={onEdit}
         >
           <span data-test-textkey="Edit" data-non-sensitive="true">
@@ -1756,7 +1759,7 @@ function CategoryCard({
     <div
       data-test-id="category-card"
       data-mds-element="true"
-      className="flex h-full flex-col overflow-hidden rounded-[8px] border border-[#1A56DB] bg-white"
+      className="flex h-full flex-col overflow-hidden rounded-[8px] border border-[#1B3A6B] bg-white"
     >
       <div data-mds-element="true" className="flex h-full flex-col">
         <RoomPhoto categoryName={category.name} />
@@ -1875,7 +1878,7 @@ function CategoryCard({
               type="button"
               aria-label="Show rates"
               data-mds-element="true"
-              className="shrink-0 bg-[#1A56DB] px-6 py-2.5 text-sm font-medium text-white transition hover:bg-[#1545B0]"
+              className="shrink-0 bg-[#1B3A6B] px-6 py-2.5 text-sm font-medium text-white transition hover:bg-[#14294B]"
               onClick={() => onSelect(category.id)}
             >
               <span data-test-textkey="ShowRates" data-non-sensitive="true">
@@ -2099,13 +2102,13 @@ function DateRangeCalendar({
   const rangeHi = end ?? start;
 
   return (
-    <div className="mt-2 w-full max-w-sm rounded-none border border-[#1A56DB] bg-white p-4 shadow-md">
+    <div className="mt-2 w-full max-w-sm rounded-none border border-[#1B3A6B] bg-white p-4 shadow-md">
       <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={() => shiftMonth(-1)}
           aria-label="Previous month"
-          className="px-2 py-1 text-[#1A56DB] hover:bg-[#1A56DB]/5"
+          className="px-2 py-1 text-[#1B3A6B] hover:bg-[#1B3A6B]/5"
         >
           ‹
         </button>
@@ -2114,7 +2117,7 @@ function DateRangeCalendar({
           type="button"
           onClick={() => shiftMonth(1)}
           aria-label="Next month"
-          className="px-2 py-1 text-[#1A56DB] hover:bg-[#1A56DB]/5"
+          className="px-2 py-1 text-[#1B3A6B] hover:bg-[#1B3A6B]/5"
         >
           ›
         </button>
@@ -2137,10 +2140,10 @@ function DateRangeCalendar({
               onClick={() => onPick(iso)}
               className={`h-9 text-sm transition-colors ${
                 isEndpoint
-                  ? "bg-[#1A56DB] text-white"
+                  ? "bg-[#1B3A6B] text-white"
                   : inRange
-                    ? "bg-[#1A56DB]/15 text-[#23262e]"
-                    : "text-[#23262e] hover:bg-[#1A56DB]/10"
+                    ? "bg-[#1B3A6B]/15 text-[#23262e]"
+                    : "text-[#23262e] hover:bg-[#1B3A6B]/10"
               }`}
             >
               {day}
@@ -2152,7 +2155,7 @@ function DateRangeCalendar({
         <button
           type="button"
           onClick={onClose}
-          className="text-xs font-medium text-[#1A56DB] hover:underline"
+          className="text-xs font-medium text-[#1B3A6B] hover:underline"
         >
           Done
         </button>
@@ -2174,7 +2177,7 @@ function GuestsEditor({
   onClose: () => void;
 }) {
   return (
-    <div className="mt-2 w-full max-w-xs rounded-none border border-[#1A56DB] bg-white p-4 shadow-md">
+    <div className="mt-2 w-full max-w-xs rounded-none border border-[#1B3A6B] bg-white p-4 shadow-md">
       <Stepper
         label="Adults"
         value={adults}
@@ -2193,7 +2196,7 @@ function GuestsEditor({
         <button
           type="button"
           onClick={onClose}
-          className="text-xs font-medium text-[#1A56DB] hover:underline"
+          className="text-xs font-medium text-[#1B3A6B] hover:underline"
         >
           Done
         </button>
@@ -2222,7 +2225,7 @@ function Stepper({
           aria-label={`Decrease ${label.toLowerCase()}`}
           onClick={() => onChange(Math.max(min, value - 1))}
           disabled={value <= min}
-          className="h-8 w-8 border border-[#1A56DB] text-[#1A56DB] transition-colors hover:bg-[#1A56DB]/5 disabled:cursor-not-allowed disabled:opacity-40"
+          className="h-8 w-8 border border-[#1B3A6B] text-[#1B3A6B] transition-colors hover:bg-[#1B3A6B]/5 disabled:cursor-not-allowed disabled:opacity-40"
         >
           -
         </button>
@@ -2233,7 +2236,7 @@ function Stepper({
           type="button"
           aria-label={`Increase ${label.toLowerCase()}`}
           onClick={() => onChange(value + 1)}
-          className="h-8 w-8 border border-[#1A56DB] text-[#1A56DB] transition-colors hover:bg-[#1A56DB]/5"
+          className="h-8 w-8 border border-[#1B3A6B] text-[#1B3A6B] transition-colors hover:bg-[#1B3A6B]/5"
         >
           +
         </button>
@@ -2370,7 +2373,7 @@ function RatesView({
                 SPEC 3.1 notes — there is no per-card Card wrapper. */}
             <div
               data-mds-element="true"
-              className="overflow-hidden rounded-[8px] border border-[#1A56DB] bg-white"
+              className="overflow-hidden rounded-[8px] border border-[#1B3A6B] bg-white"
             >
               <ul data-mds-element="true" className="divide-y divide-[#23262e]/12">
                 {rates.map((r) => (
@@ -2405,7 +2408,7 @@ function CategoryDetailCard({ category }: { category: RoomCategory }) {
     <div
       data-test-id="category-detail-card"
       data-mds-element="true"
-      className="mt-6 rounded-[8px] border border-[#1A56DB] bg-white"
+      className="mt-6 rounded-[8px] border border-[#1B3A6B] bg-white"
     >
       <div
         data-mds-element="true"
@@ -2490,7 +2493,7 @@ function RateItem({
       data-test-id="rate-item"
       data-mds-element="true"
       className={`flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between ${
-        selected ? "bg-[#1A56DB]/5" : "bg-white"
+        selected ? "bg-[#1B3A6B]/5" : "bg-white"
       }`}
     >
       <div className="min-w-0 sm:self-start">
@@ -2596,7 +2599,7 @@ function RateItem({
           type="button"
           aria-label="Book"
           data-mds-element="true"
-          className="rounded-none bg-[#1A56DB] px-6 py-2.5 text-sm font-medium text-white transition hover:bg-[#1545B0]"
+          className="rounded-none bg-[#1B3A6B] px-6 py-2.5 text-sm font-medium text-white transition hover:bg-[#14294B]"
           onClick={() => onSelect(rate.id)}
         >
           {/* Capture renders AddRoom as "Book now"; Marbrook's existing CTA
@@ -2761,7 +2764,7 @@ function BlissTeaser({
   // reconcile with the modal.
   const line =
     spread != null
-      ? "or " +
+      ? "From " +
         perNightInstallmentLabel(nightlyCents, spread.numPayments) +
         "/night over time"
       : null;
@@ -2786,7 +2789,7 @@ function BlissTeaser({
   // deliberate divergence from the overlay's phrasing at :1670-1671.
   const detailsLine =
     detailsPerNight != null
-      ? "or " + formatUsd(detailsPerNight) + "/night over time"
+      ? "From " + formatUsd(detailsPerNight) + "/night over time"
       : null;
 
   const openModal = (e: React.MouseEvent) => {
@@ -3234,7 +3237,7 @@ function SummaryView({
       <button
         type="button"
         onClick={onBack}
-        className="text-sm text-[#1A56DB] underline-offset-2 hover:underline"
+        className="text-sm text-[#1B3A6B] underline-offset-2 hover:underline"
       >
         ← Back to rooms
       </button>
@@ -3252,7 +3255,7 @@ function SummaryView({
       <div
         data-test-id="summary-reservation-card"
         data-mds-element="true"
-        className="mt-5 overflow-hidden rounded-[8px] border border-[#1A56DB] bg-white"
+        className="mt-5 overflow-hidden rounded-[8px] border border-[#1B3A6B] bg-white"
       >
         <div className="flex gap-5 p-5">
           {/* 2a. The carousel is omitted; the single RoomPhoto stands in, as on
@@ -3398,15 +3401,18 @@ function SummaryView({
           </div>
 
           {/* Destination fee. A fee, not a tax, so it carries no tax-rate
-              marker and sits outside the Taxes disclosure. */}
-          <div className="mt-2 flex items-baseline justify-between gap-3 text-[#23262e]/80">
-            <span>Destination fee ($30/night)</span>
-            <span className="tabular-nums">
-              <span dir="ltr" data-test-id="localizedCurrency">
-                {formatUsd(pricing.destinationFeeCents)}
+              marker and sits outside the Taxes disclosure. Ayres charges none,
+              so the row is suppressed rather than printed as $0.00. */}
+          {DESTINATION_FEE_PER_NIGHT_CENTS > 0 ? (
+            <div className="mt-2 flex items-baseline justify-between gap-3 text-[#23262e]/80">
+              <span>Destination fee ($30/night)</span>
+              <span className="tabular-nums">
+                <span dir="ltr" data-test-id="localizedCurrency">
+                  {formatUsd(pricing.destinationFeeCents)}
+                </span>
               </span>
-            </span>
-          </div>
+            </div>
+          ) : null}
 
           {/* 6. */}
           <div
@@ -3441,7 +3447,7 @@ function SummaryView({
               data-mds-element="true"
               className="text-xs text-[#23262e]/55"
             >
-              Occupancy tax (8.875%)
+              Occupancy tax (15%)
             </div>
             <div data-mds-element="true" className="text-xs tabular-nums text-[#23262e]/55">
               {formatUsd(pricing.occupancyTaxCents)}
@@ -3504,7 +3510,7 @@ function SummaryView({
           aria-label="Checkout"
           type="submit"
           data-mds-element="true"
-          className="rounded-none bg-[#1A56DB] px-8 py-3 text-sm font-medium text-white transition hover:bg-[#1545B0]"
+          className="rounded-none bg-[#1B3A6B] px-8 py-3 text-sm font-medium text-white transition hover:bg-[#14294B]"
           onClick={onCheckout}
         >
           <span data-test-textkey="Continue" data-non-sensitive="true">
@@ -3642,7 +3648,7 @@ function CheckoutStep(props: {
       <button
         type="button"
         onClick={onBack}
-        className="text-sm text-[#1A56DB] underline-offset-2 hover:underline"
+        className="text-sm text-[#1B3A6B] underline-offset-2 hover:underline"
       >
         ← Back to your stay
       </button>
@@ -3666,7 +3672,7 @@ function CheckoutStep(props: {
           data-test-id="enable-booker"
           type="submit"
           data-mds-element="true"
-          className="text-[#1A56DB] underline-offset-2 hover:underline"
+          className="text-[#1B3A6B] underline-offset-2 hover:underline"
         >
           <span data-test-textkey="BookerEnabled" data-non-sensitive="true">
             I&apos;m booking for someone else
@@ -3675,7 +3681,7 @@ function CheckoutStep(props: {
       </div>
 
       {/* Contact info */}
-      <div className="mt-5 rounded-[8px] border border-[#1A56DB] bg-white p-6">
+      <div className="mt-5 rounded-[8px] border border-[#1B3A6B] bg-white p-6">
         <h3
           data-test-id="checkout-your-details-heading"
           data-mds-element="true"
@@ -3872,7 +3878,7 @@ function CheckoutStep(props: {
       </div>
 
       {/* Payment */}
-      <div className="mt-5 rounded-[8px] border border-[#1A56DB] bg-white p-6">
+      <div className="mt-5 rounded-[8px] border border-[#1B3A6B] bg-white p-6">
         <h2
           data-test-id="checkout-payment-heading"
           data-mds-element="true"
@@ -3923,30 +3929,38 @@ function CheckoutStep(props: {
               {formatUsd(rate.nightlyCents)} × {nights} nights
             </div>
 
-            <button
-              data-test-id="toggle-expandable-box"
-              type="button"
-              data-mds-element="true"
-              className="mt-3 text-[#23262e]/80"
-            >
-              <span data-test-textkey="ProductsAndExtras" data-non-sensitive="true">
-                Products and extras
-              </span>
-            </button>
-            <div className="mt-1 flex items-baseline justify-between gap-3">
-              <div
-                data-test-id="product"
-                data-mds-element="true"
-                className="text-xs text-[#23262e]/55"
-              >
-                Destination fee ($30/night)
-              </div>
-              <div className="text-xs tabular-nums text-[#23262e]/55">
-                <span dir="ltr" data-test-id="localizedCurrency">
-                  {formatUsd(pricing.destinationFeeCents)}
-                </span>
-              </div>
-            </div>
+            {/* The destination fee is the ONLY Products-and-extras row, so the
+                section heading is guarded with it: at a 0 fee, keeping the
+                heading would leave "Products and extras" standing over an
+                empty section. */}
+            {DESTINATION_FEE_PER_NIGHT_CENTS > 0 ? (
+              <>
+                <button
+                  data-test-id="toggle-expandable-box"
+                  type="button"
+                  data-mds-element="true"
+                  className="mt-3 text-[#23262e]/80"
+                >
+                  <span data-test-textkey="ProductsAndExtras" data-non-sensitive="true">
+                    Products and extras
+                  </span>
+                </button>
+                <div className="mt-1 flex items-baseline justify-between gap-3">
+                  <div
+                    data-test-id="product"
+                    data-mds-element="true"
+                    className="text-xs text-[#23262e]/55"
+                  >
+                    Destination fee ($30/night)
+                  </div>
+                  <div className="text-xs tabular-nums text-[#23262e]/55">
+                    <span dir="ltr" data-test-id="localizedCurrency">
+                      {formatUsd(pricing.destinationFeeCents)}
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : null}
 
             <div
               data-test-divider="true"
@@ -3978,7 +3992,7 @@ function CheckoutStep(props: {
                 data-mds-element="true"
                 className="text-xs text-[#23262e]/55"
               >
-                Occupancy tax (8.875%)
+                Occupancy tax (15%)
               </div>
               <div className="text-xs tabular-nums text-[#23262e]/55">
                 {formatUsd(pricing.occupancyTaxCents)}
@@ -4113,7 +4127,7 @@ function CheckoutStep(props: {
               data-non-sensitive="true"
             >
               I&apos;d like to occasionally receive marketing emails from{" "}
-              {DEMO_HOTEL.businessName}.
+              {AYRES_DISPLAY_NAME}.
             </span>{" "}
             <span data-test-textkey="PropertyPrivacyPolicySentence" data-non-sensitive="true">
               Please see our
@@ -4149,7 +4163,7 @@ function CheckoutStep(props: {
         // booking engine, so it does not take a Bliss colour to signal the
         // payment method — the Bliss block above it already does that. It has
         // held both a lavender and a violet fill here; both were wrong.
-        className="mt-5 w-full rounded-none bg-[#1A56DB] px-6 py-3.5 text-center text-sm font-medium text-white transition hover:bg-[#1545B0] disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-5 w-full rounded-none bg-[#1B3A6B] px-6 py-3.5 text-center text-sm font-medium text-white transition hover:bg-[#14294B] disabled:cursor-not-allowed disabled:opacity-60"
       >
         <span data-test-textkey="Confirm" data-non-sensitive="true">
           {bookLabel}
@@ -4157,7 +4171,7 @@ function CheckoutStep(props: {
       </button>
 
       {/* Policies (below the payment CTA so it's consistent across methods). */}
-      <div className="mt-5 rounded-[8px] border border-[#1A56DB] bg-white p-6">
+      <div className="mt-5 rounded-[8px] border border-[#1B3A6B] bg-white p-6">
         <h2 className="font-serif text-lg text-[#23262e]">Policies</h2>
         <div className="mt-4 space-y-3 text-sm text-[#23262e]/75">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -4174,7 +4188,7 @@ function CheckoutStep(props: {
 }
 
 const hotelInputClass =
-  "w-full rounded-none border border-[#23262e]/20 bg-white px-3 py-2.5 text-sm text-[#23262e] focus:border-[#1A56DB] focus:outline-none";
+  "w-full rounded-none border border-[#23262e]/20 bg-white px-3 py-2.5 text-sm text-[#23262e] focus:border-[#1B3A6B] focus:outline-none";
 
 // `field`, `name` and `textKey` are the capture's markers
 // (05-details.html: div[data-test-field] > label#<name>-label > span[data-test-textkey]).
@@ -4261,7 +4275,7 @@ function CardFields({
   } = fields;
   const shell =
     tone === "hotel"
-      ? "border border-[#1A56DB] bg-white"
+      ? "border border-[#1B3A6B] bg-white"
       : "border border-[#23262e]/12 bg-white";
   return (
     <div className={`space-y-3 rounded-none ${shell} p-4`}>
@@ -4390,7 +4404,7 @@ function BookedPanel({
 }) {
   return (
     <section>
-      <div className="rounded-[8px] border border-[#1A56DB] bg-white p-6">
+      <div className="rounded-[8px] border border-[#1B3A6B] bg-white p-6">
         <h1 className="font-serif text-3xl tracking-tight text-[#23262e]">
           You are booked
         </h1>
@@ -4489,7 +4503,7 @@ function PricePanel({
   guestChildren: number;
 }) {
   return (
-    <div className="rounded-[8px] border border-[#1A56DB] bg-white p-5">
+    <div className="rounded-[8px] border border-[#1B3A6B] bg-white p-5">
       <div className="text-[11px] uppercase tracking-[0.18em] text-[#23262e]/50">
         Your stay
       </div>
@@ -4536,13 +4550,15 @@ function PriceLines({
           value={formatUsd(pricing.roomSubtotalCents)}
         />
         <Line
-          label="Occupancy tax (8.875%)"
+          label="Occupancy tax (15%)"
           value={formatUsd(pricing.occupancyTaxCents)}
         />
-        <Line
-          label="Destination fee ($30/night)"
-          value={formatUsd(pricing.destinationFeeCents)}
-        />
+        {DESTINATION_FEE_PER_NIGHT_CENTS > 0 ? (
+          <Line
+            label="Destination fee ($30/night)"
+            value={formatUsd(pricing.destinationFeeCents)}
+          />
+        ) : null}
       </div>
       <div className="mt-3 flex items-baseline justify-between border-t border-[#23262e]/10 pt-3">
         <span className="font-serif text-base text-[#23262e]">Total</span>
@@ -4574,7 +4590,7 @@ function RoomPhoto({
   compact?: boolean;
 }) {
   // Gradient base shows as a tasteful placeholder. If a real photo exists at
-  // frontend/public/marbrook-room.jpg it loads as a cover image on top of the
+  // frontend/public/ayres-room.jpg it loads as a cover image on top of the
   // gradient; if the file is absent the layer is transparent and the gradient
   // remains. Drop a photo at that path to upgrade the hero with no code change.
   return (
@@ -4587,7 +4603,7 @@ function RoomPhoto({
       <div className="absolute inset-0 opacity-40 [background-image:radial-gradient(circle_at_25%_30%,rgba(255,255,255,0.6),transparent_45%),radial-gradient(circle_at_80%_70%,rgba(35,38,46,0.18),transparent_50%)]" />
       <div
         className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: "url(/marbrook-room.jpg)" }}
+        style={{ backgroundImage: "url(/ayres-room.jpg)" }}
       />
       {!compact ? (
         <span className="absolute bottom-3 right-4 rounded-none bg-black/25 px-2 py-0.5 text-[11px] uppercase tracking-[0.2em] text-white/90">

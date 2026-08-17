@@ -25,8 +25,8 @@ import { SectionHeading } from "@/components/ui/primitives";
  */
 export function UpdateCardSection({
   token,
-  stripeConfigured,
-  stripePublishableKey,
+  stripeConfigured: _stripeConfigured,
+  stripePublishableKey: _stripePublishableKey,
   onReplaced,
   variant = "inline",
 }: {
@@ -80,13 +80,6 @@ export function UpdateCardSection({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
-    if (stripeConfigured && stripePublishableKey) {
-      setError(
-        "Card update via Stripe Elements is not yet wired in this build. Disable Stripe or update through the merchant.",
-      );
-      return;
-    }
 
     const digits = cardNumber.replace(/\D+/g, "");
     const lastFour = digits.slice(-4).padStart(4, "0");
