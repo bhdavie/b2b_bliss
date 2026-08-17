@@ -134,6 +134,48 @@
   };
 
   // =========================================================================
+  // PALETTE
+  //
+  // The current Bliss palette, ported verbatim from mews-overlay.js, which is
+  // the source of truth for the modal. Every colour in modalCss reads from
+  // here, so a palette change is an edit to this object and nothing else.
+  //
+  // Keys are the palette's own names rather than role names, so a value change
+  // here cannot leave a token called "lavender" holding something that is not
+  // lavender. What each one is used for is noted alongside it.
+  //
+  // Deliberately NOT the sampled host accent: the overlay is Bliss speaking
+  // inside the property's page, so it should read as ours rather than as
+  // another of the host's controls. Only the host FONT is still sampled, which
+  // is what keeps both surfaces sitting in the page's typography without
+  // borrowing its colour. See sampleHostTheme.
+  //
+  // CONFIG.brand below still carries the trigger line's own colours, which are
+  // Ayres-specific and are not part of this port.
+  // =========================================================================
+  var BLISS_COLORS = {
+    // Accent: primary action, selected option border, focus ring, tick, wordmark.
+    amethyst: "#8B5CF6",
+    // Primary action, hover only.
+    amethystHover: "#7C4DEF",
+    tint40: "#D6C8FB",
+    // Selected option fill, and the RECOMMENDED chip fill.
+    wash: "#F3EEFE",
+    // Modal surface, and the unselected option fill.
+    bone: "#FDFCFB",
+    // Inset and secondary surfaces: the schedule box.
+    sunken: "#F6F4F1",
+    // Dividers, the header underline, and inactive borders.
+    hairline: "#E9E5E1",
+    // Primary text: headings, plan names, amounts.
+    ink: "#17131C",
+    // Secondary text (never a border; see hairline).
+    muted: "#6E6878",
+    // The label on the primary action, and the tick glyph on amethyst.
+    white: "#FFFFFF",
+  };
+
+  // =========================================================================
   // CONFIG
   // =========================================================================
   var CONFIG = {
@@ -293,10 +335,108 @@
      * switches to "Tax and processing fee included" for this trigger.
      */
     detailsStep: {
-      /** The total row's label. Also what the amount scan splits on. */
+      /**
+       * PRIMARY ANCHOR. The custom element that renders the laid-out total, by
+       * element name rather than by text.
+       *
+       * Text discovery is wrong for this page, which is why the block used to
+       * mount into nothing. The phrase "Total Reservation" appears ONLY inside
+       * the collapsed cart panel, and every node in that panel measures 0x0,
+       * self and children. The block therefore landed in a subtree with no
+       * layout, and verifyDetailsPlacement's four-level climb could never get
+       * out of it.
+       *
+       * The total the guest actually sees is <ibe-ct-small-rate> reading
+       * "$ 924.91", inside a 742x30 flex row whose text is "Total", inside a
+       * 742x100 block, with real layout the rest of the way up through the
+       * Payment Details section.
+       *
+       * Passed straight to deepQueryAll, so a selector works as well as a bare
+       * tag name if this ever needs narrowing.
+       */
+      totalElementSelector: "ibe-ct-small-rate",
+
+      /**
+       * PLACEMENT TARGETS, independent of the amount anchor, tried in order.
+       *
+       * The two were the same node until recently, and that is why the block
+       * kept landing beside the total instead of where it belongs. The amount
+       * lives in <ibe-ct-small-rate> inside div.ibe-cn-checkout-page-card; the
+       * block belongs at the top of the payment section, above the card brand
+       * logos, below the Travel Protection panel.
+       *
+       * Captured structure, all light DOM with real layout:
+       *
+       *   div.ibe-cn-checkout-page-card
+       *     ... Travel Protection panel ...
+       *     div.payment-details
+       *       <- we go HERE, before the card fields
+       *       div.col.payment-details-b...    (logos, Name on Card, Number, Expiry)
+       *       div.consent-total-wrapper
+       *         div.consent-wrapper
+       *           amadeus-hos-res-ct-checkbox (742x26)
+       *
+       * Each entry is {selector, mode}. Every candidate is resolved with
+       * deepQueryAll and required to have a box, same as the amount anchor, so
+       * an unlaid-out or hidden match is never chosen. First laid-out hit wins;
+       * if no entry resolves, findDetailsPlacement falls through to the amount
+       * anchor's own row, so a page shape we have not captured still gets a
+       * block somewhere sensible rather than none at all.
+       *
+       * ON THE FIRST SELECTOR. The card fields container carries two classes,
+       * `col` and `payment-details-b...`, the tail of which may be generated.
+       * Matching is therefore on `.col` plus a SUBSTRING of the second class up
+       * to its hyphen, never on the full generated name. The trailing hyphen in
+       * "payment-details-" is load-bearing: it is what stops the selector also
+       * matching the div.payment-details parent, whose class has no suffix.
+       */
+      placementTargets: [
+        {
+          // PREFERRED. Immediately after the Travel Protection panel, which
+          // puts the block below that panel and above the card brand logos.
+          //
+          // TEXT, not a class. I have no capture of this panel's markup, and
+          // every class on this engine that is not hand-written is generated,
+          // so a class guess here would be a guess. The heading text is the
+          // only identifier I can rely on. Swap this entry for a selector if a
+          // stable class or id turns up on the panel.
+          textRe: /travel\s*protection/i,
+          // The climb from the heading stops before it reaches an ancestor that
+          // also contains the card fields, so "the panel" is resolved as the
+          // outermost box that still excludes what comes after it. Without this
+          // the climb would happily reach the whole checkout card, and
+          // inserting after THAT is how the block ended up under the heading
+          // and above the panel.
+          stopBeforeSelector: 'div.payment-details div.col[class*="payment-details-"]',
+          climbMax: 8,
+          mode: "after",
+        },
+        {
+          selector: 'div.payment-details div.col[class*="payment-details-"]',
+          mode: "before",
+        },
+        {
+          selector: "div.consent-total-wrapper",
+          mode: "first-child",
+        },
+      ],
+
+      /**
+       * FALLBACK ONLY, kept for the case where the element name changes. Used
+       * only when no LAID-OUT instance of totalElementSelector exists, and the
+       * same non-zero box requirement applies to it, so neither path can pick a
+       * hidden duplicate. Also what the fallback amount scan splits on.
+       */
       anchorRe: /total\s*reservation/i,
       /** Gap above the block, so it reads as its own line. */
       marginTopPx: 10,
+
+      /**
+       * TEMPORARY. The placement probe dedupes on content by default, so it
+       * prints one line per distinct state rather than one per sync. Set true
+       * to print on every sync instead, which is noisy but shows the cadence.
+       */
+      logPlacementEverySync: false,
     },
 
     /**
@@ -1281,14 +1421,30 @@
   }
 
   /** True when the element renders no visible box. Skips hidden templates. */
-  function isHidden(el) {
+  /**
+   * Does this element occupy space on the page right now?
+   *
+   * REPLACES the old isHidden(), which read computed display and visibility and
+   * had no call sites. Computed style is not enough for the failure this
+   * guards: in the collapsed cart panel exactly ONE ancestor carried
+   * display:none, and every node beneath it computed to a perfectly ordinary
+   * display while still measuring 0x0. isHidden() would have called all of them
+   * visible and picked one anyway.
+   *
+   * Measuring the box catches the whole family at once: display:none anywhere
+   * above, a zero-height collapsed container, and a flex child squeezed to
+   * nothing all fail this test, which is the only property the anchor actually
+   * needs. An unreadable box is treated as no box, because an anchor we cannot
+   * measure is one we cannot safely mount into.
+   */
+  function hasBox(el) {
+    if (!el || el.nodeType !== 1) return false;
     try {
-      var cs = ownerWin(el).getComputedStyle(el);
-      if (cs.display === "none" || cs.visibility === "hidden") return true;
+      var r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
     } catch (e) {
-      /* treat an unreadable style as visible */
+      return false;
     }
-    return false;
   }
 
   // -------------------------------------------------------------------------
@@ -1779,6 +1935,15 @@
     invalid_input: "Pick your dates to see payment plan options.",
   };
 
+  // PLACEHOLDER. Deliberately shouty so it cannot be mistaken for shipped copy:
+  // the real plan terms have not been written yet, and inventing them here
+  // would put terms a guest could rely on onto a live booking page.
+  var PLAN_TERMS_LINES = [
+    "PLACEHOLDER LINE ONE",
+    "PLACEHOLDER LINE TWO",
+    "PLACEHOLDER LINE THREE",
+  ];
+
   // =========================================================================
   // OVERLAY
   //
@@ -1960,11 +2125,13 @@
       "cursor:pointer;text-align:right;white-space:normal;overflow-wrap:break-word}" +
       ".trig:hover .amt{text-decoration:underline}" +
       ".trig:focus-visible{outline:2px solid " + violet + ";outline-offset:2px}" +
-      // Glyph is white, not ink, and the fill is ctaBg rather than the accent:
-      // the glyph is 10px, and white on amethyst is 4.23:1, which tailwind
-      // config flags as large-text-only. White on ctaBg is 8.98:1.
+      // Glyph is white, not ink: white is the label colour on every amethyst
+      // fill, and the tick is a fill of exactly that kind. Reads from
+      // BLISS_COLORS rather than CONFIG.brand so the confirmed tick and the
+      // modal CTA cannot drift apart, which is what left it on the deep purple
+      // after the modal moved to amethyst.
       ".tick{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;" +
-      "border-radius:" + radius + ";background:" + CONFIG.brand.ctaBg + ";color:" + CONFIG.brand.onCta + ";font-size:10px;" +
+      "border-radius:" + radius + ";background:" + BLISS_COLORS.amethyst + ";color:" + BLISS_COLORS.white + ";font-size:10px;" +
       "margin-right:7px;vertical-align:middle}" +
       ".sep{margin:0 5px;opacity:.55}" +
       ".amt{font-weight:600}" +
@@ -1978,17 +2145,37 @@
       // button competing with the host's own control.
       ".link{display:block;margin-top:3px;padding:0;background:none;border:0;font-size:11px;" +
       "font-weight:600;color:" + ink + ";text-decoration:underline;cursor:pointer;text-align:left}" +
-      // Details block: right-aligned. Declared AFTER .trig and .link so it wins
-      // on order at equal specificity. Sets colour explicitly because State A's
-      // container is not a .trig and would otherwise inherit the initial black
-      // from :host{all:initial}.
-      ".details{text-align:right;color:" + ink + "}" +
-      // text-align on .details cannot move this: .link is display:block, and
-      // text-align only positions INLINE-level content. A <button> also uses
-      // shrink-to-fit sizing even when block, so the box hugs its text and sits
-      // flush left. Give the box a definite width so the auto left margin
-      // resolves, and it is pushed right as a box.
-      ".details .link{display:block;width:fit-content;margin-left:auto;margin-right:0;text-align:right}" +
+      // Details block: LEFT-aligned. It now sits as the first child of the
+      // consent wrapper, in a column of checkbox rows that are all flush left,
+      // where the old right alignment read as a stray line. The rate-card
+      // teaser keeps text-align:right from .trig above, which is correct
+      // against the cards' right-aligned prices; only this block moves.
+      //
+      // Declared AFTER .trig and .link so it wins on order at equal
+      // specificity. Sets colour explicitly because State A's container is not
+      // a .trig and would otherwise inherit the initial black from
+      // :host{all:initial}.
+      // Spacing: the block sits at the top of the payment section, between the
+      // Travel Protection panel above and the card brand logos below.
+      //
+      // The two margins are deliberately UNEQUAL. Equal margins did not produce
+      // equal gaps: the logos below carry their own leading, so 16px on each
+      // side rendered tight under the panel with a large gap beneath. 28px on
+      // top against 16px underneath is what makes the two visible gaps read as
+      // the same, which is the thing being centred here.
+      ".details{text-align:left;color:" + ink + ";margin-top:28px;margin-bottom:16px;line-height:1.5}" +
+      // EXPLICIT TYPE SCALE, no longer sampled off the anchor. Sampling gave
+      // 16px/600, the total's display scale, which was far too heavy here.
+      // 15px, up from 13px: the surrounding checkbox labels are larger than
+      // first measured and 13px read as fine print next to them. Weight 700 so
+      // the main line carries against the panel headings around it.
+      ".details .amt{font-size:15px;font-weight:700}" +
+      ".details .sub{font-size:11px;font-weight:400;text-align:left;margin-top:2px}" +
+      // Left-aligned to match, and the auto margin that used to push the box
+      // right is gone. width:fit-content stays: a <button> is shrink-to-fit
+      // even at display:block, so this keeps the underline hugging the text
+      // rather than spanning the wrapper.
+      ".details .link{display:block;width:fit-content;margin-left:0;margin-right:auto;text-align:left}" +
       ".trig[disabled]{cursor:default}"
     );
   }
@@ -2002,81 +2189,98 @@
    */
   function modalCss(theme) {
     var b = CONFIG.brand;
+    var c = BLISS_COLORS;
     return (
       baseCss(theme) +
       ".scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.44);" +
       "display:flex;align-items:center;justify-content:center;padding:16px}" +
-      ".bliss-card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:" + b.surface +
-      ";color:" + b.ink + ";border:1px solid " + b.divider + ";border-radius:" + b.radiusCard +
+      ".bliss-card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:" + c.bone +
+      ";color:" + c.ink + ";border:1px solid " + c.hairline + ";border-radius:" + b.radiusCard +
       ";box-shadow:0 18px 56px rgba(0,0,0,.32)}" +
       ".bliss-card:focus{outline:none}" +
-      ".head{display:flex;align-items:flex-start;gap:12px;padding:22px 24px;border-bottom:1px solid " + b.divider + "}" +
+      ".head{display:flex;align-items:flex-start;gap:12px;padding:22px 24px;border-bottom:1px solid " + c.hairline + "}" +
       ".head h2{font-size:17px;font-weight:600;line-height:1.3}" +
-      ".head p{font-size:13px;color:" + b.inkMuted + ";margin-top:4px;line-height:1.4}" +
-      ".x{margin-left:auto;background:none;border:0;cursor:pointer;font-size:20px;line-height:1;color:" + b.inkMuted + "}" +
+      ".head p{font-size:13px;color:" + c.muted + ";margin-top:4px;line-height:1.4}" +
+      ".x{margin-left:auto;background:none;border:0;cursor:pointer;font-size:20px;line-height:1;color:" + c.muted + "}" +
       ".body{padding:20px 24px 24px}" +
-      ".ctx{font-size:13px;color:" + b.inkMuted + ";margin-bottom:2px;line-height:1.5}" +
+      ".ctx{font-size:13px;color:" + c.muted + ";margin-bottom:2px;line-height:1.5}" +
       // Fine print under the summary line, tracking the step's basis.
-      ".fine{font-size:11px;color:" + b.inkMuted + ";margin-bottom:12px;line-height:1.4}" +
-      // Collapsed-by-default schedule disclosure.
+      ".fine{font-size:11px;color:" + c.muted + ";margin-bottom:12px;line-height:1.4}" +
+      // Collapsed-by-default disclosure header. Shared by the payment schedule
+      // and the plan terms, so the two read as one control repeated rather than
+      // as two different treatments.
       ".disc{display:block;width:100%;text-align:left;margin:2px 0 8px;padding:8px 0;background:none;" +
-      "border:0;border-top:1px solid " + b.divider + ";color:" + b.ink +
+      "border:0;border-top:1px solid " + c.hairline + ";color:" + c.ink +
       ";font-size:12px;font-weight:600;cursor:pointer}" +
-      ".sched{margin:0 0 12px;border:1px solid " + b.divider + ";border-radius:" + b.radius + "}" +
+      // The inset surfaces in the modal, so they take the sunken fill rather
+      // than the card's own bone.
+      ".sched{margin:0 0 12px;background:" + c.sunken + ";border:1px solid " + c.hairline +
+      ";border-radius:" + b.radius + "}" +
       ".sched .row{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12px;" +
-      "border-bottom:1px solid " + b.divider + "}" +
+      "border-bottom:1px solid " + c.hairline + "}" +
       ".sched .row:last-child{border-bottom:0}" +
-      ".sched .n{width:18px;color:" + b.inkMuted + "}" +
-      ".sched .d{color:" + b.ink + "}" +
-      ".sched .v{margin-left:auto;font-weight:600;color:" + b.ink + "}" +
+      ".sched .n{width:18px;color:" + c.muted + "}" +
+      ".sched .d{color:" + c.ink + "}" +
+      ".sched .v{margin-left:auto;font-weight:600;color:" + c.ink + "}" +
+      // Plan terms: the schedule box's own rules, at the row type size, in the
+      // muted ink the schedule uses for its secondary column. One line per row,
+      // so there is no .n/.d/.v split to mirror.
+      ".terms{margin:0 0 12px;background:" + c.sunken + ";border:1px solid " + c.hairline +
+      ";border-radius:" + b.radius + "}" +
+      ".terms .row{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12px;color:" + c.muted +
+      ";border-bottom:1px solid " + c.hairline + "}" +
+      ".terms .row:last-child{border-bottom:0}" +
       ".opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 12px;margin-bottom:8px;" +
-      "background:transparent;color:" + b.ink + ";border:1px solid " + b.divider +
+      "background:" + c.bone + ";color:" + c.ink + ";border:1px solid " + c.hairline +
       ";border-radius:" + b.radiusCard + ";cursor:pointer}" +
-      ".opt[aria-pressed=\"true\"]{border-color:" + b.violet + ";border-width:2px;padding:10px 11px}" +
+      ".opt[aria-pressed=\"true\"]{background:" + c.wash + ";border-color:" + c.amethyst +
+      ";border-width:2px;padding:10px 11px}" +
       ".opt .lbl{font-size:13px;font-weight:600}" +
-      ".opt .sub{font-size:11px;color:" + b.inkMuted + ";margin-top:2px}" +
+      ".opt .sub{font-size:11px;color:" + c.muted + ";margin-top:2px}" +
       ".opt .amt{margin-left:auto;text-align:right}" +
       ".opt .amt b{font-size:14px;font-weight:600;display:block}" +
-      ".opt .amt span{font-size:11px;color:" + b.inkMuted + "}" +
+      ".opt .amt span{font-size:11px;color:" + c.muted + "}" +
+      // The wash is opaque by definition rather than composited — an rgba fill
+      // or an opacity property would let the card behind it show through, and
+      // would drag the chip's ink text down with it.
       ".tag{display:inline-block;font-size:9px;letter-spacing:.4px;text-transform:uppercase;padding:2px 6px;" +
-      "border-radius:" + b.radius + ";background:" + b.violetTint +
-      ";border:1px solid " + b.violet + ";color:" + b.ink +
+      "border-radius:" + b.radius + ";background:" + c.wash +
+      ";border:1px solid " + c.amethyst + ";color:" + c.ink +
       ";margin-left:6px;vertical-align:middle}" +
-      ".cta{width:100%;padding:12px;border:0;border-radius:" + b.radiusPill + ";background:" + b.ctaBg +
-      ";color:" + b.onCta + ";font-size:13px;font-weight:600;cursor:pointer;margin-top:4px}" +
-      // Sand fill with muted ink, not a half-opacity violet: at .5 the pill
-      // composited to a pale lavender under white text, which is both a failing
-      // pair and a tint-only colour used as a fill.
-      ".cta[disabled]{background:" + b.divider + ";color:" + b.inkMuted + ";cursor:default}" +
-      ".note{font-size:11px;color:" + b.inkMuted + ";margin-top:10px;line-height:1.45}" +
-      ".msg{font-size:12px;color:" + b.inkMuted + ";line-height:1.5}" +
+      ".cta{width:100%;padding:12px;border:0;border-radius:" + b.radiusPill + ";background:" + c.amethyst +
+      ";color:" + c.white + ";font-size:13px;font-weight:600;cursor:pointer;margin-top:4px}" +
+      ".cta:hover{background:" + c.amethystHover + "}" +
+      // Hairline fill with muted ink, not a half-opacity accent: at .5 the pill
+      // composited to a pale tint under white text, which is both a failing
+      // pair and a tint-only colour used as a fill. Declared after .cta:hover,
+      // which it ties with on specificity, so a disabled pill cannot light up
+      // on hover.
+      ".cta[disabled]{background:" + c.hairline + ";color:" + c.muted + ";cursor:default}" +
+      ".note{font-size:11px;color:" + c.muted + ";margin-top:10px;line-height:1.45}" +
+      ".msg{font-size:12px;color:" + c.muted + ";line-height:1.5}" +
       // The receipt's subject line. 14px matches the option row's amount, the
       // largest thing in the body it replaces.
-      ".plan{margin:2px 0 0;font-size:14px;font-weight:600;line-height:1.4;color:" + b.ink + "}" +
+      ".plan{margin:2px 0 0;font-size:14px;font-weight:600;line-height:1.4;color:" + c.ink + "}" +
       // Primary ink, and ruled off the disclaimer list above it with the same
       // hairline .disc uses above Payment schedule, so it reads as a change of
       // state rather than a fourth disclaimer.
-      ".confirmed{margin-top:4px;padding:12px 0;border-top:1px solid " + b.divider +
-      ";font-size:13px;line-height:1.45;color:" + b.ink + "}" +
+      ".confirmed{margin-top:4px;padding:12px 0;border-top:1px solid " + c.hairline +
+      ";font-size:13px;line-height:1.45;color:" + c.ink + "}" +
       // Text control, not a filled button: it is the quieter of the two actions
       // in the reopened state. UA button styling cleared explicitly.
       ".textbtn{display:block;width:100%;margin-top:10px;padding:6px 0;background:none;border:0;" +
-      "font-size:13px;line-height:1.45;color:" + b.inkMuted + ";cursor:pointer;text-align:center}" +
+      "font-size:13px;line-height:1.45;color:" + c.muted + ";cursor:pointer;text-align:center}" +
       ".textbtn:hover{text-decoration:underline}" +
       // Attribution footer, outside .body so it renders under both the receipt
       // and the picker. The body's own 24px bottom padding is the space above.
       ".pwr{padding:0 24px 20px;text-align:center;font-size:11px;font-weight:400;" +
-      "color:" + b.inkMuted + ";line-height:1.4}" +
+      "color:" + c.muted + ";line-height:1.4}" +
       // The wordmark treatment, named here because injected JS cannot reach
-      // components/BlissWordmark.tsx: ALWAYS Georgia bold. The family must be
-      // stated explicitly, because baseCss points everything at the sampled
-      // host font and this rule outranks that `*` selector.
-      //
-      // ctaBg, not the accent. The repo renders the wordmark in brand-violet,
-      // but every one of those sites is 20px or larger, where amethyst's
-      // 4.23:1 is the large-text pass tailwind config describes. This wordmark
-      // is 11px, which is body copy, so it takes the deep step at 8.98:1.
-      ".pwr .wm{font-family:Georgia,serif;font-weight:700;color:" + b.ctaBg + "}" +
+      // components/BlissWordmark.tsx: ALWAYS Georgia bold, in amethyst. The
+      // family must be stated explicitly — baseCss points everything at the
+      // sampled host font, and this rule outranks that `*` selector. Keep these
+      // three values in step with the port's `.pwr .wm` + BlissWordmark.
+      ".pwr .wm{font-family:Georgia,serif;font-weight:700;color:" + c.amethyst + "}" +
       // Below the phone breakpoint the modal becomes a bottom sheet.
       "@media (max-width:420px){.scrim{align-items:flex-end;padding:0}" +
       ".bliss-card{width:100%;max-width:100%;max-height:88vh;border-radius:" + b.radiusCard + " " + b.radiusCard + " 0 0}}"
@@ -2201,8 +2405,15 @@
     var kids;
     if (t.kind === "details") {
       // :host{all:initial} severs inheritance, so the block cannot pick up the
-      // host font on its own. Read family, size and weight off the ANCHOR so the
-      // block matches it rather than approximating with hardcoded values.
+      // host font on its own. FAMILY ONLY is read off the anchor, which is the
+      // placement target: enough to sit in the section's typography.
+      //
+      // Size and weight are deliberately NOT applied from the sample any more.
+      // They were, and the block inherited whatever the anchor happened to be:
+      // once the amount anchor became the total's money element that meant 16px
+      // weight 600, a display scale sitting in a row of checkbox labels. They
+      // are set explicitly in triggerCss under .details instead, so the result
+      // is the same wherever the block is placed.
       var face = null;
       try {
         var ref = (t.anchorEl && t.anchorEl.isConnected && t.anchorEl) || t.hostEl.parentNode;
@@ -2214,13 +2425,7 @@
         face = null;
       }
       if (face && face.family) {
-        root.appendChild(
-          h("style", {
-            text:
-              "*{font-family:" + face.family + "}" +
-              ".details .amt,.details .link{font-size:" + face.size + ";font-weight:" + face.weight + "}",
-          })
-        );
+        root.appendChild(h("style", { text: "*{font-family:" + face.family + "}" }));
       }
       reportDetailsFont(face);
 
@@ -2253,6 +2458,20 @@
           // measured as a mounted block, and it made a failure that has a
           // specific cause look like a rendering bug.
           reportDetailsSuppressed(t);
+          // THE HOLE IN THE LAST FIX. This path removes the block, and until
+          // now it armed nothing, so recovery depended entirely on some later
+          // DOM mutation happening to arrive. On a settled page none does.
+          //
+          // A null total is transient: the payment section is mid-render, the
+          // amount could not be read this pass, and the block should come back.
+          // A total that DID read and was then rejected on eligibility is
+          // settled, and retrying it would mount and remove on a loop.
+          if (t.detailsTotalCents == null && detailsAnchorPresent()) {
+            detailsSettledEmpty = false;
+            scheduleDetailsRecheck();
+          } else {
+            detailsSettledEmpty = true;
+          }
           removeDetailsTrigger(t);
           return;
         }
@@ -2371,9 +2590,15 @@
    * into a box of zero size. Nothing in the render path notices, which is why
    * the console could report a mounted block over an empty spot on the page.
    *
-   * On a zero measurement this prints the full placement picture and then moves
-   * the host one legal container further out, retrying on the next frame. The
-   * retry is capped, and a successful measurement resets it.
+   * REPORTS, DOES NOT RELOCATE. It used to move the host one container further
+   * out on each zero measurement, up to four times. That ladder is gone: it was
+   * written for a block anchored by text, which could legitimately land in a
+   * collapsed container, and it is the thing that carried the block out of the
+   * summary card and onto the page background. The anchor is now required to
+   * have a box before anything mounts (see resolveDetailsAnchor and hasBox), so
+   * a zero measurement here means the placement rules themselves are wrong and
+   * the fix belongs in findDetailsRow or chooseDetailsSlot, not in a runtime
+   * scramble that lands the block somewhere arbitrary.
    */
   function verifyDetailsPlacement(t) {
     if (!t.hostEl || !t.hostEl.isConnected) return;
@@ -2388,40 +2613,14 @@
       return;
     }
 
-    logDetailsPlacement(t, rect);
-
     t.__placementTries = (t.__placementTries || 0) + 1;
-    if (t.__placementTries > 4) {
-      console.warn(
-        "[bliss] checkout block still measures zero after " + (t.__placementTries - 1) +
-          " placement attempts. Leaving it where it is. The ancestor dump above shows which " +
-          "container is collapsing it."
-      );
-      return;
-    }
+    if (t.__placementTries > 1) return;
 
-    // Escalate: hop out of whatever container is collapsing us, to the next
-    // ancestor that can hold a block, and re-measure on the next frame.
-    var current = t.slotEl && t.slotEl.isConnected ? t.slotEl : t.hostEl;
-    var next = parentAcrossShadow(current);
-    if (!next || next.nodeType !== 1) return;
-    var parent = parentAcrossShadow(next);
-    if (!parent || parent.nodeType !== 1) return;
-
-    try {
-      parent.insertBefore(t.hostEl, next.nextSibling);
-      t.slotEl = next;
-      console.warn(
-        "[bliss] checkout block measured 0x0, moved it out one level to sit after <" +
-          (next.tagName || "?").toLowerCase() + "> inside <" +
-          (parent.tagName || "?").toLowerCase() + ">. Re-measuring."
-      );
-      schedule(function () {
-        verifyDetailsPlacement(t);
-      });
-    } catch (e) {
-      /* ignore */
-    }
+    logDetailsPlacement(t, rect);
+    console.warn(
+      "[bliss] checkout block measures 0x0. REPORTING ONLY, it has not been moved. " +
+        "The ancestor dump above shows which container is collapsing it."
+    );
   }
 
   /**
@@ -2861,6 +3060,33 @@
       }
     }
 
+    // Plan terms, collapsed by default. Built as the schedule disclosure above
+    // is, down to the caret and the toggle, so the two are one pattern used
+    // twice. Its own flag, so opening either leaves the other as it was.
+    //
+    // Not gated on `chosen`, unlike the schedule: the terms describe the plan
+    // rather than the selected cadence, so they stay readable when the guest
+    // has deselected and the schedule has nothing to show.
+    body.appendChild(
+      h("button", {
+        class: "disc",
+        type: "button",
+        "aria-expanded": state.modal.termsOpen ? "true" : "false",
+        text: (state.modal.termsOpen ? "▾" : "▸") + "  Plan terms and conditions",
+        onClick: function () {
+          state.modal.termsOpen = !state.modal.termsOpen;
+          renderModal();
+        },
+      })
+    );
+    if (state.modal.termsOpen) {
+      var terms = h("div", { class: "terms" });
+      PLAN_TERMS_LINES.forEach(function (line) {
+        terms.appendChild(h("div", { class: "row", text: line }));
+      });
+      body.appendChild(terms);
+    }
+
     // State 1 tail: the action, then the note. The confirmed states never reach
     // here — they return a receipt body above.
     body.appendChild(
@@ -2880,7 +3106,7 @@
       })
     );
     body.appendChild(
-      h("div", { class: "note", text: "No card needed here. You will finish checkout the usual way." })
+      h("div", { class: "note", text: "Choose your plan and finish checkout as usual." })
     );
 
     mountModalCard(h, head, body);
@@ -2961,7 +3187,15 @@
 
   function confirmPlan(t, option) {
     // Frequency and count only — no amount. See confirmedOption.
-    t.confirmed = { frequency: option.frequency, numPayments: option.numPayments };
+    //
+    // cardKey rides along so recompute can put the confirmation back on the
+    // card it was made on after a re-render destroys this trigger. Null on a
+    // details trigger, which owns no card, and a null key matches nothing.
+    t.confirmed = {
+      frequency: option.frequency,
+      numPayments: option.numPayments,
+      cardKey: t.cardKey || null,
+    };
     var choice = {
       frequency: option.frequency,
       numPayments: option.numPayments,
@@ -3080,6 +3314,36 @@
     hostEl.style.gridColumn = "1 / -1";
   }
 
+  /**
+   * Content-derived identity for a rate card, and the thing that lets a
+   * confirmed plan find its way back to the right card after iHotelier
+   * re-renders the room list.
+   *
+   * Deliberately NOT DECORATED_ATTR or any other attribute we write. In the
+   * case where iHotelier replaces the card ELEMENT rather than its children,
+   * every attribute we set went with the old node, so a marker of ours cannot
+   * be the key. The card's own rendered content is the only thing that
+   * survives both re-render shapes.
+   *
+   * Composed from the room name, which is what the trigger already scrapes for
+   * `label` on the line below and what resolveCardAmount returns again as
+   * `rateName`. Those two are the same string on this file, from the same
+   * findRoomName call, so there is no second component to add; the price is
+   * deliberately left out because it moves when the stay dates change and the
+   * key must not.
+   *
+   * Lowercased so a re-render that recapitalises the title still matches.
+   * Returns null for a card with no resolvable title, and a null key never
+   * matches anything, so such a card simply does not restore.
+   */
+  function cardKeyFor(card) {
+    var room = findRoomName(card);
+    if (!room) return null;
+    // findRoomName already returns normText output, so whitespace is collapsed
+    // and trimmed by the time it gets here.
+    return room.toLowerCase();
+  }
+
   function attachBadge(card, priceEl) {
     if (card.hasAttribute(DECORATED_ATTR)) {
       // The attribute survives a re-render that replaced the card's children,
@@ -3139,6 +3403,11 @@
       hostEl: hostEl,
       root: root,
       label: findRoomName(card),
+      // Frozen at build time and never recomputed. recompute() overwrites
+      // `label` with rateName, so keying off that field would give the same
+      // card a different key before and after the first recompute and the
+      // match would never land.
+      cardKey: cardKeyFor(card),
       amountCents: null,
       nightlyAmountCents: null,
       scrapedNightlyCents: null,
@@ -3220,19 +3489,52 @@
     }
   }
 
+  /** Whether a trigger's own nodes are still mounted. */
+  function triggerAlive(t) {
+    if (!t || !t.hostEl) return false;
+    if (t.kind === "details") return !!t.hostEl.isConnected;
+    return !!(t.cardEl && t.cardEl.isConnected && t.hostEl.isConnected);
+  }
+
+  /**
+   * Whether some OTHER live trigger is currently mounted on this card.
+   *
+   * The children-replaced re-render is the case this exists for: iHotelier
+   * keeps the card element and swaps its subtree, which takes our teaser with
+   * it. decorateRateCards runs before pruneTriggers, so by the time we get here
+   * a fresh trigger has already been built on this same card element and has
+   * stamped DECORATED_ATTR with its own id. Clearing the card's attributes on
+   * behalf of the dead trigger would strip that stamp off a card that is still
+   * decorated, and attachBadge only consults the "is our badge already in
+   * there" check INSIDE the hasAttribute branch, so the next sync would sail
+   * past the guard and inject a second teaser, then a third, one per sync.
+   *
+   * Scans the whole array rather than the kept list: the replacement trigger is
+   * pushed at the end, so it always sits after the dead one.
+   */
+  function cardHasLiveTrigger(card, except) {
+    if (!card) return false;
+    for (var i = 0; i < state.triggers.length; i++) {
+      var o = state.triggers[i];
+      if (o === except || o.kind !== "rate-card" || o.cardEl !== card) continue;
+      if (triggerAlive(o)) return true;
+    }
+    return false;
+  }
+
   /** Drops triggers whose card the SPA has unmounted. */
   function pruneTriggers() {
     var kept = [];
     for (var i = 0; i < state.triggers.length; i++) {
       var t = state.triggers[i];
-      var alive =
-        t.kind === "details" ? t.hostEl.isConnected : t.cardEl && t.cardEl.isConnected && t.hostEl.isConnected;
-      if (alive) {
+      if (triggerAlive(t)) {
         kept.push(t);
         continue;
       }
       if (t.hostEl && t.hostEl.parentNode) t.hostEl.parentNode.removeChild(t.hostEl);
-      if (t.cardEl) {
+      // Undo what we did to the host card, but only once nothing of ours is
+      // mounted on it. See cardHasLiveTrigger.
+      if (t.cardEl && !cardHasLiveTrigger(t.cardEl, t)) {
         t.cardEl.removeAttribute(DECORATED_ATTR);
         if (t.cardEl.hasAttribute(POSITIONED_ATTR)) {
           t.cardEl.style.position = "";
@@ -3248,45 +3550,215 @@
   // PLACEMENT — checkout step, the "Your Reservation" panel
   // -------------------------------------------------------------------------
 
+  /** How far to climb from the money node looking for its row. */
+  var DETAILS_ROW_CLIMB_MAX = 6;
+
   /**
-   * The "Total Reservation" LABEL, as its own element: the deepest thing whose
-   * deep text names the total. This is what the amount scan reads forward from.
+   * CONTAINMENT. How much wider than the total row a node may be and still be
+   * treated as part of the same row rather than as a wrapper around the card.
+   *
+   * The total row and the card's inner content share a width. A section or page
+   * wrapper is materially wider, and inserting after one of those is what put
+   * the block on the page background below ADD ANOTHER ROOM. 1.25 leaves room
+   * for a row that sits inside a slightly padded parent without admitting a
+   * full-width wrapper.
    */
-  function findDetailsLabel() {
-    var cfg = CONFIG.detailsStep;
-    if (!cfg || !cfg.anchorRe) return null;
-    var all = deepQueryAll(document, "*");
-    var best = null;
-    for (var i = 0; i < all.length; i++) {
-      var el = all[i];
-      if (isOurNode(el)) continue;
-      if (!cfg.anchorRe.test(normText(el))) continue;
-      if (best == null || deepContains(best, el)) best = el;
+  var DETAILS_ROW_MAX_WIDTH_RATIO = 1.25;
+
+  /**
+   * How far chooseDetailsSlot may climb out of table-ish containers. Was 8,
+   * which is far enough to leave the card entirely on markup whose widths do
+   * not change on the way up.
+   */
+  var DETAILS_SLOT_CLIMB_MAX = 3;
+
+  /** Measured width, or 0 when unmeasurable. Companion to hasBox. */
+  function widthOf(el) {
+    if (!el || el.nodeType !== 1) return 0;
+    try {
+      return el.getBoundingClientRect().width;
+    } catch (e) {
+      return 0;
     }
-    return best;
   }
 
   /**
-   * The total ROW: the smallest ancestor of the label that also holds the
-   * amount. The block is inserted after this, not after the label.
+   * The checkout anchor: the node the total is rendered by, plus how it was
+   * found.
    *
-   * The distinction matters because the panel splits the row into a label and
-   * a figure. Inserting after the deepest label match would drop the Bliss
-   * block between "Total Reservation" and "$ 1,113.84", splitting the host's
-   * own row in half.
+   * ELEMENT NAME FIRST, text second. The text search is what put the block in a
+   * dead subtree: "Total Reservation" appears only inside the collapsed cart
+   * panel, so every match measured 0x0 and there was no laid-out candidate for
+   * it to prefer. Resolving by element name goes straight to the node the guest
+   * can see.
+   *
+   * The ELEMENT path no longer requires a box, only text that parses to money,
+   * preferring a laid-out instance when several parse. The TEXT fallback still
+   * requires a box, because it selects by prose and a hidden branch is exactly
+   * what it would otherwise latch onto.
+   *
+   * @returns {{el: Element, source: "element"|"text", boxed?: boolean,
+   *           cents?: number}|null}
+   */
+  var lastAnchorAmbiguityKey = null;
+
+  /**
+   * More than one instance parsed, and they disagree. Name the winner and its
+   * value so a wrong total is visible in the console rather than silently
+   * driving the plan. Deduped on the value set, so a settled page says it once.
+   */
+  function reportAnchorAmbiguity(candidates, pick) {
+    var distinct = [];
+    for (var i = 0; i < candidates.length; i++) {
+      if (distinct.indexOf(candidates[i].cents) === -1) distinct.push(candidates[i].cents);
+    }
+    if (distinct.length < 2) return;
+    var key = distinct.join(",") + "->" + pick.cents;
+    if (key === lastAnchorAmbiguityKey) return;
+    lastAnchorAmbiguityKey = key;
+
+    var listed = [];
+    for (var j = 0; j < candidates.length; j++) {
+      listed.push(
+        money(candidates[j].cents, CONFIG.currencyFallback) +
+          (candidates[j].boxed ? " (laid out)" : " (no box)")
+      );
+    }
+    console.warn(
+      "[bliss] " + CONFIG.detailsStep.totalElementSelector +
+        " resolved to more than one amount: " + listed.join(", ") + ".\n" +
+        "  CHOSE " + money(pick.cents, CONFIG.currencyFallback) +
+        (pick.boxed ? " (laid out, preferred)" : " (no box, no laid-out candidate available)") +
+        ". If that is the wrong figure, narrow CONFIG.detailsStep.totalElementSelector."
+    );
+  }
+
+  function resolveDetailsAnchor() {
+    var cfg = CONFIG.detailsStep;
+    if (!cfg) return null;
+
+    // 1. The total element, selected by whether its text PARSES to money, not
+    //    by whether it has a box.
+    //
+    //    THE BOX REQUIREMENT IS GONE, deliberately. It existed because this
+    //    same node used to decide placement, where picking a hidden duplicate
+    //    would mount the block into a dead subtree. Placement now comes from
+    //    placementTargets and this node is only an amount source, and an
+    //    element's text is readable whether or not it is laid out.
+    //
+    //    It was also the whole of the wide-viewport bug: above the breakpoint
+    //    iHotelier renders <ibe-ct-small-rate> with no box, so hasBox rejected
+    //    the only instance on the page, the anchor resolved to null and the
+    //    mount bailed. 1 in DOM / 0 boxed at w=1419, 1 in DOM / 1 boxed at 864.
+    //
+    //    A laid-out instance still wins whenever more than one parses, so the
+    //    hidden-duplicate case is decided exactly as it was before.
+    if (cfg.totalElementSelector) {
+      var hits = [];
+      var raw = deepQueryAll(document, cfg.totalElementSelector);
+      for (var i = 0; i < raw.length; i++) {
+        if (!isOurNode(raw[i])) hits.push(raw[i]);
+      }
+
+      var candidates = [];
+      for (var k = 0; k < hits.length; k++) {
+        var cents = parseMoneyTextToCents(normText(hits[k]));
+        // Zero or unparsable is not an amount to plan against, so the instance
+        // is not a candidate at all rather than a candidate with a bad value.
+        if (cents == null || !isFinite(cents) || cents <= 0) continue;
+        candidates.push({ el: hits[k], cents: cents, boxed: hasBox(hits[k]) });
+      }
+
+      if (candidates.length) {
+        var pick = null;
+        for (var c = 0; c < candidates.length; c++) {
+          if (candidates[c].boxed) {
+            pick = candidates[c];
+            break;
+          }
+        }
+        if (!pick) pick = candidates[0];
+        reportAnchorAmbiguity(candidates, pick);
+        // cents rides along, so scrapeDetailsTotalCents reports the figure from
+        // the instance actually chosen rather than re-deriving it and possibly
+        // disagreeing with what was reported here.
+        return { el: pick.el, source: "element", boxed: pick.boxed, cents: pick.cents };
+      }
+      // PRESENCE IS AUTHORITATIVE, not just a laid-out box.
+      //
+      // This early return is the fix for the double resolution. hasBox is a
+      // point-in-time measurement, and sync runs on every mutation, so during
+      // any sync where the payments card has not laid out yet the loop above
+      // found nothing and execution fell through to the text search. That
+      // search matches "Total Reservation" in the summary and assembles the
+      // PRE-TAX SUBTOTAL, which was then logged and used as the plan basis for
+      // that sync. A later sync, once laid out, resolved through the element
+      // and logged the tax-inclusive total instead. Two totals, two log lines,
+      // one of them wrong.
+      //
+      // If the element is on the page at all, it is the only acceptable source.
+      // Returning null here means this sync simply has no anchor; the next one
+      // resolves it properly once layout settles.
+      if (hits.length) return null;
+    }
+
+    // 2. Text fallback, reached ONLY when the element is absent from the DOM
+    //    entirely, which means it was renamed. Same descent as before, with the
+    //    box test added: skipping unlaid-out matches outright means `best`
+    //    starts from the first VISIBLE match, so the walk can no longer descend
+    //    into a hidden branch and get stuck there.
+    if (!cfg.anchorRe) return null;
+    var all = deepQueryAll(document, "*");
+    var best = null;
+    for (var j = 0; j < all.length; j++) {
+      var el = all[j];
+      if (isOurNode(el)) continue;
+      if (!cfg.anchorRe.test(normText(el))) continue;
+      if (!hasBox(el)) continue;
+      if (best == null || deepContains(best, el)) best = el;
+    }
+    return best ? { el: best, source: "text" } : null;
+  }
+
+  /** The anchor element alone. Kept as its own name for the existing callers. */
+  function findDetailsLabel() {
+    var found = resolveDetailsAnchor();
+    return found ? found.el : null;
+  }
+
+  /**
+   * The total ROW: the nearest ancestor of the anchor that has a box of its
+   * own. The block is inserted after this, not after the anchor.
+   *
+   * The distinction matters because the row splits into a label and a figure.
+   * Inserting directly after the money node would drop the Bliss block between
+   * "Total" and "$ 924.91", splitting the host's own row in half.
+   *
+   * NO AMOUNT TEST. The old version required the ancestor's text to hold both
+   * the anchor phrase and a currency figure, which was how it identified a row
+   * when the anchor was only a label. The anchor is now the money node itself,
+   * so that test has nothing left to establish, and on a row whose text reads
+   * just "Total" it would reject the correct answer.
    */
   function findDetailsRow() {
-    var label = findDetailsLabel();
-    if (!label) return null;
-    var cfg = CONFIG.detailsStep;
-    var node = label;
-    for (var d = 0; d <= 6 && node && node.nodeType === 1; d++) {
-      var t = normText(node);
-      if (cfg.anchorRe.test(t) && rxAmount().test(t)) return node;
+    var found = resolveDetailsAnchor();
+    if (!found) return null;
+    var node = parentAcrossShadow(found.el);
+    for (var d = 0; d < DETAILS_ROW_CLIMB_MAX && node && node.nodeType === 1; d++) {
+      if (isOurNode(node)) break;
+      // FIRST laid-out ancestor wins, and the climb stops dead here. Everything
+      // above this node is a wrapper by definition, so there is nothing further
+      // up worth considering; the width ceiling this establishes is what
+      // chooseDetailsSlot is then held to.
+      if (hasBox(node)) return node;
       node = parentAcrossShadow(node);
-      if (node && isOurNode(node)) break;
     }
-    return label;
+    // Nothing above it measured. NULL, not the anchor: the anchor is no longer
+    // required to have a box, so returning it here would hand chooseDetailsSlot
+    // an unlaid-out node to insert beside. A null row is no longer fatal, it
+    // just means the amount-row fallback is unavailable and placement has to
+    // come from placementTargets.
+    return null;
   }
 
   /**
@@ -3322,32 +3794,383 @@
   }
 
   /**
-   * The node the block should be inserted AFTER.
+   * WHERE THE BLOCK GOES, which is not the same question as where the amount
+   * comes from. The amount anchor stays put and keeps feeding the figure; only
+   * the placement target moves.
    *
-   * Starts at the Total Reservation row and climbs while the would-be parent is
-   * something that cannot lay out a block child. Inserting into a table row or
-   * a cell is the failure this avoids: the block ends up sized by a container
-   * the page fits to its own content, which is the "nested cell" case.
+   * Walks CONFIG.detailsStep.placementTargets in order and takes the first
+   * LAID-OUT hit, so the preferred position wins whenever the page offers it
+   * and each later entry is a genuine fallback rather than a competitor. A
+   * "before" target additionally needs a parent to be inserted relative to.
+   *
+   * Falls through to the amount anchor's own row via chooseDetailsSlot when no
+   * entry resolves, so a page shape we have not captured still gets a block.
+   *
+   * @returns {{el: Element, mode: "before"|"first-child"|"inside"|"after"}}
+   */
+  /** First laid-out, non-ours match for a selector, or null. */
+  function firstLaidOutMatch(selector) {
+    if (!selector) return null;
+    var hits = deepQueryAll(document, selector);
+    for (var i = 0; i < hits.length; i++) {
+      if (isOurNode(hits[i])) continue;
+      if (hasBox(hits[i])) return hits[i];
+    }
+    return null;
+  }
+
+  /** Deepest laid-out, non-ours element whose deep text matches, or null. */
+  function deepestLaidOutTextMatch(re) {
+    var all = deepQueryAll(document, "*");
+    var best = null;
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (isOurNode(el)) continue;
+      if (!re.test(normText(el))) continue;
+      if (!hasBox(el)) continue;
+      if (best == null || deepContains(best, el)) best = el;
+    }
+    return best;
+  }
+
+  /** Does this element paint a border on any edge? Marks a panel container. */
+  function hasBorder(el) {
+    try {
+      var cs = ownerWin(el).getComputedStyle(el);
+      if (!cs.borderTopStyle || cs.borderTopStyle === "none") {
+        if (!cs.borderBottomStyle || cs.borderBottomStyle === "none") return false;
+      }
+      return (parseFloat(cs.borderTopWidth) || 0) > 0 || (parseFloat(cs.borderBottomWidth) || 0) > 0;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * A panel identified by its heading text: climb from the heading to the box
+   * that IS the panel.
+   *
+   * The stop condition is what makes this precise. `stopBeforeSelector` names
+   * something that comes AFTER the panel (the card fields), and the climb halts
+   * the moment an ancestor would swallow it. The answer is therefore the
+   * outermost box containing the heading and not the thing after it, which is
+   * the panel, without needing to recognise the panel by its styling.
+   *
+   * Falls back to the first bordered ancestor when that marker cannot be
+   * resolved, since a bordered box is the next best signal for "panel".
+   */
+  function resolveTextPanel(spec) {
+    var mark = deepestLaidOutTextMatch(spec.textRe);
+    if (!mark) return null;
+    var avoid = firstLaidOutMatch(spec.stopBeforeSelector);
+    var node = mark;
+    var best = null;
+    for (var d = 0; d < (spec.climbMax || 8) && node && node.nodeType === 1; d++) {
+      if (isOurNode(node)) break;
+      if (avoid && node !== mark && deepContains(node, avoid)) break;
+      if (hasBox(node) && node.parentNode) {
+        best = node;
+        // With no stop marker, a border is the only signal that we have reached
+        // the panel rather than some wrapper inside it.
+        if (!avoid && node !== mark && hasBorder(node)) break;
+      }
+      node = parentAcrossShadow(node);
+    }
+    return best;
+  }
+
+  function findDetailsPlacement(row) {
+    var cfg = CONFIG.detailsStep;
+    var targets = (cfg && cfg.placementTargets) || [];
+    for (var t = 0; t < targets.length; t++) {
+      var spec = targets[t];
+      if (!spec) continue;
+      var mode = spec.mode || "before";
+      var el = spec.textRe ? resolveTextPanel(spec) : firstLaidOutMatch(spec.selector);
+      if (!el) continue;
+      // A sibling insertion needs somewhere to be a sibling IN. Without this
+      // the mode would be honoured and the insert would throw on a detached
+      // or root-level match.
+      if ((mode === "before" || mode === "after") && !el.parentNode) continue;
+      return { el: el, mode: mode };
+    }
+    // The amount-row fallback is the ONLY thing that needs a row, and the row
+    // is now allowed to be null. Returning null here rather than handing
+    // chooseDetailsSlot a null is what lets ensureDetailsTrigger treat "no
+    // placement anywhere" as the bail condition instead of "no row".
+    if (!row) return null;
+    return chooseDetailsSlot(row);
+  }
+
+  /**
+   * The node the block should be inserted AFTER, when no placement target
+   * resolved and we are falling back to the amount anchor's own row.
+   *
+   * Starts at that row and climbs while the would-be parent is something that
+   * cannot lay out a block child. Inserting into a table row or a cell is the
+   * failure this avoids: the block ends up sized by a container the page fits
+   * to its own content, which is the "nested cell" case.
    *
    * Climbing stops as soon as a normal flow parent is found, so on markup that
-   * is already plain divs this returns the row itself and placement is
-   * unchanged.
+   * is already plain divs this returns the row itself.
    */
   function chooseDetailsSlot(row) {
+    // A CELL CAN HOLD A BLOCK, so go inside it rather than climbing out of the
+    // table. A table and its own rows share a width, so the width ceiling below
+    // cannot stop that climb, and walking out returns the <table> itself, which
+    // puts the block below every row in it including ADD ANOTHER ROOM. That is
+    // the one escalation that is guaranteed to leave the card.
+    if (displayOf(row) === "table-cell") return { el: row, mode: "inside" };
+
+    // CONTAINMENT CEILING, from the row findDetailsRow settled on. Anything
+    // materially wider than the total row is a section or page wrapper, not a
+    // container we belong in, and inserting after one of those is what put the
+    // block on the page background. The hop cap is the backstop for a chain
+    // that stays the same width all the way up.
+    var maxWidth = widthOf(row) * DETAILS_ROW_MAX_WIDTH_RATIO;
     var node = row;
-    for (var d = 0; d < 8; d++) {
+    for (var d = 0; d < DETAILS_SLOT_CLIMB_MAX; d++) {
       var parent = parentAcrossShadow(node);
-      if (!parent || parent.nodeType !== 1) return node;
+      if (!parent || parent.nodeType !== 1) break;
       var pd = displayOf(parent);
-      if (!NO_BLOCK_CHILDREN[pd]) return node;
+      if (!NO_BLOCK_CHILDREN[pd]) break;
+      if (maxWidth > 0 && widthOf(parent) > maxWidth) break;
       node = parent;
     }
-    return node;
+    return { el: node, mode: "after" };
+  }
+
+  /**
+   * Is the total element on the page at all, laid out or not?
+   *
+   * Separates "we are not on the checkout step" from "we are, but the payment
+   * section is mid-render". They look identical to resolveDetailsAnchor, which
+   * returns null for both, and they need opposite responses: drop the block for
+   * the first, come back and look again for the second.
+   */
+  function detailsAnchorPresent() {
+    var cfg = CONFIG.detailsStep;
+    if (!cfg || !cfg.totalElementSelector) return false;
+    var hits = deepQueryAll(document, cfg.totalElementSelector);
+    for (var i = 0; i < hits.length; i++) {
+      if (!isOurNode(hits[i])) return true;
+    }
+    return false;
+  }
+
+  // BOUNDED RE-CHECK, not a poll. Armed only when the anchor element is on the
+  // page but did not resolve, which means a re-render is in flight. It fires at
+  // most DETAILS_MAX_RECHECKS times, ~250ms apart, and the counter resets the
+  // moment a block mounts or the checkout step is genuinely gone. On a settled
+  // page nothing is ever scheduled.
+  //
+  // This exists because the mutation-driven sync can land on a half-updated
+  // DOM: the re-render's mutations are coalesced into one sync, and if that
+  // sync cannot resolve, nothing re-runs. Resize covers the DevTools case; this
+  // covers a payment-section re-render that arrives without one.
+  var DETAILS_RECHECK_MS = 250;
+  var DETAILS_MAX_RECHECKS = 3;
+  var detailsRecheckTimer = null;
+  var detailsRechecks = 0;
+
+  function scheduleDetailsRecheck() {
+    if (detailsRecheckTimer != null) return;
+    if (detailsRechecks >= DETAILS_MAX_RECHECKS) return;
+    detailsRechecks++;
+    detailsRecheckTimer = window.setTimeout(function () {
+      detailsRecheckTimer = null;
+      try {
+        sync();
+      } catch (e) {
+        console.warn("[bliss] checkout re-check failed", e);
+      }
+    }, DETAILS_RECHECK_MS);
+  }
+
+  function cancelDetailsRecheck() {
+    if (detailsRecheckTimer != null) {
+      window.clearTimeout(detailsRecheckTimer);
+      detailsRecheckTimer = null;
+    }
+    detailsRechecks = 0;
+  }
+
+  /**
+   * Set when the block was removed for a REAL reason: the total read fine and
+   * the merchant's rules rejected it, or no cadence fits. Distinguishes that
+   * from "mid-render, try again", and is what stops the watchdog below from
+   * mounting and removing the block twice a second on an ineligible stay.
+   * Cleared whenever a block successfully mounts.
+   */
+  var detailsSettledEmpty = false;
+
+  /** Is a details block currently mounted and attached to the document? */
+  function detailsHostAlive() {
+    for (var i = 0; i < state.triggers.length; i++) {
+      var t = state.triggers[i];
+      if (t.kind === "details") return !!(t.hostEl && t.hostEl.isConnected);
+    }
+    return false;
+  }
+
+  /**
+   * HOST WATCHDOG, and yes, this is a polling interval. Adding one was the
+   * explicit last resort and this is the second attempt at recovering by
+   * events alone, so it is now the safety net under the event paths rather
+   * than the mechanism.
+   *
+   * Every 500ms it asks one question: should there be a block, and is there
+   * one? If a block is mounted it stops at the first check, which is a walk of
+   * state.triggers and nothing else, so the settled-page cost is negligible.
+   * The expensive check, whether the anchor element exists anywhere in the
+   * tree, only runs when no block is mounted.
+   *
+   * It deliberately does NOT fire when detailsSettledEmpty is set, so an
+   * ineligible stay is left alone instead of being remounted on a loop.
+   */
+  var HOST_WATCHDOG_MS = 500;
+  var watchdogTimer = null;
+
+  function startHostWatchdog() {
+    if (watchdogTimer != null) return;
+    if (typeof window.setInterval !== "function") return;
+    watchdogTimer = window.setInterval(function () {
+      if (detailsHostAlive()) return;
+      if (detailsSettledEmpty) return;
+      if (!detailsAnchorPresent()) return;
+      try {
+        sync();
+      } catch (e) {
+        console.warn("[bliss] watchdog sync failed", e);
+      }
+    }, HOST_WATCHDOG_MS);
+  }
+
+  function stopHostWatchdog() {
+    if (watchdogTimer != null) {
+      window.clearInterval(watchdogTimer);
+      watchdogTimer = null;
+    }
+  }
+
+  // =========================================================================
+  // PLACEMENT PROBE — TEMPORARY DIAGNOSTIC, delete once the breakpoint failure
+  // is understood.
+  //
+  // The block mounts at 864 and never at 1419, and the trigger count sits at
+  // zero at the wider width, so something in the resolution chain returns null
+  // above a breakpoint. This prints the whole chain on one line so the failing
+  // link is visible without stepping through it.
+  //
+  // READ-ONLY. Every resolver it calls is a pure read (resolveDetailsAnchor,
+  // findDetailsRow, resolveTextPanel, firstLaidOutMatch), so re-running them
+  // here cannot change what the real path decided. It costs a second pass over
+  // the tree per sync, which is why it is temporary.
+  //
+  // Deduped on content by default, because sync runs on every mutation and the
+  // watchdog adds one every 500ms while the block is missing. That means one
+  // line per distinct state, which is exactly what makes a resize readable.
+  // Set CONFIG.detailsStep.logPlacementEverySync = true to print every time.
+  // =========================================================================
+  var detailsBail = null;
+  var lastProbeLine = null;
+
+  function probeEl(el) {
+    if (!el) return "NULL";
+    var r = null;
+    try {
+      r = el.getBoundingClientRect();
+    } catch (e) {
+      r = null;
+    }
+    var cls = (el.className && typeof el.className === "string" ? el.className : "").split(/\s+/)[0];
+    return (
+      "<" + (el.tagName || "?").toLowerCase() + (cls ? "." + cls : "") + " " +
+      (r ? Math.round(r.width) + "x" + Math.round(r.height) : "?") + ">"
+    );
+  }
+
+  function probeSpecLabel(spec) {
+    if (!spec) return "?";
+    if (spec.textRe) return "text " + String(spec.textRe);
+    return String(spec.selector || "?");
+  }
+
+  function probeDetails() {
+    var cfg = CONFIG.detailsStep;
+    if (!cfg) return;
+    var bits = [];
+
+    bits.push("w=" + (window.innerWidth || 0));
+
+    // 1. Anchor: present in DOM at all, versus present but unlaid-out.
+    var inDom = 0;
+    var boxed = 0;
+    if (cfg.totalElementSelector) {
+      var hits = deepQueryAll(document, cfg.totalElementSelector);
+      for (var i = 0; i < hits.length; i++) {
+        if (isOurNode(hits[i])) continue;
+        inDom++;
+        if (hasBox(hits[i])) boxed++;
+      }
+    }
+    var anchor = resolveDetailsAnchor();
+    bits.push(
+      "anchor " + cfg.totalElementSelector + ": " + inDom + " in DOM / " + boxed + " boxed -> " +
+      (anchor ? anchor.source + " " + probeEl(anchor.el) : "NULL")
+    );
+
+    // 2. Every placement target, in order, resolved or not.
+    var targets = cfg.placementTargets || [];
+    var tb = [];
+    for (var t = 0; t < targets.length; t++) {
+      var spec = targets[t];
+      var el = null;
+      try {
+        el = spec ? (spec.textRe ? resolveTextPanel(spec) : firstLaidOutMatch(spec.selector)) : null;
+      } catch (e) {
+        el = null;
+      }
+      tb.push("[" + t + "] " + probeSpecLabel(spec) + " -> " + probeEl(el));
+    }
+    bits.push("targets " + (tb.join("  ") || "(none configured)"));
+
+    // 3. Row climb.
+    var rowEl = null;
+    try {
+      rowEl = findDetailsRow();
+    } catch (e) {
+      rowEl = null;
+    }
+    bits.push("row -> " + probeEl(rowEl));
+
+    // 4. What ensureDetailsTrigger did, and what survived to the end of sync.
+    var live = 0;
+    var connected = 0;
+    for (var k = 0; k < state.triggers.length; k++) {
+      if (state.triggers[k].kind !== "details") continue;
+      live++;
+      if (state.triggers[k].hostEl && state.triggers[k].hostEl.isConnected) connected++;
+    }
+    bits.push("ensure: " + (detailsBail || "not reached"));
+    bits.push("triggers " + live + " (connected " + connected + ")");
+
+    var line = "[bliss probe] " + bits.join("  |  ");
+    if (!cfg.logPlacementEverySync && line === lastProbeLine) return;
+    lastProbeLine = line;
+    console.log(line);
   }
 
   function ensureDetailsTrigger() {
     var cfg = CONFIG.detailsStep;
-    if (!cfg || !cfg.anchorRe) return;
+    detailsBail = "reached-config-gate"; // TEMP PROBE, see probeDetails
+    // Either anchor source is enough. Gating on anchorRe alone would kill the
+    // whole checkout path if the text fallback were ever dropped, even though
+    // it is now the secondary of the two.
+    if (!cfg || (!cfg.totalElementSelector && !cfg.anchorRe)) {
+      detailsBail = "BAILED at config gate (no totalElementSelector and no anchorRe)";
+      return;
+    }
 
     var label = findDetailsLabel();
     var row = label ? findDetailsRow() : null;
@@ -3357,8 +4180,32 @@
       if (state.triggers[i].kind === "details") existing = state.triggers[i];
     }
 
-    if (!row) {
-      // Not on the checkout step. Drop any block left from a previous visit.
+    // PLACEMENT IS THE GATE, not the row.
+    //
+    // The row used to be a hard bail here, which was wrong once placement moved
+    // to placementTargets: the row is only needed for the amount-row fallback
+    // INSIDE findDetailsPlacement, and it climbs from an anchor that is no
+    // longer required to be laid out. A null row now simply means that one
+    // fallback is unavailable.
+    var placement = findDetailsPlacement(row);
+
+    if (!placement) {
+      // Two very different situations arrive here identically. If the anchor
+      // element is on the page, this is a re-render in flight and the block
+      // should come back on its own; if it is not, we have genuinely left the
+      // checkout step and there is nothing to wait for.
+      detailsBail =
+        "BAILED at placement gate (no placementTarget resolved and " +
+        (row ? "the amount-row fallback produced nothing" : "no row to fall back to") +
+        "; anchor " + (label ? "resolved" : "did not resolve") +
+        ", element " + (detailsAnchorPresent() ? "present in DOM" : "absent from DOM") +
+        ")";
+      if (detailsAnchorPresent()) scheduleDetailsRecheck();
+      else cancelDetailsRecheck();
+
+      // Drop any block left from a previous visit either way: its host has
+      // already gone with the re-render, and a fresh one is mounted below once
+      // resolution succeeds.
       if (existing) {
         if (existing.hostEl && existing.hostEl.parentNode) {
           existing.hostEl.parentNode.removeChild(existing.hostEl);
@@ -3372,11 +4219,21 @@
 
     // DOUBLE-INJECTION GUARD, matching the rate cards'.
     //
-    // Our tracked block is still mounted against this same row, so there is
-    // nothing to do. rowEl is part of the test, not just isConnected: a block
-    // still attached to a row the page has since replaced is stale, and
-    // returning early on it would strand it there.
-    if (existing && existing.hostEl.isConnected && existing.rowEl === row) return;
+    // Our tracked block is still mounted in the same place against the same
+    // row, so there is nothing to do. rowEl and slotEl are both part of the
+    // test, not just isConnected: a block still attached to a node the page has
+    // since replaced is stale, and returning early on it would strand it there.
+    if (
+      existing &&
+      existing.hostEl.isConnected &&
+      existing.rowEl === row &&
+      existing.slotEl === placement.el
+    ) {
+      // Still mounted where it belongs, so nothing is in flight.
+      detailsBail = "OK already mounted (guard hit)";
+      cancelDetailsRecheck();
+      return;
+    }
 
     // About to mount. Remove EVERY details host on the page first, tracked or
     // not, so re-running the overlay REPLACES the block rather than adding a
@@ -3407,7 +4264,10 @@
       return x !== existing;
     });
 
-    var hostEl = (row.ownerDocument || document).createElement("div");
+    // Created in the PLACEMENT target's document, not the row's: the row is now
+    // allowed to be null, and the placement target is the tree the host
+    // actually joins.
+    var hostEl = (placement.el.ownerDocument || document).createElement("div");
     hostEl.setAttribute(BADGE_ATTR, "");
     hostEl.setAttribute("data-bliss-details", "");
     hostEl.style.display = "none";
@@ -3428,13 +4288,49 @@
     //
     // The slot is the row itself on plain markup, and the nearest ancestor that
     // a block can legally sit beside when the row is a table row or a cell.
-    var slot = chooseDetailsSlot(row);
-    slot.parentNode.insertBefore(hostEl, slot.nextSibling);
+    var slot = placement.el;
+    if (placement.mode === "before") {
+      // Sibling immediately BEFORE the card fields container, inside
+      // div.payment-details, which puts the block between the Travel
+      // Protection panel above and the card brand logos below.
+      slot.parentNode.insertBefore(hostEl, slot);
+    } else if (placement.mode === "first-child") {
+      // FIRST child of the consent wrapper, so the block sits below the card
+      // fields and above the checkbox list. insertBefore with firstChild is
+      // correct even when that first child is a text node, and is a no-op-safe
+      // append when the wrapper is empty.
+      slot.insertBefore(hostEl, slot.firstChild);
+    } else if (placement.mode === "inside") {
+      // Last child of the cell, so the block sits under the cell's own content
+      // and inside the card, rather than after the table and below every row.
+      slot.appendChild(hostEl);
+    } else {
+      slot.parentNode.insertBefore(hostEl, slot.nextSibling);
+    }
     // Marked the way a decorated rate card is, so a stray host is traceable to
     // its row and the sweep above can clear the mark it owns.
-    row.setAttribute(DECORATED_ATTR, "details");
-    row.setAttribute("data-bliss-details-row", "");
-    var anchor = label;
+    // Guarded: the row is optional now, and these marks only exist so a stray
+    // host is traceable back to it. No row simply means no mark to leave.
+    if (row && row.setAttribute) {
+      row.setAttribute(DECORATED_ATTR, "details");
+      row.setAttribute("data-bliss-details-row", "");
+    }
+    // TYPOGRAPHY SOURCE, now the FAMILY ONLY. renderTrigger reads it off this
+    // node, and it tracks where the block actually sits rather than where the
+    // amount came from: the consent wrapper, whose text is the checkbox rows.
+    //
+    // Sampling the row gave 16px weight 600, which is the total's display
+    // scale and far too heavy in this position. Size and weight are no longer
+    // sampled at all; triggerCss sets them explicitly under .details, so the
+    // result does not depend on whichever node happened to be the anchor.
+    var anchor = slot;
+
+    // Mounted. Clear any pending re-check and reset the budget, so the next
+    // re-render gets a full allowance rather than the remainder of this one's,
+    // and clear the settled-empty latch so the watchdog is armed again.
+    cancelDetailsRecheck();
+    detailsSettledEmpty = false;
+    detailsBail = "OK mounted (mode " + placement.mode + ")";
 
     var newId = state.nextId++;
     if (modalWasOnExisting && state.modal) state.modal.triggerId = newId;
@@ -3481,28 +4377,54 @@
    */
   function scrapeDetailsTotalCents() {
     var cfg = CONFIG.detailsStep;
-    if (!cfg || !cfg.anchorRe) return null;
-    var label = findDetailsLabel();
-    if (!label) return null;
-    var got = assembleAmountAfterLabel(label, cfg.anchorRe);
-    var cents = got ? got.cents : null;
+    if (!cfg) return null;
+    var found = resolveDetailsAnchor();
+    if (!found) return null;
+    var label = found.el;
 
-    // A label that resolves but yields no number would hide the whole block
+    var cents;
+    if (found.source === "element") {
+      // The anchor IS the money node, so read its own text: "$ 924.91". No
+      // global lookup and no forward scan across siblings, which is what the
+      // label-shaped anchor needed and what could drift onto a different
+      // figure. normText goes through deepText, so a total rendered inside the
+      // element's own shadow root still reads.
+      // resolveDetailsAnchor already parsed this instance to choose it, so take
+      // its figure rather than re-deriving one that could disagree with the
+      // ambiguity warning it just printed.
+      cents = found.cents != null ? found.cents : parseMoneyTextToCents(normText(label));
+    } else {
+      // Text fallback: the anchor is a label, so the figure still has to be
+      // assembled from what follows it.
+      var got = assembleAmountAfterLabel(label, cfg.anchorRe);
+      cents = got ? got.cents : null;
+    }
+
+    // An anchor that resolves but yields no number would hide the whole block
     // with no clue why, which is exactly how the old selector version failed
-    // silently. Say it out loud instead.
+    // silently. Say it out loud instead, and name WHICH anchor was used, since
+    // the two paths fail for different reasons and take different fixes.
     if (cents == null && !warnedTotalUnparsed) {
       warnedTotalUnparsed = true;
       console.warn(
-        '[bliss] found the "Total Reservation" row but could not assemble an amount after it. ' +
-          "Row text: " + JSON.stringify(normText(findDetailsRow() || label).slice(0, 80)) +
-          ". Adjust CONFIG.detailsStep.anchorRe or CONFIG.rateCards.amountRe."
+        "[bliss] resolved the checkout total anchor (" +
+          (found.source === "element"
+            ? "<" + (label.tagName || "?").toLowerCase() + ">, via CONFIG.detailsStep.totalElementSelector"
+            : "text match, via CONFIG.detailsStep.anchorRe") +
+          ") but could not read an amount from it.\n" +
+          "  anchor text: " + JSON.stringify(normText(label).slice(0, 80)) + "\n" +
+          "  row text: " + JSON.stringify(normText(findDetailsRow() || label).slice(0, 80))
       );
     }
     if (cents != null && cents !== lastLoggedTotal) {
       lastLoggedTotal = cents;
       console.log(
-        "[bliss] checkout block: Total Reservation " + money(cents, CONFIG.currencyFallback) +
-          " (tax-inclusive basis, plan written against this plus the Bliss fee)"
+        "[bliss] checkout block: total " + money(cents, CONFIG.currencyFallback) +
+          " (tax-inclusive basis, plan written against this plus the Bliss fee)" +
+          "  |  anchor: " +
+          (found.source === "element"
+            ? "<" + (label.tagName || "?").toLowerCase() + ">"
+            : "text fallback")
       );
     }
     return cents;
@@ -3552,10 +4474,29 @@
         if (t.confirmed && !optionByFrequency(t.preview, t.confirmed.frequency)) t.confirmed = null;
         return;
       }
+      // Restore after an iHotelier re-render. The trigger that recorded the
+      // plan was destroyed along with the card and decorateRateCards built a
+      // fresh one in its place with confirmed:null, so the session-level
+      // planChoice is the only surviving copy. Keyed on content, so it lands on
+      // the ONE card the guest actually chose and every other card stays
+      // unconfirmed. Both keys must be non-null: a card with no resolvable
+      // title, and a plan confirmed from the details step, both key to null and
+      // must not match each other.
+      if (
+        !t.confirmed &&
+        state.planChoice &&
+        state.planChoice.cardKey &&
+        t.cardKey &&
+        state.planChoice.cardKey === t.cardKey
+      ) {
+        t.confirmed = state.planChoice;
+      }
       if (t.confirmed) {
         // Invalidate only when the CADENCE is no longer offered. A changed
         // amount is not grounds to drop the confirmation: the figure is derived
-        // at render, so it simply follows the new basis.
+        // at render, so it simply follows the new basis. Runs after the restore
+        // above, so a restored confirmation is checked against the current
+        // preview on the same pass rather than a sync later.
         if (!optionByFrequency(t.preview, t.confirmed.frequency)) t.confirmed = null;
       }
     });
@@ -3602,6 +4543,14 @@
     renderAllTriggers();
     ensureObserver();
     if (state.modal) renderModal();
+    // TEMPORARY. Runs last so it reports what SURVIVED the sync, not just what
+    // ensureDetailsTrigger mounted: renderAllTriggers can still remove the
+    // block on the suppression path after it was mounted this same pass.
+    try {
+      probeDetails();
+    } catch (e) {
+      /* a diagnostic must never break the sync it is diagnosing */
+    }
   }
 
   function rangeChanged(a, b) {
@@ -3687,6 +4636,35 @@
     shadowObservers = kept;
   }
 
+  /**
+   * VIEWPORT RESIZE. There was no resize listener at all, which is the whole of
+   * the "disappears when DevTools closes" bug: closing the panel resizes the
+   * viewport, iHotelier re-renders the payment section, our host goes with it,
+   * and the one sync the re-render's mutations triggered ran against a
+   * half-updated DOM. Nothing re-ran afterwards, because mutations, popstate
+   * and hashchange were the only entry points and a settled page produces none.
+   *
+   * Debounced, because resize fires continuously while a window is dragged and
+   * refresh() re-samples the theme and re-walks every shadow root. The delay
+   * also means this lands well after the host's own re-render has settled,
+   * which is what makes the re-resolve succeed where the mutation-driven sync
+   * failed.
+   */
+  var RESIZE_DEBOUNCE_MS = 200;
+  var resizeTimer = null;
+
+  function onViewportResize() {
+    if (resizeTimer != null) window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(function () {
+      resizeTimer = null;
+      try {
+        refresh();
+      } catch (e) {
+        console.warn("[bliss] resize refresh failed", e);
+      }
+    }, RESIZE_DEBOUNCE_MS);
+  }
+
   function ensureObserver() {
     if (!observer && document.body && typeof window.MutationObserver === "function") {
       try {
@@ -3703,11 +4681,13 @@
       try {
         window.addEventListener("popstate", onMutation);
         window.addEventListener("hashchange", onMutation);
+        window.addEventListener("resize", onViewportResize);
         navBound = true;
       } catch (e) {
         /* ignore */
       }
     }
+    startHostWatchdog();
   }
 
   function stopObserver() {
@@ -3731,11 +4711,20 @@
       try {
         window.removeEventListener("popstate", onMutation);
         window.removeEventListener("hashchange", onMutation);
+        window.removeEventListener("resize", onViewportResize);
       } catch (e) {
         /* ignore */
       }
       navBound = false;
     }
+    // Both timers, so destroy() cannot leave a pending callback that resurrects
+    // the overlay after it has been torn down.
+    if (resizeTimer != null) {
+      window.clearTimeout(resizeTimer);
+      resizeTimer = null;
+    }
+    cancelDetailsRecheck();
+    stopHostWatchdog();
   }
 
   // =========================================================================
@@ -3916,6 +4905,14 @@
         return rows;
       },
       config: CONFIG,
+      /**
+       * TEMPORARY. Prints the placement resolution chain on demand, ignoring
+       * the dedupe so it always emits. Read-only, safe to call at any time.
+       */
+      probePlacement: function () {
+        lastProbeLine = null;
+        probeDetails();
+      },
       __unobserve: stopObserver,
     };
 
