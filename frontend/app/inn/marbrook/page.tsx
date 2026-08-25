@@ -2669,6 +2669,12 @@ const BLISS_CSS = `
 .bliss-ui .sched .n{width:18px;color:#6E6878}
 .bliss-ui .sched .d{color:#17131C}
 .bliss-ui .sched .v{margin-left:auto;font-weight:600;color:#17131C}
+/* Plan terms: plain stacked lines rather than the schedule's box. Same type
+   size and muted ink as the schedule's secondary column, so the two disclosures
+   still read as one pattern, but the rules are prose and take no chrome of
+   their own. Keeps .sched's bottom margin so the rhythm below is unchanged. */
+.bliss-ui .terms{margin:0 0 12px}
+.bliss-ui .terms .row{font-size:12px;color:#6E6878;line-height:1.45}
 .bliss-ui .opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 12px;margin-bottom:8px;background:transparent;color:#17131C;border:1px solid #E9E5E1;border-radius:16px;cursor:pointer}
 .bliss-ui .opt[aria-pressed="true"]{border-color:#8B5CF6;border-width:2px;padding:10px 11px}
 .bliss-ui .opt .lbl{font-size:13px;font-weight:600}
@@ -2946,6 +2952,9 @@ function BlissModal({
   );
   // mews-overlay.js:1920 sets no scheduleOpen key, so it starts falsy.
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  // mews-overlay.js:2234 termsOpen — its own flag, so opening either
+  // disclosure leaves the other as it was.
+  const [termsOpen, setTermsOpen] = useState(false);
   // mews-overlay.js:1936 state.modal.justConfirmed — per modal SESSION, so it
   // starts false on every open and separates "just confirmed" from "reopened".
   const [justConfirmed, setJustConfirmed] = useState(false);
@@ -3115,32 +3124,47 @@ function BlissModal({
 
               {chosen ? (
                 <>
-                  {/* Fine print in place of the removed fee breakdown. The
-                      fee stays inside the per-payment figures and the
-                      schedule. .note treatment (mews-overlay.js:1560). */}
-                  <div className="note">
-                    Includes a small additional processing fee.
-                  </div>
-
-                  {/* Plan policy, .note (mews-overlay.js:1560). */}
-                  <ul className="note">
-                    {policies ? (
-                      <>
-                        <li>{refundCopy(policies)}</li>
-                        <li>{dueDateCopy(policies)}</li>
-                        <li>{failedPaymentCopy(policies)}</li>
-                      </>
-                    ) : (
-                      <>
-                        <li>Full refund anytime before your check-in.</li>
-                        <li>Each payment runs automatically on the date shown.</li>
-                        <li>
-                          If a payment does not go through, we retry it before your
-                          check-in.
-                        </li>
-                      </>
-                    )}
-                  </ul>
+                  {/* The fee fine print and the plan policy, collapsed into one
+                      disclosure. Built as the schedule disclosure above is, down
+                      to the caret and the toggle, so the two are one pattern used
+                      twice (mews-overlay.js:2232-2256). Kept behind `chosen` like
+                      the schedule, so the tail of the picker does not change
+                      shape when the guest deselects. */}
+                  <button
+                    type="button"
+                    className="disc"
+                    aria-expanded={termsOpen ? "true" : "false"}
+                    onClick={() => setTermsOpen((v) => !v)}
+                  >
+                    {(termsOpen ? "▾" : "▸") + "  Terms and conditions"}
+                  </button>
+                  {termsOpen ? (
+                    <div className="terms">
+                      <div className="row">
+                        Includes a small additional processing fee.
+                      </div>
+                      {policies ? (
+                        <>
+                          <div className="row">{refundCopy(policies)}</div>
+                          <div className="row">{dueDateCopy(policies)}</div>
+                          <div className="row">{failedPaymentCopy(policies)}</div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="row">
+                            Full refund anytime before your check-in.
+                          </div>
+                          <div className="row">
+                            Each payment runs automatically on the date shown.
+                          </div>
+                          <div className="row">
+                            If a payment does not go through, we retry it before your
+                            check-in.
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : null}
                 </>
               ) : null}
 
