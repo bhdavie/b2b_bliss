@@ -68,7 +68,19 @@ function tabFor(status: DerivedBookingStatus): Tab {
   return ARCHIVE_STATUSES.has(status) ? "archive" : "active";
 }
 
-export function BookingsTable({ bookings }: { bookings: Booking[] }) {
+export function BookingsTable({
+  bookings,
+  action,
+}: {
+  bookings: Booking[];
+  /**
+   * Primary action for this list, rendered opposite the tabs inside the card.
+   * It used to sit beside the page title; with the title gone it belongs with
+   * the thing it acts on, which is what puts it here rather than floating
+   * above the card on its own.
+   */
+  action?: React.ReactNode;
+}) {
   const [tab, setTab] = useState<Tab>("active");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
@@ -138,13 +150,16 @@ export function BookingsTable({ bookings }: { bookings: Booking[] }) {
     // carry their own px-8 and stay full-bleed to the card edges.
     <Panel variant="filled" className="overflow-hidden">
       <div className="px-8 pt-[30px]">
-        <div className="mb-7 inline-flex gap-1.5 self-start rounded-full bg-sand-track p-[5px]">
-          <TabButton active={tab === "active"} onClick={() => setTab("active")} count={counts.active}>
-            Active
-          </TabButton>
-          <TabButton active={tab === "archive"} onClick={() => setTab("archive")} count={counts.archive}>
-            Archive
-          </TabButton>
+        <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
+          <div className="inline-flex gap-1.5 rounded-full bg-sand-track p-[5px]">
+            <TabButton active={tab === "active"} onClick={() => setTab("active")} count={counts.active}>
+              Active
+            </TabButton>
+            <TabButton active={tab === "archive"} onClick={() => setTab("archive")} count={counts.archive}>
+              Archive
+            </TabButton>
+          </div>
+          {action ?? null}
         </div>
 
         <div className="mb-7 grid grid-cols-1 gap-5 sm:grid-cols-[minmax(0,1fr)_240px_200px]">

@@ -2,7 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { fetchAccountPlans, fetchPlanPortal } from "@/lib/publicApi";
 import { PortalShell } from "@/components/portal/PortalShell";
-import { PageHeader, Panel, SectionHeading } from "@/components/ui/primitives";
+import { Panel, SectionHeading } from "@/components/ui/primitives";
 import { SettingsCardOnFile } from "@/components/portal/SettingsCardOnFile";
 
 export default async function AccountSettingsPage() {
@@ -26,11 +26,6 @@ export default async function AccountSettingsPage() {
   return (
     <PortalShell active="settings" email={data.email}>
       <div className="flex flex-col pb-[72px]">
-        <PageHeader
-          title="Settings"
-          subtitle="Your account details and the card your installments run on."
-        />
-
         <div className="grid grid-cols-1 items-start gap-x-12 gap-y-7 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
           <Panel variant="filled" className="px-7 py-[30px]">
             <SectionHeading className="mb-5">Account</SectionHeading>

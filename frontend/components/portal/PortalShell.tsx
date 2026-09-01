@@ -102,7 +102,9 @@ export function PortalShell({
       </aside>
 
       <main className="md:pl-[264px]">
-        <div className="mx-auto max-w-[1136px] px-6 pt-14 xl:px-16">
+        {/* pt-10, matching the merchant shell now that both drop their page
+            titles. /plan/[token] keeps its title and sits on the same rhythm. */}
+        <div className="mx-auto max-w-[1136px] px-6 pt-10 xl:px-16">
           {children}
         </div>
       </main>

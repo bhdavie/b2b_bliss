@@ -27,7 +27,10 @@ export default async function AuthenticatedLayout({
     <div className="min-h-screen bg-sand-100 font-inter text-ink-900">
       <Sidebar email={session.email} businessName={session.businessName} />
       <main className="md:pl-[264px]">
-        <div className="mx-auto max-w-[1136px] px-6 pb-[72px] pt-16 xl:px-16">
+        {/* pt-10, down from pt-16. With the PageHeader gone the first card
+            would otherwise have started 64px down with nothing above it, which
+            reads as the header's empty socket rather than as breathing room. */}
+        <div className="mx-auto max-w-[1136px] px-6 pb-[72px] pt-10 xl:px-16">
           {children}
         </div>
       </main>

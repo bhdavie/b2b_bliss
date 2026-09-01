@@ -16,7 +16,7 @@ import {
   type PmsType,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
-import { PageHeader, Panel } from "@/components/ui/primitives";
+import { Panel } from "@/components/ui/primitives";
 
 export type AccountInitial = {
   hotelName: string;
@@ -46,11 +46,6 @@ export function AccountSettings({
 }) {
   return (
     <div className="flex max-w-[980px] flex-col">
-      <PageHeader
-        title="Account settings"
-        subtitle="Manage your property details and the tools Bliss connects to."
-      />
-
       <AccountInformation initial={initial} />
 
       <StackedSection
@@ -113,11 +108,7 @@ function AccountInformation({ initial }: { initial: AccountInitial }) {
     .join("\n");
 
   return (
-    <StackedSection
-      title="Account information"
-      helper="Your property details and how guests reach you."
-      dense
-    >
+    <StackedSection title="Account information" dense>
       <FieldRow
           label="Hotel name"
           display={values.hotelName}
@@ -193,7 +184,15 @@ function StackedSection({
   dense = false,
 }: {
   title: string;
-  helper: string;
+  /**
+   * Optional. "Account information" dropped its helper because the helper
+   * restated the title: "Your property details and how guests reach you" said
+   * the same thing as the heading, and its second clause was not even true —
+   * the fields under it are the login email and the property's own address,
+   * not a contact route for guests. The connection section keeps its helper,
+   * which explains what connecting a PMS actually does.
+   */
+  helper?: string;
   children: React.ReactNode;
   /** Account information holds ruled rows, so its panel takes tighter padding. */
   dense?: boolean;

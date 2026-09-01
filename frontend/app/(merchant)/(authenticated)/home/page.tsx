@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { OverviewConnections } from "@/components/merchant/OverviewConnections";
 import { OnboardingChecklist } from "@/components/merchant/OnboardingChecklist";
-import { PageHeader, Panel, SectionHeading } from "@/components/ui/primitives";
+import { Panel, SectionHeading } from "@/components/ui/primitives";
 import {
   fetchAttentionPlansServer,
   fetchBookingsServer,
@@ -27,11 +27,6 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col">
-      <PageHeader
-        title="Overview"
-        subtitle={`A quick look at ${session.businessName || "your property"} today.`}
-      />
-
       {showChecklist ? (
         <div className="mb-7">
           <OnboardingChecklist status={onboarding} />
