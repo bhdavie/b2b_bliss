@@ -1,25 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   CheckIcon,
-  PAYMENT_PROVIDERS,
   PMS_PROVIDERS,
   ProviderLogo,
-  Spinner,
 } from "./ConnectionsContext";
 import {
   cloudbedsOAuthStartUrl,
-  completeStripeConnectStandardDemo,
   disconnectMews,
-  fetchStripeConnectStatus,
-  startStripeConnect,
   type OnboardingCloudbeds,
   type OnboardingMews,
   type OnboardingStateWire,
   type PmsType,
-  type StripeConnectStatus,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { PageHeader, Panel } from "@/components/ui/primitives";
@@ -66,12 +60,6 @@ export function AccountSettings({
         <PropertyManagementSection connections={connections} />
       </StackedSection>
 
-      <StackedSection
-        title="Payment processor connection"
-        helper="Accept payments and installments, and route payouts to your bank."
-      >
-        <PaymentProcessorSection connections={connections} />
-      </StackedSection>
     </div>
   );
 }
@@ -418,11 +406,10 @@ function LockIcon({ className = "" }: { className?: string }) {
 
 const MEWS = PMS_PROVIDERS.find((p) => p.name === "Mews")!;
 const CLOUDBEDS = PMS_PROVIDERS.find((p) => p.name === "Cloudbeds")!;
-const STRIPE = PAYMENT_PROVIDERS.find((p) => p.name === "Stripe")!;
 
-// Property management (PMS) connection, driven by real onboarding state. Only
-// Mews is connectable today; Cloudbeds is coming soon; Stripe-only properties
-// have no PMS.
+// Property management (PMS) connection, driven by real onboarding state. Mews
+// and Cloudbeds are the two connectable rails; a property that has not chosen
+// one yet is prompted to.
 function PropertyManagementSection({ connections }: { connections: AccountConnections }) {
   const router = useRouter();
   const [disconnecting, setDisconnecting] = useState(false);
@@ -529,109 +516,9 @@ function PropertyManagementSection({ connections }: { connections: AccountConnec
   );
 }
 
-// Payment processor connection. For a Mews-rail property, payments run through
-// Mews, so there is no separate processor. For a Stripe-rail property, this is
-// the real Stripe connect flow.
-function PaymentProcessorSection({ connections }: { connections: AccountConnections }) {
-  const router = useRouter();
-  const { pmsType, mews } = connections;
-  const mewsConnected = pmsType === "mews" && Boolean(mews?.connected);
-  const [phase, setPhase] = useState<"idle" | "connecting" | "error">("idle");
-  const [error, setError] = useState<string | null>(null);
-  // Live Connect Standard status. The session's stripeConnectStatus reflects
-  // the older Express columns on the merchant row, which the per-property
-  // Standard flow never writes, so read the connection from its own endpoint.
-  // Mounting after Stripe returns to /dashboard is what refreshes this.
-  const [connect, setConnect] = useState<StripeConnectStatus | null>(null);
-
-  useEffect(() => {
-    if (mewsConnected) return;
-    let active = true;
-    fetchStripeConnectStatus()
-      .then((status) => {
-        if (active) setConnect(status);
-      })
-      .catch(() => {
-        // Leave the section in its not-connected state; the button still works.
-      });
-    return () => {
-      active = false;
-    };
-  }, [mewsConnected]);
-
-  if (mewsConnected) {
-    return (
-      <p className="text-sm text-ink-500">
-        Payments run through your Mews connection. Cards are charged in Mews, so there is no
-        separate processor to connect.
-      </p>
-    );
-  }
-
-  if (connect?.chargesEnabled) {
-    return (
-      <div>
-        <ConnectedHeader provider={STRIPE} subtext="Payouts are set up. You can take payment plans and get paid out on arrival." />
-      </div>
-    );
-  }
-
-  async function handleConnectStripe() {
-    setError(null);
-    setPhase("connecting");
-    try {
-      const link = await startStripeConnect();
-      if ("error" in link) {
-        // No Stripe key on the backend, so there is no hosted flow to send
-        // them to. Mark the property connected the way the demo path does.
-        setConnect(await completeStripeConnectStandardDemo());
-        setPhase("idle");
-        router.refresh();
-        return;
-      }
-      window.location.href = link.url;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not connect Stripe. Try again.");
-      setPhase("error");
-    }
-  }
-
-  const resuming = connect?.status === "in_progress" || connect?.status === "restricted";
-
-  return (
-    <div>
-      <div className="flex items-center gap-3">
-        <ProviderLogo provider={STRIPE} className="h-8" />
-      </div>
-      <p className="mt-3 text-sm text-ink-500">
-        {resuming
-          ? "Your Stripe onboarding is not finished. Pick up where you left off to start taking payments."
-          : "Connect Stripe to accept payments and installments, and route payouts to your bank."}
-      </p>
-      {error ? (
-        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-      ) : null}
-      <Button
-        type="button"
-        onClick={handleConnectStripe}
-        disabled={phase === "connecting"}
-        variant="merchant"
-        className="mt-5"
-      >
-        {phase === "connecting" ? (
-          <span className="flex items-center gap-2">
-            <Spinner className="h-4 w-4" />
-            Redirecting to Stripe
-          </span>
-        ) : resuming ? (
-          "Continue Stripe setup"
-        ) : (
-          "Connect Stripe"
-        )}
-      </Button>
-    </div>
-  );
-}
+// The Payment processor connection section was removed with the rest of the
+// payment-processor surface: a property connects its property system, and that
+// system executes the charge. Nothing here connected a second time.
 
 // Shared: connected header with a logo, a "Connected" tag, and a subtext line.
 function ConnectedHeader({ provider, subtext }: { provider: { name: string; logo: string }; subtext: string }) {

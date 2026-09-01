@@ -14,7 +14,11 @@ export type Address = {
   country: string | null;
 };
 
-export type PmsType = "stripe" | "mews" | "cloudbeds";
+// "none" is the default for a property that has not chosen a rail yet; it
+// replaced "stripe" as the default so a new property is never silently placed
+// on a rail whose connect step no longer exists. "stripe" remains for the
+// legacy no-PMS properties already on it.
+export type PmsType = "none" | "stripe" | "mews" | "cloudbeds";
 
 export type OnboardingStateWire =
   | "created"

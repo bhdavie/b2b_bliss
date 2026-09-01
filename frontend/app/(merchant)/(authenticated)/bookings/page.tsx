@@ -1,16 +1,21 @@
 import { BookingsTable } from "@/components/merchant/BookingsTable";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/primitives";
-import { fetchBookingsServer, fetchStripeStatusServer } from "@/lib/auth";
+import { fetchBookingsServer, fetchOnboardingServer } from "@/lib/auth";
 
 export default async function BookingsPage() {
-  const [stripeStatus, list] = await Promise.all([
-    fetchStripeStatusServer(),
+  const [onboarding, list] = await Promise.all([
+    fetchOnboardingServer(),
     fetchBookingsServer(),
   ]);
-  const chargesEnabled = stripeStatus?.status === "charges_enabled";
-  const stripeUnconfigured = stripeStatus?.configured === false;
-  const canCreate = chargesEnabled || stripeUnconfigured;
+  // Gated on the PMS connection, not on Stripe charges_enabled. The old gate
+  // asked whether the property could take a card on its own Stripe Connect
+  // account; with the payment-processor step removed, no property can ever
+  // answer yes to that, so it would have locked "New booking" for everyone.
+  // What actually has to be true is that the rail which executes the charge is
+  // connected, which is exactly the pms_connected step.
+  const canCreate =
+    onboarding?.steps.find((s) => s.key === "pms_connected")?.done ?? false;
   const bookings = list?.bookings ?? [];
 
   return (

@@ -94,10 +94,8 @@ export default async function HomePage() {
             <SectionHeading track="0.08em">Connections</SectionHeading>
             <OverviewConnections
               pmsType={session.pmsType}
-              onboardingState={session.onboardingState}
               mews={onboarding?.mews ?? null}
               cloudbeds={onboarding?.cloudbeds ?? null}
-              stripeConnectStatus={session.stripeConnectStatus}
             />
           </Panel>
 

@@ -9,16 +9,24 @@ import { Panel } from "@/components/ui/primitives";
 // Setup checklist shown on the dashboard until the property reaches `active`.
 // Each step links to its page; the final step activates the property.
 
+// `none` is the default for a property that has not chosen yet. It never
+// reaches a label in practice — pmsChosen gates every read of PMS_LABEL — but
+// the Record is exhaustive over PmsType, so it needs an entry. `stripe` is the
+// legacy no-PMS rail; no new property can land on it.
 const PMS_LABEL: Record<PmsType, string> = {
+  none: "Not chosen",
   stripe: "Stripe",
   mews: "Mews",
   cloudbeds: "Cloudbeds",
 };
 
-function connectHref(pms: PmsType): string | null {
+// Only the two connectable rails have a connect screen. Anything else (none,
+// or a legacy stripe property) goes back to the PMS picker rather than to the
+// removed /onboarding/connect-stripe.
+function connectHref(pms: PmsType): string {
   if (pms === "mews") return "/onboarding/connect-mews";
   if (pms === "cloudbeds") return "/onboarding/connect-cloudbeds";
-  return "/onboarding/connect-stripe";
+  return "/onboarding/pms";
 }
 
 export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {

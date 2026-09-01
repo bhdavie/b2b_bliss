@@ -119,7 +119,12 @@ export default async function InstallPage() {
         </>
       ) : null}
 
-      {pms === "stripe" ? (
+      {/* The no-booking-engine case. `none` is the new default for a property
+          that has not picked a rail, and `stripe` is the legacy no-PMS rail;
+          neither has an engine to install into, so both land here. Before
+          `none` existed this read `pms === "stripe"` alone, which after the
+          default changed would have shown a new property nothing at all. */}
+      {pms === "none" || pms === "stripe" ? (
         <>
           <SubHeading>Add Bliss to your booking engine</SubHeading>
           <Panel variant="filled" className="gap-4 px-7 py-[30px]">

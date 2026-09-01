@@ -116,10 +116,15 @@ public class PropertyOnboardingService {
 
     /**
      * Advances a Stripe-rail property PMS_SELECTED -> PMS_CONNECTED once its
-     * Standard connection can take charges. This is the Stripe equivalent of the
-     * Mews "connect" step: a Stripe-rail property routes through Connect before
-     * it can set policies. No-op if the property is not on the Stripe rail, has
-     * no charges-enabled connection, or is already further along. Idempotent.
+     * Standard connection can take charges. Idempotent, and a no-op unless the
+     * property is on the Stripe rail with a charges-enabled connection.
+     *
+     * <p>No longer part of onboarding. The payment-processor connect step has
+     * been removed from the funnel, and a new property now defaults to
+     * {@link PmsType#NONE} rather than STRIPE, so nothing in the funnel reaches
+     * this. It stays only so the Standard Connect endpoints keep working for the
+     * properties already on that rail; onboarding completion no longer depends
+     * on it for any property.
      */
     public void markStripeConnected(UUID merchantId) {
         Merchant merchant = reload(merchantId);
@@ -140,6 +145,16 @@ public class PropertyOnboardingService {
      * PMS_SELECTED and cannot reach PMS_CONNECTED.
      */
     public OnboardingStatus selectPms(Merchant merchant, PmsType pmsType) {
+        // The funnel offers Mews and Cloudbeds. NONE is the not-yet-chosen
+        // default and is not a choice; STRIPE is the legacy no-PMS rail whose
+        // connect step has been removed, so selecting it would park the property
+        // in front of a step that no longer exists. Reject both here rather than
+        // at the resource, so the rule holds for every caller.
+        if (!pmsType.isConnectable()) {
+            throw new PropertyOnboardingException(
+                    "unsupported_pms",
+                    "Choose a property management system to connect.");
+        }
         merchantDao.updatePmsType(merchant.id(), pmsType.wire());
         advanceTo(merchant, OnboardingState.PMS_SELECTED);
         Merchant updated = reload(merchant.id());

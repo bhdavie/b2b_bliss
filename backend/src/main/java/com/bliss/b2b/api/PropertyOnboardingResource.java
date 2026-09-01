@@ -47,9 +47,16 @@ public class PropertyOnboardingResource {
         try {
             pmsType = PmsType.fromWire(req.pmsType());
         } catch (IllegalArgumentException e) {
-            return badRequest("invalid_input", "pmsType must be one of stripe, mews, cloudbeds");
+            return badRequest("invalid_input", "pmsType must be one of mews, cloudbeds");
         }
-        return Response.ok(service.selectPms(principal.merchant(), pmsType)).build();
+        try {
+            return Response.ok(service.selectPms(principal.merchant(), pmsType)).build();
+        } catch (PropertyOnboardingException e) {
+            // selectPms rejects a non-connectable rail ('none', and the legacy
+            // 'stripe' whose connect step has been removed). Without this catch
+            // the exception escapes as a 500; it is a bad request, not a fault.
+            return badRequest(e.code(), e.getMessage());
+        }
     }
 
     @POST

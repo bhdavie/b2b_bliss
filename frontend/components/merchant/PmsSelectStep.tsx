@@ -49,13 +49,15 @@ export function PmsSelectStep({ currentPms }: { currentPms: PmsType }) {
     setSubmitting(pms);
     try {
       await selectPms(pms);
-      if (pms === "mews") {
-        router.push("/onboarding/connect-mews");
-      } else if (pms === "cloudbeds") {
-        router.push("/onboarding/connect-cloudbeds");
-      } else {
-        router.push("/onboarding/connect-stripe");
-      }
+      // Mews and Cloudbeds are the only options, and PmsType.isConnectable on
+      // the backend now enforces that, so there is no third branch to fall
+      // through to. The Stripe arm used to route to /onboarding/connect-stripe,
+      // which no longer exists.
+      router.push(
+        pms === "mews"
+          ? "/onboarding/connect-mews"
+          : "/onboarding/connect-cloudbeds",
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save your choice. Try again.");
       setSubmitting(null);

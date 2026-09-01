@@ -3,100 +3,62 @@
 import Link from "next/link";
 import {
   CheckIcon,
-  PAYMENT_PROVIDERS,
   PMS_PROVIDERS,
   ProviderLogo,
   type Provider,
 } from "./ConnectionsContext";
-import type {
-  OnboardingCloudbeds,
-  OnboardingMews,
-  OnboardingStateWire,
-  PmsType,
-} from "@/lib/api";
+import type { OnboardingCloudbeds, OnboardingMews, PmsType } from "@/lib/api";
 
 // At-a-glance connection status for the Overview, driven by the property's REAL
-// onboarding state (pmsType + Mews connection + Stripe status) rather than the
-// simulated demo store. A Mews-connected property shows Mews on both rows; a
-// Stripe-only property shows its Stripe payout status.
+// onboarding state (pmsType + the PMS connection) rather than the simulated
+// demo store.
+//
+// One row now, not two. The Payments row was removed along with the payment
+// processor connection: a property connects its property system, and that
+// system executes the charge, so there was never a second connection to report.
+// `onboardingState` and `stripeConnectStatus` went with it — the first only fed
+// the removed "Stripe only, no property system" branch, the second only the
+// removed Payments row.
 
 const MEWS = PMS_PROVIDERS.find((p) => p.name === "Mews")!;
 const CLOUDBEDS = PMS_PROVIDERS.find((p) => p.name === "Cloudbeds")!;
-const STRIPE = PAYMENT_PROVIDERS.find((p) => p.name === "Stripe")!;
 
 export function OverviewConnections({
   pmsType,
-  onboardingState,
   mews,
   cloudbeds,
-  stripeConnectStatus,
 }: {
   pmsType: PmsType;
-  onboardingState: OnboardingStateWire;
   mews: OnboardingMews | null;
   cloudbeds: OnboardingCloudbeds | null;
-  stripeConnectStatus: string | null;
 }) {
   const mewsConnected = pmsType === "mews" && Boolean(mews?.connected);
   const cloudbedsConnected = pmsType === "cloudbeds" && Boolean(cloudbeds?.connected);
-  const stripeConnected = stripeConnectStatus === "charges_enabled";
-  const pmsChosen = onboardingState !== "created";
 
   return (
     // No panel of its own: the Overview wraps this in the filled section block
     // together with the heading, so drawing one here would nest sand-50 inside
     // sand-50.
     <div className="flex flex-col">
-      {/* Payments: reflect the PMS rail when connected, else Stripe payouts. */}
-      {mewsConnected ? (
-        <Row
-          label="Payments"
-          subtext={
-            mews?.currency ? `Charged through Mews in ${mews.currency}` : "Charged through Mews"
-          }
-          logo={MEWS}
-          right={<ConnectedTag />}
-        />
-      ) : cloudbedsConnected ? (
-        <Row
-          label="Payments"
-          subtext={
-            cloudbeds?.currency
-              ? `Charged through Cloudbeds in ${cloudbeds.currency}`
-              : "Charged through Cloudbeds"
-          }
-          logo={CLOUDBEDS}
-          right={<ConnectedTag />}
-        />
-      ) : stripeConnected ? (
-        <Row label="Payments" logo={STRIPE} right={<ConnectedTag />} />
-      ) : (
-        <Row
-          label="Payments"
-          right={
-            <SetUp
-              href={
-                pmsType === "cloudbeds"
-                  ? "/onboarding/connect-cloudbeds"
-                  : "/onboarding/connect-stripe"
-              }
-            />
-          }
-        />
-      )}
+      {/* The Payments row is gone. A property no longer connects a payment
+          processor: its PMS executes the charge, so "payments" and "property
+          system" named the same connection twice, and the row's not-connected
+          state pointed at /onboarding/connect-stripe, a route that no longer
+          exists. The currency the rail charges in — the one thing the Payments
+          row carried that this one did not — has moved onto the subtext below. */}
 
       {/* Property system: the chosen PMS. */}
       {mewsConnected ? (
         <Row
           label="Property system"
-          subtext={mews?.enterpriseName ?? undefined}
+          subtext={joinSubtext(mews?.enterpriseName, mews?.currency, "Mews")}
           logo={MEWS}
           right={<ConnectedTag />}
         />
       ) : cloudbedsConnected ? (
         <Row
           label="Property system"
-          subtext={cloudbeds?.propertyName ?? undefined}
+          subtext={joinSubtext(cloudbeds?.propertyName, cloudbeds?.currency, "Cloudbeds")}
           logo={CLOUDBEDS}
           right={<ConnectedTag />}
         />
@@ -108,9 +70,11 @@ export function OverviewConnections({
           logo={CLOUDBEDS}
           right={<SetUp href="/onboarding/connect-cloudbeds" />}
         />
-      ) : pmsChosen ? (
-        <Row label="Property system" right={<InfoTag text="Stripe only, no property system" />} />
       ) : (
+        // Covers `none` (nothing chosen yet) and the legacy `stripe` rail. Both
+        // want the same thing: go pick a property system. The old branch here
+        // showed "Stripe only, no property system" for a chosen-but-unconnected
+        // property, which no longer describes a state a property can enter.
         <Row label="Property system" right={<SetUp href="/onboarding/pms" />} />
       )}
     </div>
@@ -155,8 +119,20 @@ function ConnectedTag() {
   );
 }
 
-function InfoTag({ text }: { text: string }) {
-  return <span className="text-base text-ink-400">{text}</span>;
+/**
+ * Property name plus the currency the rail charges in, e.g.
+ * "Gross pricing UK · charged in GBP". The currency line used to live on the
+ * Payments row; folding it in here is what keeps it visible now that the row is
+ * gone. Falls back to the provider name when the connection reports no
+ * enterprise, and drops the currency clause when there is none.
+ */
+function joinSubtext(
+  name: string | null | undefined,
+  currency: string | null | undefined,
+  provider: string,
+): string {
+  const left = name?.trim() || provider;
+  return currency?.trim() ? `${left} · charged in ${currency.trim()}` : left;
 }
 
 function SetUp({ href }: { href: string }) {

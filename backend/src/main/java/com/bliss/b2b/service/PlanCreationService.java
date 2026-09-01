@@ -752,12 +752,17 @@ public class PlanCreationService {
                 null, PaymentPlanStatus.ACTIVE.wire());
     }
 
-    /** payment_rail written at plan creation; only Mews is a non-Stripe rail. */
+    /**
+     * payment_rail written at plan creation. NONE (a property that has not
+     * chosen a PMS) charges on the platform exactly as STRIPE does, so it
+     * records the same rail: the column describes how the money moved, and for
+     * both of those it moved through the Bliss platform account.
+     */
     private static String railFor(Merchant merchant) {
         return switch (merchant.pmsType()) {
             case MEWS -> "mews";
             case CLOUDBEDS -> "cloudbeds";
-            case STRIPE -> "stripe";
+            case STRIPE, NONE -> "stripe";
         };
     }
 
