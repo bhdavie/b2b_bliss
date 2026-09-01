@@ -43,7 +43,24 @@ export function PageHeader({
 }) {
   return (
     <div className="mb-12 flex flex-col gap-2.5">
-      <h1 className="text-[44px] font-medium leading-[1.05] tracking-[-0.035em] text-ink-900">
+      {/* Title takes the marketing site's hero-headline face: DM Serif Display
+          (`font-display`), already loaded in app/layout.tsx under --font-display
+          and already the face AuthShell's heading uses.
+          font-normal, NOT font-medium: DM Serif Display ships a single 400
+          weight, so asking for 500 makes the browser synthesize a bold. The
+          marketing site hits the same problem — its .hero h1 declares
+          font-weight: 700, and the later serif rule resets it to 400 with the
+          comment "avoids synthetic bold". This is part of the face, not a
+          weight change of its own.
+          Size, leading and tracking are untouched, and 44px / 1.05 / -0.035em
+          already matched the marketing hero's own line-height and letter
+          spacing exactly.
+          Subtitle deliberately left on the sans face. */}
+      {/* text-brand-violet (#8B5CF6), the token rather than the hex. At 44px
+          this is large text, so the amethyst clears AA at that size even though
+          the palette notes it does not for body copy — which is why the
+          subtitle below stays on ink-500 rather than following the title. */}
+      <h1 className="font-display text-[44px] font-normal leading-[1.05] tracking-[-0.035em] text-brand-violet">
         {title}
       </h1>
       <p className="text-lg text-ink-500">{subtitle}</p>

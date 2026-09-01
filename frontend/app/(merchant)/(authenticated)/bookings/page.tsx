@@ -22,7 +22,12 @@ export default async function BookingsPage() {
     <>
       <header className="mb-9 flex items-start justify-between gap-10">
         <div className="flex flex-col gap-3">
-          <h1 className="text-[44px] font-medium leading-[1.05] tracking-[-0.035em] text-ink-900">
+          {/* Not PageHeader: this route needs the New booking button beside the
+              title, which PageHeader has no slot for. The h1 therefore carries
+              a copy of PageHeader's classes and has to be kept in step with it
+              by hand — including the serif face and the font-normal that goes
+              with it. See the note in PageHeader for why the weight drops. */}
+          <h1 className="font-display text-[44px] font-normal leading-[1.05] tracking-[-0.035em] text-brand-violet">
             Bookings
           </h1>
           <p className="text-[19px] text-ink-500">
