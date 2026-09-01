@@ -57,7 +57,7 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
 
   if (result) {
     return (
-      <Panel className="mx-auto w-full max-w-[560px] items-center gap-5 px-10 pb-10 pt-9 text-center">
+      <Panel variant="filled" className="mx-auto w-full max-w-[560px] items-center gap-5 px-10 pb-10 pt-9 text-center">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-violet text-xl text-white">
           ✓
         </div>
@@ -76,7 +76,10 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col rounded-panel border border-sand-200 px-8 pb-8 pt-[30px]">
+    // Hand-rolled Panel shape (a <form>, so it cannot be a <Panel>). bg-white
+    // keeps it matching Panel variant="filled" now that the funnel ground is
+    // sand-100; without a fill it would take the page colour.
+    <form onSubmit={handleSubmit} className="flex flex-col rounded-panel border border-sand-200 bg-white px-8 pb-8 pt-[30px]">
       <h2 className="text-2xl font-medium tracking-[-0.02em] text-ink-900">Connect Mews</h2>
       <p className="mt-2.5 max-w-[760px] text-[17px] leading-[1.55] text-ink-500">
         Enter your Mews Connector API tokens. We check them against Mews before saving.

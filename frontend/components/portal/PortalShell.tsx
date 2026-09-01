@@ -41,8 +41,12 @@ export function PortalShell({
   email?: string | null;
   children: React.ReactNode;
 }) {
+  // bg-sand-100 is the app's page ground, matching the merchant shell. Was
+  // bg-white, a redundant repaint of the body that left the page lighter than
+  // its own cards. See the note in app/(merchant)/(authenticated)/layout.tsx
+  // for why this lives on the shell rather than on globals.css body.
   return (
-    <div className="min-h-screen bg-white font-inter text-ink-900">
+    <div className="min-h-screen bg-sand-100 font-inter text-ink-900">
       <aside className="flex flex-col justify-between border-sand-200 bg-sand-50 py-[34px] md:fixed md:inset-y-0 md:left-0 md:w-[264px] md:border-r">
         <div className="flex flex-col">
           <div className="flex flex-col gap-[5px] px-7 pb-10">

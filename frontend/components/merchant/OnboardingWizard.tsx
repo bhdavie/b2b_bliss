@@ -91,7 +91,10 @@ export function OnboardingWizard({ initial }: { initial: FormState }) {
   }
 
   return (
-    <Panel className="px-8 pb-8 pt-[30px]">
+    // variant="filled" (white) rather than the default outlined. The funnel
+    // ground is sand-100 now, and an unfilled panel would take the page colour
+    // and stop reading as a card at all.
+    <Panel variant="filled" className="px-8 pb-8 pt-[30px]">
       <Stepper current={step} />
 
       {step === 0 && (
