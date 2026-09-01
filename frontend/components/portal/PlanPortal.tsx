@@ -9,7 +9,7 @@ import {
   formatScheduleDateLong,
   type PublicPlanPortal,
 } from "@/lib/publicApi";
-import { Panel, SectionHeading } from "@/components/ui/primitives";
+import { PageHeader, Panel, SectionHeading } from "@/components/ui/primitives";
 import { PayEarlyButton } from "./PayEarlyButton";
 import { UpdateCardSection } from "./UpdateCardSection";
 import { CancelPlanSection } from "./CancelPlanSection";
@@ -74,26 +74,68 @@ export function PlanPortal({
 
   return (
     <div className="flex flex-col">
-      {/* Header */}
-      <div className="mb-8 flex flex-col gap-3">
-        {backHref ? (
-          <Link
-            href={backHref}
-            className="self-start text-[15px] text-brand-violet no-underline hover:underline"
-          >
-            Back to your plans
-          </Link>
-        ) : null}
-        <div className="text-[42px] font-medium leading-[1.08] tracking-[-0.03em] text-ink-900">
-          {portal.merchant.businessName}
-        </div>
-        <div className="text-lg text-ink-500">{portal.booking.serviceName}</div>
-      </div>
+      {/* Title on the page ground, not in a card. The property name is this
+          route's title, and every other route puts its title on the ground —
+          carding it here made this the only screen where the page's own name
+          sat on a surface.
+          It renders through PageHeader itself rather than a copy of its
+          classes, so the 44px scale, the leading and the 48px space beneath it
+          cannot drift from /home, /bookings, /settings and /install. The back
+          link is the one thing PageHeader has no slot for, so it sits above,
+          matched to the gap PageHeader keeps between its own two lines. */}
+      {backHref ? (
+        <Link
+          href={backHref}
+          className="mb-2.5 self-start text-[15px] text-brand-violet no-underline hover:underline"
+        >
+          Back to your plans
+        </Link>
+      ) : null}
+      <PageHeader
+        title={portal.merchant.businessName}
+        subtitle={portal.booking.serviceName}
+      />
 
-      {/* Plan-level notices. Not drawn in the design, which shows one active,
-          unrefunded plan; kept on the chrome-free treatment. */}
+      {/* Plan progress — the bar plus paid/remaining, on their own card
+          directly under the title. py-6 rather than the py-[30px] this card
+          carried while it also held the title: with only a 8px bar and one row
+          of figures inside, the taller padding left more empty card than
+          content.
+          The bar is decorative: the two figures it encodes are printed
+          underneath, so it is hidden from assistive tech rather than carrying a
+          redundant progressbar role. */}
+      <Panel variant="filled" className="mb-7 px-7 py-6">
+        <div className="flex flex-col gap-4">
+          <div
+            aria-hidden="true"
+            className="h-2 w-full overflow-hidden rounded-full bg-sand-200"
+          >
+            <div
+              className="h-full rounded-full bg-brand-violet"
+              style={{ width: `${paidPercent}%` }}
+            />
+          </div>
+          <div className="flex items-start justify-between gap-6">
+            <div className="flex flex-col gap-[7px]">
+              <div className="text-[15px] text-ink-400">Paid to date</div>
+              <div className="text-[17px] font-medium text-ink-900">
+                {formatDollars(portal.paidCents)}
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-[7px]">
+              <div className="text-[15px] text-ink-400">Remaining</div>
+              <div className="text-[17px] font-medium text-ink-900">
+                {formatDollars(portal.remainingCents)}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Panel>
+
+      {/* Plan-level notices. bg-white so the notice is a card like everything
+          else here; it was an unfilled panel and took the page ground. */}
       {portal.plan.refundedAt ? (
-        <div className="mb-8 flex items-center gap-3 rounded-panel border border-sand-200 px-7 py-5">
+        <div className="mb-7 flex items-center gap-3 rounded-panel border border-sand-200 bg-white px-7 py-5">
           <span className="rounded-full bg-brand-violet-tint px-[15px] py-[7px] text-[13px] font-medium uppercase tracking-[0.06em] text-brand-violet">
             Refunded
           </span>
@@ -104,8 +146,11 @@ export function PlanPortal({
         </div>
       ) : null}
 
+      {/* Completion banner. Its own card rather than folded into the masthead:
+          it is a state that appears and disappears, and merging it would make
+          the masthead's height jump between two quite different layouts. */}
       {planComplete ? (
-        <div className="mb-8 flex flex-col gap-3">
+        <Panel variant="filled" className="mb-7 gap-3 px-7 py-[30px]">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-lavender text-brand-violet-deep">
             <CheckIcon />
           </div>
@@ -116,7 +161,7 @@ export function PlanPortal({
             Your stay at {portal.merchant.businessName} is fully paid.{" "}
             {enjoyCopy}
           </div>
-        </div>
+        </Panel>
       ) : null}
 
       {/* Booking — full content width, directly above the schedule. The four
@@ -147,34 +192,6 @@ export function PlanPortal({
         </div>
       </Panel>
 
-      {/* Plan progress — replaces the balance band. Decorative: the two figures
-          it encodes are printed underneath, so the bar itself is hidden from
-          assistive tech rather than carrying a redundant progressbar role. */}
-      <div className="mb-9 flex flex-col gap-4">
-        <div
-          aria-hidden="true"
-          className="h-2 w-full overflow-hidden rounded-full bg-sand-200"
-        >
-          <div
-            className="h-full rounded-full bg-brand-violet"
-            style={{ width: `${paidPercent}%` }}
-          />
-        </div>
-        <div className="flex items-start justify-between gap-6">
-          <div className="flex flex-col gap-[7px]">
-            <div className="text-[15px] text-ink-400">Paid to date</div>
-            <div className="text-[17px] font-medium text-ink-900">
-              {formatDollars(portal.paidCents)}
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-[7px]">
-            <div className="text-[15px] text-ink-400">Remaining</div>
-            <div className="text-[17px] font-medium text-ink-900">
-              {formatDollars(portal.remainingCents)}
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Row 1 — schedule, with next payment and payment method beside it */}
       <div className="mb-7 grid grid-cols-1 items-start gap-x-10 gap-y-9 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
@@ -296,7 +313,10 @@ export function PlanPortal({
         {/* Not drawn in the design, which shows no cancel affordance. Kept on
             the chrome-free treatment, now beside the accounting. */}
         {!planComplete && portal.plan.status === "active" ? (
-          <div className="flex flex-col xl:col-start-1 xl:row-start-1">
+          <Panel
+            variant="filled"
+            className="px-7 py-[30px] xl:col-start-1 xl:row-start-1"
+          >
             <SectionHeading className="mb-5">Cancel plan</SectionHeading>
             <div className="max-w-[560px]">
               <CancelPlanSection
@@ -307,7 +327,7 @@ export function PlanPortal({
                 processingFeeCents={portal.processingFeeCents}
               />
             </div>
-          </div>
+          </Panel>
         ) : null}
       </div>
 

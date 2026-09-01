@@ -128,55 +128,63 @@ export function BookingsTable({ bookings }: { bookings: Booking[] }) {
   }, [sorted, tab, search, status, dateRange]);
 
   return (
-    <div>
-      <div className="mb-7 inline-flex gap-1.5 self-start rounded-full bg-sand-track p-[5px]">
-        <TabButton active={tab === "active"} onClick={() => setTab("active")} count={counts.active}>
-          Active
-        </TabButton>
-        <TabButton active={tab === "archive"} onClick={() => setTab("archive")} count={counts.archive}>
-          Archive
-        </TabButton>
-      </div>
-
-      <div className="mb-8 grid grid-cols-1 gap-5 sm:grid-cols-[minmax(0,1fr)_240px_200px]">
-        <div className="relative">
-          <SearchIcon className="pointer-events-none absolute left-[17px] top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search guest or package"
-            className="w-full rounded-xl border-2 border-sand-500 bg-white py-[15px] pl-[45px] pr-[17px] text-[17px] text-ink-900 placeholder:text-ink-300 focus:border-brand-violet focus:outline-none focus:shadow-focus-ring"
-          />
+    // Tabs, filters and the table are ONE card. They were three blocks stacked
+    // on the page ground with only the table carded, which left the controls
+    // that operate the table floating away from it. These tabs and filters
+    // narrow what the table below shows, so they belong inside its surface —
+    // unlike the /settings tab row, which chooses which card to render and
+    // therefore stays outside.
+    // The controls take px-8 to line up with the table header and rows, which
+    // carry their own px-8 and stay full-bleed to the card edges.
+    <Panel variant="filled" className="overflow-hidden">
+      <div className="px-8 pt-[30px]">
+        <div className="mb-7 inline-flex gap-1.5 self-start rounded-full bg-sand-track p-[5px]">
+          <TabButton active={tab === "active"} onClick={() => setTab("active")} count={counts.active}>
+            Active
+          </TabButton>
+          <TabButton active={tab === "archive"} onClick={() => setTab("archive")} count={counts.archive}>
+            Archive
+          </TabButton>
         </div>
-        <Select value={status} onChange={(v) => setStatus(v as StatusFilter)} options={STATUS_OPTIONS} />
-        <Select value={dateRange} onChange={(v) => setDateRange(v as DateFilter)} options={DATE_OPTIONS} />
-      </div>
 
-      <Panel className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <div className="min-w-[860px]">
-            <div className="grid grid-cols-[minmax(0,1fr)_140px_125px_115px_170px] gap-x-4 border-b border-sand-200 bg-sand-50 px-8 py-[18px]">
-              <Th>Booking package</Th>
-              <Th>Guest</Th>
-              <Th>Booking date</Th>
-              <Th className="text-right">Total</Th>
-              <Th>Status</Th>
-            </div>
-            {filtered.map((b) => (
-              <BookingRow key={b.id} booking={b} />
-            ))}
-            {filtered.length === 0 ? (
-              <div className="px-8 py-16 text-center text-[17px] text-ink-400">
-                {tab === "active"
-                  ? "No active bookings match these filters."
-                  : "Nothing in the archive yet. Cancelled and completed bookings land here."}
-              </div>
-            ) : null}
+        <div className="mb-7 grid grid-cols-1 gap-5 sm:grid-cols-[minmax(0,1fr)_240px_200px]">
+          <div className="relative">
+            <SearchIcon className="pointer-events-none absolute left-[17px] top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search guest or package"
+              className="w-full rounded-xl border-2 border-sand-500 bg-white py-[15px] pl-[45px] pr-[17px] text-[17px] text-ink-900 placeholder:text-ink-300 focus:border-brand-violet focus:outline-none focus:shadow-focus-ring"
+            />
           </div>
+          <Select value={status} onChange={(v) => setStatus(v as StatusFilter)} options={STATUS_OPTIONS} />
+          <Select value={dateRange} onChange={(v) => setDateRange(v as DateFilter)} options={DATE_OPTIONS} />
         </div>
-      </Panel>
-    </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <div className="min-w-[860px]">
+          <div className="grid grid-cols-[minmax(0,1fr)_140px_125px_115px_170px] gap-x-4 border-y border-sand-200 bg-sand-50 px-8 py-[18px]">
+            <Th>Booking package</Th>
+            <Th>Guest</Th>
+            <Th>Booking date</Th>
+            <Th className="text-right">Total</Th>
+            <Th>Status</Th>
+          </div>
+          {filtered.map((b) => (
+            <BookingRow key={b.id} booking={b} />
+          ))}
+          {filtered.length === 0 ? (
+            <div className="px-8 py-16 text-center text-[17px] text-ink-400">
+              {tab === "active"
+                ? "No active bookings match these filters."
+                : "Nothing in the archive yet. Cancelled and completed bookings land here."}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </Panel>
   );
 }
 

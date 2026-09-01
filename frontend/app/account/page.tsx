@@ -4,6 +4,7 @@ import { fetchAccountPlans, fetchPlanPortal } from "@/lib/publicApi";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PlanPortal } from "@/components/portal/PlanPortal";
 import { PlansList } from "@/components/account/PlansList";
+import { PageHeader } from "@/components/ui/primitives";
 
 // Carried over from the former /account/plans, which was more specific than
 // the generic PlansList default ("No plans yet" / "When a merchant sends you
@@ -60,12 +61,26 @@ export default async function AccountPage() {
 
   return (
     <PortalShell active="home" email={data.email}>
-      <h1 className="text-4xl font-bold tracking-tight text-ink-900">
-        {firstName ? `Welcome back, ${firstName}` : "Welcome back"}
-      </h1>
-      <p className="mt-1 text-sm text-ink-500">Signed in as {data.email}</p>
+      {/* Title on the page ground, like every other route. It was briefly an
+          identity card on the theory that a greeting is the guest's own detail
+          rather than a route label; it is the route label, and carding it made
+          this screen disagree with /home, /bookings, /install and the plan
+          screen.
+          Rendered through PageHeader rather than kept as its own h1: the local
+          markup was 36px bold at tracking-tight over a 14px line, where every
+          other route's title is 44px medium at -0.035em over 18px. Dropping the
+          card alone would have moved it to the ground and left it the one title
+          still styled differently. */}
+      <PageHeader
+        title={firstName ? `Welcome back, ${firstName}` : "Welcome back"}
+        subtitle={`Signed in as ${data.email}`}
+      />
 
-      <h2 className="mt-7 text-2xl font-bold text-ink-900">Your plans</h2>
+      {/* "Your plans" stays on the ground. It labels the GROUP of plan cards
+          below it, so there is no single card it could sit inside without
+          claiming to belong to the first plan. A list label above a card group
+          is the one heading this pass leaves on the ground. */}
+      <h2 className="text-2xl font-bold text-ink-900">Your plans</h2>
       <div className="mt-5">
         <PlansList
           plans={active}

@@ -46,8 +46,12 @@ export default async function InstallPage() {
         subtitle="Add Bliss to your booking engine so guests see a payment plan while they book."
       />
 
-      <SubHeading>Your booking engine</SubHeading>
+      {/* Section headings moved INSIDE their cards. They were 24px h2s sitting
+          on the page ground directly above the card they title, which is the
+          one pattern this pass removes; /home and the guest plan screen already
+          put their SectionHeading inside the Panel. */}
       <Panel variant="filled" className="mb-7 px-7 py-[30px]">
+        <SubHeading>Your booking engine</SubHeading>
         <p className="text-lg leading-[1.55] text-ink-500">
           Bliss installs differently depending on which system takes your
           bookings. Yours is set up for{" "}
@@ -64,10 +68,10 @@ export default async function InstallPage() {
 
       {pms === "mews" ? (
         <>
-          <SubHeading helper="This snippet carries your property's own identifier, so it picks up your plan rules automatically. If you change your plan settings later, the snippet does not need updating.">
-            Add Bliss through Google Tag Manager
-          </SubHeading>
           <Panel variant="filled" className="px-7 py-[30px]">
+            <SubHeading helper="This snippet carries your property's own identifier, so it picks up your plan rules automatically. If you change your plan settings later, the snippet does not need updating.">
+              Add Bliss through Google Tag Manager
+            </SubHeading>
             {GTM_STEPS.map((step, i) => {
               const isLast = i === GTM_STEPS.length - 1;
               return (
@@ -104,8 +108,8 @@ export default async function InstallPage() {
 
       {pms === "cloudbeds" ? (
         <>
-          <SubHeading>Add Bliss to your booking engine</SubHeading>
           <Panel variant="filled" className="px-7 py-[30px]">
+            <SubHeading>Add Bliss to your booking engine</SubHeading>
             {/* The Cloudbeds equivalent is Booking Engine Extensions rather than
                 a Tag Manager container, so the snippet shape and the injection
                 point both differ from Mews. Not built yet; no snippet is shown
@@ -126,8 +130,8 @@ export default async function InstallPage() {
           default changed would have shown a new property nothing at all. */}
       {pms === "none" || pms === "stripe" ? (
         <>
-          <SubHeading>Add Bliss to your booking engine</SubHeading>
           <Panel variant="filled" className="gap-4 px-7 py-[30px]">
+            <SubHeading>Add Bliss to your booking engine</SubHeading>
             <p className="text-lg leading-[1.55] text-ink-500">
               You have not connected a booking engine yet, so there is nothing
               to install. Your guests can still pay over time through the
