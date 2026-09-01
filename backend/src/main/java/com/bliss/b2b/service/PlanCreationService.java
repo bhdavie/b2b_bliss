@@ -774,13 +774,25 @@ public class PlanCreationService {
         if (outcome.plan().status() == PaymentPlanStatus.ACTIVE) {
             emitPlanStartedWebhook(outcome);
             sendNotifications(outcome);
-            // Guest lifecycle emails (idempotent, fire-and-forget). Plan is active
-            // here, so the first schedule row has already been charged/paid.
+            // Guest lifecycle emails (idempotent, fire-and-forget).
             notificationService.onPlanActivated(outcome.plan().id());
-            if (!outcome.schedule().isEmpty()) {
-                notificationService.onInstallmentPaid(
-                        outcome.plan().id(), outcome.schedule().get(0).id());
-            }
+            // The receipt fires only when the first row is genuinely PAID, which
+            // is the same test MewsCheckoutService applies before its own
+            // onInstallmentPaid. It used to fire on plan status alone, under the
+            // comment "plan is active here, so the first schedule row has already
+            // been charged/paid". That stopped being true when the Mews rail
+            // began inserting an active plan without collecting anything: guests
+            // on that rail were emailed a receipt for a charge that was never
+            // attempted, while the portal correctly showed nothing paid.
+            //
+            // Read back from the database rather than trusting outcome.schedule():
+            // on the Stripe path that list is fetched BEFORE the charge is
+            // recorded and never refreshed, so its first row still says
+            // 'scheduled' even after a successful charge. Testing the stale copy
+            // would have suppressed the receipt on the one rail that had earned
+            // it.
+            firstRowIfPaid(outcome.plan().id()).ifPresent(row ->
+                    notificationService.onInstallmentPaid(outcome.plan().id(), row.id()));
             notificationService.onPlanCompleted(outcome.plan().id());
         }
         return new PlanCreationResult(
@@ -790,6 +802,27 @@ public class PlanCreationService {
                 outcome.schedule(),
                 outcome.firstChargeIntentId(),
                 outcome.firstChargeStatus());
+    }
+
+    /**
+     * The plan's first schedule row, only when its CURRENT status is PAID.
+     *
+     * <p>PROCESSING deliberately does not qualify: an in-flight charge has not
+     * settled, and Mews sends that receipt from reconciliation once it does.
+     * Note there is no equivalent catch-up on the Stripe rail today, so a
+     * Stripe first charge that lands in 'processing' rather than 'succeeded'
+     * gets no receipt at all. That gap is pre-existing in the sense that
+     * nothing ever watched for it; it is called out here because this method is
+     * where it becomes observable.
+     */
+    private java.util.Optional<PaymentScheduleEntry> firstRowIfPaid(UUID planId) {
+        List<PaymentScheduleEntry> rows = jdbi.withHandle(h ->
+                h.attach(PaymentScheduleDao.class).listForPlan(planId));
+        if (rows.isEmpty()) return java.util.Optional.empty();
+        PaymentScheduleEntry first = rows.get(0);
+        return first.status() == PaymentScheduleStatus.PAID
+                ? java.util.Optional.of(first)
+                : java.util.Optional.empty();
     }
 
     private static void validateCustomerAndPm(String pmId, String email, PlanFrequency frequency) {

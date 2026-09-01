@@ -5,6 +5,8 @@ import com.bliss.b2b.domain.Customer;
 import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.domain.PaymentPlan;
 import com.bliss.b2b.domain.PaymentScheduleEntry;
+import com.bliss.b2b.domain.PaymentScheduleStatus;
+import com.bliss.b2b.domain.ScheduleKind;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -16,6 +18,9 @@ public final class EmailTemplates {
             DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", Locale.US);
     private static final DateTimeFormatter SHORT_DATE =
             DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US);
+    /** "August 2, 2026" — the timeline's own date format on the plan page. */
+    private static final DateTimeFormatter TIMELINE_DATE =
+            DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US);
 
     private EmailTemplates() {}
 
@@ -176,6 +181,10 @@ public final class EmailTemplates {
     private static final String SAND = "#F6F4F1";
     private static final String WHITE = "#FFFFFF";
     private static final String HAIRLINE = "#E9E5E1";
+    private static final String INK_400 = "#898294";
+    private static final String LAVENDER = "#D6C8FB";
+    private static final String SAND_300 = "#E9E5E1";
+    private static final String SAND_400 = "#E2DEE6";
     private static final String SANS =
             "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
@@ -311,73 +320,170 @@ public final class EmailTemplates {
     }
 
     /**
-     * The installment schedule as a real table: sequence, date, amount, and a
-     * status word. The next unpaid row is marked in violet and bolded, so the
-     * guest can see at a glance what is coming rather than counting rows.
+     * The installment schedule as the plan page's timeline, rebuilt in table
+     * cells. Mirrors ScheduleTimeline in PlanPortal.tsx as closely as email
+     * allows, and reproduces its logic rather than approximating it:
+     *
+     * <ul>
+     *   <li>labelSchedule: a deposit row is labelled "Deposit"; installments are
+     *       numbered 1..N of N over the NON-deposit rows only, so a plan with a
+     *       deposit does not number it as installment 1.
+     *   <li>rowDisplayStatus: paid, canceled, everything else scheduled.
+     *   <li>The next row is the FIRST scheduled row, not a date comparison, so a
+     *       failed row still awaiting retry can be next and a future row already
+     *       paid is not.
+     *   <li>Two lines per row: label with amount opposite, then the dated status
+     *       line. The next payment says "Automatic on {date} · Next payment ·
+     *       Scheduled"; others say "Due {date} · {status}".
+     *   <li>A canceled row drops label and amount to the muted tone, so it reads
+     *       as struck from the plan rather than merely pending.
+     * </ul>
+     *
+     * <p>Two departures forced by email. The rail is a fixed-height 2px cell
+     * hanging below each node instead of a flex segment that fills its row, so
+     * it approximates the row height rather than tracking it. And the nodes are
+     * border-radius circles, which Outlook's Word renderer squares off: the
+     * paid/next/upcoming distinction survives because it is carried by colour
+     * and the ring's border, not by the shape.
      */
-    private static String scheduleTable(List<PaymentScheduleEntry> schedule) {
-        int nextSeq = nextDueSequence(schedule);
-        StringBuilder rows = new StringBuilder();
-        rows.append("<tr>")
-            .append(th("Payment")).append(th("Date")).append(thRight("Amount"))
-            .append("</tr>");
+    private static String scheduleTimeline(List<PaymentScheduleEntry> schedule) {
+        int installmentCount = 0;
         for (PaymentScheduleEntry e : schedule) {
-            boolean isNext = e.sequence() == nextSeq;
-            boolean paid = e.status() == com.bliss.b2b.domain.PaymentScheduleStatus.PAID;
-            String colour = isNext ? VIOLET : (paid ? MUTED : INK);
-            String weight = isNext ? "600" : "400";
-            String label = e.sequence() + " of " + schedule.size()
-                    + (isNext ? " · Next" : paid ? " · Paid" : "");
-            rows.append("<tr>")
-                .append("<td style=\"padding:11px 0;border-bottom:1px solid ").append(HAIRLINE)
-                .append(";font-family:").append(SANS).append(";font-size:14px;font-weight:").append(weight)
-                .append(";color:").append(colour).append(";\">").append(esc(label)).append("</td>")
-                .append("<td style=\"padding:11px 0;border-bottom:1px solid ").append(HAIRLINE)
-                .append(";font-family:").append(SANS).append(";font-size:14px;color:").append(colour)
-                .append(";\">").append(SHORT_DATE.format(e.dueDate())).append("</td>")
-                .append("<td align=\"right\" style=\"padding:11px 0;border-bottom:1px solid ").append(HAIRLINE)
-                .append(";font-family:").append(SANS).append(";font-size:14px;font-weight:600;color:")
-                .append(colour).append(";\">").append(dollars(e.amountCents())).append("</td>")
-                .append("</tr>");
+            if (e.kind() != ScheduleKind.DEPOSIT) installmentCount++;
         }
+        int nextIndex = nextScheduledIndex(schedule);
+
+        StringBuilder rows = new StringBuilder();
+        int installmentNumber = 0;
+        for (int i = 0; i < schedule.size(); i++) {
+            PaymentScheduleEntry e = schedule.get(i);
+            String label;
+            if (e.kind() == ScheduleKind.DEPOSIT) {
+                label = "Deposit";
+            } else {
+                installmentNumber++;
+                label = "Installment " + installmentNumber + " of " + installmentCount;
+            }
+
+            String base = rowDisplayStatus(e.status());
+            String state = "scheduled".equals(base) && i == nextIndex ? "next" : base;
+            boolean isLast = i == schedule.size() - 1;
+
+            String statusWord = switch (state) {
+                case "paid" -> "Paid";
+                case "canceled" -> "Canceled";
+                default -> "Scheduled";
+            };
+            String meta = "next".equals(state)
+                    ? "Automatic on " + TIMELINE_DATE.format(e.dueDate())
+                        + " · Next payment · " + statusWord
+                    : "Due " + TIMELINE_DATE.format(e.dueDate()) + " · " + statusWord;
+
+            String labelColour = "canceled".equals(state) ? INK_400 : INK;
+            String amountColour = "canceled".equals(state) ? INK_400 : MUTED;
+
+            rows.append("<tr>")
+                // Rail column: node, then the connector hanging below it.
+                .append("<td valign=\"top\" width=\"26\" style=\"width:26px;padding:0;\">")
+                .append("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">")
+                .append("<tr><td style=\"padding:6px 0 0 0;line-height:0;\">")
+                .append(node(state))
+                .append("</td></tr>")
+                .append(isLast ? "" :
+                    "<tr><td align=\"center\" style=\"padding:0;\">"
+                    + "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">"
+                    + "<tr><td width=\"2\" height=\"30\" style=\"width:2px;height:30px;font-size:0;"
+                    + "line-height:0;background-color:"
+                    + ("paid".equals(state) ? LAVENDER : SAND_300) + ";\">&nbsp;</td></tr>"
+                    + "</table></td></tr>")
+                .append("</table></td>")
+                // Content column: line one label + amount, line two the meta.
+                .append("<td valign=\"top\" style=\"padding:0 0 ")
+                .append(isLast ? "0" : "14px").append(" 26px;\">")
+                .append("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">")
+                .append("<tr>")
+                .append("<td style=\"font-family:").append(SANS)
+                .append(";font-size:16px;font-weight:600;color:").append(labelColour).append(";\">")
+                .append(esc(label)).append("</td>")
+                .append("<td align=\"right\" style=\"font-family:").append(SANS)
+                .append(";font-size:16px;color:").append(amountColour).append(";\">")
+                .append(dollars(e.amountCents())).append("</td>")
+                .append("</tr>")
+                .append("<tr><td colspan=\"2\" style=\"padding-top:3px;font-family:").append(SANS)
+                .append(";font-size:13px;line-height:1.5;color:").append(INK_400).append(";\">")
+                .append(esc(meta)).append("</td></tr>")
+                .append("</table></td></tr>");
+        }
+
         return "<tr><td style=\"padding:24px 40px 0 40px;\">"
             + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">"
             + rows + "</table></td></tr>";
     }
 
-    private static String th(String label) {
-        return "<td style=\"padding:0 0 8px 0;font-family:" + SANS + ";font-size:11px;"
-            + "letter-spacing:0.08em;text-transform:uppercase;color:" + MUTED + ";\">"
-            + esc(label) + "</td>";
+    /**
+     * A 12px timeline node. Paid is a solid violet dot, next is a white dot with
+     * a thick violet ring, upcoming and canceled are a solid warm grey. Matches
+     * TimelineNode in PlanPortal.tsx.
+     */
+    private static String node(String state) {
+        if ("next".equals(state)) {
+            return "<div style=\"width:5px;height:5px;border-radius:50%;background-color:" + WHITE
+                + ";border:3.5px solid " + VIOLET + ";font-size:0;line-height:0;\"></div>";
+        }
+        String fill = "paid".equals(state) ? VIOLET : SAND_400;
+        return "<div style=\"width:12px;height:12px;border-radius:50%;background-color:" + fill
+            + ";font-size:0;line-height:0;\"></div>";
     }
 
-    private static String thRight(String label) {
-        return "<td align=\"right\" style=\"padding:0 0 8px 0;font-family:" + SANS + ";font-size:11px;"
-            + "letter-spacing:0.08em;text-transform:uppercase;color:" + MUTED + ";\">"
-            + esc(label) + "</td>";
+    /** Mirrors rowDisplayStatus in PlanPortal.tsx. */
+    private static String rowDisplayStatus(PaymentScheduleStatus status) {
+        if (status == PaymentScheduleStatus.PAID) return "paid";
+        if (status == PaymentScheduleStatus.CANCELED) return "canceled";
+        return "scheduled";
     }
 
-    /** First not-yet-paid installment, or -1 when everything is settled. */
-    private static int nextDueSequence(List<PaymentScheduleEntry> schedule) {
-        for (PaymentScheduleEntry e : schedule) {
-            if (e.status() != com.bliss.b2b.domain.PaymentScheduleStatus.PAID
-                    && e.status() != com.bliss.b2b.domain.PaymentScheduleStatus.CANCELED) {
-                return e.sequence();
-            }
+    /** Index of the first row that displays as scheduled, or -1 when none do. */
+    private static int nextScheduledIndex(List<PaymentScheduleEntry> schedule) {
+        for (int i = 0; i < schedule.size(); i++) {
+            if ("scheduled".equals(rowDisplayStatus(schedule.get(i).status()))) return i;
         }
         return -1;
     }
 
-    /** Plain-text schedule, column-aligned so it reads in a monospace client. */
+    /**
+     * Plain-text timeline. Carries the same labels, states and next-payment
+     * marker as the HTML, column aligned so it holds shape in a monospace
+     * client.
+     */
     private static String scheduleTextRows(List<PaymentScheduleEntry> schedule) {
-        int nextSeq = nextDueSequence(schedule);
-        StringBuilder sb = new StringBuilder();
+        int installmentCount = 0;
         for (PaymentScheduleEntry e : schedule) {
-            String marker = e.sequence() == nextSeq ? "->" : "  ";
-            sb.append(String.format(Locale.US, "%s %-2d of %-2d  %-13s %10s%s%n",
-                    marker, e.sequence(), schedule.size(),
-                    SHORT_DATE.format(e.dueDate()), dollars(e.amountCents()),
-                    e.status() == com.bliss.b2b.domain.PaymentScheduleStatus.PAID ? "  paid" : ""));
+            if (e.kind() != ScheduleKind.DEPOSIT) installmentCount++;
+        }
+        int nextIndex = nextScheduledIndex(schedule);
+        StringBuilder sb = new StringBuilder();
+        int installmentNumber = 0;
+        for (int i = 0; i < schedule.size(); i++) {
+            PaymentScheduleEntry e = schedule.get(i);
+            String label;
+            if (e.kind() == ScheduleKind.DEPOSIT) {
+                label = "Deposit";
+            } else {
+                installmentNumber++;
+                label = "Installment " + installmentNumber + " of " + installmentCount;
+            }
+            String base = rowDisplayStatus(e.status());
+            String state = "scheduled".equals(base) && i == nextIndex ? "next" : base;
+            String statusWord = switch (state) {
+                case "paid" -> "Paid";
+                case "canceled" -> "Canceled";
+                default -> "Scheduled";
+            };
+            String marker = "next".equals(state) ? "->" : "  ";
+            sb.append(String.format(Locale.US, "%s %-22s %10s   %s%s%n",
+                    marker, label, dollars(e.amountCents()),
+                    TIMELINE_DATE.format(e.dueDate()),
+                    "next".equals(state) ? " · Next payment · " + statusWord : " · " + statusWord));
         }
         return sb.toString();
     }
@@ -408,21 +514,30 @@ public final class EmailTemplates {
                     + SHORT_DATE.format(booking.checkoutDate())
                 : SHORT_DATE.format(booking.appointmentDate());
 
+        // What the guest actually pays: the plan total PLUS the processing fee.
+        // The headline used plan.totalAmountCents() alone, which is the
+        // post-discount booking price with no fee, so it read $994.15 while the
+        // schedule underneath it summed to $1,043.86. This is the same figure
+        // PlanPortal calls totalDue (plan.totalAmountCents + processingFeeCents)
+        // and the same one PlanProgress takes as totalWithFeeCents, so the
+        // email, the portal and the schedule now all state one number.
+        long totalWithFee = plan.totalAmountCents() + plan.processingFeeCents();
+
         String rows = heading("Your payment plan is set")
-                + keyFact(dollars(plan.totalAmountCents()),
+                + keyFact(dollars(totalWithFee),
                     plan.numPayments() + " " + plan.frequency().wire() + " payments to " + property)
                 + detailTable(new String[][] {
                     {"Booking", booking.serviceName()},
                     {"Stay", stay},
                 })
-                + scheduleTable(schedule)
+                + scheduleTimeline(schedule)
                 + para("Each payment is charged automatically to the card you saved. "
                     + "We will email you a receipt every time.")
                 + button(url, "View your plan");
 
         StringBuilder text = new StringBuilder();
         text.append("Your payment plan is set.\n\n")
-            .append(dollars(plan.totalAmountCents())).append(" to ").append(property)
+            .append(dollars(totalWithFee)).append(" to ").append(property)
             .append(" over ").append(plan.numPayments()).append(' ')
             .append(plan.frequency().wire()).append(" payments.\n\n")
             .append("Booking: ").append(booking.serviceName()).append('\n')
