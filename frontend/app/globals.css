@@ -77,6 +77,40 @@
   .card-subtle {
     @apply rounded-panel border border-sand-200 bg-sand-50 p-4;
   }
+
+  /* Left-to-right cream fade over the sign-in artwork. Stop geometry is the
+     marketing site's (bliss_b2b_website .hero-bg-img / .stats-bg-img, which
+     carry the identical fade, so 42/72 is the house value rather than a
+     one-off): flat through 42% across, ramping to fully clear by 72%, with the
+     artwork reading unobstructed from there to the right edge. 42% is chosen
+     against the card, not the artwork — the card's right edge lands at 41% of
+     the viewport at 1440, so it sits entirely inside the flat zone.
+     The site expresses this as a MASK that thins the artwork to 8% alpha on the
+     left. This is an overlay at full opacity instead, which is the one place it
+     deliberately departs: at 8% the palm and chair still ghost through behind
+     the card, and the brief here is flat colour under the card, not a trace of
+     the room. Opaque cream is the stronger read and it makes the left third
+     genuinely solid rather than nearly so.
+     The transparent end is written rgba(247,244,239,0) and NOT `transparent`.
+     `transparent` is rgba(0,0,0,0), so interpolating to it drags the ramp
+     through black and greys the midpoint out; holding the cream's own channels
+     at zero alpha keeps the hue constant across the whole ramp.
+     Desktop only, at the same breakpoint the card stops being centred. Below
+     1024px the card sits mid-viewport, where a left-hand fade would run
+     straight through it — half the card on flat cream, half on artwork. The
+     marketing site draws the same line, dropping .stats-bg outright below
+     860px. With no fade the card still reads on its own: opaque white over
+     shadow-elevated-lg. */
+  @media (min-width: 1024px) {
+    .auth-hero-fade {
+      background-image: linear-gradient(
+        to right,
+        #f7f4ef 0%,
+        #f7f4ef 42%,
+        rgba(247, 244, 239, 0) 72%
+      );
+    }
+  }
 }
 
 @media print {
