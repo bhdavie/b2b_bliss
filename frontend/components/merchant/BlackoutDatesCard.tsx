@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { updatePlanRules, type PlanRules } from "@/lib/api";
-import { Panel, SectionTitle } from "@/components/ui/primitives";
 
 // Rolling window the merchant can pick from: today through today + 365 days.
 const WINDOW_DAYS = 365;
@@ -160,11 +159,13 @@ export function BlackoutDatesCard({
   }
 
   return (
-    // Panel owns the filled surface and the padding; the form keeps only its
-    // own row rhythm. Body indentation is left as it was so the change stays a
-    // few lines rather than a whole-file reflow.
-    <Panel variant="filled" className="gap-7 px-7 py-[30px]">
-      <SectionTitle>Blackout dates</SectionTitle>
+    // No Panel of its own: PaymentSettingsTabs is the card now, and this is the
+    // section it reveals. Drawing one here would nest a white card inside a
+    // white card. Padding comes from the tab card too, so only the form's own
+    // row rhythm survives.
+    <div className="flex flex-col gap-7">
+      {/* No heading: the tab row above IS this card's head, and the active tab
+          already says "Blackout dates". A heading here repeated it verbatim. */}
     <form onSubmit={handleSubmit} className="flex flex-col gap-8">
       <section className="grid gap-3 sm:grid-cols-[180px_1fr]">
         <div>
@@ -245,6 +246,6 @@ export function BlackoutDatesCard({
         </button>
       </div>
     </form>
-    </Panel>
+    </div>
   );
 }

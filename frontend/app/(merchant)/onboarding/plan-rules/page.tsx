@@ -54,17 +54,17 @@ export default async function OnboardingPlanRulesPage() {
           <InstallSteps status={onboarding} />
         </div>
 
-        <SectionHeading track="0.08em" className="mb-5">
+        <SectionHeading className="mb-5">
           Eligibility &amp; plans
         </SectionHeading>
         <PlanRulesCard initial={planRules ?? DEFAULT_PLAN_RULES} />
 
-        <SectionHeading track="0.08em" className="mb-5 mt-14">
+        <SectionHeading className="mb-5 mt-14">
           Blackout dates
         </SectionHeading>
         <BlackoutDatesCard initial={planRules ?? DEFAULT_PLAN_RULES} />
 
-        <SectionHeading track="0.08em" className="mb-5 mt-14">
+        <SectionHeading className="mb-5 mt-14">
           Cancellation &amp; policies
         </SectionHeading>
         <PoliciesCard initial={planRules ?? DEFAULT_PLAN_RULES} />

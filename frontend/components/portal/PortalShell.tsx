@@ -103,7 +103,9 @@ export function PortalShell({
 
       <main className="md:pl-[264px]">
         {/* pt-10, matching the merchant shell now that both drop their page
-            titles. /plan/[token] keeps its title and sits on the same rhythm. */}
+            titles. /plan/[token] was the last route here with a title of its
+            own; it moved into its first card, so every portal route now opens
+            straight onto a card at the same offset. */}
         <div className="mx-auto max-w-[1136px] px-6 pt-10 xl:px-16">
           {children}
         </div>

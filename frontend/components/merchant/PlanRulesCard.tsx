@@ -9,7 +9,6 @@ import {
   type PlanRules,
 } from "@/lib/api";
 import { Input } from "@/components/ui/Input";
-import { Panel, SectionTitle } from "@/components/ui/primitives";
 
 type FormState = {
   minLeadTimeWeeks: string;
@@ -162,11 +161,13 @@ export function PlanRulesCard({
   const bothAllowed = form.allowedFrequencies === "both";
 
   return (
-    // Panel owns the filled surface and the padding; the form keeps only its
-    // own row rhythm. Body indentation is left as it was so the change stays a
-    // few lines rather than a whole-file reflow.
-    <Panel variant="filled" className="gap-7 px-7 py-[30px]">
-      <SectionTitle>Plan rules</SectionTitle>
+    // No Panel of its own: PaymentSettingsTabs is the card now, and this is the
+    // section it reveals. Drawing one here would nest a white card inside a
+    // white card. Padding comes from the tab card too, so only the form's own
+    // row rhythm survives.
+    <div className="flex flex-col gap-7">
+      {/* No heading: the tab row above IS this card's head, and the active tab
+          already says "Plan rules". A heading here repeated it verbatim. */}
     <form onSubmit={handleSubmit} className="flex flex-col gap-8">
       <Row label="Lead time" hint="How far in advance bookings must be to qualify for a plan.">
         <div className="grid grid-cols-2 gap-3">
@@ -365,7 +366,7 @@ export function PlanRulesCard({
         </button>
       </div>
     </form>
-    </Panel>
+    </div>
   );
 }
 

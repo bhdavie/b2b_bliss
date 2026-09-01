@@ -1,5 +1,5 @@
 import { InstallSnippet } from "@/components/merchant/InstallSnippet";
-import { PageHeader, Panel } from "@/components/ui/primitives";
+import { Panel, SectionHeading } from "@/components/ui/primitives";
 import { fetchMerchantSession } from "@/lib/auth";
 
 /**
@@ -41,17 +41,17 @@ export default async function InstallPage() {
 
   return (
     <div className="flex max-w-[1000px] flex-col">
-      <PageHeader
-        title="Install"
-        subtitle="Add Bliss to your booking engine so guests see a payment plan while they book."
-      />
-
-      {/* Section headings moved INSIDE their cards. They were 24px h2s sitting
-          on the page ground directly above the card they title, which is the
-          one pattern this pass removes; /home and the guest plan screen already
-          put their SectionHeading inside the Panel. */}
-      <Panel variant="filled" className="mb-7 px-7 py-[30px]">
-        <SubHeading>Your booking engine</SubHeading>
+      {/* The page's orienting line used to float above this card as a
+          PageLead. It moved inside, because the card it was floating over is
+          the one that answers it: the lead says Bliss goes into your booking
+          engine, and the line under it names which engine is yours. Two
+          sentences of the same thought, now on the same surface. */}
+      <Panel variant="filled" className="mb-7 gap-4 px-7 py-[30px]">
+        <SectionHeading className="mb-1">Your booking engine</SectionHeading>
+        <p className="text-lg leading-[1.55] text-ink-500">
+          Add Bliss to your booking engine so guests see a payment plan while
+          they book.
+        </p>
         <p className="text-lg leading-[1.55] text-ink-500">
           Bliss installs differently depending on which system takes your
           bookings. Yours is set up for{" "}
@@ -69,9 +69,14 @@ export default async function InstallPage() {
       {pms === "mews" ? (
         <>
           <Panel variant="filled" className="px-7 py-[30px]">
-            <SubHeading helper="This snippet carries your property's own identifier, so it picks up your plan rules automatically. If you change your plan settings later, the snippet does not need updating.">
+            <SectionHeading className="mb-2.5">
               Add Bliss through Google Tag Manager
-            </SubHeading>
+            </SectionHeading>
+            <p className="mb-6 max-w-[760px] text-[17px] leading-[1.55] text-ink-400">
+              This snippet carries your property&apos;s own identifier, so it
+              picks up your plan rules automatically. If you change your plan
+              settings later, the snippet does not need updating.
+            </p>
             {GTM_STEPS.map((step, i) => {
               const isLast = i === GTM_STEPS.length - 1;
               return (
@@ -109,7 +114,7 @@ export default async function InstallPage() {
       {pms === "cloudbeds" ? (
         <>
           <Panel variant="filled" className="px-7 py-[30px]">
-            <SubHeading>Add Bliss to your booking engine</SubHeading>
+            <SectionHeading className="mb-5">Add Bliss to your booking engine</SectionHeading>
             {/* The Cloudbeds equivalent is Booking Engine Extensions rather than
                 a Tag Manager container, so the snippet shape and the injection
                 point both differ from Mews. Not built yet; no snippet is shown
@@ -131,7 +136,7 @@ export default async function InstallPage() {
       {pms === "none" || pms === "stripe" ? (
         <>
           <Panel variant="filled" className="gap-4 px-7 py-[30px]">
-            <SubHeading>Add Bliss to your booking engine</SubHeading>
+            <SectionHeading className="mb-5">Add Bliss to your booking engine</SectionHeading>
             <p className="text-lg leading-[1.55] text-ink-500">
               You have not connected a booking engine yet, so there is nothing
               to install. Your guests can still pay over time through the
@@ -144,28 +149,6 @@ export default async function InstallPage() {
             </p>
           </Panel>
         </>
-      ) : null}
-    </div>
-  );
-}
-
-/** 24px section title over an optional 17px helper line, per turns 11 and 13. */
-function SubHeading({
-  children,
-  helper,
-}: {
-  children: React.ReactNode;
-  helper?: string;
-}) {
-  return (
-    <div className="mb-5 flex flex-col gap-2.5">
-      <h2 className="text-2xl font-medium tracking-[-0.02em] text-ink-900">
-        {children}
-      </h2>
-      {helper ? (
-        <p className="max-w-[760px] text-[17px] leading-[1.55] text-ink-400">
-          {helper}
-        </p>
       ) : null}
     </div>
   );

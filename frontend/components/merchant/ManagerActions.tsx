@@ -5,6 +5,7 @@ import { useState } from "react";
 import { cancelPlan, refundPlan } from "@/lib/api";
 import { formatDollars } from "@/lib/publicApi";
 import { Button } from "@/components/ui/Button";
+import { Panel, SectionHeading } from "@/components/ui/primitives";
 
 type Kind = "cancel" | "refund";
 
@@ -47,9 +48,9 @@ export function ManagerActions({
   }
 
   return (
-    <section className="border border-brand-neutral bg-white p-6 shadow-card">
-      <h2 className="text-xl font-bold text-brand-navy">Manage booking</h2>
-      <p className="mt-1 text-sm text-brand-navy/65">
+    <Panel variant="filled" className="px-7 py-[30px]">
+      <SectionHeading className="mb-2.5">Manage booking</SectionHeading>
+      <p className="text-[17px] leading-[1.55] text-ink-400">
         Manager overrides. These supersede the booking&apos;s cancellation and
         refund policy and apply immediately.
       </p>
@@ -88,7 +89,7 @@ export function ManagerActions({
           onClose={() => (busy ? undefined : setConfirming(null))}
         />
       ) : null}
-    </section>
+    </Panel>
   );
 }
 

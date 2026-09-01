@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { activateOnboarding, type OnboardingStatus, type PmsType } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
-import { Panel } from "@/components/ui/primitives";
+import { Panel, SectionHeading } from "@/components/ui/primitives";
 
 // Setup checklist shown on the dashboard until the property reaches `active`.
 // Each step links to its page; the final step activates the property.
@@ -76,9 +76,9 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
   return (
     <Panel variant="filled" className="px-7 py-[30px]">
       <div className="flex items-baseline justify-between gap-6">
-        <h2 className="text-[22px] font-medium tracking-[-0.015em] text-ink-900">
-          Finish setting up your property
-        </h2>
+        {/* Was 22px medium ink-900, one of eight competing in-card heading
+            treatments. On the app's single one now, like every other card. */}
+        <SectionHeading>Finish setting up your property</SectionHeading>
         <span className="flex-none text-base text-ink-400">
           {status.steps.filter((s) => s.done && s.key !== "active").length} of {items.length} done
         </span>

@@ -9,7 +9,7 @@ import {
   formatScheduleDateLong,
   type PublicPlanPortal,
 } from "@/lib/publicApi";
-import { PageHeader, Panel, SectionHeading } from "@/components/ui/primitives";
+import { Panel, SectionHeading } from "@/components/ui/primitives";
 import { PayEarlyButton } from "./PayEarlyButton";
 import { UpdateCardSection } from "./UpdateCardSection";
 import { CancelPlanSection } from "./CancelPlanSection";
@@ -74,37 +74,42 @@ export function PlanPortal({
 
   return (
     <div className="flex flex-col">
-      {/* Title on the page ground, not in a card. The property name is this
-          route's title, and every other route puts its title on the ground —
-          carding it here made this the only screen where the page's own name
-          sat on a surface.
-          It renders through PageHeader itself rather than a copy of its
-          classes, so the 44px scale, the leading and the 48px space beneath it
-          cannot drift from /home, /bookings, /settings and /install. The back
-          link is the one thing PageHeader has no slot for, so it sits above,
-          matched to the gap PageHeader keeps between its own two lines. */}
-      {backHref ? (
-        <Link
-          href={backHref}
-          className="mb-2.5 self-start text-[15px] text-brand-violet no-underline hover:underline"
-        >
-          Back to your plans
-        </Link>
-      ) : null}
-      <PageHeader
-        title={portal.merchant.businessName}
-        subtitle={portal.booking.serviceName}
-      />
+      {/* Head and progress in ONE card. The back link, property name and
+          room/rate line used to sit on the page ground above this card, as the
+          last sanctioned exception to "nothing sits loose"; there is no
+          exception now.
 
-      {/* Plan progress — the bar plus paid/remaining, on their own card
-          directly under the title. py-6 rather than the py-[30px] this card
-          carried while it also held the title: with only a 8px bar and one row
-          of figures inside, the taller padding left more empty card than
-          content.
-          The bar is decorative: the two figures it encodes are printed
-          underneath, so it is hidden from assistive tech rather than carrying a
-          redundant progressbar role. */}
-      <Panel variant="filled" className="mb-7 px-7 py-6">
+          The property name dropped from PageHeader's 44px display serif to the
+          app's one in-card heading treatment, which is what stops this from
+          being the only screen in either surface with a title style of its own.
+          It goes at the top of THIS card rather than into a card of its own
+          because a head with nothing under it is just the old loose head with a
+          border drawn round it.
+
+          Padding went back up to py-[30px], the value every other card uses.
+          It was py-6 only while this card held a bar and one row of figures and
+          nothing else. */}
+      <Panel variant="filled" className="mb-7 px-7 py-[30px]">
+        <div className="mb-6 flex flex-col border-b border-sand-100 pb-5">
+          {backHref ? (
+            <Link
+              href={backHref}
+              className="mb-4 self-start text-[15px] text-brand-violet no-underline hover:underline"
+            >
+              Back to your plans
+            </Link>
+          ) : null}
+          <SectionHeading className="mb-2.5">
+            {portal.merchant.businessName}
+          </SectionHeading>
+          <p className="text-[17px] text-ink-500">
+            {portal.booking.serviceName}
+          </p>
+        </div>
+
+        {/* The bar is decorative: the two figures it encodes are printed
+            underneath, so it is hidden from assistive tech rather than carrying
+            a redundant progressbar role. */}
         <div className="flex flex-col gap-4">
           <div
             aria-hidden="true"
@@ -203,7 +208,13 @@ export function PlanPortal({
         <div className="flex flex-col gap-5">
           {hasUpcoming ? (
             <Panel variant="filled" className="px-7 pb-8 pt-[30px]">
-              <SectionHeading className="mb-[18px] font-medium text-brand-violet">
+              {/* Was font-medium and brand-violet, the only SectionHeading in
+                  either surface that overrode the treatment. Normalised: card
+                  headings are one thing app-wide now, and the violet had to go
+                  somewhere — it is still on this card, carried by the Pay
+                  button and the 44px figure, which is where the emphasis
+                  actually belongs. */}
+              <SectionHeading className="mb-[18px]">
                 Next payment
               </SectionHeading>
               <div className="mb-3 text-[44px] font-medium leading-none tracking-[-0.035em] text-ink-900">
@@ -332,6 +343,11 @@ export function PlanPortal({
       </div>
 
 
+      {/* Left on the ground deliberately, and the only thing on this screen
+          that is besides the title. It is a footer rule spanning the content
+          column, not a block of content: same class of thing as the sidebar
+          wordmark, which is why it takes the same exemption. Carding it would
+          make the attribution look like a section of the plan. */}
       <div className="-mx-6 border-t border-sand-200 px-6 pb-8 pt-7 text-sm text-ink-400 xl:-mx-16 xl:px-16">
         Powered by <BlissWordmark />
       </div>

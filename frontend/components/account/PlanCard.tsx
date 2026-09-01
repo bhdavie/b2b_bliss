@@ -5,16 +5,17 @@ import {
   formatScheduleDateShort,
   type AccountPlanCard,
 } from "@/lib/publicApi";
-import { Panel } from "@/components/ui/primitives";
 
 /**
- * Plan card for the guest portal lists, built to the settled design (turn 6a):
- * a filled 20px panel, merchant name at 30px over the service and date, a
- * status pill top-right, a rule, then a single meta line of figures with the
- * "View plan" pill beside it.
+ * One plan, as a row inside the PlansList card.
  *
- * Fill rather than border, matching the plan detail screen: sand-50 on the
- * white page, no edge, no shadow.
+ * The content is unchanged from when this was a card of its own — property name
+ * at 30px over the service and date, status pill top-right, a rule, then the
+ * meta line of figures with the "View plan" pill beside it. Only the container
+ * changed: it was a filled Panel sitting on the page ground next to its
+ * siblings, and it is now a hairline-separated row inside the single card that
+ * holds the whole list. Same treatment the /home "Recent bookings" rows and the
+ * /bookings table rows take.
  */
 /**
  * Which list the guest is looking at. Travels to /plan/[token] as `?from=`, so
@@ -22,7 +23,7 @@ import { Panel } from "@/components/ui/primitives";
  */
 export type PlanOrigin = "home" | "history";
 
-export function PlanCard({
+export function PlanRow({
   plan,
   from,
 }: {
@@ -39,7 +40,7 @@ export function PlanCard({
     : formatScheduleDateLong(plan.appointmentDate);
 
   return (
-    <Panel variant="filled" className="px-10 pb-[30px] pt-9">
+    <div className="border-b border-sand-100 py-7 last:border-b-0">
       <div className="flex items-start justify-between gap-8">
         <div className="flex min-w-0 flex-col gap-2.5">
           <div className="text-[30px] font-medium leading-[1.1] tracking-[-0.025em] text-ink-900">
@@ -84,7 +85,7 @@ export function PlanCard({
           View plan
         </Link>
       </div>
-    </Panel>
+    </div>
   );
 }
 

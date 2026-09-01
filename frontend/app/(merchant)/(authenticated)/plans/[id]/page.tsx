@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PlanDetailActions } from "@/components/merchant/PlanDetailActions";
-import { Card } from "@/components/ui/Card";
+import { Panel, SectionHeading } from "@/components/ui/primitives";
 import { fetchPlanServer } from "@/lib/auth";
 import type { PaymentPlanStatus } from "@/lib/api";
 
@@ -43,130 +43,134 @@ export default async function PlanDetailPage({
     .reduce((s, e) => s + e.amountCents, 0);
   const balance = Math.max(0, plan.totalAmountCents - paidCents);
 
+  // NOTE: nothing in the app links here — no sidebar item, no row, no button.
+  // Brought onto the rule anyway rather than left as the one screen that
+  // contradicts it, because an unlinked route is exactly the one that quietly
+  // drifts. Its head, its two state banners and its schedule label were all
+  // loose on the sand ground.
   return (
-    <>
-      <header>
-        <Link
-          href="/home"
-          className="text-xs text-ink-muted hover:underline"
-        >
-          ← Back to overview
-        </Link>
-        <div className="mt-2 flex items-baseline justify-between gap-3">
-          <h1 className="text-3xl font-bold">{plan.serviceName}</h1>
-          <span
-            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${STATUS_PILL[plan.status]}`}
+    <div className="flex flex-col gap-7">
+      <Panel variant="filled" className="px-7 py-[30px]">
+        <div className="flex flex-col border-b border-sand-100 pb-5">
+          <Link
+            href="/home"
+            className="mb-4 self-start text-[15px] text-brand-violet no-underline hover:underline"
           >
-            {STATUS_LABEL[plan.status]}
-          </span>
+            ← Back to overview
+          </Link>
+          {/* Service name on SectionHeading, matching /bookings/[id] and the
+              property name on /plan/[token]. It was 22px medium, the last of
+              the two-treatments-for-one-thing split across the detail pages. */}
+          <div className="flex items-baseline justify-between gap-3">
+            <SectionHeading className="mb-2.5">
+              {plan.serviceName}
+            </SectionHeading>
+            <span
+              className={`inline-flex flex-none items-center rounded-full px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${STATUS_PILL[plan.status]}`}
+            >
+              {STATUS_LABEL[plan.status]}
+            </span>
+          </div>
+          <div className="text-[17px] text-ink-500">
+            {plan.customerHint ?? "Customer info pending"} · Appointment{" "}
+            {plan.appointmentDate}
+          </div>
         </div>
-        <p className="mt-1 text-ink-muted">
-          {plan.customerHint ?? "Customer info pending"} · Appointment{" "}
-          {plan.appointmentDate}
-        </p>
-      </header>
+
+        <div className="grid gap-4 pt-6 sm:grid-cols-2">
+          <div>
+            <SectionHeading className="mb-2">Plan</SectionHeading>
+            <div className="text-[17px] text-ink-900">
+              {plan.numPayments}{" "}
+              {plan.frequency === "biweekly" ? "bi-weekly" : "monthly"}{" "}
+              installment{plan.numPayments === 1 ? "" : "s"}
+            </div>
+            {plan.depositAmountCents > 0 ? (
+              <div className="mt-1 text-[15px] text-ink-400">
+                + {formatCents(plan.depositAmountCents)} deposit
+              </div>
+            ) : null}
+          </div>
+          <div>
+            <SectionHeading className="mb-2">Total · Paid · Balance</SectionHeading>
+            <div className="text-[17px] tabular-nums text-ink-900">
+              {formatCents(plan.totalAmountCents)} ·{" "}
+              <span className="text-emerald-700">{formatCents(paidCents)}</span> ·{" "}
+              <span className={balance > 0 ? "text-ink-900" : "text-ink-400"}>
+                {formatCents(balance)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </Panel>
 
       {plan.status === "balance_due" ? (
-        <section className="mt-6 rounded-md border-2 border-brand-purple bg-white p-4">
-          <div className="text-[11px] font-medium text-brand-purple">
+        <Panel variant="filled" className="px-7 py-[30px]">
+          <SectionHeading className="mb-2.5">
             Balance due at check-in
-          </div>
-          <div className="mt-1 text-[24px] font-medium tabular-nums text-brand-navy">
+          </SectionHeading>
+          <div className="text-[24px] font-medium tabular-nums text-ink-900">
             {formatCents(balance)}
           </div>
-          <p className="mt-1 text-xs text-ink-muted">
+          <p className="mt-1.5 text-[17px] text-ink-400">
             Booking is still confirmed. Collect the remaining balance from the
             customer when they arrive.
           </p>
-        </section>
+        </Panel>
       ) : null}
 
       {plan.failedInstallment ? (
-        <section className="mt-6 rounded-md border border-amber-200 bg-amber-50 p-4">
-          <div className="text-[11px] font-medium text-amber-800">
-            Failed installment
-          </div>
-          <div className="mt-1 text-sm text-amber-900">
+        <Panel variant="filled" className="px-7 py-[30px]">
+          <SectionHeading className="mb-2.5">Failed installment</SectionHeading>
+          <div className="text-[17px] text-ink-900">
             Installment {plan.failedInstallment.sequence} of{" "}
             {formatCents(plan.failedInstallment.amountCents)} failed on{" "}
             {plan.failedInstallment.dueDate}. Retries attempted:{" "}
             {plan.failedInstallment.retryCount}.
           </div>
           {plan.failedInstallment.lastError ? (
-            <div className="mt-1 text-xs text-amber-800 font-mono">
+            <div className="mt-1.5 font-mono text-[13px] text-ink-400">
               {plan.failedInstallment.lastError}
             </div>
           ) : null}
-        </section>
+        </Panel>
       ) : null}
 
-      <section className="mt-8 grid gap-4 sm:grid-cols-2">
-        <Card padding="sm">
-          <div className="text-xs text-ink-muted">Plan</div>
-          <div className="mt-1 text-sm">
-            {plan.numPayments}{" "}
-            {plan.frequency === "biweekly" ? "bi-weekly" : "monthly"} installment
-            {plan.numPayments === 1 ? "" : "s"}
-          </div>
-          {plan.depositAmountCents > 0 ? (
-            <div className="mt-1 text-xs text-ink-muted">
-              + {formatCents(plan.depositAmountCents)} deposit
-            </div>
-          ) : null}
-        </Card>
-        <Card padding="sm">
-          <div className="text-xs text-ink-muted">Total · Paid · Balance</div>
-          <div className="mt-1 text-sm tabular-nums">
-            {formatCents(plan.totalAmountCents)} ·{" "}
-            <span className="text-emerald-700">{formatCents(paidCents)}</span> ·{" "}
-            <span className={balance > 0 ? "text-ink" : "text-ink-muted"}>
-              {formatCents(balance)}
-            </span>
-          </div>
-        </Card>
-      </section>
-
-      <section className="mt-6">
-        <div className="text-[11px] font-medium text-ink-muted">
-          Schedule
-        </div>
-        <ol className="mt-2.5 divide-y divide-brand-neutral rounded-md border border-brand-neutral bg-white">
+      <Panel variant="filled" className="px-7 py-[30px]">
+        <SectionHeading className="mb-5">Schedule</SectionHeading>
+        <ol className="divide-y divide-sand-100">
           {plan.schedule.map((entry) => (
             <li
               key={entry.sequence}
-              className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-2.5 text-[13px] ${
-                entry.kind === "deposit" ? "bg-brand-cream/60" : ""
-              }`}
+              className="grid grid-cols-[auto_1fr_auto] items-center gap-3 py-3 text-[15px]"
             >
-              <span className="text-xs text-ink-muted tabular-nums w-10">
+              <span className="w-10 tabular-nums text-[13px] text-ink-400">
                 #{entry.sequence}
               </span>
-              <span className="flex items-center gap-2 text-ink-muted">
+              <span className="flex flex-wrap items-center gap-2 text-ink-500">
                 {entry.kind === "deposit" ? (
-                  <span className="rounded-full bg-brand-lavender px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white">
+                  <span className="rounded-full bg-brand-violet-tint px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.06em] text-brand-violet">
                     Deposit
                   </span>
                 ) : null}
                 <span>{entry.dueDate}</span>
                 <StatusPill status={entry.status} />
                 {entry.retryCount > 0 ? (
-                  <span className="text-[10px] text-ink-muted">
+                  <span className="text-[12px] text-ink-400">
                     · {entry.retryCount} retr{entry.retryCount === 1 ? "y" : "ies"}
                   </span>
                 ) : null}
               </span>
-              <span className="tabular-nums text-ink">
+              <span className="tabular-nums text-ink-900">
                 {formatCents(entry.amountCents)}
               </span>
             </li>
           ))}
         </ol>
-      </section>
+      </Panel>
 
-      <section className="mt-8">
-        <PlanDetailActions plan={plan} />
-      </section>
-    </>
+      <PlanDetailActions plan={plan} />
+    </div>
   );
 }
 

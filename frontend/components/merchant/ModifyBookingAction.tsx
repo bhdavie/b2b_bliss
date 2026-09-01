@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { modifyBooking, type ModificationResult } from "@/lib/api";
 import { formatDollars, formatScheduleDateShort } from "@/lib/publicApi";
 import { Button } from "@/components/ui/Button";
+import { Panel, SectionHeading } from "@/components/ui/primitives";
 
 // Merchant-only booking modification: change dates and/or total, see a preview
 // of the rebuilt schedule (paid/processing rows preserved), then confirm. The
@@ -89,22 +90,31 @@ export function ModifyBookingAction({
     }
   }
 
+  // Collapsed state takes the same card as the open one. It used to be a bare
+  // ghost button floating on the page ground — the last loose element in the
+  // merchant app after this pass, and the easiest kind to miss, since it only
+  // exists while the editor is shut. Opening the editor now swaps the card's
+  // body rather than materialising a card around a button that was already
+  // there.
   if (!open) {
     return (
-      <Button
-        type="button"
-        onClick={() => setOpen(true)}
-        variant="ghost"
-      >
-        Modify booking
-      </Button>
+      <Panel variant="filled" className="items-start px-7 py-[30px]">
+        <SectionHeading className="mb-2.5">Modify booking</SectionHeading>
+        <p className="mb-5 text-[17px] leading-[1.55] text-ink-400">
+          Change the dates or total. Paid and in-progress installments are kept;
+          only the remaining schedule is rebuilt. Preview before you confirm.
+        </p>
+        <Button type="button" onClick={() => setOpen(true)} variant="ghost">
+          Modify booking
+        </Button>
+      </Panel>
     );
   }
 
   return (
-    <section className="border border-brand-neutral bg-white p-5">
-      <h3 className="text-sm font-semibold text-brand-navy">Modify booking</h3>
-      <p className="mt-1 text-xs text-brand-navy/60">
+    <Panel variant="filled" className="px-7 py-[30px]">
+      <SectionHeading className="mb-2.5">Modify booking</SectionHeading>
+      <p className="text-[17px] leading-[1.55] text-ink-400">
         Change the dates or total. Paid and in-progress installments are kept; only the
         remaining schedule is rebuilt. Preview before you confirm.
       </p>
@@ -212,7 +222,7 @@ export function ModifyBookingAction({
           Cancel
         </button>
       </div>
-    </section>
+    </Panel>
   );
 }
 

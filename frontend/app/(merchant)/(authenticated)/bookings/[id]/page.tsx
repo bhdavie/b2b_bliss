@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { CopyLinkButton } from "@/components/merchant/CopyLinkButton";
 import { ManagerActions } from "@/components/merchant/ManagerActions";
 import { ModifyBookingAction } from "@/components/merchant/ModifyBookingAction";
+import { Panel, SectionHeading } from "@/components/ui/primitives";
 import { fetchBookingServer } from "@/lib/auth";
 import {
   fetchPlanPortal,
@@ -25,50 +26,71 @@ export default async function BookingDetailPage({
   // Same record the guest portal reads (shared source of truth), keyed by token.
   const portal = await fetchPlanPortal(booking.bookingToken);
 
-  return (
-    <>
-      <header>
-        <Link href="/bookings" className="text-sm font-medium text-brand-purple hover:underline">
-          ← Back to bookings
-        </Link>
-        <h1 className="mt-3 text-3xl font-bold text-brand-navy">{booking.serviceName}</h1>
-        <p className="mt-1 text-brand-navy/70">
-          {booking.customerNameHint ?? booking.customerEmailHint ?? "Guest pending"}
-        </p>
-      </header>
+  // The back link, service name and guest line used to be a <header> on the
+  // sand ground above the cards. They are the first card's head now.
+  //
+  // The service name is on SectionHeading, not the 22px medium it landed on
+  // first. A record's name and a card's heading looked like two different kinds
+  // of thing while /plan/[token] still had a 44px title of its own; once the
+  // property name there became a SectionHeading, keeping 22px here would have
+  // been the same content in two treatments on two detail pages. One treatment
+  // for every heading in both surfaces, no exceptions.
+  const head = (
+    <div className="mb-6 flex flex-col border-b border-sand-100 pb-5">
+      <Link
+        href="/bookings"
+        className="mb-4 self-start text-[15px] text-brand-violet no-underline hover:underline"
+      >
+        ← Back to bookings
+      </Link>
+      <SectionHeading className="mb-2.5">{booking.serviceName}</SectionHeading>
+      <p className="text-[17px] text-ink-500">
+        {booking.customerNameHint ?? booking.customerEmailHint ?? "Guest pending"}
+      </p>
+    </div>
+  );
 
-      {portal ? (
-        <PlanDetail booking={booking} portal={portal} />
-      ) : (
-        <NoPlan booking={booking} />
-      )}
-    </>
+  return portal ? (
+    <PlanDetail booking={booking} portal={portal} head={head} />
+  ) : (
+    <NoPlan booking={booking} head={head} />
   );
 }
 
-function PlanDetail({ booking, portal }: { booking: Booking; portal: PublicPlanPortal }) {
+function PlanDetail({
+  booking,
+  portal,
+  head,
+}: {
+  booking: Booking;
+  portal: PublicPlanPortal;
+  head: React.ReactNode;
+}) {
   const totalDue = portal.plan.totalAmountCents + portal.processingFeeCents;
   const refunded = portal.plan.refundedAt != null;
   const displayStatus = portal.complete ? "completed" : portal.plan.status;
 
   return (
-    <div className="mt-6 space-y-5">
+    <div className="flex flex-col gap-7">
+      {/* Was a lavender-tinted bordered strip, the one block on this page that
+          held content on something other than a white card. Now a card like
+          everything else, matching the refund notice on the guest plan screen. */}
       {refunded ? (
-        <div className="flex items-center gap-3 border border-brand-purple/40 bg-brand-lavender/15 px-4 py-3">
-          <span className="inline-flex items-center gap-1.5 bg-brand-purple px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
+        <Panel variant="filled" className="flex-row items-center gap-3 px-7 py-5">
+          <span className="rounded-full bg-brand-violet-tint px-[15px] py-[7px] text-[13px] font-medium uppercase tracking-[0.06em] text-brand-violet">
             Refunded
           </span>
-          <span className="text-sm text-brand-navy">
+          <span className="text-[17px] text-ink-500">
             {formatDollars(portal.plan.refundAmountCents ?? 0)} refunded to the guest
             {portal.plan.refundedAt
               ? ` on ${formatScheduleDateLong(portal.plan.refundedAt.slice(0, 10))}`
               : ""}
             .
           </span>
-        </div>
+        </Panel>
       ) : null}
 
-      <Card title="Booking">
+      <Card title="Booking" head={head}>
         {booking.customerNameHint ? <Row label="Guest" value={booking.customerNameHint} /> : null}
         {booking.customerEmailHint ? <Row label="Email" value={booking.customerEmailHint} /> : null}
         <Row label="Stay" value={booking.serviceName} />
@@ -83,22 +105,24 @@ function PlanDetail({ booking, portal }: { booking: Booking; portal: PublicPlanP
       </Card>
 
       <Card title="Plan summary">
-        <div className="space-y-2 text-sm text-ink">
+        <div className="space-y-2.5">
           <Line label="Subtotal" value={formatDollars(portal.plan.totalAmountCents)} />
           <Line label="Processing fee" value={`+${formatDollars(portal.processingFeeCents)}`} />
         </div>
-        <div className="mt-3 flex items-baseline justify-between border-t border-brand-neutral pt-3">
-          <span className="text-base font-semibold text-brand-navy">Total</span>
-          <span className="text-2xl font-bold tabular-nums text-brand-navy">{formatDollars(totalDue)}</span>
+        <div className="mt-[18px] flex items-baseline justify-between border-t border-sand-300 pt-[18px]">
+          <span className="text-[17px] font-medium text-ink-900">Total</span>
+          <span className="text-2xl font-medium tracking-[-0.02em] tabular-nums text-ink-900">
+            {formatDollars(totalDue)}
+          </span>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="mt-7 grid grid-cols-2 gap-3">
           <Stat label="Paid to date" value={formatDollars(portal.paidCents)} />
           <Stat label="Remaining" value={formatDollars(portal.remainingCents)} />
         </div>
       </Card>
 
       <Card title="Schedule">
-        <ol className="divide-y divide-brand-neutral">
+        <ol className="divide-y divide-sand-100">
           {labelSchedule(portal.schedule).map(({ entry, label }) => {
             // Drive the pill from the row's REAL status (rail-agnostic), not the
             // due date. A Mews installment captures asynchronously, so it can sit
@@ -106,18 +130,18 @@ function PlanDetail({ booking, portal }: { booking: Booking; portal: PublicPlanP
             // that as paid. Same statuses apply to the Stripe rail.
             const rowStatus = scheduleDisplayStatus(entry.status);
             return (
-              <li key={entry.sequence} className="flex items-center justify-between gap-4 py-3 text-sm">
+              <li key={entry.sequence} className="flex items-center justify-between gap-4 py-4">
                 <div className="flex items-center gap-3">
                   <SchedulePill status={rowStatus} />
                   <div>
-                    <div className="text-ink">{label}</div>
-                    <div className="text-xs text-brand-navy/55">
+                    <div className="text-[17px] text-ink-900">{label}</div>
+                    <div className="mt-0.5 text-[13px] text-ink-400">
                       {SCHEDULE_DATE_PREFIX[rowStatus]}
                       {formatScheduleDateShort(entry.dueDate)}
                     </div>
                   </div>
                 </div>
-                <div className="text-base font-semibold tabular-nums text-brand-navy">
+                <div className="text-[17px] font-medium tabular-nums text-ink-900">
                   {formatDollars(entry.amountCents)}
                 </div>
               </li>
@@ -161,10 +185,10 @@ function PlanDetail({ booking, portal }: { booking: Booking; portal: PublicPlanP
   );
 }
 
-function NoPlan({ booking }: { booking: Booking }) {
+function NoPlan({ booking, head }: { booking: Booking; head: React.ReactNode }) {
   return (
-    <div className="mt-6 space-y-5">
-      <Card title="Booking">
+    <div className="flex flex-col gap-7">
+      <Card title="Booking" head={head}>
         <Row label="Stay" value={booking.serviceName} />
         <Row label="Check-in" value={formatScheduleDateLong(booking.appointmentDate)} />
         <Row label="Total" value={formatDollars(booking.totalAmountCents)} />
@@ -184,38 +208,65 @@ function NoPlan({ booking }: { booking: Booking }) {
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+/**
+ * Was a square, shadowed, brand-neutral box with a 20px bold brand-navy h2 —
+ * the last of the pre-redesign card system in the merchant app. Now Panel plus
+ * the one in-card heading treatment, so this page matches every other screen.
+ */
+function Card({
+  title,
+  head,
+  children,
+}: {
+  title: string;
+  /** Page head, rendered above the heading on the first card only. */
+  head?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="border border-brand-neutral bg-white p-6 shadow-card">
-      <h2 className="mb-4 text-xl font-bold text-brand-navy">{title}</h2>
+    <Panel variant="filled" className="px-7 py-[30px]">
+      {head}
+      <SectionHeading className="mb-5">{title}</SectionHeading>
       {children}
-    </section>
+    </Panel>
   );
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-brand-neutral py-2.5 text-sm last:border-b-0">
-      <span className="text-xs font-medium uppercase tracking-wide text-brand-navy/55">{label}</span>
-      <span className="text-right text-ink">{value}</span>
+    <div className="flex items-center justify-between gap-4 border-b border-sand-100 py-4 last:border-b-0">
+      {/* text-xs (12px), NOT the 13px SectionHeading size. This labels a field
+          in a row, so it belongs with /dashboard's FieldRow labels and the
+          /bookings column headers, which are all 12px. At 13px it was sitting
+          in the section-heading family and made "Guest" here look like the same
+          kind of thing as "Booking" above it. */}
+      <span className="text-xs uppercase tracking-[0.08em] text-ink-400">
+        {label}
+      </span>
+      <span className="text-right text-[17px] text-ink-900">{value}</span>
     </div>
   );
 }
 
 function Line({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between">
-      <span className="text-brand-navy/70">{label}</span>
-      <span className="tabular-nums text-ink">{value}</span>
+    <div className="flex items-baseline justify-between text-[17px]">
+      <span className="text-ink-500">{label}</span>
+      <span className="tabular-nums text-ink-900">{value}</span>
     </div>
   );
 }
 
+// Was a square, cream-tinted, brand-neutral box — a second surface tint inside
+// a card. Now the same label-over-figure pair the guest plan screen uses, with
+// no box of its own: one card, one fill.
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-brand-neutral bg-brand-cream/30 px-3 py-2.5">
-      <div className="text-[11px] uppercase tracking-wide text-brand-navy/55">{label}</div>
-      <div className="mt-1 text-lg font-semibold tabular-nums text-ink">{value}</div>
+    <div className="flex flex-col gap-[7px]">
+      <div className="text-[15px] text-ink-400">{label}</div>
+      <div className="text-[19px] font-medium tabular-nums text-ink-900">
+        {value}
+      </div>
     </div>
   );
 }

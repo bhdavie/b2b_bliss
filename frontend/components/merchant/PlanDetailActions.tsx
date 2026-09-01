@@ -12,7 +12,7 @@ import {
   type PlanDetail,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { Panel, SectionHeading } from "@/components/ui/primitives";
 
 const OVERRIDE_OPTIONS: PaymentPlanStatus[] = [
   "active",
@@ -43,8 +43,8 @@ export function PlanDetailActions({ plan }: { plan: PlanDetail }) {
   }
 
   return (
-    <Card padding="md" className="space-y-4">
-      <div className="text-sm font-medium">Take action</div>
+    <Panel variant="filled" className="space-y-4 px-7 py-[30px]">
+      <SectionHeading>Take action</SectionHeading>
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
@@ -128,6 +128,6 @@ export function PlanDetailActions({ plan }: { plan: PlanDetail }) {
           {error}
         </div>
       ) : null}
-    </Card>
+    </Panel>
   );
 }

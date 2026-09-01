@@ -15,6 +15,7 @@ import {
 } from "@/lib/eligibility";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { SectionHeading } from "@/components/ui/primitives";
 
 type FormState = {
   serviceName: string;
@@ -36,8 +37,11 @@ const EMPTY: FormState = {
 
 export function NewBookingForm({
   planRules = DEFAULT_PLAN_RULES,
+  head,
 }: {
   planRules?: PlanRules;
+  /** Rendered at the top of the form's own card. See the note at its call site. */
+  head?: React.ReactNode;
 }) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -88,8 +92,12 @@ export function NewBookingForm({
   }
 
   return (
-    <form className="mt-8 grid gap-6 md:grid-cols-[1fr_320px]" onSubmit={handleSubmit}>
-      <section className="card p-6 space-y-4">
+    <form className="grid gap-6 md:grid-cols-[1fr_320px]" onSubmit={handleSubmit}>
+      {/* `head` is the back link, title and helper this page used to float on
+          the sand ground above the form. They belong to the form, so they open
+          the form's own card. */}
+      <section className="card space-y-4 p-6">
+        {head}
         <label className="block">
           <span className="label">Service name</span>
           <Input
@@ -186,10 +194,11 @@ export function NewBookingForm({
         </div>
       </section>
 
-      <aside className="card-subtle space-y-3">
-        <div className="text-xs text-ink-muted font-medium">
-          Plan preview
-        </div>
+      {/* card, not card-subtle: card-subtle fills sand-50, which on the sand-100
+          page ground reads as a tinted region rather than as a card. Every
+          surface holding content in this app is white. */}
+      <aside className="card space-y-3 p-4">
+        <SectionHeading className="mb-1">Plan preview</SectionHeading>
         <EligibilityPreview
           totalCents={totalCents}
           appointmentDate={appointmentDate}

@@ -36,7 +36,7 @@ export default async function HomePage() {
       {/* At a glance, promoted to a header rollup above the columns. The
           border-y band it used to sit in is gone: the fill separates it now. */}
       <Panel variant="filled" className="mb-7 gap-5 px-7 py-[30px]">
-        <SectionHeading track="0.08em">At a glance</SectionHeading>
+        <SectionHeading>At a glance</SectionHeading>
         <div className="flex flex-wrap items-baseline gap-x-14 gap-y-4">
           <Stat value={String(bookingsTotal)} label="Bookings" />
           <Stat value={String(needsAttention)} label="Needs attention" />
@@ -49,7 +49,7 @@ export default async function HomePage() {
             back to pb-2 because the last child (a row, or the View-all link)
             carries its own. */}
         <Panel variant="filled" className="px-7 pb-2 pt-[30px]">
-          <SectionHeading track="0.08em">Recent bookings</SectionHeading>
+          <SectionHeading>Recent bookings</SectionHeading>
           {recent.length === 0 ? (
             <div className="flex flex-col items-start pb-7 pt-5">
               <div className="text-xl font-medium tracking-[-0.015em] text-ink-900">
@@ -86,7 +86,7 @@ export default async function HomePage() {
               on the guest plan screen. Rows carry their own py-6, so the bottom
               padding comes back to pb-2. */}
           <Panel variant="filled" className="px-7 pb-2 pt-[30px]">
-            <SectionHeading track="0.08em">Connections</SectionHeading>
+            <SectionHeading>Connections</SectionHeading>
             <OverviewConnections
               pmsType={session.pmsType}
               mews={onboarding?.mews ?? null}

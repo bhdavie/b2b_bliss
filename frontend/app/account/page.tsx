@@ -4,7 +4,6 @@ import { fetchAccountPlans, fetchPlanPortal } from "@/lib/publicApi";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PlanPortal } from "@/components/portal/PlanPortal";
 import { PlansList } from "@/components/account/PlansList";
-import { PageHeader } from "@/components/ui/primitives";
 
 // Carried over from the former /account/plans, which was more specific than
 // the generic PlansList default ("No plans yet" / "When a merchant sends you
@@ -48,47 +47,23 @@ export default async function AccountPage() {
     }
   }
 
-  // Zero or several plans: the page needs its own heading, so the greeting
-  // stays. Same name resolution as before — prefer the customer record's
-  // first name, fall back to the booking's captured name.
-  const anchor =
-    data.plans.find((p) => p.status === "active") ?? data.plans[0] ?? null;
-  const portal = anchor ? await fetchPlanPortal(anchor.bookingToken) : null;
-  const nameHint = portal?.booking.customerNameHint ?? null;
-  const firstName =
-    (data.firstName?.trim() ?? "") ||
-    (nameHint ? (nameHint.trim().split(/\s+/)[0] ?? "") : "");
+  // The greeting is gone with the page header, and with it the name lookup it
+  // needed: resolving a display name used to cost an extra fetchPlanPortal call
+  // on every render of this page purely to read a customerNameHint.
 
   return (
     <PortalShell active="home" email={data.email}>
-      {/* Title on the page ground, like every other route. It was briefly an
-          identity card on the theory that a greeting is the guest's own detail
-          rather than a route label; it is the route label, and carding it made
-          this screen disagree with /home, /bookings, /install and the plan
-          screen.
-          Rendered through PageHeader rather than kept as its own h1: the local
-          markup was 36px bold at tracking-tight over a 14px line, where every
-          other route's title is 44px medium at -0.035em over 18px. Dropping the
-          card alone would have moved it to the ground and left it the one title
-          still styled differently. */}
-      <PageHeader
-        title={firstName ? `Welcome back, ${firstName}` : "Welcome back"}
-        subtitle={`Signed in as ${data.email}`}
+      {/* "Your plans" was a 24px h2 on the sand ground above a stack of plan
+          cards. It is the list's heading now, inside the one card that holds
+          the list — see the note in PlansList for why the group merged into a
+          single card rather than the heading moving into the first plan. */}
+      <PlansList
+        plans={active}
+        from="home"
+        title="Your plans"
+        emptyTitle={EMPTY_TITLE}
+        emptyBody={EMPTY_BODY}
       />
-
-      {/* "Your plans" stays on the ground. It labels the GROUP of plan cards
-          below it, so there is no single card it could sit inside without
-          claiming to belong to the first plan. A list label above a card group
-          is the one heading this pass leaves on the ground. */}
-      <h2 className="text-2xl font-bold text-ink-900">Your plans</h2>
-      <div className="mt-5">
-        <PlansList
-          plans={active}
-          from="home"
-          emptyTitle={EMPTY_TITLE}
-          emptyBody={EMPTY_BODY}
-        />
-      </div>
     </PortalShell>
   );
 }

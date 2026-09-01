@@ -16,7 +16,7 @@ import {
   type PmsType,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
-import { Panel } from "@/components/ui/primitives";
+import { Panel, SectionHeading } from "@/components/ui/primitives";
 
 export type AccountInitial = {
   hotelName: string;
@@ -174,9 +174,9 @@ function AccountInformation({ initial }: { initial: AccountInitial }) {
   );
 }
 
-// Uniform single-column section chrome shared by all three Account-settings
-// sections: full-width bold title, helper line, then indented content. Matches
-// the Affirm stacked layout (no two-column header).
+// Uniform single-column section chrome shared by the Account-settings
+// sections: one card, opening with its own heading and optional helper line,
+// then the section's content. Single column, no two-column header.
 function StackedSection({
   title,
   helper,
@@ -197,19 +197,23 @@ function StackedSection({
   /** Account information holds ruled rows, so its panel takes tighter padding. */
   dense?: boolean;
 }) {
+  // Title and helper are INSIDE the panel now. They were a 24px h2 and a 17px
+  // line sitting on the page ground directly above the card they name, which
+  // made /dashboard the loosest screen in the app: four lines of content on the
+  // sand before the first surface. Nothing else on this page reads as belonging
+  // to the ground, so neither should its section heads.
+  //
+  // `dense` no longer means "no vertical padding": the panel has to open with
+  // its own heading now, so the tier is a tighter body padding under a normal
+  // head rather than a panel that starts flush with a ruled row.
   return (
     <section className="mb-7 flex flex-col">
-      <div className="mb-5 flex flex-col gap-2">
-        <h2 className="text-2xl font-medium tracking-[-0.02em] text-ink-900">
-          {title}
-        </h2>
-        <p className="text-[17px] text-ink-400">{helper}</p>
-      </div>
-      <Panel
-        variant="filled"
-        className={dense ? "px-7 py-1.5" : "px-7 py-[30px]"}
-      >
-        {children}
+      <Panel variant="filled" className="px-7 pb-[30px] pt-[30px]">
+        <div className={`flex flex-col gap-2 ${helper ? "mb-5" : "mb-4"}`}>
+          <SectionHeading>{title}</SectionHeading>
+          {helper ? <p className="text-[17px] text-ink-400">{helper}</p> : null}
+        </div>
+        <div className={dense ? "-mb-[18px]" : ""}>{children}</div>
       </Panel>
     </section>
   );

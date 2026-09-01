@@ -2,7 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { fetchAccountPlans } from "@/lib/publicApi";
 import { PortalShell } from "@/components/portal/PortalShell";
-import { PageHeader, Panel } from "@/components/ui/primitives";
+import { Panel } from "@/components/ui/primitives";
 import { PlansList } from "@/components/account/PlansList";
 
 export default async function AccountHistoryPage({
@@ -48,14 +48,18 @@ export default async function AccountHistoryPage({
           </Panel>
         ) : null}
 
-        <PageHeader
-          title="Plan history"
-          subtitle="Plans that are paid off or cancelled."
-        />
-
+        {/* The orienting line was a PageLead floating above the plan cards.
+            It is the list card's helper now. The heading beside it is "Past
+            plans" rather than "History": the sidebar already says History, and
+            repeating it would put the same word twice on one screen for no
+            gain. The helper is the line that actually does the work here — it
+            is what tells a guest a cancelled plan belongs on this page
+            alongside a paid-off one. */}
         <PlansList
           plans={past}
           from="history"
+          title="Past plans"
+          helper="Plans that are paid off or cancelled."
           emptyTitle="Nothing here yet"
           emptyBody="Completed and cancelled plans will appear here."
         />

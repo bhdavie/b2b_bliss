@@ -11,7 +11,9 @@ import {
   type RefundPolicy,
 } from "@/lib/api";
 import { Input } from "@/components/ui/Input";
-import { Panel, SectionTitle } from "@/components/ui/primitives";
+// No Panel here: PaymentSettingsTabs draws the card and supplies the padding.
+// Each of these three sections is one tab of that card, so a Panel of its own
+// would nest a white card inside a white card.
 
 type FormState = {
   refundPolicy: RefundPolicy;
@@ -229,9 +231,10 @@ export function PoliciesCard({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-8">
       {show("cancellation") ? (
-      <Panel variant="filled" className="gap-7 px-7 py-[30px]">
-        <SectionTitle>Cancellation policies</SectionTitle>
-
+      <div className="flex flex-col gap-7">
+      {/* No heading: the tab row above IS this card's head, and the active tab
+          already says "Cancellation policies". A heading here repeated it verbatim. */}
+  
         <Row label="Refund policy" hint="What customers get back if they cancel a plan in progress.">
           <div className="grid gap-2 sm:grid-cols-2">
             {REFUND_OPTIONS.map((opt) => (
@@ -308,13 +311,12 @@ export function PoliciesCard({
             ) : null}
           </div>
         </Row>
-      </Panel>
+      </div>
       ) : null}
 
       {show("deadline") ? (
-      <Panel variant="filled" className="gap-7 px-7 py-[30px]">
-        <SectionTitle>Payment deadline</SectionTitle>
-
+      <div className="flex flex-col gap-7">
+  
         <Row
           label="All installments due by"
           hint="Cuts off the plan window. Customers can't pick a plan whose final installment falls after this date."
@@ -342,13 +344,12 @@ export function PoliciesCard({
             </div>
           ) : null}
         </Row>
-      </Panel>
+      </div>
       ) : null}
 
       {show("failed") ? (
-      <Panel variant="filled" className="gap-7 px-7 py-[30px]">
-        <SectionTitle>Failed payment handling</SectionTitle>
-
+      <div className="flex flex-col gap-7">
+  
         <Row label="Retry policy" hint="How aggressively to retry a failed installment.">
           <div className="grid grid-cols-2 gap-3 max-w-md">
             <NumberInput
@@ -443,7 +444,7 @@ export function PoliciesCard({
             ))}
           </div>
         </Row>
-      </Panel>
+      </div>
       ) : null}
 
       {error ? (

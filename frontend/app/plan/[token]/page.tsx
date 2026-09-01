@@ -1,6 +1,7 @@
 import { fetchPlanPortal } from "@/lib/publicApi";
 import { PlanPortal } from "@/components/portal/PlanPortal";
 import { PortalShell } from "@/components/portal/PortalShell";
+import { Panel } from "@/components/ui/primitives";
 
 type Params = { token: string };
 type Search = { from?: string | string[] };
@@ -39,15 +40,19 @@ export default async function PlanPortalPage(props: {
   if (!portal) {
     return (
       <PortalShell active={origin.active}>
-        <div className="py-16 text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-ink-900">
+        {/* Was a bare centred h1 and paragraph on the sand ground — the only
+            screen in either surface with no card at all. Now the same empty-state
+            card the plan lists use, so a dead link lands on a surface rather
+            than on the page background. */}
+        <Panel variant="filled" className="items-center px-10 py-16 text-center">
+          <div className="text-[22px] font-medium tracking-[-0.015em] text-ink-900">
             Plan not found
-          </h1>
-          <p className="mt-3 text-sm text-ink-500">
+          </div>
+          <p className="mt-2.5 max-w-[420px] text-[17px] text-ink-500">
             This link is no longer active or the plan has been canceled. If you
             think this is a mistake, contact the property that sent you the link.
           </p>
-        </div>
+        </Panel>
       </PortalShell>
     );
   }

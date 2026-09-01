@@ -1,39 +1,51 @@
 /**
- * Shared page chrome for the settled design, used by the guest portal and the
- * merchant dashboard alike: no card wrappers around sections, small uppercase
- * section labels instead of large headings, sand borders and ink type.
+ * Shared page chrome for the merchant app and the guest portal.
  *
- * These sit alongside Button/Card/Input/Label rather than under either surface,
- * because turns 5, 6 and 7-13 of the design export all draw the same page head,
- * section label and panel.
+ * The rule these now enforce: nothing sits loose on the sand page ground.
+ * Every heading, label and block of content in both surfaces lives inside a
+ * white card. The sidebar, the onboarding funnel (which has no sidebar) and the
+ * auth screens are the only things outside one.
+ *
+ * That leaves exactly two exports here, and each has a single job:
+ *  - SectionHeading — THE in-card heading. One treatment for the whole app.
+ *  - PageHeader — a 44px page title, now used ONLY by the onboarding funnel.
+ *
+ * Two former exports are gone rather than left to compete with SectionHeading:
+ * SectionTitle (24px + hairline, the /settings cards) and PageLead (the
+ * orienting line that /install and /account/history floated above their first
+ * card). Their content did not disappear; it moved inside the card it was
+ * describing. See the notes on each remaining export.
  */
 
 export function SectionHeading({
   children,
   className = "",
-  track = "0.06em",
 }: {
   children: React.ReactNode;
   className?: string;
-  /**
-   * The export uses 0.06em on the guest screens (turns 5-6) and 0.08em on the
-   * merchant ones (turns 9-13). Passed explicitly rather than overridden via
-   * className, so the winner does not depend on utility emission order.
-   */
-  track?: "0.06em" | "0.08em";
 }) {
   return (
     <div
-      className={`text-[13px] uppercase text-ink-400 ${
-        track === "0.08em" ? "tracking-[0.08em]" : "tracking-[0.06em]"
-      } ${className}`}
+      className={`text-[13px] uppercase tracking-[0.08em] text-ink-400 ${className}`}
     >
       {children}
     </div>
   );
 }
 
-/** 44px title over an 18px subtitle. The History and Settings page heads. */
+/**
+ * 44px title over an 18px subtitle.
+ *
+ * No route inside the merchant app or the guest portal uses this any more, and
+ * none should: a page title on either surface goes inside a card, on
+ * SectionHeading. /plan/[token] was the last holdout and gave it up too.
+ *
+ * What keeps this alive is the onboarding funnel — /onboarding, /onboarding/pms
+ * and /onboarding/plan-rules. The funnel has no sidebar and no cards; it is a
+ * centred column with a wordmark and a step head, so it is exempt from the
+ * card rule and it is the one place a 44px title still does a job. Do not
+ * reintroduce it behind the sidebar.
+ */
 export function PageHeader({
   title,
   subtitle,
@@ -65,22 +77,6 @@ export function PageHeader({
       </h1>
       <p className="text-lg text-ink-500">{subtitle}</p>
     </div>
-  );
-}
-
-/**
- * 24px card title with a hairline under it, the head each Payment settings tab
- * draws inside its own card. Distinct from SectionHeading above, which is the
- * 13px uppercase eyebrow — this is the larger in-card title.
- *
- * Lifted here from PoliciesCard once PlanRulesCard and BlackoutDatesCard needed
- * the same head; the markup is unchanged from that original.
- */
-export function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h3 className="border-b border-sand-100 pb-4 text-2xl font-medium tracking-[-0.02em] text-ink-900">
-      {children}
-    </h3>
   );
 }
 
