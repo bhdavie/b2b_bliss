@@ -59,7 +59,7 @@ export function refundCopy(policies: PublicPolicies): string {
     case "none":
       return "No refunds on paid installments.";
     case "first_installment_only":
-      return "Only your first installment is refundable. Later payments stay with the merchant.";
+      return "Only your first installment is refundable. Later payments stay with the property.";
     case "sliding_scale": {
       const t = policies.refundSlidingThresholdPercent ?? 50;
       return `Full refund before ${t}% through your plan, no refund after.`;

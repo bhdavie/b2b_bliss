@@ -159,7 +159,7 @@ public class PublicMerchantsResource {
     private static Response notFound() {
         return Response.status(404)
                 .entity(Map.of("error", "merchant_not_found",
-                        "message", "We can't find that merchant. Contact them for a fresh link."))
+                        "message", "We can't find that property. Contact them for a fresh link."))
                 .build();
     }
 }

@@ -19,7 +19,7 @@ export default async function HostedPaymentPlanPage(props: {
       <PageChrome>
         <InactiveLink
           title="This link is no longer active"
-          body="The merchant link you followed has expired or was already used. Reach out to the merchant for a fresh one."
+          body="The link you followed has expired or was already used. Reach out to the property for a fresh one."
         />
       </PageChrome>
     );
@@ -31,7 +31,7 @@ export default async function HostedPaymentPlanPage(props: {
         <MerchantBlock merchant={booking.merchant} />
         <InactiveLink
           title={`${booking.merchant.businessName} canceled this booking`}
-          body="Contact the merchant directly with any questions."
+          body="Contact the property directly with any questions."
         />
       </PageChrome>
     );
@@ -47,7 +47,7 @@ export default async function HostedPaymentPlanPage(props: {
         <MerchantBlock merchant={booking.merchant} />
         <InactiveLink
           title="This booking has already been accepted"
-          body="Sign in to manage your plan, or contact the merchant if you have questions."
+          body="Sign in to manage your plan, or contact the property if you have questions."
         />
       </PageChrome>
     );

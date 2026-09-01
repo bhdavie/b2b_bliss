@@ -37,7 +37,7 @@ export function Sidebar({
       <div className="flex flex-col">
         <div className="flex flex-col gap-[5px] px-7 pb-10">
           <BlissWordmark className="text-[22px] tracking-[-0.005em] text-brand-violet" />
-          <div className="text-sm text-ink-400">Merchant dashboard</div>
+          <div className="text-sm text-ink-400">Property dashboard</div>
         </div>
 
         <nav className="flex flex-col gap-0.5 px-4">

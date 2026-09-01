@@ -10,7 +10,7 @@ export default function HomePage() {
       </p>
       <div className="mt-6 flex gap-3">
         <Button href="/login" variant="primary">
-          Merchant sign in
+          Property sign in
         </Button>
         <Button href="/signup" variant="ghost">
           Create account

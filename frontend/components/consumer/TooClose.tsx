@@ -63,7 +63,7 @@ function copyFor(booking: PublicBooking): { headline: string; body: string } {
     case "too_far":
       return {
         headline: "This booking is too far out for a plan",
-        body: "Plans are available for bookings within the merchant's preferred window.",
+        body: "Plans are available for bookings within the property's preferred window.",
       };
     case "amount_too_low":
       return {
@@ -83,7 +83,7 @@ function copyFor(booking: PublicBooking): { headline: string; body: string } {
     case "deposit_too_high":
       return {
         headline: "A payment plan is not available for this booking",
-        body: "The merchant's deposit configuration doesn't fit this booking size.",
+        body: "The property's deposit configuration doesn't fit this booking size.",
       };
     default:
       return {

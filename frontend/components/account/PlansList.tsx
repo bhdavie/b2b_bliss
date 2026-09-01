@@ -6,7 +6,7 @@ export function PlansList({
   plans,
   from,
   emptyTitle = "No plans yet",
-  emptyBody = "When a merchant sends you a payment-plan link, your plan will appear here automatically.",
+  emptyBody = "When a property sends you a payment-plan link, your plan will appear here automatically.",
 }: {
   plans: AccountPlanCard[];
   /** Threaded through to each card so the plan screen knows the entry point. */

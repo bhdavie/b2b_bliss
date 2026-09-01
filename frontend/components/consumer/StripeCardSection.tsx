@@ -169,7 +169,7 @@ export function StripeNotConfiguredCard() {
     <section className="mt-6 rounded-none border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-900">
       <div className="font-medium">Stripe is not configured</div>
       <p className="mt-1 text-[12px] leading-relaxed text-amber-800">
-        The merchant has not finished wiring payments yet. Reach out to them
+        The property has not finished wiring payments yet. Reach out to them
         directly to arrange this booking, or check back shortly.
       </p>
     </section>

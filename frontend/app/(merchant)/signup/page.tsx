@@ -39,7 +39,7 @@ export default function SignupPage() {
         <form onSubmit={handleSubmit} className="w-full max-w-sm flex flex-col gap-4">
           <header>
             <BlissWordmark className="text-xl tracking-tight text-brand-violet" />
-            <h1 className="mt-4 text-lg font-medium">Create your merchant account</h1>
+            <h1 className="mt-4 text-lg font-medium">Create your property account</h1>
             <p className="mt-1 text-ink-muted">
               We will email you a link to confirm your address.
             </p>

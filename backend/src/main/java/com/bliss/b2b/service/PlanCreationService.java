@@ -296,7 +296,7 @@ public class PlanCreationService {
             // request). Fail clearly rather than create an unfulfillable plan.
             throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
                     "Cloudbeds is connected, but guest card capture is not yet available "
-                            + "(tokenization seam pending). Contact the merchant to book.");
+                            + "(tokenization seam pending). Contact the property to book.");
         }
         if (!stripeService.isConfigured()) {
             return acceptForBookingDemo(handle, booking, merchant,
@@ -314,7 +314,7 @@ public class PlanCreationService {
             ConnectStatus connectStatus = ConnectStatus.fromWire(merchant.stripeConnectStatus());
             if (connectStatus != ConnectStatus.CHARGES_ENABLED) {
                 throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
-                        "merchant has not completed Stripe onboarding");
+                        "property has not completed Stripe onboarding");
             }
         }
         StripePaymentsService.Destination destination = new StripePaymentsService.Destination(
@@ -337,7 +337,7 @@ public class PlanCreationService {
                 today, booking.appointmentDate(), booking.checkoutDate(), evaluateInput, rules);
         if (!eligibility.eligible()) {
             throw new PlanCreationException(Reason.ELIGIBILITY_FAILED,
-                    "booking does not satisfy this merchant's plan rules (" + eligibility.reason() + ")");
+                    "booking does not satisfy this property's plan rules (" + eligibility.reason() + ")");
         }
         PlanOption option = eligibility.options().stream()
                 .filter(o -> o.frequency() == requestedFrequency)
@@ -515,7 +515,7 @@ public class PlanCreationService {
                 today, booking.appointmentDate(), booking.checkoutDate(), evaluateInput, rules);
         if (!eligibility.eligible()) {
             throw new PlanCreationException(Reason.ELIGIBILITY_FAILED,
-                    "booking does not satisfy this merchant's plan rules (" + eligibility.reason() + ")");
+                    "booking does not satisfy this property's plan rules (" + eligibility.reason() + ")");
         }
         PlanOption option = eligibility.options().stream()
                 .filter(o -> o.frequency() == requestedFrequency)
@@ -651,7 +651,7 @@ public class PlanCreationService {
                 .isPresent();
         if (!connected) {
             throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
-                    "merchant has not connected Mews");
+                    "property has not connected Mews");
         }
 
         MerchantPlanRules rules = handle.attach(MerchantPlanRulesDao.class)
@@ -666,7 +666,7 @@ public class PlanCreationService {
                 today, booking.appointmentDate(), booking.checkoutDate(), evaluateInput, rules);
         if (!eligibility.eligible()) {
             throw new PlanCreationException(Reason.ELIGIBILITY_FAILED,
-                    "booking does not satisfy this merchant's plan rules (" + eligibility.reason() + ")");
+                    "booking does not satisfy this property's plan rules (" + eligibility.reason() + ")");
         }
         PlanOption option = eligibility.options().stream()
                 .filter(o -> o.frequency() == requestedFrequency)

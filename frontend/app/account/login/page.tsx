@@ -44,11 +44,11 @@ export default async function AccountLoginPage() {
       {hasCookie ? <ClearStaleSession /> : null}
       <AuthShell
         heading="Welcome back"
-        subhead="Sign in to see your payment plans across every Bliss merchant."
+        subhead="Sign in to see your payment plans across every Bliss property."
         footer={
           <>
             Don&rsquo;t have an account yet? Your account is created
-            automatically the first time a merchant sends you a payment-plan
+            automatically the first time a property sends you a payment-plan
             link.
           </>
         }

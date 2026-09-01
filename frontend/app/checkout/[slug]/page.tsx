@@ -17,8 +17,8 @@ export default async function CheckoutPage(props: {
     return (
       <PageChrome>
         <InactiveLink
-          title="We can't find that merchant"
-          body="The checkout link you followed points to a merchant we don't recognize. Contact the merchant for a fresh link."
+          title="We can't find that property"
+          body="The checkout link you followed points to a property we don't recognize. Contact the property for a fresh link."
         />
       </PageChrome>
     );

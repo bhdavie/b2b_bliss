@@ -83,7 +83,7 @@ public class PublicBookingsResource {
     private static Response notFound() {
         return Response.status(404)
                 .entity(Map.of("error", "not_found",
-                        "message", "This link is no longer active. Contact the merchant for a new one."))
+                        "message", "This link is no longer active. Contact the property for a new one."))
                 .build();
     }
 }
