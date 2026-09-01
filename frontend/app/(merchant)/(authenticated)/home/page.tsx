@@ -98,16 +98,6 @@ export default async function HomePage() {
               cloudbeds={onboarding?.cloudbeds ?? null}
             />
           </Panel>
-
-          <Panel variant="filled" className="px-7 py-[30px]">
-            <SectionHeading track="0.08em" className="mb-5">
-              Next payout
-            </SectionHeading>
-            <p className="text-[17px] leading-[1.5] text-ink-500">
-              No payouts scheduled yet. Payouts appear here once a plan
-              completes.
-            </p>
-          </Panel>
         </div>
       </div>
     </div>

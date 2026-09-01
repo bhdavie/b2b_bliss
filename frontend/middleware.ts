@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const SESSION_COOKIE = "bliss_session";
-const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/bookings", "/payouts", "/settings"];
+const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/bookings", "/settings"];
 const PUBLIC_AUTH_ROUTES = ["/login", "/signup"];
 
 // Production serves one Next deployment on two hostnames. Each route belongs to
@@ -15,7 +15,6 @@ const GUEST_HOST = "guest.bliss-payments.com";
 const MERCHANT_PREFIXES = [
   "/dashboard",
   "/bookings",
-  "/payouts",
   "/plans",
   "/settings",
   "/home",

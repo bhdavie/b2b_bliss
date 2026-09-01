@@ -12,7 +12,6 @@ const NAV: NavItem[] = [
   { href: "/home", label: "Home" },
   { href: "/dashboard", label: "Account settings" },
   { href: "/bookings", label: "Bookings" },
-  { href: "/payouts", label: "Payouts" },
   { href: "/settings", label: "Payment settings" },
   { href: "/install", label: "Install" },
 ];
