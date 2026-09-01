@@ -1,9 +1,11 @@
 package com.bliss.b2b.service;
 
 import com.bliss.b2b.BlissConfiguration.AppConfig;
+import com.bliss.b2b.domain.Customer;
 import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.integration.EmailService;
 import com.bliss.b2b.integration.EmailTemplates;
+import com.bliss.b2b.persistence.CustomerDao;
 import com.bliss.b2b.persistence.MagicLinkTokenDao;
 import com.bliss.b2b.persistence.MerchantDao;
 import java.nio.charset.StandardCharsets;
@@ -25,6 +27,7 @@ public class MagicLinkService {
     private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
 
     private final MerchantDao merchantDao;
+    private final CustomerDao customerDao;
     private final MagicLinkTokenDao tokenDao;
     private final EmailService emailService;
     private final AppConfig appConfig;
@@ -38,6 +41,7 @@ public class MagicLinkService {
 
     public MagicLinkService(
             MerchantDao merchantDao,
+            CustomerDao customerDao,
             MagicLinkTokenDao tokenDao,
             EmailService emailService,
             AppConfig appConfig,
@@ -45,6 +49,7 @@ public class MagicLinkService {
             boolean demoSignups
     ) {
         this.merchantDao = merchantDao;
+        this.customerDao = customerDao;
         this.tokenDao = tokenDao;
         this.emailService = emailService;
         this.appConfig = appConfig;
@@ -125,6 +130,87 @@ public class MagicLinkService {
             return merchantDao.findById(merchant.id());
         }
         return Optional.of(merchant);
+    }
+
+    // ---------------------------------------------------------------------
+    // Guest (customer) links. Same token primitives as the merchant flow above
+    // — same RNG, same SHA-256 hashing, same TTL, same single-use consume — so
+    // the two cannot drift in how a credential is generated or retired. Only
+    // the subject and the destination host differ.
+    // ---------------------------------------------------------------------
+
+    /**
+     * Issues a guest magic link for an EXISTING customer.
+     *
+     * <p>Deliberately not find-or-create, unlike {@link #requestLink}. A
+     * merchant signs up by asking for a link; a guest account only comes into
+     * being when a property sends them a plan and they complete checkout.
+     * Creating one here would mint an empty account for any address typed into
+     * the sign-in box, and the sign-in screen's own copy tells the guest that
+     * accounts are created by the property.
+     *
+     * @return empty when no customer has that email, so the caller can return
+     *         the same not-found response the password flow used to.
+     */
+    public Optional<Customer> requestCustomerLink(String email) {
+        if (email == null || email.isBlank()) return Optional.empty();
+        String normalized = email.trim().toLowerCase();
+        Optional<Customer> maybe = customerDao.findByEmail(normalized);
+        if (maybe.isEmpty()) {
+            log.info("Guest magic link requested for unknown email");
+            return Optional.empty();
+        }
+        Customer customer = maybe.get();
+        String rawToken = randomToken();
+        String hash = sha256Hex(rawToken);
+        Instant expiresAt = Instant.now().plus(linkTtl);
+        tokenDao.insertForCustomer(customer.id(), hash, expiresAt);
+        // The guest host, not the merchant one: /account/verify is a portal
+        // route and the two hosts are split in production.
+        String link = appConfig.getConsumerBaseUrl() + "/account/verify?token=" + rawToken;
+        try {
+            emailService.send(EmailTemplates.guestMagicLink(
+                    customer.email(), link, linkTtl, appConfig.getConsumerBaseUrl()));
+        } catch (Exception e) {
+            // Same cleanup as the merchant path: the row was written before the
+            // send, so drop it rather than leave a live credential nobody got.
+            try {
+                tokenDao.deleteByHash(hash);
+            } catch (Exception cleanupFailure) {
+                log.warn("Could not delete undelivered guest magic-link token: {}",
+                        cleanupFailure.getMessage());
+            }
+            log.warn("Failed to send guest magic link: {}", e.getMessage());
+            throw new MagicLinkDeliveryException(
+                    "Could not deliver magic link to " + customer.email(), e);
+        }
+        return Optional.of(customer);
+    }
+
+    /**
+     * Returns the customer for a valid, unconsumed, unexpired GUEST token, and
+     * consumes it. A merchant token returns empty: the DAO lookup filters on
+     * subject_type, so the two token families cannot cross over.
+     */
+    public Optional<Customer> verifyCustomer(String rawToken) {
+        if (rawToken == null || rawToken.isBlank()) return Optional.empty();
+        String hash = sha256Hex(rawToken);
+        Instant now = Instant.now();
+        Optional<UUID> customerId = tokenDao.findActiveCustomerId(hash, now);
+        if (customerId.isEmpty()) return Optional.empty();
+        int consumed = tokenDao.consume(hash, now);
+        if (consumed == 0) return Optional.empty();
+        return customerDao.findById(customerId.get());
+    }
+
+    /**
+     * Dev-only guest shortcut, the mirror of {@link #devLogin}. Still requires
+     * an existing customer: the account-must-exist rule is a product rule, not
+     * an auth-strength one, so the dev path does not relax it.
+     */
+    public Optional<Customer> devCustomerLogin(String email) {
+        if (email == null || email.isBlank()) return Optional.empty();
+        return customerDao.findByEmail(email.trim().toLowerCase());
     }
 
     private static String randomToken() {

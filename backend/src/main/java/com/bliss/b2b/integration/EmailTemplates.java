@@ -32,6 +32,44 @@ public final class EmailTemplates {
         );
     }
 
+    /**
+     * Guest sign-in link. Styled like the other guest mail — the same HTML
+     * shell and the same muted footer rule — but the footer drops the
+     * "charged by {property}" clause the plan emails carry: a sign-in is not
+     * about one property, and this template has no booking to name. What stays
+     * is the Bliss attribution and a link back to the portal.
+     */
+    public static EmailMessage guestMagicLink(String to, String url, Duration linkTtl, String portalBaseUrl) {
+        String ttl = formatTtl(linkTtl);
+        String text = """
+                Click the link below to sign in to your Bliss account and see
+                your payment plans. This link expires in %s and can only be
+                used once.
+
+                %s
+
+                If you did not ask to sign in you can ignore this email.
+                """.formatted(ttl, url);
+        String htmlInner =
+                "<p>Click the button below to sign in to your Bliss account and see your payment plans.</p>"
+                + "<p style=\"margin:24px 0\"><a href=\"" + esc(url) + "\" "
+                + "style=\"background:#8B5CF6;color:#ffffff;text-decoration:none;"
+                + "padding:14px 30px;border-radius:999px;display:inline-block;"
+                + "font-weight:500\">Sign in to Bliss</a></p>"
+                + "<p style=\"color:#6b6b6b;font-size:13px\">This link expires in " + esc(ttl)
+                + " and can only be used once. If you did not ask to sign in you can ignore this email.</p>";
+        String html = "<div style=\"font-family:sans-serif;color:#111;line-height:1.5\">"
+                + htmlInner
+                + "<p style=\"color:#6b6b6b;font-size:12px;margin-top:24px\">"
+                + "Sent by Bliss · <a href=\"" + esc(portalBaseUrl) + "/account\">your plans</a></p>"
+                + "</div>";
+        return new EmailMessage(
+                to,
+                "Sign in to Bliss",
+                text + "\nSent by Bliss · your plans: " + portalBaseUrl + "/account\n",
+                html);
+    }
+
     private static String formatTtl(Duration ttl) {
         long hours = ttl.toHours();
         if (hours >= 24 && ttl.toMinutes() % 60 == 0) {
@@ -43,40 +81,6 @@ public final class EmailTemplates {
         }
         long mins = ttl.toMinutes();
         return mins + " minutes";
-    }
-
-    /**
-     * @param consumerBaseUrl base url of the consumer portal, which hosts the
-     *                        manage-your-plan route this links to
-     */
-    public static EmailMessage customerPlanConfirmation(
-            String to,
-            Merchant merchant,
-            Booking booking,
-            PaymentPlan plan,
-            List<PaymentScheduleEntry> schedule,
-            String consumerBaseUrl
-    ) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Your plan with ").append(merchant.businessName()).append(" is set.\n\n");
-        sb.append("Booking: ").append(booking.serviceName()).append('\n');
-        sb.append("Appointment: ").append(LONG_DATE.format(booking.appointmentDate())).append('\n');
-        sb.append("Total: $").append(formatDollars(plan.totalAmountCents())).append('\n');
-        sb.append("Plan: ").append(plan.numPayments()).append(' ')
-                .append(plan.frequency().wire()).append(" payments\n\n");
-        sb.append("Schedule:\n");
-        for (PaymentScheduleEntry entry : schedule) {
-            sb.append("  ").append(entry.sequence()).append(". ")
-                    .append(SHORT_DATE.format(entry.dueDate()))
-                    .append(" — $").append(formatDollars(entry.amountCents()))
-                    .append('\n');
-        }
-        sb.append("\nYour first payment is processing. Subsequent payments will be charged");
-        sb.append(" automatically to the card on file.\n\n");
-        sb.append("Manage your plan: ").append(consumerBaseUrl).append("/plan/")
-                .append(booking.bookingToken())
-                .append('\n');
-        return new EmailMessage(to, "Your plan with " + merchant.businessName() + " is set", sb.toString());
     }
 
     public static EmailMessage merchantBookingAccepted(
@@ -247,7 +251,7 @@ public final class EmailTemplates {
         String name = merchant.businessName() != null ? merchant.businessName() : "there";
         return new EmailMessage(
                 merchant.email(),
-                "You are set up to accept payouts on Bliss",
+                "Your Stripe account is connected",
                 """
                 Hi %s,
 

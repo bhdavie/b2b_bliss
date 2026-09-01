@@ -140,8 +140,13 @@ public class BlissApplication extends Application<BlissConfiguration> {
         Duration sessionTtl = Duration.ofMinutes(sessionTtlMinutes);
 
         EmailService emailService = EmailServiceFactory.build(config.getEmail());
+        // Declared here rather than beside the other customer wiring below,
+        // because MagicLinkService now issues guest links as well as merchant
+        // ones and needs the DAO at construction.
+        com.bliss.b2b.persistence.CustomerDao customerDao =
+                jdbi.onDemand(com.bliss.b2b.persistence.CustomerDao.class);
         MagicLinkService magicLinkService = new MagicLinkService(
-                merchantDao, tokenDao, emailService, config.getApp(), magicLinkTtl,
+                merchantDao, customerDao, tokenDao, emailService, config.getApp(), magicLinkTtl,
                 config.isDemoLogin());
         StripeConnectService stripeService = new StripeConnectService(config.getStripe());
         // Demo charge cap threaded into both rails' execution points only.
@@ -199,9 +204,6 @@ public class BlissApplication extends Application<BlissConfiguration> {
         com.bliss.b2b.service.MewsCheckoutService mewsCheckoutService =
                 new com.bliss.b2b.service.MewsCheckoutService(
                         jdbi, mewsAdapterFactory, planNotificationService, clock);
-        com.bliss.b2b.persistence.CustomerDao customerDao =
-                jdbi.onDemand(com.bliss.b2b.persistence.CustomerDao.class);
-
         JwtService jwtService = new JwtService(config.getJwt(), sessionTtl);
         CustomerAuthService customerAuthService = new CustomerAuthService(
                 customerDao, jwtService, clock);
@@ -267,7 +269,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new PublicPlansPortalResource(
                 planPortalService, stripePaymentsService, stripeConnectResolver, mewsCheckoutService));
         environment.jersey().register(new PublicAccountResource(
-                customerAuthService, paymentPlanDao, customerDao, clock, cookieOptions,
+                customerAuthService, magicLinkService, demoLoginEnabled,
+                paymentPlanDao, customerDao, clock, cookieOptions,
                 sessionTtlMinutes));
         environment.jersey().register(new PlanRulesResource(planRulesService, onboardingService));
         environment.jersey().register(new PropertyOnboardingResource(onboardingService));

@@ -16,7 +16,7 @@ import {
 } from "@/lib/eligibility";
 import { calcInstallmentPlan, BLISS_FEE_RATE } from "@/lib/blissFee";
 import {
-  attemptCustomerLogin,
+  devCustomerLogin,
   createPlan,
   fetchPublicMerchant,
   type MerchantPolicies,
@@ -807,7 +807,7 @@ export default function AyresHotelPage() {
       const guestEmail = email.trim();
       if (guestEmail) {
         try {
-          await attemptCustomerLogin({ email: guestEmail, password: "demo" });
+          await devCustomerLogin(guestEmail);
         } catch {
           // non-fatal: guest can still sign in from the portal
         }

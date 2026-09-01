@@ -659,29 +659,67 @@ export type AccountPlansResponse = {
   plans: AccountPlanCard[];
 };
 
-export type LoginRequest = { email: string; password: string };
+export type GuestAuthResult =
+  | { ok: true; email: string }
+  | { ok: false; error: PortalActionError; status: number };
 
-export async function attemptCustomerLogin(
-  payload: LoginRequest,
-): Promise<{ ok: true; email: string } | { ok: false; error: PortalActionError; status: number }> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/public/account/login`, {
+async function guestAuthPost(path: string, body: object): Promise<GuestAuthResult> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/public/account/${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
-  const body = await res.json().catch(() => ({} as Record<string, unknown>));
+  // 204 on a successful magic-link request has no body to parse.
+  const parsed = res.status === 204
+    ? {}
+    : await res.json().catch(() => ({} as Record<string, unknown>));
   if (!res.ok) {
     return {
       ok: false,
       status: res.status,
       error: {
-        error: (body as { error?: string }).error ?? "unknown_error",
-        message: (body as { message?: string }).message ?? `Login failed (${res.status})`,
+        error: (parsed as { error?: string }).error ?? "unknown_error",
+        message:
+          (parsed as { message?: string }).message ?? `Sign in failed (${res.status})`,
       },
     };
   }
-  return { ok: true, email: (body as { email?: string }).email ?? payload.email };
+  return { ok: true, email: (parsed as { email?: string }).email ?? "" };
+}
+
+/**
+ * Asks for a guest sign-in link. 404 no_account_found when the email has no
+ * customer row, which is deliberate: a guest account is created when a property
+ * sends a plan link, never by this form.
+ */
+export async function requestCustomerMagicLink(email: string): Promise<GuestAuthResult> {
+  return guestAuthPost("magic-link", { email });
+}
+
+/** Consumes a guest magic-link token and sets the session cookie. */
+export async function verifyCustomerMagicLink(token: string): Promise<GuestAuthResult> {
+  return guestAuthPost("verify", { token });
+}
+
+/**
+ * Dev-only shortcut, gated server-side by the same flag as the merchant
+ * dev-login. Still requires an existing customer. Used by the demo funnels to
+ * sign a guest straight into the portal after checkout.
+ */
+export async function devCustomerLogin(email: string): Promise<GuestAuthResult> {
+  return guestAuthPost("dev-login", { email });
+}
+
+export type GuestDevAuthStatus = { devLoginEnabled: boolean };
+
+/** Which sign-in path the backend is offering. Mirrors the merchant probe. */
+export async function fetchGuestDevAuthStatus(): Promise<GuestDevAuthStatus> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/public/account/dev-status`, {
+    cache: "no-store",
+  });
+  if (!res.ok) return { devLoginEnabled: false };
+  return (await res.json()) as GuestDevAuthStatus;
 }
 
 export async function logoutCustomer(): Promise<void> {

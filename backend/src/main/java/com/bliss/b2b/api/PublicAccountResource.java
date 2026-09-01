@@ -8,7 +8,8 @@ import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentPlanDao.PaymentPlanListItem;
 import com.bliss.b2b.persistence.PaymentPlanDao.ScheduleRow;
 import com.bliss.b2b.service.CustomerAuthService;
-import com.bliss.b2b.service.CustomerAuthService.LoginResult;
+import com.bliss.b2b.service.MagicLinkDeliveryException;
+import com.bliss.b2b.service.MagicLinkService;
 import com.bliss.b2b.service.PlanProgress;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.ws.rs.Consumes;
@@ -47,6 +48,15 @@ public class PublicAccountResource {
     private static final Logger log = LoggerFactory.getLogger(PublicAccountResource.class);
 
     private final CustomerAuthService authService;
+    private final MagicLinkService magicLinkService;
+    /**
+     * Whether POST /dev-login is live. Same gate as the merchant side's
+     * dev-login: on outside production, and in production only when
+     * BLISS_DEMO_LOGIN is set. Computed once in BlissApplication and passed to
+     * both resources so the two sign-in surfaces cannot end up on different
+     * rules.
+     */
+    private final boolean devLoginEnabled;
     private final PaymentPlanDao planDao;
     private final CustomerDao customerDao;
     private final Clock clock;
@@ -55,12 +65,16 @@ public class PublicAccountResource {
 
     public PublicAccountResource(
             CustomerAuthService authService,
+            MagicLinkService magicLinkService,
+            boolean devLoginEnabled,
             PaymentPlanDao planDao,
             CustomerDao customerDao,
             Clock clock,
             CookieOptions cookieOptions,
             int jwtTtlMinutes) {
         this.authService = authService;
+        this.magicLinkService = magicLinkService;
+        this.devLoginEnabled = devLoginEnabled;
         this.planDao = planDao;
         this.customerDao = customerDao;
         this.clock = clock;
@@ -74,22 +88,102 @@ public class PublicAccountResource {
         this.cookieMaxAgeSeconds = jwtTtlMinutes * 60;
     }
 
+    /**
+     * Requests a guest magic link. Account-must-exist is preserved: an unknown
+     * email gets the same 404 and the same message the password flow returned,
+     * because a guest account is created by a property sending a plan link, not
+     * by typing an address into the sign-in box.
+     *
+     * <p>This does mean the response distinguishes a known address from an
+     * unknown one, which is an enumeration surface. It is kept because the
+     * sign-in screen's copy promises exactly that explanation, and silently
+     * accepting an unknown address would leave the guest watching an inbox
+     * nothing is coming to. Worth revisiting alongside real rate limiting.
+     */
     @POST
-    @Path("/login")
-    public Response login(LoginRequest req) {
-        if (req == null) {
-            return Response.status(400).entity(Map.of("error", "body required")).build();
+    @Path("/magic-link")
+    public Response requestMagicLink(MagicLinkRequest req) {
+        if (req == null || req.email() == null || req.email().isBlank()) {
+            return Response.status(400).entity(Map.of("error", "email required")).build();
         }
-        LoginResult result = authService.attemptLogin(req.email(), req.password());
-        if (result instanceof LoginResult.NotFound) {
+        Optional<Customer> customer;
+        try {
+            customer = magicLinkService.requestCustomerLink(req.email());
+        } catch (MagicLinkDeliveryException e) {
+            // The link is the only way in, so a delivery failure has to be
+            // visible rather than a silent 204.
+            return Response.status(502).entity(Map.of(
+                    "error", "email_delivery_failed",
+                    "message", "We could not send the sign-in email just now. Try again in a moment."))
+                    .build();
+        }
+        if (customer.isEmpty()) {
             return Response.status(404).entity(Map.of(
                     "error", "no_account_found",
                     "message", "We could not find an account for that email.")).build();
         }
-        LoginResult.Ok ok = (LoginResult.Ok) result;
+        return Response.noContent().build();
+    }
+
+    /** Consumes a guest magic-link token and issues the session cookie. */
+    @POST
+    @Path("/verify")
+    public Response verify(VerifyRequest req) {
+        if (req == null || req.token() == null || req.token().isBlank()) {
+            return Response.status(400).entity(Map.of("error", "token required")).build();
+        }
+        Optional<Customer> customer = magicLinkService.verifyCustomer(req.token());
+        if (customer.isEmpty()) {
+            return Response.status(400).entity(Map.of(
+                    "error", "invalid_token",
+                    "message", "That sign-in link is no longer valid. Request a new one.")).build();
+        }
+        return sessionResponse(customer.get());
+    }
+
+    /**
+     * Dev-only guest sign-in with no email round trip, mirroring the merchant
+     * POST /api/v1/auth/dev-login. 404 when the gate is off, so the route does
+     * not exist rather than refusing.
+     *
+     * <p>Unlike the merchant equivalent this does NOT find-or-create. The
+     * account-must-exist rule is a product rule and the shortcut does not get
+     * to bend it.
+     */
+    @POST
+    @Path("/dev-login")
+    public Response devLogin(MagicLinkRequest req) {
+        if (!devLoginEnabled) {
+            return Response.status(404).entity(Map.of("error", "not_found")).build();
+        }
+        if (req == null || req.email() == null || req.email().isBlank()) {
+            return Response.status(400).entity(Map.of("error", "email required")).build();
+        }
+        Optional<Customer> customer = magicLinkService.devCustomerLogin(req.email());
+        if (customer.isEmpty()) {
+            return Response.status(404).entity(Map.of(
+                    "error", "no_account_found",
+                    "message", "We could not find an account for that email.")).build();
+        }
+        log.info("Guest dev-login bypass issued session for customer {}", customer.get().id());
+        return sessionResponse(customer.get());
+    }
+
+    /**
+     * Public probe the guest sign-in page reads to decide which path to render,
+     * mirroring GET /api/v1/auth/dev-status on the merchant side.
+     */
+    @GET
+    @Path("/dev-status")
+    public Response devStatus() {
+        return Response.ok(Map.of("devLoginEnabled", devLoginEnabled)).build();
+    }
+
+    private Response sessionResponse(Customer customer) {
+        String token = authService.issueSession(customer);
         String setCookie = SessionCookies.buildSetCookie(
-                COOKIE_NAME, ok.token(), cookieMaxAgeSeconds, cookieOptions);
-        return Response.ok(Map.of("status", "ok", "email", ok.email()))
+                COOKIE_NAME, token, cookieMaxAgeSeconds, cookieOptions);
+        return Response.ok(Map.of("status", "ok", "email", customer.email()))
                 .header(HttpHeaders.SET_COOKIE, setCookie)
                 .build();
     }
@@ -149,8 +243,8 @@ public class PublicAccountResource {
         }
     }
 
-    public record LoginRequest(
-            @JsonProperty("email") String email,
-            @JsonProperty("password") String password
-    ) {}
+    /** Body for both /magic-link and /dev-login. No password field any more. */
+    public record MagicLinkRequest(@JsonProperty("email") String email) {}
+
+    public record VerifyRequest(@JsonProperty("token") String token) {}
 }

@@ -12,9 +12,9 @@ import java.util.Optional;
 /**
  * Customer-side authentication for the /account portal.
  *
- * <p>The entire body of {@link #attemptLogin} is the demo gate. When
- * production auth lands the body is rewritten in one place — callers and
- * the surrounding {@link LoginResult} shape stay the same.
+ * <p>Session issuing only. Authentication is the magic-link token verified in
+ * MagicLinkService; this class turns a verified customer into a signed cookie
+ * payload and reads that payload back.
  */
 public class CustomerAuthService {
 
@@ -29,41 +29,23 @@ public class CustomerAuthService {
     }
 
     /**
-     * Validate an email/password pair and, on success, return a signed
-     * customer session token.
+     * Issues a customer session for an already-authenticated customer and
+     * stamps last_login_at.
      *
-     * <p>====================================================================
-     * <p>DEMO-MODE AUTH. This method only validates that the email exists
-     * on the customers table; password is accepted but never checked.
-     * There is no bcrypt, no sessions table, no rate limiting, and no
-     * lockout. The signed cookie's TTL is the only protection on the
-     * account.
+     * <p>This no longer authenticates anything itself. Proof of identity is the
+     * single-use magic-link token, verified by
+     * {@link com.bliss.b2b.service.MagicLinkService#verifyCustomer}; this
+     * method only mints the cookie payload once that has succeeded.
      *
-     * <p>TODO(prod): replace this entire method body with a flow that
-     * <ol>
-     *   <li>looks up customer + password_hash on customers (column does not
-     *       exist yet — needs a Flyway migration),
-     *   <li>verifies via bcrypt,
-     *   <li>writes a row to a sessions table keyed by a refresh token,
-     *   <li>rate-limits by IP + email.
-     * </ol>
-     * The method signature and {@link LoginResult} stay the same so the
-     * caller in {@code PublicAccountResource} does not change.
-     * <p>====================================================================
+     * <p>What it replaced was a demo gate that looked the email up and accepted
+     * any password without checking it. There is still no password column, no
+     * bcrypt and no sessions table; the difference is that possession of a
+     * mailbox is now actually required, rather than possession of an address
+     * someone could guess.
      */
-    public LoginResult attemptLogin(String email, String password) {
-        if (email == null || email.isBlank()) {
-            return LoginResult.notFound();
-        }
-        String normalized = email.trim().toLowerCase();
-        Optional<Customer> maybe = customerDao.findByEmail(normalized);
-        if (maybe.isEmpty()) {
-            return LoginResult.notFound();
-        }
-        Customer customer = maybe.get();
+    public String issueSession(Customer customer) {
         customerDao.touchLastLogin(customer.id(), Instant.now(clock));
-        String token = jwtService.issueCustomer(customer.email());
-        return LoginResult.ok(customer.email(), token);
+        return jwtService.issueCustomer(customer.email());
     }
 
     /**
@@ -85,23 +67,4 @@ public class CustomerAuthService {
         }
     }
 
-    public sealed interface LoginResult {
-        boolean ok();
-
-        static LoginResult ok(String email, String token) {
-            return new Ok(email, token);
-        }
-
-        static LoginResult notFound() {
-            return new NotFound();
-        }
-
-        record Ok(String email, String token) implements LoginResult {
-            @Override public boolean ok() { return true; }
-        }
-
-        record NotFound() implements LoginResult {
-            @Override public boolean ok() { return false; }
-        }
-    }
 }
