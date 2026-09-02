@@ -9,7 +9,7 @@ import {
   formatScheduleDateLong,
   type PublicPlanPortal,
 } from "@/lib/publicApi";
-import { Panel, SectionHeading } from "@/components/ui/primitives";
+import { Panel, RecordTitle, SectionHeading } from "@/components/ui/primitives";
 import { PayEarlyButton } from "./PayEarlyButton";
 import { UpdateCardSection } from "./UpdateCardSection";
 import { CancelPlanSection } from "./CancelPlanSection";
@@ -99,9 +99,9 @@ export function PlanPortal({
               Back to your plans
             </Link>
           ) : null}
-          <SectionHeading className="mb-4">
+          <RecordTitle className="mb-2">
             {portal.merchant.businessName}
-          </SectionHeading>
+          </RecordTitle>
           <p className="text-[14px] text-ink-500">
             {portal.booking.serviceName}
           </p>

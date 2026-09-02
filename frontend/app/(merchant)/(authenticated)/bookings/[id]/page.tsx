@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { CopyLinkButton } from "@/components/merchant/CopyLinkButton";
 import { ManagerActions } from "@/components/merchant/ManagerActions";
 import { ModifyBookingAction } from "@/components/merchant/ModifyBookingAction";
-import { Panel, SectionHeading } from "@/components/ui/primitives";
+import { Panel, RecordTitle, SectionHeading } from "@/components/ui/primitives";
 import { fetchBookingServer } from "@/lib/auth";
 import {
   fetchPlanPortal,
@@ -43,7 +43,7 @@ export default async function BookingDetailPage({
       >
         ← Back to bookings
       </Link>
-      <SectionHeading className="mb-4">{booking.serviceName}</SectionHeading>
+      <RecordTitle className="mb-2">{booking.serviceName}</RecordTitle>
       <p className="text-[14px] text-ink-500">
         {booking.customerNameHint ?? booking.customerEmailHint ?? "Guest pending"}
       </p>

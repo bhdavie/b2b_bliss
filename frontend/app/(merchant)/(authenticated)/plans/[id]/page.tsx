@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PlanDetailActions } from "@/components/merchant/PlanDetailActions";
-import { Panel, SectionHeading } from "@/components/ui/primitives";
+import { Panel, RecordTitle, SectionHeading } from "@/components/ui/primitives";
 import { fetchPlanServer } from "@/lib/auth";
 import type { PaymentPlanStatus } from "@/lib/api";
 
@@ -62,9 +62,9 @@ export default async function PlanDetailPage({
               property name on /plan/[token]. It was 22px medium, the last of
               the two-treatments-for-one-thing split across the detail pages. */}
           <div className="flex items-baseline justify-between gap-3">
-            <SectionHeading className="mb-4">
+            <RecordTitle className="mb-2">
               {plan.serviceName}
-            </SectionHeading>
+            </RecordTitle>
             <span
               className={`inline-flex flex-none items-center rounded-full px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${STATUS_PILL[plan.status]}`}
             >

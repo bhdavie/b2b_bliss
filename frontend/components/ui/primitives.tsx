@@ -40,6 +40,33 @@ export function SectionHeading({
 }
 
 /**
+ * The name of the one record a detail screen is about: the property on the
+ * guest plan screen, the service on a booking or plan detail.
+ *
+ * 28px against SectionHeading's 20px. Both were on SectionHeading, which made
+ * "Marbrook House" the same size as the "Booking" and "Schedule" headings
+ * underneath it even though it names the whole plan rather than a section of
+ * it. Same colour, same case, same weight as a section heading, so the only
+ * thing separating them is scale, which is what the hierarchy needs.
+ *
+ * Shared rather than copied at each of the three call sites so the merchant
+ * detail screens and the guest plan screen cannot drift apart.
+ */
+export function RecordTitle({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`text-[28px] font-medium tracking-[-0.015em] text-ink-900 ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+/**
  * 44px title over an 18px subtitle.
  *
  * No route inside the merchant app or the guest portal uses this any more, and

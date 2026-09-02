@@ -64,7 +64,7 @@ export function PaymentSettingsTabs({ planRules }: { planRules: PlanRules }) {
               type="button"
               onClick={() => setTab(t.key)}
               aria-pressed={active}
-              className={`whitespace-nowrap px-0.5 pb-4 text-[14px] transition-colors ${
+              className={`whitespace-nowrap px-0.5 pb-4 text-[18px] transition-colors ${
                 active
                   ? "font-medium tracking-[-0.01em] text-brand-violet shadow-[inset_0_-2px_0_#8B5CF6]"
                   : "text-ink-500 hover:text-ink-900"
