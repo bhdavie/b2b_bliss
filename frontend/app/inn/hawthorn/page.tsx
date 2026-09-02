@@ -13,6 +13,11 @@ import {
 } from "@/lib/publicApi";
 import { DEFAULT_PLAN_RULES, type PlanRules } from "@/lib/api";
 import { previewEligibility, type PlanFrequency } from "@/lib/eligibility";
+import { useFeeRate } from "@/lib/useFeeRate";
+
+// This demo inn is a real merchant row; the slug keys both the policy lookup
+// and the fee-rate lookup, so it is named once rather than repeated.
+const HAWTHORN_SLUG = "hawthorn-camden";
 
 // Combined lodging tax + resort fees. Single rate so the displayed "Taxes & fees"
 // line is one number — Maine state lodging tax is ~9%, the rest is house fees.
@@ -84,11 +89,14 @@ export default function HawthornInnPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [merchant, setMerchant] = useState<PublicMerchant | null>(null);
+  // This property's processing-fee rate, so the quoted fee matches what the
+  // backend would resolve for the same slug at this moment.
+  const feeRate = useFeeRate(HAWTHORN_SLUG);
   const discountBasisPoints = merchant?.policies.discountBasisPoints ?? 0;
 
   useEffect(() => {
     let cancelled = false;
-    fetchPublicMerchant("hawthorn-camden")
+    fetchPublicMerchant(HAWTHORN_SLUG)
       .then((m) => {
         if (cancelled || m == null) return;
         setMerchant(m);
@@ -152,6 +160,7 @@ export default function HawthornInnPage() {
     const display = deriveDisplayAmounts({
       discountedTotalCents: preview.discountedTotalAmountCents,
       originalDepositCents: preview.depositAmountCents,
+      feeRate,
     });
     const distribution = distributeInstallments({
       remainingCents: display.remainingCents,
@@ -165,7 +174,7 @@ export default function HawthornInnPage() {
       finalPaymentCents: distribution.finalPaymentCents,
       dueDates: option.dueDates,
     };
-  }, [merchant, totalCents, checkin, today, checkout]);
+  }, [merchant, totalCents, checkin, today, checkout, feeRate]);
 
   function onCheckinChange(value: string) {
     setCheckin(value);
@@ -187,7 +196,7 @@ export default function HawthornInnPage() {
     });
     if (phone.trim().length > 0) params.set("phone", phone.trim());
     params.set("return_url", `${window.location.origin}/inn/hawthorn`);
-    router.push(`/checkout/hawthorn-camden?${params.toString()}`);
+    router.push(`/checkout/${HAWTHORN_SLUG}?${params.toString()}`);
   }
 
   function onBookNow() {

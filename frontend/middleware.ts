@@ -4,6 +4,15 @@ const SESSION_COOKIE = "bliss_session";
 const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/bookings", "/settings"];
 const PUBLIC_AUTH_ROUTES = ["/login", "/signup"];
 
+// Bliss internal admin. Its own cookie, so a merchant session cannot reach it
+// and signing out of one surface cannot end the other.
+const ADMIN_SESSION_COOKIE = "bliss_admin_session";
+// Everything admin lives under /admin, including its sign-in, so one prefix
+// covers the surface. /admin/login and /admin/verify are the way IN and must
+// stay reachable without a session; everything else under /admin is gated.
+const ADMIN_PREFIX = "/admin";
+const ADMIN_PUBLIC_ROUTES = ["/admin/login", "/admin/verify"];
+
 // Production serves one Next deployment on two hostnames. Each route belongs to
 // exactly one of them, and a request landing on the wrong host is redirected
 // rather than served, so every route has a single canonical origin.
@@ -40,7 +49,17 @@ function matchesPrefix(pathname: string, prefix: string): boolean {
 }
 
 function isMerchantRoute(pathname: string): boolean {
+  // Admin is checked first and excluded here. Without this an admin route
+  // would fall through into the merchant list on the hostname split, because
+  // "/admin" is not in MERCHANT_PREFIXES but "/admin/..." is also not in
+  // GUEST_PREFIXES, and the merchant host would then be treated as canonical
+  // for a surface that is neither.
+  if (isAdminRoute(pathname)) return false;
   return MERCHANT_PREFIXES.some((p) => matchesPrefix(pathname, p));
+}
+
+function isAdminRoute(pathname: string): boolean {
+  return matchesPrefix(pathname, ADMIN_PREFIX);
 }
 
 function isGuestRoute(pathname: string): boolean {
@@ -71,6 +90,26 @@ export function middleware(request: NextRequest) {
   }
   if (host === GUEST_HOST && isMerchantRoute(pathname)) {
     return redirectToHost(request, MERCHANT_HOST);
+  }
+
+  // Admin is handled before the merchant gate and returns in every branch, so
+  // an /admin path can never reach the merchant cookie checks below. It is
+  // deliberately not part of the hostname split: this surface is internal,
+  // linked from nowhere, and serves from whichever origin it is reached on.
+  if (isAdminRoute(pathname)) {
+    const hasAdminSession = Boolean(request.cookies.get(ADMIN_SESSION_COOKIE)?.value);
+    const isAdminPublic = ADMIN_PUBLIC_ROUTES.some((p) => matchesPrefix(pathname, p));
+    if (hasAdminSession && isAdminPublic) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin";
+      return NextResponse.redirect(url);
+    }
+    if (!hasAdminSession && !isAdminPublic) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/login";
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
   }
 
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);

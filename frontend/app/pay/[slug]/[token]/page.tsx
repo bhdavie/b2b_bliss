@@ -5,6 +5,7 @@ import { PageChrome } from "@/components/consumer/PageChrome";
 import { ServiceCard } from "@/components/consumer/ServiceCard";
 import { TooClose } from "@/components/consumer/TooClose";
 import { fetchPublicBooking } from "@/lib/publicApi";
+import { fetchFeeRate } from "@/lib/blissFee";
 
 type Params = { slug: string; token: string };
 
@@ -12,7 +13,13 @@ export default async function HostedPaymentPlanPage(props: {
   params: Promise<Params>;
 }) {
   const { slug, token } = await props.params;
-  const booking = await fetchPublicBooking(slug, token);
+  // The property's processing-fee rate, resolved here where the slug lives and
+  // passed down. Never throws: a failed lookup resolves to the same fallback
+  // the backend uses, so the page still renders a fee.
+  const [booking, feeRate] = await Promise.all([
+    fetchPublicBooking(slug, token),
+    fetchFeeRate(slug),
+  ]);
 
   if (!booking) {
     return (
@@ -57,7 +64,7 @@ export default async function HostedPaymentPlanPage(props: {
     return (
       <PageChrome>
         <MerchantBlock merchant={booking.merchant} />
-        <ServiceCard service={booking.service} />
+        <ServiceCard service={booking.service} feeRate={feeRate} />
         <TooClose booking={booking} />
       </PageChrome>
     );
@@ -65,7 +72,7 @@ export default async function HostedPaymentPlanPage(props: {
 
   return (
     <PageChrome>
-      <HostedPlanFlow booking={booking} />
+      <HostedPlanFlow booking={booking} feeRate={feeRate} />
     </PageChrome>
   );
 }

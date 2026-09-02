@@ -2,7 +2,7 @@ import {
   formatDollarsCompact,
   formatScheduleDateLong,
 } from "@/lib/publicApi";
-import { feeFor } from "@/lib/blissFee";
+import { feeForAtRate } from "@/lib/blissFee";
 
 /**
  * Read-only booking summary card on the customer-initiated checkout
@@ -14,6 +14,7 @@ export function CheckoutSummaryCard({
   cart,
   originalTotalCents,
   discountedTotalCents,
+  feeRate,
 }: {
   cart: {
     totalCents: number;
@@ -24,6 +25,9 @@ export function CheckoutSummaryCard({
   };
   originalTotalCents?: number;
   discountedTotalCents?: number;
+  // The property's rate, resolved by whoever has the slug. Required rather
+  // than defaulted: a silent default here is how the hardcoded 5% survived.
+  feeRate: number;
 }) {
   const hasDiscount =
     originalTotalCents !== undefined &&
@@ -36,7 +40,7 @@ export function CheckoutSummaryCard({
   const subtotalCents = originalTotalCents ?? cart.totalCents;
   const baseTotalCents =
     discountedTotalCents ?? originalTotalCents ?? cart.totalCents;
-  const processingFeeCents = feeFor(baseTotalCents);
+  const processingFeeCents = feeForAtRate(baseTotalCents, feeRate);
   const displayedTotalCents = baseTotalCents + processingFeeCents;
 
   return (

@@ -14,7 +14,8 @@ import {
   previewEligibility,
   type PreviewReason,
 } from "@/lib/eligibility";
-import { calcInstallmentPlan, BLISS_FEE_RATE } from "@/lib/blissFee";
+import { calcInstallmentPlan, feeForAtRate } from "@/lib/blissFee";
+import { useFeeRate } from "@/lib/useFeeRate";
 import {
   devCustomerLogin,
   createPlan,
@@ -44,9 +45,20 @@ const AYRES_DISPLAY_NAME = "Ayres Hotel Anaheim";
 // engine) without leaving the page. The /pay hosted plan page stays intact as
 // the backend source of truth but the checkout no longer routes to it.
 
-// Default stay (editable): Fri Sep 11 to Sun Sep 13, 2026, 2 adults, 2 nights.
-const DEFAULT_CHECKIN_ISO = "2026-09-11";
-const DEFAULT_CHECKOUT_ISO = "2026-09-13";
+// Default stay (editable): a 2-night stay four months out, plus 2 adults.
+//
+// Computed at load, never a literal. The previous hardcoded "2026-09-11" went
+// stale the moment today's date caught up to it: a stay inside the 6-week
+// eligibility floor is ineligible, so the Bliss teaser rendered nothing at all
+// and the page demoed no offer.
+//
+// Four months clears that floor by roughly triple (~17 weeks against a 6-week
+// minimum), which leaves room for the floor to be raised without this going
+// quiet again. Checked against lib/eligibility for every load date across a
+// year: eligible on all 365, offering 9 biweekly installments and 4 or 5
+// monthly ones. That reads as a real plan rather than a token two payments.
+const DEFAULT_STAY_LEAD_MONTHS = 4;
+const DEFAULT_STAY_NIGHTS = 2;
 const DEFAULT_ADULTS = 2;
 const DEFAULT_CHILDREN = 0;
 
@@ -66,6 +78,21 @@ function toIso(date: Date): string {
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
+// The default stay, resolved against today rather than baked in. Called from
+// the component's state initialiser, so it re-resolves on every page load
+// instead of once when this module is first imported.
+function defaultCheckinIso(): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setMonth(d.getMonth() + DEFAULT_STAY_LEAD_MONTHS);
+  return toIso(d);
+}
+function defaultCheckoutIso(checkinIso: string): string {
+  const d = parseIso(checkinIso);
+  d.setDate(d.getDate() + DEFAULT_STAY_NIGHTS);
+  return toIso(d);
+}
+
 function nightsBetween(checkinIso: string, checkoutIso: string): number {
   const ms = parseIso(checkoutIso).getTime() - parseIso(checkinIso).getTime();
   return Math.max(0, Math.round(ms / 86400000));
@@ -277,6 +304,9 @@ function buildTeaserPreview(
   checkoutIso: string,
   amountCents: number,
   rules: PlanRulesArg,
+  // The property's fee rate. Passed in rather than read from a constant so the
+  // teaser quotes whatever this property is actually on.
+  feeRate: number,
 ): TeaserPreview {
   const preview = previewEligibility(
     today,
@@ -294,6 +324,7 @@ function buildTeaserPreview(
       const calc = calcInstallmentPlan({
         baseCents: amountCents,
         numPayments: o.numPayments,
+        feeRate,
       });
       return {
         frequency: o.frequency as PublicPlanFrequency,
@@ -322,11 +353,12 @@ function summaryPerNightCents(
   totalCents: number,
   nights: number,
   numPayments: number,
+  feeRate: number,
 ): number | null {
   if (!totalCents || totalCents <= 0) return null;
   if (!nights || nights <= 0) return null;
   if (!numPayments || numPayments <= 0) return null;
-  const withFee = Math.round(totalCents * (1 + BLISS_FEE_RATE));
+  const withFee = totalCents + feeForAtRate(totalCents, feeRate);
   return Math.round(withFee / nights / numPayments);
 }
 
@@ -517,8 +549,10 @@ export default function AyresHotelPage() {
 
   // Editable stay: dates + guests. Everything downstream (nights, subtotal,
   // tax, destination fee, total, teasers, schedule) derives from these.
-  const [checkinIso, setCheckinIso] = useState(DEFAULT_CHECKIN_ISO);
-  const [checkoutIso, setCheckoutIso] = useState(DEFAULT_CHECKOUT_ISO);
+  const [checkinIso, setCheckinIso] = useState(defaultCheckinIso);
+  const [checkoutIso, setCheckoutIso] = useState(() =>
+    defaultCheckoutIso(checkinIso),
+  );
   const [adults, setAdults] = useState(DEFAULT_ADULTS);
   const [children, setChildren] = useState(DEFAULT_CHILDREN);
   const nights = nightsBetween(checkinIso, checkoutIso);
@@ -561,6 +595,9 @@ export default function AyresHotelPage() {
   // so SSR and the offline case still render. MerchantPolicies is a structural
   // superset of PlanRules, so it feeds previewEligibility directly.
   const [policies, setPolicies] = useState<MerchantPolicies | null>(null);
+  // This property's processing-fee rate, so every quoted figure on the page
+  // matches what the backend would resolve for the same slug right now.
+  const feeRate = useFeeRate(DEMO_HOTEL.slug);
   useEffect(() => {
     let cancelled = false;
     fetchPublicMerchant(DEMO_HOTEL.slug)
@@ -604,10 +641,11 @@ export default function AyresHotelPage() {
         checkoutIso,
         r.nightlyCents * nights,
         planRules,
+        feeRate,
       );
     }
     return out;
-  }, [checkinIso, checkoutIso, nights, planRules]);
+  }, [checkinIso, checkoutIso, nights, planRules, feeRate]);
 
   // The one resolved category every downstream step reads: the rates heading,
   // the summary, the sidebar, checkout, the confirmation, and the booking
@@ -641,8 +679,9 @@ export default function AyresHotelPage() {
       checkoutIso,
       pricing.totalCents,
       planRules,
+      feeRate,
     );
-  }, [pricing, checkinIso, checkoutIso, planRules]);
+  }, [pricing, checkinIso, checkoutIso, planRules, feeRate]);
 
   // mews-overlay.js:1767 — the checkout step reads the stay's one confirmation
   // rather than a flag of its own, validated against this step's own preview on
@@ -2740,6 +2779,15 @@ function BlissTeaser({
   policies?: MerchantPolicies | null;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
+  // Read here rather than threaded down from the page: this teaser renders
+  // once per rate card, three components below the page, and passing a prop
+  // through RatesView and RateItem would touch components that have nothing
+  // to do with the fee. useFeeRate shares one request per slug, so the extra
+  // call sites cost no extra fetches.
+  //
+  // Above the early return below, because a hook cannot be called
+  // conditionally: this component returns null for an ineligible preview.
+  const feeRate = useFeeRate(DEMO_HOTEL.slug);
 
   if (!preview || !preview.eligible || preview.options.length === 0) return null;
 
@@ -2781,7 +2829,7 @@ function BlissTeaser({
   // total, not the pre-tax nightly price.
   const detailsPerNight =
     spread != null
-      ? summaryPerNightCents(preview.amountCents, nights, spread.numPayments)
+      ? summaryPerNightCents(preview.amountCents, nights, spread.numPayments, feeRate)
       : null;
   // Same wording as the rate-card line above, so the two teasers read as one
   // offer rather than two. Only the basis differs, and that is what the

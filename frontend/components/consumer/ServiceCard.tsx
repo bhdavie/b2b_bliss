@@ -3,16 +3,20 @@ import {
   formatScheduleDateLong,
   type PublicBooking,
 } from "@/lib/publicApi";
-import { feeFor } from "@/lib/blissFee";
+import { feeForAtRate } from "@/lib/blissFee";
 
 export function ServiceCard({
   service,
   originalTotalCents,
   discountedTotalCents,
+  feeRate,
 }: {
   service: PublicBooking["service"];
   originalTotalCents?: number;
   discountedTotalCents?: number;
+  // The property's rate, resolved by whoever has the slug. Required rather
+  // than defaulted: a silent default here is how the hardcoded 5% survived.
+  feeRate: number;
 }) {
   const hasDiscount =
     originalTotalCents !== undefined &&
@@ -25,7 +29,7 @@ export function ServiceCard({
   const subtotalCents = originalTotalCents ?? service.totalAmountCents;
   const baseTotalCents =
     discountedTotalCents ?? originalTotalCents ?? service.totalAmountCents;
-  const processingFeeCents = feeFor(baseTotalCents);
+  const processingFeeCents = feeForAtRate(baseTotalCents, feeRate);
   const displayedTotalCents = baseTotalCents + processingFeeCents;
 
   return (

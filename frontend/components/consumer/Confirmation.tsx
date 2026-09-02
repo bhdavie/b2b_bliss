@@ -8,14 +8,19 @@ import {
   type CreatePlanResponse,
   type PublicBooking,
 } from "@/lib/publicApi";
-import { feeFor } from "@/lib/blissFee";
+import { feeForAtRate } from "@/lib/blissFee";
 
 export function Confirmation({
   booking,
   plan,
+  feeRate,
 }: {
   booking: PublicBooking;
   plan: CreatePlanResponse;
+  // The rate this plan was quoted at. Re-derived rather than read back from
+  // the plan, because CreatePlanResponse does not carry the frozen
+  // processing_fee_cents and adding it is a backend change.
+  feeRate: number;
 }) {
   const firstPaymentStatus = plan.firstChargeStatus.toLowerCase();
   const firstSucceeded =
@@ -31,7 +36,7 @@ export function Confirmation({
     hasDiscount && plan.originalTotalAmountCents != null
       ? Math.round((savings / plan.originalTotalAmountCents) * 100)
       : 0;
-  const processingFeeCents = feeFor(plan.totalAmountCents);
+  const processingFeeCents = feeForAtRate(plan.totalAmountCents, feeRate);
   const displayedTotalCents = plan.totalAmountCents + processingFeeCents;
 
   return (

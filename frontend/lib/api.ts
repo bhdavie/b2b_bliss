@@ -103,6 +103,184 @@ export async function devLogin(email: string): Promise<MerchantView> {
   return unwrap<MerchantView>(res);
 }
 
+// ---------------------------------------------------------------------------
+// Bliss internal admin. Separate session (bliss_admin_session), separate
+// endpoints, separate principal on the backend. Kept beside the merchant
+// helpers rather than in their own module because they are the same shape and
+// share API_BASE_URL and unwrap; nothing here touches the merchant helpers.
+// ---------------------------------------------------------------------------
+
+export type AdminView = {
+  id: string;
+  email: string;
+  name: string | null;
+};
+
+export async function requestAdminMagicLink(email: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/admin/auth/magic-link`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to send sign-in link: ${res.status} ${text}`);
+  }
+}
+
+export async function verifyAdminMagicLinkToken(token: string): Promise<AdminView> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/admin/auth/verify`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  return unwrap<AdminView>(res);
+}
+
+/**
+ * Dev sign-in. Unlike the merchant equivalent this does NOT accept any email:
+ * the backend requires an existing admin_users row and answers 401 otherwise,
+ * so an unknown address fails here rather than provisioning an admin.
+ */
+export async function adminDevLogin(email: string): Promise<AdminView> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/admin/auth/dev-login`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return unwrap<AdminView>(res);
+}
+
+export async function adminSignOut(): Promise<void> {
+  await fetch(`${API_BASE_URL}/api/v1/admin/auth/sign-out`, {
+    method: "POST",
+    credentials: "include",
+  });
+}
+
+// --- Admin: properties -----------------------------------------------------
+// Shapes mirror AdminMerchantsService's view records one for one. `rate` and
+// `derivedFeeRate` arrive as decimal fractions (0.05 = 5%); nothing on this
+// side recomputes them.
+
+export type AdminMerchantRow = {
+  id: string;
+  slug: string;
+  businessName: string | null;
+  email: string;
+  status: string;
+  onboardingState: string;
+  pmsType: string;
+  isDemo: boolean;
+  createdAt: string;
+  /** null when the property has no rate row in force. */
+  currentFeeRate: number | null;
+  bookingsLast7Days: number;
+};
+
+export type AdminMerchantProfile = {
+  phone: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  addressCity: string | null;
+  addressState: string | null;
+  addressZip: string | null;
+  addressCountry: string | null;
+  emailVerifiedAt: string | null;
+  updatedAt: string;
+};
+
+export type AdminFeeRateRow = {
+  id: string;
+  rate: number;
+  effectiveFrom: string;
+  note: string | null;
+  createdAt: string;
+  createdByAdminEmail: string | null;
+};
+
+export type AdminCounts = {
+  bookingsTotal: number;
+  bookingsByStatus: Record<string, number>;
+  plansTotal: number;
+  plansByStatus: Record<string, number>;
+};
+
+export type AdminRecentBooking = {
+  id: string;
+  bookingToken: string;
+  serviceName: string;
+  totalAmountCents: number;
+  status: string;
+  bookingSource: string;
+  createdAt: string;
+  checkoutDate: string | null;
+  customerNameHint: string | null;
+  planId: string | null;
+  planStatus: string | null;
+  numPayments: number | null;
+  processingFeeCents: number | null;
+  /**
+   * The rate the plan was created under, or null when the backend could not
+   * recover it safely (a pre-V13 flat fee, or a fee that is not a clean
+   * percentage). Render a dash, never a zero.
+   */
+  derivedFeeRate: number | null;
+};
+
+export type AdminMerchantDetail = {
+  merchant: AdminMerchantRow;
+  profile: AdminMerchantProfile;
+  feeRateHistory: AdminFeeRateRow[];
+  counts: AdminCounts;
+  recentBookings: AdminRecentBooking[];
+};
+
+export type SetFeeRatePayload = {
+  rate: number;
+  note?: string | null;
+  effectiveFrom?: string | null;
+};
+
+/** The distinct error keys AdminMerchantsResource returns on a bad rate post. */
+export type AdminFeeRateError = {
+  error: string;
+  message?: string;
+};
+
+/**
+ * Posts a new rate. Throws an Error whose message is the backend's error KEY,
+ * so the caller can map it to copy; the raw message is appended after a "|" for
+ * anything unrecognised.
+ */
+export async function setAdminFeeRate(
+  merchantId: string,
+  payload: SetFeeRatePayload,
+): Promise<AdminFeeRateRow> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/admin/merchants/${merchantId}/fee-rate`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!res.ok) {
+    let body: AdminFeeRateError | null = null;
+    try {
+      body = (await res.json()) as AdminFeeRateError;
+    } catch {
+      // fall through to the status-only message below
+    }
+    throw new Error(body?.error ?? `http_${res.status}`);
+  }
+  return (await res.json()) as AdminFeeRateRow;
+}
+
 export type UpdateMerchantPayload = {
   businessName: string;
   businessType: string;

@@ -52,9 +52,13 @@ export function CheckoutFlow({
   merchant,
   cart,
   returnUrl,
+  feeRate,
 }: {
   merchant: PublicMerchant;
   cart: CheckoutCart;
+  // Resolved server-side from the route's slug and threaded through, so every
+  // figure on this page and its confirmation quotes the one rate.
+  feeRate: number;
   // TODO: in production, validate return_url against an allow-list of
   // merchant-registered URLs to prevent open-redirect attacks. No validation
   // needed for local demo.
@@ -96,7 +100,8 @@ export function CheckoutFlow({
   if (step === "confirmed" && confirmed) {
     return <Confirmation
         booking={syntheticBookingFromCart(merchant, cart)}
-        plan={syntheticPlanFromCheckout(confirmed)} />;
+        plan={syntheticPlanFromCheckout(confirmed)}
+        feeRate={feeRate} />;
   }
 
   const ineligible = !preview.eligible;
@@ -110,6 +115,7 @@ export function CheckoutFlow({
           cart={cart}
           originalTotalCents={preview.originalTotalAmountCents}
           discountedTotalCents={preview.discountedTotalAmountCents}
+          feeRate={feeRate}
         />
         <TooClose
           booking={syntheticBookingFromCart(merchant, cart, preview.reason, preview.daysToAppointment)}
@@ -128,6 +134,7 @@ export function CheckoutFlow({
   const display = deriveDisplayAmounts({
     discountedTotalCents: preview.discountedTotalAmountCents,
     originalDepositCents: depositCents,
+    feeRate,
   });
   const distribution = distributeInstallments({
     remainingCents: display.remainingCents,
@@ -141,6 +148,7 @@ export function CheckoutFlow({
         cart={cart}
         originalTotalCents={preview.originalTotalAmountCents}
         discountedTotalCents={preview.discountedTotalAmountCents}
+        feeRate={feeRate}
       />
 
       <div className={showCardStep ? "pointer-events-none opacity-30" : ""}>

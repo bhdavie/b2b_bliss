@@ -2,6 +2,7 @@ import { CheckoutFlow, type CheckoutCart } from "@/components/consumer/CheckoutF
 import { InactiveLink } from "@/components/consumer/InactiveLink";
 import { PageChrome } from "@/components/consumer/PageChrome";
 import { fetchPublicMerchant } from "@/lib/publicApi";
+import { fetchFeeRate } from "@/lib/blissFee";
 
 type Params = { slug: string };
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -11,7 +12,13 @@ export default async function CheckoutPage(props: {
   searchParams: Promise<SearchParams>;
 }) {
   const [{ slug }, raw] = await Promise.all([props.params, props.searchParams]);
-  const merchant = await fetchPublicMerchant(slug);
+  // The property's processing-fee rate, resolved here where the slug lives and
+  // passed down. Never throws: a failed lookup resolves to the same fallback
+  // the backend uses, so the page still renders a fee.
+  const [merchant, feeRate] = await Promise.all([
+    fetchPublicMerchant(slug),
+    fetchFeeRate(slug),
+  ]);
 
   if (!merchant) {
     return (
@@ -52,7 +59,12 @@ export default async function CheckoutPage(props: {
 
   return (
     <PageChrome>
-      <CheckoutFlow merchant={merchant} cart={parsed.cart} returnUrl={returnUrl} />
+      <CheckoutFlow
+        merchant={merchant}
+        cart={parsed.cart}
+        returnUrl={returnUrl}
+        feeRate={feeRate}
+      />
     </PageChrome>
   );
 }

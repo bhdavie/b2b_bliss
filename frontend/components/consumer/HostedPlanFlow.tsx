@@ -30,7 +30,15 @@ import { MewsCardSection } from "./MewsCardSection";
 
 type Step = "plan" | "card" | "confirmed";
 
-export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
+export function HostedPlanFlow({
+  booking,
+  feeRate,
+}: {
+  booking: PublicBooking;
+  // Resolved server-side from the route's slug and threaded through, so every
+  // figure on this page and its confirmation quotes the one rate.
+  feeRate: number;
+}) {
   const [step, setStep] = useState<Step>("plan");
   const [selected, setSelected] = useState<PublicPlanFrequency>(
     pickDefaultFrequency(booking),
@@ -52,7 +60,7 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
   }, [booking.stripe.configured, booking.stripe.publishableKey]);
 
   if (step === "confirmed" && confirmed) {
-    return <Confirmation booking={booking} plan={confirmed} />;
+    return <Confirmation booking={booking} plan={confirmed} feeRate={feeRate} />;
   }
 
   if (!selectedOption) return null;
@@ -61,6 +69,7 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
   const display = deriveDisplayAmounts({
     discountedTotalCents: booking.eligibility.discountedTotalAmountCents,
     originalDepositCents: depositCents,
+    feeRate,
   });
   const distribution = distributeInstallments({
     remainingCents: display.remainingCents,
@@ -74,6 +83,7 @@ export function HostedPlanFlow({ booking }: { booking: PublicBooking }) {
         service={booking.service}
         originalTotalCents={booking.eligibility.originalTotalAmountCents}
         discountedTotalCents={booking.eligibility.discountedTotalAmountCents}
+        feeRate={feeRate}
       />
 
       <div className={showCardStep ? "pointer-events-none opacity-30" : ""}>

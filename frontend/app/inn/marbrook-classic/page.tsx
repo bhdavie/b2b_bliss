@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import { previewEligibility, formatScheduleDate } from "@/lib/eligibility";
 import { calcInstallmentPlan } from "@/lib/blissFee";
+import { useFeeRate } from "@/lib/useFeeRate";
 import {
   devCustomerLogin,
   createPlan,
@@ -35,9 +36,20 @@ import { BlissWordmark } from "@/components/BlissWordmark";
 // engine) without leaving the page. The /pay hosted plan page stays intact as
 // the backend source of truth but the checkout no longer routes to it.
 
-// Default stay (editable): Fri Sep 11 to Sun Sep 13, 2026, 2 adults, 2 nights.
-const DEFAULT_CHECKIN_ISO = "2026-09-11";
-const DEFAULT_CHECKOUT_ISO = "2026-09-13";
+// Default stay (editable): a 2-night stay four months out, plus 2 adults.
+//
+// Computed at load, never a literal. The previous hardcoded "2026-09-11" went
+// stale the moment today's date caught up to it: a stay inside the 6-week
+// eligibility floor is ineligible, so the Bliss teaser rendered nothing at all
+// and the page demoed no offer.
+//
+// Four months clears that floor by roughly triple (~17 weeks against a 6-week
+// minimum), which leaves room for the floor to be raised without this going
+// quiet again. Checked against lib/eligibility for every load date across a
+// year: eligible on all 365, offering 9 biweekly installments and 4 or 5
+// monthly ones. That reads as a real plan rather than a token two payments.
+const DEFAULT_STAY_LEAD_MONTHS = 4;
+const DEFAULT_STAY_NIGHTS = 2;
 const DEFAULT_ADULTS = 2;
 const DEFAULT_CHILDREN = 0;
 
@@ -57,6 +69,21 @@ function toIso(date: Date): string {
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
+// The default stay, resolved against today rather than baked in. Called from
+// the component's state initialiser, so it re-resolves on every page load
+// instead of once when this module is first imported.
+function defaultCheckinIso(): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setMonth(d.getMonth() + DEFAULT_STAY_LEAD_MONTHS);
+  return toIso(d);
+}
+function defaultCheckoutIso(checkinIso: string): string {
+  const d = parseIso(checkinIso);
+  d.setDate(d.getDate() + DEFAULT_STAY_NIGHTS);
+  return toIso(d);
+}
+
 function nightsBetween(checkinIso: string, checkoutIso: string): number {
   const ms = parseIso(checkoutIso).getTime() - parseIso(checkinIso).getTime();
   return Math.max(0, Math.round(ms / 86400000));
@@ -205,8 +232,10 @@ export default function MarbrookHousePage() {
 
   // Editable stay: dates + guests. Everything downstream (nights, subtotal,
   // tax, destination fee, total, teasers, schedule) derives from these.
-  const [checkinIso, setCheckinIso] = useState(DEFAULT_CHECKIN_ISO);
-  const [checkoutIso, setCheckoutIso] = useState(DEFAULT_CHECKOUT_ISO);
+  const [checkinIso, setCheckinIso] = useState(defaultCheckinIso);
+  const [checkoutIso, setCheckoutIso] = useState(() =>
+    defaultCheckoutIso(checkinIso),
+  );
   const [adults, setAdults] = useState(DEFAULT_ADULTS);
   const [children, setChildren] = useState(DEFAULT_CHILDREN);
   const nights = nightsBetween(checkinIso, checkoutIso);
@@ -249,6 +278,9 @@ export default function MarbrookHousePage() {
   // so SSR and the offline case still render. MerchantPolicies is a structural
   // superset of PlanRules, so it feeds previewEligibility directly.
   const [policies, setPolicies] = useState<MerchantPolicies | null>(null);
+  // This property's processing-fee rate, so every quoted figure on the page
+  // matches what the backend would resolve for the same slug right now.
+  const feeRate = useFeeRate(DEMO_HOTEL_CLASSIC.slug);
   useEffect(() => {
     let cancelled = false;
     fetchPublicMerchant(DEMO_HOTEL_CLASSIC.slug)
@@ -338,6 +370,7 @@ export default function MarbrookHousePage() {
       const calc = calcInstallmentPlan({
         baseCents: pricing.totalCents,
         numPayments: opt.numPayments,
+        feeRate,
       });
       return {
         numPayments: opt.numPayments,
@@ -347,7 +380,7 @@ export default function MarbrookHousePage() {
       };
     };
     return { biweekly: forFrequency("biweekly"), monthly: forFrequency("monthly") };
-  }, [pricing, checkinIso, checkoutIso, planRules]);
+  }, [pricing, checkinIso, checkoutIso, planRules, feeRate]);
 
   function selectRate(id: string) {
     setRateId(id);

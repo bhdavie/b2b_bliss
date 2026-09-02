@@ -2,12 +2,12 @@
 // No cookies are sent; the booking_token in the URL is the auth grant.
 
 import { API_BASE_URL } from "./api";
-import { feeFor } from "./blissFee";
+import { feeForAtRate } from "./blissFee";
 
 /**
  * Customer-facing schedule shape, mirroring how the backend persists rows in
- * {@code PlanCreationService}. The Bliss fee is 5% of the full total (see
- * {@code lib/blissFee.ts}).
+ * {@code PlanCreationService}. The Bliss fee is {@code feeRate} of the full
+ * total, resolved per property by the caller (see {@code lib/blissFee.ts}).
  *
  * - With a deposit the fee rides the deposit: {@code todayCents} = baseDeposit
  *   + fee, and installments split (discountedTotal - baseDeposit) cleanly.
@@ -17,8 +17,9 @@ import { feeFor } from "./blissFee";
 export function deriveDisplayAmounts(opts: {
   discountedTotalCents: number;
   originalDepositCents: number;
+  feeRate: number;
 }) {
-  const feeCents = feeFor(opts.discountedTotalCents);
+  const feeCents = feeForAtRate(opts.discountedTotalCents, opts.feeRate);
   const totalWithFeeCents = opts.discountedTotalCents + feeCents;
   const depositRate = opts.originalDepositCents / opts.discountedTotalCents;
   const hasDeposit = opts.originalDepositCents > 0;
