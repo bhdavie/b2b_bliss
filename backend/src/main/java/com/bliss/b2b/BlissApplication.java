@@ -118,6 +118,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
         Jdbi jdbi = JdbiBootstrap.build(config.getDatabase(), environment);
         MerchantDao merchantDao = jdbi.onDemand(MerchantDao.class);
         MagicLinkTokenDao tokenDao = jdbi.onDemand(MagicLinkTokenDao.class);
+        com.bliss.b2b.persistence.MerchantFeeRateDao merchantFeeRateDao =
+                jdbi.onDemand(com.bliss.b2b.persistence.MerchantFeeRateDao.class);
         BookingDao bookingDao = jdbi.onDemand(BookingDao.class);
         MerchantPlanRulesDao planRulesDao = jdbi.onDemand(MerchantPlanRulesDao.class);
         PaymentPlanDao paymentPlanDao = jdbi.onDemand(PaymentPlanDao.class);
@@ -264,7 +266,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 stripePaymentsService, stripeConnectResolver, clock));
         environment.jersey().register(new PublicPlansResource(planCreationService));
         environment.jersey().register(new PublicMerchantsResource(
-                merchantDao, planRulesService, stripePaymentsService, stripeConnectResolver));
+                merchantDao, planRulesService, stripePaymentsService, stripeConnectResolver,
+                merchantFeeRateDao, clock));
         environment.jersey().register(new PublicCheckoutResource(planCreationService));
         environment.jersey().register(new PublicPlansPortalResource(
                 planPortalService, stripePaymentsService, stripeConnectResolver, mewsCheckoutService));

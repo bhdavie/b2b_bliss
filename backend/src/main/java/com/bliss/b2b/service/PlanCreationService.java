@@ -28,6 +28,7 @@ import com.bliss.b2b.persistence.BookingDao;
 import com.bliss.b2b.persistence.CustomerCardDao;
 import com.bliss.b2b.persistence.CustomerDao;
 import com.bliss.b2b.persistence.MerchantDao;
+import com.bliss.b2b.persistence.MerchantFeeRateDao;
 import com.bliss.b2b.persistence.MerchantMewsConnectionDao;
 import com.bliss.b2b.persistence.MerchantPlanRulesDao;
 import com.bliss.b2b.persistence.PaymentPlanDao;
@@ -37,8 +38,11 @@ import com.stripe.exception.CardException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.PaymentMethod;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Base64;
 import java.util.List;
@@ -78,22 +82,63 @@ public class PlanCreationService {
     private static final int TOKEN_BYTES = 12;
 
     /**
-     * Bliss fee: 5% of the plan's full total (the customer-facing booking total,
-     * already inclusive of taxes and fees). Layered onto the customer schedule at
-     * persistence time; eligibility math stays fee-free. The resolved fee is
-     * stored per-plan in {@code payment_plans.processing_fee_cents} so historical
-     * plans keep whatever fee they were created and charged under. Mirrors
-     * {@code BLISS_FEE_RATE} / {@code calcInstallmentPlan} in
-     * {@code frontend/lib/blissFee.ts}; the two must stay in sync.
+     * Fallback ONLY, for a property with no row in {@code merchant_fee_rates}.
+     * This is not the applied rate: the applied rate is resolved per property
+     * and per moment by {@link #resolveFeeRate}. V27 backfilled every existing
+     * property at 0.05, so reaching this constant means either a property
+     * created after that migration with no rate written, or a rate whose
+     * effective_from is still in the future. Both are configuration gaps rather
+     * than normal operation, which is why the resolver logs a warning.
+     *
+     * <p>Deliberately not zero. A missing rate is a mistake, and defaulting to
+     * "Bliss takes nothing" would hide it behind revenue that quietly stops.
      */
-    public static final double BLISS_FEE_RATE = 0.05;
+    private static final BigDecimal FALLBACK_FEE_RATE = new BigDecimal("0.05");
+
+    /**
+     * The same fallback, readable by the public quote endpoint so a quote and
+     * the plan it turns into cannot disagree about what a property with no rate
+     * row is charged. Exposed rather than duplicated for exactly that reason.
+     */
+    public static final BigDecimal FALLBACK_FEE_RATE_PUBLIC = FALLBACK_FEE_RATE;
 
     /** Legacy flat fee, retained only for the V13 backfill of pre-migration plans. */
     public static final long LEGACY_FLAT_FEE_CENTS = 2000L;
 
-    /** 5% of the full plan total, rounded to whole cents. */
-    public static long feeFor(long totalCents) {
-        return Math.round(totalCents * BLISS_FEE_RATE);
+    /**
+     * The property's fee rate as of {@code at}: the newest row in
+     * {@code merchant_fee_rates} whose effective_from has arrived. Resolved ONCE
+     * per plan creation and threaded down, so a plan cannot straddle two rates
+     * and the DAO is not queried per installment.
+     */
+    private static BigDecimal resolveFeeRate(Handle handle, UUID merchantId, Instant at) {
+        BigDecimal resolved = handle.attach(MerchantFeeRateDao.class)
+                .effectiveRateFor(merchantId, at)
+                .orElse(null);
+        if (resolved == null) {
+            log.warn("No effective merchant_fee_rates row for merchant {} as of {}; "
+                    + "falling back to {}", merchantId, at, FALLBACK_FEE_RATE);
+            return FALLBACK_FEE_RATE;
+        }
+        return resolved;
+    }
+
+    /**
+     * The fee in whole cents for a plan total at a resolved rate, rounded
+     * half-up to match what the old {@code Math.round(total * 0.05)} produced
+     * for the same inputs.
+     *
+     * <p>A rate of exactly 0 yields 0, which is a real value and not an absent
+     * one: the caller still writes {@code processing_fee_cents = 0}.
+     */
+    static long feeFor(long totalCents, BigDecimal rate) {
+        if (rate == null || rate.signum() <= 0 || totalCents <= 0) {
+            return 0L;
+        }
+        return BigDecimal.valueOf(totalCents)
+                .multiply(rate)
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
     }
 
     /**
@@ -104,7 +149,10 @@ public class PlanCreationService {
      * {@code calcInstallmentPlan} on the frontend and the /pay estimate. Either
      * way SUM(schedule) == discountedTotal + feeCents.
      */
-    private static void buildSchedule(
+    // Package-private, not private: PlanCreationFeeRateTest drives it directly
+    // to prove SUM(schedule) == discountedTotal + feeCents still holds at a 0%
+    // rate, which is the one case the fee refactor could plausibly break.
+    static void buildSchedule(
             PaymentScheduleDao scheduleDao,
             UUID planId,
             LocalDate today,
@@ -281,6 +329,11 @@ public class PlanCreationService {
             PlanFrequency requestedFrequency,
             DemoCard demoCard
     ) {
+        // Resolved once, here, and threaded down to the fee calculation. Doing it
+        // at the top means the whole plan is priced at one rate even if a rate
+        // row lands mid-transaction, and the DAO is hit once per plan rather
+        // than once per installment.
+        BigDecimal feeRate = resolveFeeRate(handle, merchant.id(), clock.instant());
         // Rail fork. A Mews-rail property creates a pending-card plan (no Stripe,
         // no demo), whose card is captured out-of-band via the Mews checkout
         // endpoints. It never reaches the Stripe demo branch below.
@@ -402,7 +455,7 @@ public class PlanCreationService {
             booking = bookingDao.findById(booking.id()).orElseThrow();
         }
 
-        long feeCents = feeFor(discountedTotal);
+        long feeCents = feeFor(discountedTotal, feeRate);
         planDao.insert(
                 booking.id(),
                 customer.id(),
@@ -498,6 +551,11 @@ public class PlanCreationService {
             PlanFrequency requestedFrequency,
             DemoCard demoCard
     ) {
+        // Resolved once, here, and threaded down to the fee calculation. Doing it
+        // at the top means the whole plan is priced at one rate even if a rate
+        // row lands mid-transaction, and the DAO is hit once per plan rather
+        // than once per installment.
+        BigDecimal feeRate = resolveFeeRate(handle, merchant.id(), clock.instant());
         // Demo / simulated mode (reached only when Stripe is not configured):
         // this path skips every Stripe network call and synthesizes ids, so it
         // does NOT require the merchant to be Stripe-connected. The real-Stripe
@@ -578,7 +636,7 @@ public class PlanCreationService {
             booking = bookingDao.findById(booking.id()).orElseThrow();
         }
 
-        long feeCents = feeFor(discountedTotal);
+        long feeCents = feeFor(discountedTotal, feeRate);
         planDao.insert(
                 booking.id(), customer.id(), storedCard.id(),
                 discountedTotal, installmentCount, option.frequency().wire(),
@@ -645,6 +703,11 @@ public class PlanCreationService {
             PlanFrequency requestedFrequency,
             DemoCard demoCard
     ) {
+        // Resolved once, here, and threaded down to the fee calculation. Doing it
+        // at the top means the whole plan is priced at one rate even if a rate
+        // row lands mid-transaction, and the DAO is hit once per plan rather
+        // than once per installment.
+        BigDecimal feeRate = resolveFeeRate(handle, merchant.id(), clock.instant());
         boolean connected = handle.attach(MerchantMewsConnectionDao.class)
                 .findByMerchant(merchant.id())
                 .filter(MewsConnection::isValidated)
@@ -725,7 +788,7 @@ public class PlanCreationService {
             booking = bookingDao.findById(booking.id()).orElseThrow();
         }
 
-        long feeCents = feeFor(discountedTotal);
+        long feeCents = feeFor(discountedTotal, feeRate);
         // DEMO OVERRIDE: insert() writes status 'active'; insertPendingMews()
         // wrote 'pending_card'. Same columns otherwise, and railFor(merchant) is
         // 'mews' here, matching the rail the pending insert hardcoded.

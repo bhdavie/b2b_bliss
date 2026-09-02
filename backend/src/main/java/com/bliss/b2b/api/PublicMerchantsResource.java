@@ -6,7 +6,9 @@ import com.bliss.b2b.integration.StripeConnectResolver;
 import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.persistence.MerchantDao;
+import com.bliss.b2b.persistence.MerchantFeeRateDao;
 import com.bliss.b2b.service.MerchantPlanRulesService;
+import com.bliss.b2b.service.PlanCreationService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -15,6 +17,8 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.math.BigDecimal;
+import java.time.Clock;
 import java.util.Map;
 import java.util.Optional;
 
@@ -32,17 +36,23 @@ public class PublicMerchantsResource {
     private final MerchantPlanRulesService rulesService;
     private final StripePaymentsService stripeService;
     private final StripeConnectResolver stripeConnectResolver;
+    private final MerchantFeeRateDao feeRateDao;
+    private final Clock clock;
 
     public PublicMerchantsResource(
             MerchantDao merchantDao,
             MerchantPlanRulesService rulesService,
             StripePaymentsService stripeService,
-            StripeConnectResolver stripeConnectResolver
+            StripeConnectResolver stripeConnectResolver,
+            MerchantFeeRateDao feeRateDao,
+            Clock clock
     ) {
         this.merchantDao = merchantDao;
         this.rulesService = rulesService;
         this.stripeService = stripeService;
         this.stripeConnectResolver = stripeConnectResolver;
+        this.feeRateDao = feeRateDao;
+        this.clock = clock;
     }
 
     @GET
@@ -144,6 +154,33 @@ public class PublicMerchantsResource {
         Merchant merchant = maybe.get();
         MerchantPlanRules rules = rulesService.forMerchant(merchant.id());
         return Response.ok(PublicPlanRulesView.from(rules, merchant.pmsType())).build();
+    }
+
+    /**
+     * The property's Bliss processing-fee rate as of now, as a decimal fraction
+     * ({@code 0.05} = 5%). Unauthenticated, same exposure as the rest of this
+     * resource: the guest is shown this number on the checkout summary before
+     * they commit, so it is not privileged.
+     *
+     * <p>"As of now" is the whole point. It answers what a plan created at this
+     * instant would be charged, which is what a quote needs; it says nothing
+     * about plans that already exist, whose fee was frozen at their own
+     * creation and is not resolved from here.
+     *
+     * <p>Falls back to the same rate {@code PlanCreationService} falls back to
+     * when a property has no effective rate row, so the quote cannot promise a
+     * number the plan would not then apply.
+     */
+    @GET
+    @Path("/{slug}/fee-rate")
+    public Response feeRate(@PathParam("slug") String slug) {
+        if (slug == null || slug.isBlank()) return notFound();
+        Optional<Merchant> maybe = merchantDao.findBySlug(slug);
+        if (maybe.isEmpty()) return notFound();
+        BigDecimal rate = feeRateDao
+                .effectiveRateFor(maybe.get().id(), clock.instant())
+                .orElse(PlanCreationService.FALLBACK_FEE_RATE_PUBLIC);
+        return Response.ok(Map.of("rate", rate)).build();
     }
 
     /**
