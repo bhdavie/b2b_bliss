@@ -26,6 +26,15 @@ public class MerchantAuthenticator implements Authenticator<String, MerchantPrin
     public Optional<MerchantPrincipal> authenticate(String token) throws AuthenticationException {
         try {
             Claims claims = jwtService.verify(token);
+            // Reject any token that declares a role other than merchant. Guest
+            // and admin tokens were already excluded in practice by carrying no
+            // merchantId claim, but that was a negative check: it held only for
+            // as long as no other subject happened to carry one. This is the
+            // positive one. Tokens with NO role claim still pass, because that
+            // is what a merchant token looks like today and live sessions must
+            // keep working across the deploy.
+            Object role = claims.get("role");
+            if (role != null && !"merchant".equals(role)) return Optional.empty();
             String merchantIdStr = claims.get("merchantId", String.class);
             if (merchantIdStr == null) return Optional.empty();
             UUID merchantId = UUID.fromString(merchantIdStr);

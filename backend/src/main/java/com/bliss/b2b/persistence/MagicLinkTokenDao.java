@@ -35,6 +35,17 @@ public interface MagicLinkTokenDao {
             @Bind("expiresAt") Instant expiresAt
     );
 
+    /** Admin link. Third subject, same token, TTL and consume semantics. */
+    @SqlUpdate("""
+            INSERT INTO magic_link_tokens (subject_type, admin_user_id, token_hash, expires_at)
+            VALUES ('admin', :adminUserId, :tokenHash, :expiresAt)
+            """)
+    void insertForAdmin(
+            @Bind("adminUserId") UUID adminUserId,
+            @Bind("tokenHash") String tokenHash,
+            @Bind("expiresAt") Instant expiresAt
+    );
+
     /**
      * The subject_type filter is the scope check, and it is deliberately in the
      * WHERE clause rather than left to the CHECK constraint alone: a guest token
@@ -64,6 +75,20 @@ public interface MagicLinkTokenDao {
               AND expires_at > :now
             """)
     Optional<UUID> findActiveCustomerId(
+            @Bind("tokenHash") String tokenHash,
+            @Bind("now") Instant now
+    );
+
+    /** Mirror of the two lookups above, scoped to the admin subject. */
+    @SqlQuery("""
+            SELECT admin_user_id
+            FROM magic_link_tokens
+            WHERE token_hash = :tokenHash
+              AND subject_type = 'admin'
+              AND consumed_at IS NULL
+              AND expires_at > :now
+            """)
+    Optional<UUID> findActiveAdminUserId(
             @Bind("tokenHash") String tokenHash,
             @Bind("now") Instant now
     );

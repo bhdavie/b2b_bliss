@@ -4,6 +4,14 @@ public final class SessionCookies {
 
     public static final String COOKIE_NAME = "bliss_session";
 
+    /**
+     * Bliss internal admin session. A separate cookie rather than a claim on the
+     * merchant one so signing out of the property dashboard cannot leave an
+     * admin session alive, or the reverse. Built through the same builder below,
+     * so its Domain, Path and SameSite match and a clear always undoes a set.
+     */
+    public static final String ADMIN_COOKIE_NAME = "bliss_admin_session";
+
     private SessionCookies() {}
 
     public static String buildSetCookie(String token, int maxAgeSeconds, CookieOptions options) {

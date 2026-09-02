@@ -11,6 +11,8 @@ import com.bliss.b2b.api.PlanRulesResource;
 import com.bliss.b2b.api.PropertyOnboardingResource;
 import com.bliss.b2b.api.PlansResource;
 import com.bliss.b2b.api.PublicBookingsResource;
+import com.bliss.b2b.api.AdminAuthResource;
+import com.bliss.b2b.api.AdminMerchantsResource;
 import com.bliss.b2b.api.PublicAccountResource;
 import com.bliss.b2b.api.PublicCheckoutResource;
 import com.bliss.b2b.api.PublicMerchantsResource;
@@ -18,6 +20,9 @@ import com.bliss.b2b.api.PublicPlansPortalResource;
 import com.bliss.b2b.api.PublicPlansResource;
 import com.bliss.b2b.api.StripeConnectResource;
 import com.bliss.b2b.api.StripeStandardConnectResource;
+import com.bliss.b2b.auth.AdminAuthenticator;
+import com.bliss.b2b.auth.AdminJwtCookieAuthFilter;
+import com.bliss.b2b.auth.AdminPrincipal;
 import com.bliss.b2b.auth.CookieOptions;
 import com.bliss.b2b.auth.JwtCookieAuthFilter;
 import com.bliss.b2b.auth.JwtService;
@@ -49,6 +54,8 @@ import com.bliss.b2b.service.MewsSyncService;
 import com.bliss.b2b.service.MerchantPlanRulesService;
 import com.bliss.b2b.service.DemoResetService;
 import com.bliss.b2b.service.PropertyOnboardingService;
+import com.bliss.b2b.service.AdminAuthService;
+import com.bliss.b2b.service.AdminMerchantsService;
 import com.bliss.b2b.service.CustomerAuthService;
 import com.bliss.b2b.service.PlanCreationService;
 import com.bliss.b2b.service.PlanPortalService;
@@ -120,6 +127,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
         MagicLinkTokenDao tokenDao = jdbi.onDemand(MagicLinkTokenDao.class);
         com.bliss.b2b.persistence.MerchantFeeRateDao merchantFeeRateDao =
                 jdbi.onDemand(com.bliss.b2b.persistence.MerchantFeeRateDao.class);
+        com.bliss.b2b.persistence.AdminUserDao adminUserDao =
+                jdbi.onDemand(com.bliss.b2b.persistence.AdminUserDao.class);
         BookingDao bookingDao = jdbi.onDemand(BookingDao.class);
         MerchantPlanRulesDao planRulesDao = jdbi.onDemand(MerchantPlanRulesDao.class);
         PaymentPlanDao paymentPlanDao = jdbi.onDemand(PaymentPlanDao.class);
@@ -248,6 +257,17 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new AuthResource(
                 magicLinkService, jwtService, cookieOptions,
                 demoLoginEnabled, sessionTtlMinutes));
+        // Bliss internal admin. Same cookie options and the same demo gate as
+        // the merchant surface; the resource itself is what refuses to create
+        // an admin, so BLISS_DEMO_LOGIN cannot mint one here the way it can
+        // mint a merchant.
+        AdminAuthService adminAuthService = new AdminAuthService(
+                adminUserDao, tokenDao, emailService, config.getApp(), magicLinkTtl);
+        environment.jersey().register(new AdminAuthResource(
+                adminAuthService, jwtService, cookieOptions,
+                demoLoginEnabled, sessionTtlMinutes));
+        environment.jersey().register(new AdminMerchantsResource(
+                new AdminMerchantsService(jdbi), clock));
         environment.jersey().register(new MerchantsResource(merchantDao, stripeService, emailService));
         environment.jersey().register(new StripeConnectResource(
                 stripeService, merchantDao, emailService, config.getApp(),
@@ -337,14 +357,35 @@ public class BlissApplication extends Application<BlissConfiguration> {
             }
         }, 90, 60, java.util.concurrent.TimeUnit.SECONDS);
 
-        environment.jersey().register(new AuthDynamicFeature(
+        // Two principal types now, so this is the polymorphic feature rather
+        // than AuthDynamicFeature: Dropwizard picks the filter by the principal
+        // the resource method asks for with @Auth. Each surface keeps its own
+        // cookie and its own authenticator, so a merchant token cannot satisfy
+        // an admin endpoint or the reverse.
+        java.util.Map<Class<? extends java.security.Principal>,
+                jakarta.ws.rs.container.ContainerRequestFilter> authFilters =
+                new java.util.LinkedHashMap<>();
+        authFilters.put(MerchantPrincipal.class,
                 new JwtCookieAuthFilter.Builder()
                         .setAuthenticator(new MerchantAuthenticator(jwtService, merchantDao))
                         .setPrefix("Bearer")
                         .setRealm("bliss-b2b")
-                        .buildAuthFilter()));
+                        .buildAuthFilter());
+        authFilters.put(AdminPrincipal.class,
+                new AdminJwtCookieAuthFilter.Builder()
+                        .setAuthenticator(new AdminAuthenticator(jwtService, adminUserDao))
+                        .setPrefix("Bearer")
+                        .setRealm("bliss-b2b-admin")
+                        .buildAuthFilter());
+        environment.jersey().register(
+                new io.dropwizard.auth.PolymorphicAuthDynamicFeature<>(authFilters));
         environment.jersey().register(RolesAllowedDynamicFeature.class);
-        environment.jersey().register(new AuthValueFactoryProvider.Binder<>(MerchantPrincipal.class));
+        java.util.Set<Class<? extends java.security.Principal>> principals =
+                new java.util.LinkedHashSet<>();
+        principals.add(MerchantPrincipal.class);
+        principals.add(AdminPrincipal.class);
+        environment.jersey().register(
+                new io.dropwizard.auth.PolymorphicAuthValueFactoryProvider.Binder<>(principals));
 
         log.info("Bliss B2B backend started env={}", config.getEnv());
     }

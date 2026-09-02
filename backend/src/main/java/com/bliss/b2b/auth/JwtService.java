@@ -60,6 +60,25 @@ public class JwtService {
                 .compact();
     }
 
+    /**
+     * Issues a Bliss internal admin session token. Carries {@code role=admin}
+     * and {@code adminUserId}, and deliberately NO {@code merchantId} claim, so
+     * an admin token cannot satisfy {@link MerchantAuthenticator}, which keys on
+     * that claim.
+     */
+    public String issueAdmin(String email, String adminUserId) {
+        Instant now = Instant.now();
+        return Jwts.builder()
+                .issuer(issuer)
+                .subject(email)
+                .claim("role", "admin")
+                .claim("adminUserId", adminUserId)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plus(ttl)))
+                .signWith(signingKey, Jwts.SIG.HS256)
+                .compact();
+    }
+
     public Claims verify(String token) {
         return Jwts.parser()
                 .verifyWith(signingKey)
