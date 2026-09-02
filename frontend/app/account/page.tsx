@@ -23,9 +23,13 @@ export default async function AccountPage() {
     redirect("/account/login");
   }
 
-  const active = data.plans.filter(
-    (p) => !p.complete && p.status !== "canceled",
-  );
+  // Check-in ascending: the soonest stay first. The list had no sort at all,
+  // so rows arrived in creation order, which matches neither the date the row
+  // now leads with nor any order a guest would look for.
+  const active = data.plans
+    .filter((p) => !p.complete && p.status !== "canceled")
+    .slice()
+    .sort((a, b) => a.appointmentDate.localeCompare(b.appointmentDate));
 
   // Exactly one active plan: render that plan directly, through the same
   // component /plan/[token] uses rather than a parallel implementation.

@@ -105,11 +105,18 @@ export function PageHeader({
  * the same thing, which is why `outlined` was left with no fill: on a sand-100
  * page it reads as an inset region, which is what its call sites want.
  */
-export type PanelVariant = "outlined" | "filled";
+export type PanelVariant = "outlined" | "filled" | "flat";
 
 const PANEL_VARIANT_CLASS: Record<PanelVariant, string> = {
   outlined: "border border-sand-200",
   filled: "border border-sand-200 bg-white",
+  // White surface with NO edge of its own. For a card whose children are
+  // themselves bordered cards: with `filled`, the parent's hairline and the
+  // children's ran parallel a padding-width apart in the same colour, and
+  // nothing said which contained which. Dropping the parent's edge leaves one
+  // edge system on the screen. The parent is still separated from the page,
+  // by its white fill against the sand ground.
+  flat: "bg-white",
 };
 
 /**

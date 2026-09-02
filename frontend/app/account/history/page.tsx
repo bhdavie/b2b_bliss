@@ -22,15 +22,17 @@ export default async function AccountHistoryPage({
 
   const canceledToken = (await searchParams).canceled ?? null;
 
-  // Pin the just-cancelled plan to the top; everything else keeps its
-  // created-date order from the backend.
+  // Pin the just-cancelled plan to the top; everything else is most recent
+  // stay first. Descending rather than /account's ascending: these stays have
+  // been and gone, so the useful end of the list is the recent one, whereas on
+  // the active list it is the soonest.
   const past = data.plans
     .filter((p) => p.complete || p.status === "canceled")
     .slice()
     .sort((a, b) => {
       if (a.bookingToken === canceledToken) return -1;
       if (b.bookingToken === canceledToken) return 1;
-      return 0;
+      return b.appointmentDate.localeCompare(a.appointmentDate);
     });
 
   return (
@@ -60,6 +62,7 @@ export default async function AccountHistoryPage({
           from="history"
           title="Past plans"
           helper="Plans that are paid off or cancelled."
+          showNextPayment={false}
           emptyTitle="Nothing here yet"
           emptyBody="Completed and cancelled plans will appear here."
         />

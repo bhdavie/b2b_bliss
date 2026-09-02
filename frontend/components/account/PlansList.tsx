@@ -26,6 +26,7 @@ export function PlansList({
   helper,
   emptyTitle = "No plans yet",
   emptyBody = "When a property sends you a payment-plan link, your plan will appear here automatically.",
+  showNextPayment = true,
 }: {
   plans: AccountPlanCard[];
   /** Threaded through to each row so the plan screen knows the entry point. */
@@ -36,9 +37,11 @@ export function PlansList({
   helper?: string;
   emptyTitle?: string;
   emptyBody?: string;
+  /** History has no next payment to show. See the note on PlanRow. */
+  showNextPayment?: boolean;
 }) {
   return (
-    <Panel variant="filled" className="p-5">
+    <Panel variant="flat" className="p-5">
       <div className={`flex flex-col gap-1 ${helper ? "mb-4" : "mb-4"}`}>
         <SectionHeading>{title}</SectionHeading>
         {helper ? <p className="text-[14px] text-ink-500">{helper}</p> : null}
@@ -58,9 +61,14 @@ export function PlansList({
           </p>
         </div>
       ) : (
-        <div>
+        <div className="flex flex-col gap-4">
           {plans.map((plan) => (
-            <PlanRow key={plan.planId} plan={plan} from={from} />
+            <PlanRow
+              key={plan.planId}
+              plan={plan}
+              from={from}
+              showNextPayment={showNextPayment}
+            />
           ))}
         </div>
       )}
