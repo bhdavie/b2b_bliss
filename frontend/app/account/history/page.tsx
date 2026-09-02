@@ -35,13 +35,13 @@ export default async function AccountHistoryPage({
 
   return (
     <PortalShell active="history" email={data.email}>
-      <div className="flex flex-col pb-[72px]">
+      <div className="flex flex-col pb-10">
         {canceledToken ? (
-          <Panel variant="filled" className="mb-7 gap-2 px-7 py-[30px]">
-            <div className="text-[22px] font-medium tracking-[-0.015em] text-ink-900">
+          <Panel variant="filled" className="mb-3 gap-3 p-5">
+            <div className="text-[15px] font-medium text-ink-900">
               Cancellation confirmed
             </div>
-            <p className="text-[17px] text-ink-500">
+            <p className="text-[14px] text-ink-500">
               Your plan has been cancelled and the remaining payments are
               stopped.
             </p>

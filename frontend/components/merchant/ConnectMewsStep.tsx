@@ -57,7 +57,7 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
 
   if (result) {
     return (
-      <Panel variant="filled" className="mx-auto w-full max-w-[560px] items-center gap-5 px-10 pb-10 pt-9 text-center">
+      <Panel radius="panel" variant="filled" className="mx-auto w-full max-w-[560px] items-center gap-5 px-10 pb-10 pt-9 text-center">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-violet text-xl text-white">
           ✓
         </div>
@@ -76,7 +76,7 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
   }
 
   return (
-    // Hand-rolled Panel shape (a <form>, so it cannot be a <Panel>). bg-white
+    // Hand-rolled Panel shape (a <form>, so it cannot be a <Panel radius="panel">). bg-white
     // keeps it matching Panel variant="filled" now that the funnel ground is
     // sand-100; without a fill it would take the page colour.
     <form onSubmit={handleSubmit} className="flex flex-col rounded-panel border border-sand-200 bg-white px-8 pb-8 pt-[30px]">

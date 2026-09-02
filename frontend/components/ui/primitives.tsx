@@ -8,6 +8,12 @@
  *
  * That leaves exactly two exports here, and each has a single job:
  *  - SectionHeading — THE in-card heading. One treatment for the whole app.
+ *    20px, weight 500, sentence case, near-black. It was a 13px uppercase
+ *    muted eyebrow, which read as a label rather than as the head of a card.
+ *    The uppercase came from CSS; the strings were always sentence case, so
+ *    dropping `uppercase` is what makes "BOOKING" read as "Booking". Field
+ *    labels and column headers keep the 12px uppercase muted treatment, and
+ *    that gap is what separates a heading from a label.
  *  - PageHeader — a 44px page title, now used ONLY by the onboarding funnel.
  *
  * Two former exports are gone rather than left to compete with SectionHeading:
@@ -26,7 +32,7 @@ export function SectionHeading({
 }) {
   return (
     <div
-      className={`text-[13px] uppercase tracking-[0.08em] text-ink-400 ${className}`}
+      className={`text-[20px] font-medium text-ink-900 ${className}`}
     >
       {children}
     </div>
@@ -106,18 +112,38 @@ const PANEL_VARIANT_CLASS: Record<PanelVariant, string> = {
   filled: "border border-sand-200 bg-white",
 };
 
+/**
+ * Corner radius. "card" (4px) is the app and portal value and the default,
+ * because that is where all but a handful of Panels live. "panel" (8px) is the
+ * softer corner the onboarding funnel and the signup preview keep; they are
+ * outside the app's density rules, so they opt in explicitly rather than
+ * inheriting a value tuned for a dense card grid.
+ *
+ * Passed as a prop rather than overridden through className: both are plain
+ * utilities of equal specificity, so which one won would depend on their order
+ * in the emitted stylesheet rather than on the order they are written here.
+ */
+export type PanelRadius = "card" | "panel";
+
+const PANEL_RADIUS_CLASS: Record<PanelRadius, string> = {
+  card: "rounded-card",
+  panel: "rounded-panel",
+};
+
 export function Panel({
   children,
   className = "",
   variant = "outlined",
+  radius = "card",
 }: {
   children: React.ReactNode;
   className?: string;
   variant?: PanelVariant;
+  radius?: PanelRadius;
 }) {
   return (
     <div
-      className={`flex flex-col rounded-panel ${PANEL_VARIANT_CLASS[variant]} ${className}`}
+      className={`flex flex-col ${PANEL_RADIUS_CLASS[radius]} ${PANEL_VARIANT_CLASS[variant]} ${className}`}
     >
       {children}
     </div>

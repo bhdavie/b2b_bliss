@@ -36,15 +36,15 @@ export default async function BookingDetailPage({
   // been the same content in two treatments on two detail pages. One treatment
   // for every heading in both surfaces, no exceptions.
   const head = (
-    <div className="mb-6 flex flex-col border-b border-sand-100 pb-5">
+    <div className="mb-3 flex flex-col border-b border-sand-100 pb-3">
       <Link
         href="/bookings"
-        className="mb-4 self-start text-[15px] text-brand-violet no-underline hover:underline"
+        className="mb-4 self-start text-[13px] text-brand-violet no-underline hover:underline"
       >
         ← Back to bookings
       </Link>
-      <SectionHeading className="mb-2.5">{booking.serviceName}</SectionHeading>
-      <p className="text-[17px] text-ink-500">
+      <SectionHeading className="mb-4">{booking.serviceName}</SectionHeading>
+      <p className="text-[14px] text-ink-500">
         {booking.customerNameHint ?? booking.customerEmailHint ?? "Guest pending"}
       </p>
     </div>
@@ -71,16 +71,16 @@ function PlanDetail({
   const displayStatus = portal.complete ? "completed" : portal.plan.status;
 
   return (
-    <div className="flex flex-col gap-7">
+    <div className="flex flex-col gap-3">
       {/* Was a lavender-tinted bordered strip, the one block on this page that
           held content on something other than a white card. Now a card like
           everything else, matching the refund notice on the guest plan screen. */}
       {refunded ? (
-        <Panel variant="filled" className="flex-row items-center gap-3 px-7 py-5">
+        <Panel variant="filled" className="flex-row items-center gap-3 p-5">
           <span className="rounded-full bg-brand-violet-tint px-[15px] py-[7px] text-[13px] font-medium uppercase tracking-[0.06em] text-brand-violet">
             Refunded
           </span>
-          <span className="text-[17px] text-ink-500">
+          <span className="text-[14px] text-ink-500">
             {formatDollars(portal.plan.refundAmountCents ?? 0)} refunded to the guest
             {portal.plan.refundedAt
               ? ` on ${formatScheduleDateLong(portal.plan.refundedAt.slice(0, 10))}`
@@ -110,7 +110,7 @@ function PlanDetail({
           <Line label="Processing fee" value={`+${formatDollars(portal.processingFeeCents)}`} />
         </div>
         <div className="mt-[18px] flex items-baseline justify-between border-t border-sand-300 pt-[18px]">
-          <span className="text-[17px] font-medium text-ink-900">Total</span>
+          <span className="text-[14px] text-ink-900">Total</span>
           <span className="text-2xl font-medium tracking-[-0.02em] tabular-nums text-ink-900">
             {formatDollars(totalDue)}
           </span>
@@ -134,14 +134,14 @@ function PlanDetail({
                 <div className="flex items-center gap-3">
                   <SchedulePill status={rowStatus} />
                   <div>
-                    <div className="text-[17px] text-ink-900">{label}</div>
-                    <div className="mt-0.5 text-[13px] text-ink-400">
+                    <div className="text-[14px] text-ink-900">{label}</div>
+                    <div className="mt-0.5 text-[13px] text-ink-500">
                       {SCHEDULE_DATE_PREFIX[rowStatus]}
                       {formatScheduleDateShort(entry.dueDate)}
                     </div>
                   </div>
                 </div>
-                <div className="text-[17px] font-medium tabular-nums text-ink-900">
+                <div className="text-[14px] tabular-nums text-ink-900">
                   {formatDollars(entry.amountCents)}
                 </div>
               </li>
@@ -152,16 +152,16 @@ function PlanDetail({
 
       <Card title="Payment method">
         {portal.card ? (
-          <div className="text-sm">
-            <div className="text-base font-semibold text-brand-navy">
+          <div className="text-[13px]">
+            <div className="text-[14px] text-ink-900">
               {brandLabel(portal.card.brand)} •••• {portal.card.lastFour}
             </div>
-            <div className="mt-1 text-xs text-brand-navy/55">
+            <div className="mt-1 text-[13px] text-ink-500">
               Expires {String(portal.card.expMonth).padStart(2, "0")}/{String(portal.card.expYear).slice(-2)}
             </div>
           </div>
         ) : (
-          <p className="text-sm text-brand-navy/55">No card on file.</p>
+          <p className="text-[14px] text-ink-500">No card on file.</p>
         )}
       </Card>
 
@@ -187,18 +187,18 @@ function PlanDetail({
 
 function NoPlan({ booking, head }: { booking: Booking; head: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-7">
+    <div className="flex flex-col gap-4">
       <Card title="Booking" head={head}>
         <Row label="Stay" value={booking.serviceName} />
         <Row label="Check-in" value={formatScheduleDateLong(booking.appointmentDate)} />
         <Row label="Total" value={formatDollars(booking.totalAmountCents)} />
       </Card>
       <Card title="Plan">
-        <p className="text-sm text-brand-navy/65">
+        <p className="text-[14px] text-ink-900">
           No plan yet. Share the link below so your guest can set up a payment plan.
         </p>
         <div className="mt-3 flex items-center gap-3">
-          <code className="flex-1 truncate border border-brand-neutral bg-brand-cream/50 px-3 py-2 text-xs font-mono text-ink">
+          <code className="flex-1 truncate border border-brand-neutral bg-brand-cream/50 px-3 py-2 text-[13px] font-mono text-ink-900">
             {booking.hostedUrl}
           </code>
           <CopyLinkButton url={booking.hostedUrl} />
@@ -224,9 +224,9 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <Panel variant="filled" className="px-7 py-[30px]">
+    <Panel variant="filled" className="p-5">
       {head}
-      <SectionHeading className="mb-5">{title}</SectionHeading>
+      <SectionHeading className="mb-4">{title}</SectionHeading>
       {children}
     </Panel>
   );
@@ -235,22 +235,22 @@ function Card({
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-sand-100 py-4 last:border-b-0">
-      {/* text-xs (12px), NOT the 13px SectionHeading size. This labels a field
+      {/* text-[13px] (12px), NOT the 13px SectionHeading size. This labels a field
           in a row, so it belongs with /dashboard's FieldRow labels and the
           /bookings column headers, which are all 12px. At 13px it was sitting
           in the section-heading family and made "Guest" here look like the same
           kind of thing as "Booking" above it. */}
-      <span className="text-xs uppercase tracking-[0.08em] text-ink-400">
+      <span className="text-[12px] uppercase tracking-[0.08em] text-ink-500">
         {label}
       </span>
-      <span className="text-right text-[17px] text-ink-900">{value}</span>
+      <span className="text-right text-[14px] text-ink-900">{value}</span>
     </div>
   );
 }
 
 function Line({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between text-[17px]">
+    <div className="flex items-baseline justify-between text-[14px]">
       <span className="text-ink-500">{label}</span>
       <span className="tabular-nums text-ink-900">{value}</span>
     </div>
@@ -263,8 +263,8 @@ function Line({ label, value }: { label: string; value: string }) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-[7px]">
-      <div className="text-[15px] text-ink-400">{label}</div>
-      <div className="text-[19px] font-medium tabular-nums text-ink-900">
+      <div className="text-[13px] text-ink-500">{label}</div>
+      <div className="text-[14px] tabular-nums text-ink-900">
         {value}
       </div>
     </div>
@@ -274,12 +274,12 @@ function Stat({ label, value }: { label: string; value: string }) {
 function StatusBadge({ status }: { status: string }) {
   const cls =
     status === "canceled"
-      ? "bg-brand-neutral/50 text-ink-muted"
+      ? "bg-brand-neutral/50 text-ink-500"
       : status === "completed"
         ? "bg-brand-navy text-white"
         : status === "active"
           ? "bg-brand-lavender text-white"
-          : "bg-brand-cream text-brand-navy ring-1 ring-inset ring-brand-dusty";
+          : "bg-brand-cream text-ink-900 ring-1 ring-inset ring-brand-dusty";
   return (
     <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${cls}`}>
       {status.replace(/_/g, " ")}
@@ -313,7 +313,7 @@ const SCHEDULE_PILL: Record<ScheduleDisplayStatus, { label: string; cls: string 
   paid: { label: "Paid", cls: "bg-brand-purple text-white" },
   processing: { label: "Processing", cls: "bg-amber-100 text-amber-800" },
   failed: { label: "Failed", cls: "bg-red-100 text-red-700" },
-  canceled: { label: "Canceled", cls: "bg-brand-neutral/60 text-ink-muted" },
+  canceled: { label: "Canceled", cls: "bg-brand-neutral/60 text-ink-500" },
   scheduled: { label: "Scheduled", cls: "border border-brand-lavender bg-white text-brand-purple" },
 };
 

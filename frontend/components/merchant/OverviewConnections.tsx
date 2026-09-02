@@ -93,9 +93,9 @@ function Row({
   right: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3.5 border-b border-sand-100 py-6 last:border-b-0">
-      <div className="flex items-center justify-between gap-5">
-        <div className="text-[19px] font-medium tracking-[-0.012em] text-ink-900">
+    <div className="flex flex-col gap-3.5 border-b border-sand-100 py-4 last:border-b-0">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[14px] tracking-[-0.012em] text-ink-900">
           {label}
         </div>
         <div className="flex flex-none items-center gap-2">
@@ -104,7 +104,7 @@ function Row({
         </div>
       </div>
       {subtext ? (
-        <div className="truncate text-base text-ink-400">{subtext}</div>
+        <div className="truncate text-[14px] text-ink-500">{subtext}</div>
       ) : null}
     </div>
   );
@@ -112,7 +112,7 @@ function Row({
 
 function ConnectedTag() {
   return (
-    <span className="inline-flex items-center gap-1 text-base font-medium text-brand-violet">
+    <span className="inline-flex items-center gap-1 text-[14px] text-brand-violet">
       <CheckIcon className="h-4 w-4" />
       Connected
     </span>
@@ -139,7 +139,7 @@ function SetUp({ href }: { href: string }) {
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-2 text-base text-ink-400 no-underline transition-colors hover:text-brand-violet hover:no-underline"
+      className="inline-flex items-center gap-2 text-[14px] text-ink-500 no-underline transition-colors hover:text-brand-violet hover:no-underline"
     >
       <span className="h-1.5 w-1.5 rounded-full bg-sand-500" aria-hidden="true" />
       Not connected · Set up

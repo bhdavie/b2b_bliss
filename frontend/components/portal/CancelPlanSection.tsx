@@ -50,10 +50,10 @@ export function CancelPlanSection({
   if (refundability === "nonrefundable") {
     return (
       <div className="space-y-2">
-        <p className="text-sm text-ink-700">
+        <p className="text-[13px] text-ink-900">
           This rate is non-refundable per the hotel&apos;s policy.
         </p>
-        <p className="text-sm text-ink-500">
+        <p className="text-[13px] text-ink-500">
           The amount already paid is not returned, so this plan cannot be
           cancelled here. Reach out to the hotel directly with any questions.
         </p>
@@ -99,7 +99,7 @@ export function CancelPlanSection({
   if (!confirming) {
     return (
       <div className="space-y-2">
-        <p className="text-sm text-ink-500">
+        <p className="text-[13px] text-ink-500">
           {inWindow
             ? "You are more than 48 hours before arrival, so cancelling returns your full payment."
             : "You are within 48 hours of arrival. Your refund follows the hotel's policy and the Bliss processing fee is not returned."}
@@ -118,18 +118,18 @@ export function CancelPlanSection({
   return (
     <div className="space-y-3 rounded-xl border border-sand-200 bg-sand-50 p-4">
       <div>
-        <div className="text-[11px] text-ink-400">
+        <div className="text-[11px] text-ink-500">
           Refund {inWindow ? "(includes the Bliss fee)" : "(per the hotel policy)"}
         </div>
         <div className="mt-1 text-2xl font-semibold tabular-nums text-ink-900">
           {formatDollars(refundCents)}
         </div>
       </div>
-      <p className="text-xs text-ink-500">
+      <p className="text-[13px] text-ink-500">
         Cancelling stops every remaining installment. This figure is what you
         are due back. We will sort the refund out for you.
       </p>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-[13px] text-red-600">{error}</p> : null}
       <div className="flex gap-2">
         <Button
           type="button"

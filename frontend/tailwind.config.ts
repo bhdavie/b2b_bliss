@@ -181,7 +181,19 @@ const config: Config = {
         // Large panels. Named `panel` rather than `xl` so Tailwind's stock
         // rounded-xl is not shadowed. Buttons use the stock rounded-full,
         // which renders identically to the design's 100px at these heights.
-        panel: "20px",
+        //
+        // 8px, down from 20px. At 20px the corner was doing more work than the
+        // fill: on a screen of stacked cards the radius read as the dominant
+        // shape rather than the content. 8px is the LinkedIn/Stripe register,
+        // where a card is a rectangle with the corner taken off rather than a
+        // rounded tile. One token, so every card in every surface moves
+        // together, the onboarding funnel and the auth screens included.
+        panel: "8px",
+        // App and portal cards. 6px: 8px read as a rounded tile and 4px read
+        // as a hard cut, so this sits between them. `panel` stays at 8px
+        // because the onboarding funnel and the auth screens keep their softer
+        // treatment, and those share the Panel component.
+        card: "6px",
       },
       // All four are brand colours at an alpha. They read from `palette` via
       // `channels()` rather than repeating a triplet, so `brand.navy` and

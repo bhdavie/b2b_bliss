@@ -116,8 +116,8 @@ export function UpdateCardSection({
         aria-haspopup="dialog"
         className={
           variant === "block"
-            ? "rounded-full border border-sand-500 p-4 text-center text-base font-medium tracking-[-0.01em] text-brand-violet transition-colors hover:bg-sand-50"
-            : "flex-none text-[15px] text-brand-violet underline-offset-2 hover:underline"
+            ? "rounded-full border border-sand-500 p-4 text-center text-[14px] tracking-[-0.01em] text-brand-violet transition-colors hover:bg-sand-50"
+            : "flex-none text-[13px] text-brand-violet underline-offset-2 hover:underline"
         }
       >
         Update card
@@ -139,9 +139,9 @@ export function UpdateCardSection({
                 aria-modal="true"
                 aria-labelledby={titleId}
                 tabIndex={-1}
-                className="relative flex max-h-[calc(100vh-48px)] w-full max-w-[480px] flex-col overflow-y-auto rounded-panel bg-white p-8 focus:outline-none"
+                className="relative flex max-h-[calc(100vh-48px)] w-full max-w-[480px] flex-col overflow-y-auto rounded-card bg-white p-6 focus:outline-none"
               >
-                <div className="mb-6 flex items-start justify-between gap-4">
+                <div className="mb-3 flex items-start justify-between gap-3">
                   <div id={titleId}>
                     <SectionHeading>Replace card</SectionHeading>
                   </div>
@@ -192,7 +192,7 @@ export function UpdateCardSection({
                     </label>
                   </div>
                   {error ? (
-                    <div role="alert" className="text-xs text-red-700">
+                    <div role="alert" className="text-[13px] text-red-700">
                       {error}
                     </div>
                   ) : null}

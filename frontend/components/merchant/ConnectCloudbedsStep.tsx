@@ -34,7 +34,7 @@ export function ConnectCloudbedsStep({
 
   if (alreadyConnected) {
     return (
-      <Panel variant="filled" className="mx-auto w-full max-w-[560px] items-center gap-5 px-10 pb-10 pt-9 text-center">
+      <Panel radius="panel" variant="filled" className="mx-auto w-full max-w-[560px] items-center gap-5 px-10 pb-10 pt-9 text-center">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-violet text-xl text-white">
           ✓
         </div>
@@ -60,7 +60,7 @@ export function ConnectCloudbedsStep({
   }
 
   return (
-    <Panel variant="filled" className="px-8 pb-8 pt-[30px]">
+    <Panel radius="panel" variant="filled" className="px-8 pb-8 pt-[30px]">
       <h2 className="text-2xl font-medium tracking-[-0.02em] text-ink-900">Connect Cloudbeds</h2>
       <p className="mt-2.5 max-w-[760px] text-[17px] leading-[1.55] text-ink-500">
         Authorize Bliss in your Cloudbeds account. You will be sent to Cloudbeds to sign in

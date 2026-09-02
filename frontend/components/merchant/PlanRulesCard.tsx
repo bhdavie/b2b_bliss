@@ -165,7 +165,7 @@ export function PlanRulesCard({
     // section it reveals. Drawing one here would nest a white card inside a
     // white card. Padding comes from the tab card too, so only the form's own
     // row rhythm survives.
-    <div className="flex flex-col gap-7">
+    <div className="flex flex-col gap-6">
       {/* No heading: the tab row above IS this card's head, and the active tab
           already says "Plan rules". A heading here repeated it verbatim. */}
     <form onSubmit={handleSubmit} className="flex flex-col gap-8">
@@ -274,7 +274,7 @@ export function PlanRulesCard({
                 }`}
               />
             </span>
-            <span className="text-sm text-ink-900">
+            <span className="text-[13px] text-ink-900">
               Require a deposit at booking
             </span>
           </label>
@@ -321,7 +321,7 @@ export function PlanRulesCard({
                 />
               </div>
 
-              <p className="text-[11px] text-ink-400 leading-snug">
+              <p className="text-[11px] text-ink-500 leading-[1.4]">
                 {form.depositType === "percentage"
                   ? "A percentage of the booking total is charged at signup. The optional cap protects against runaway deposits on big-ticket bookings."
                   : "A fixed dollar amount is charged at signup. If the booking total is smaller than the deposit, the plan flow rejects so you don't accidentally charge above the booking price."}
@@ -348,13 +348,13 @@ export function PlanRulesCard({
       </Row>
 
       {error ? (
-        <div className="text-base text-red-700" role="alert">
+        <div className="text-[14px] text-red-700" role="alert">
           {error}
         </div>
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-4 border-t border-sand-100 pt-6">
-        <div className="text-[17px] text-ink-400">
+        <div className="text-[14px] text-ink-500">
           {savedAt ? "Rules saved" : "Customers see these on their hosted page."}
         </div>
         <button
@@ -427,9 +427,9 @@ function Row({
   return (
     <section className="grid gap-3 sm:grid-cols-[180px_1fr]">
       <div>
-        <div className="text-[19px] font-medium tracking-[-0.012em] text-ink-900">{label}</div>
+        <div className="text-[14px] tracking-[-0.012em] text-ink-900">{label}</div>
         {hint ? (
-          <div className="mt-2 text-base leading-[1.5] text-ink-400">{hint}</div>
+          <div className="mt-2 text-[14px] leading-[1.4] text-ink-500">{hint}</div>
         ) : null}
       </div>
       <div>{children}</div>
@@ -452,7 +452,7 @@ function NumberInput({
 }) {
   return (
     <label className="block">
-      <span className="text-base text-ink-500">{label}</span>
+      <span className="text-[14px] text-ink-500">{label}</span>
       <Input
         type="number"
         inputMode="numeric"
@@ -479,10 +479,10 @@ function DollarInput({
 }) {
   return (
     <label className="block">
-      <span className="text-base text-ink-500">{label}</span>
+      <span className="text-[14px] text-ink-500">{label}</span>
       <div className="relative mt-1.5">
         <span
-          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-ink-400"
+          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[13px] text-ink-500"
           aria-hidden="true"
         >
           $
@@ -517,7 +517,7 @@ function PercentInput({
 }) {
   return (
     <label className="block">
-      <span className="text-base text-ink-500">{label}</span>
+      <span className="text-[14px] text-ink-500">{label}</span>
       <div className="relative mt-1.5">
         <Input
           type="number"
@@ -530,7 +530,7 @@ function PercentInput({
           placeholder={placeholder}
         />
         <span
-          className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-ink-400"
+          className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[13px] text-ink-500"
           aria-hidden="true"
         >
           %
@@ -564,10 +564,10 @@ function FrequencyOption({
           : "border border-sand-200 bg-white hover:border-brand-violet"
       }`}
     >
-      <div className={`text-sm font-medium ${selected ? "text-brand-violet" : "text-ink-900"}`}>
+      <div className={`text-[13px] ${selected ? "text-brand-violet" : "text-ink-900"}`}>
         {label}
       </div>
-      <div className="mt-0.5 text-xs text-ink-400 leading-snug">{body}</div>
+      <div className="mt-0.5 text-[13px] text-ink-500 leading-[1.4]">{body}</div>
       <input
         type="radio"
         name="allowed_frequencies"
@@ -595,7 +595,7 @@ function PillToggle({
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      className={`rounded-md py-2 text-sm transition-colors ${
+      className={`rounded-md py-2 text-[13px] transition-colors ${
         selected
           ? "border border-brand-violet bg-brand-violet-tint text-brand-violet"
           : "border border-sand-200 bg-white text-ink-900 hover:border-brand-violet"

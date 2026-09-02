@@ -43,7 +43,7 @@ export function PlanDetailActions({ plan }: { plan: PlanDetail }) {
   }
 
   return (
-    <Panel variant="filled" className="space-y-4 px-7 py-[30px]">
+    <Panel variant="filled" className="space-y-4 p-5">
       <SectionHeading>Take action</SectionHeading>
       <div className="flex flex-wrap gap-2">
         <Button
@@ -76,7 +76,7 @@ export function PlanDetailActions({ plan }: { plan: PlanDetail }) {
       </div>
 
       <details className="border-t border-brand-neutral pt-3">
-        <summary className="cursor-pointer text-xs text-ink-muted">
+        <summary className="cursor-pointer text-[13px] text-ink-500">
           Override state (admin)
         </summary>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -98,7 +98,7 @@ export function PlanDetailActions({ plan }: { plan: PlanDetail }) {
       </details>
 
       <details className="border-t border-brand-neutral pt-3">
-        <summary className="cursor-pointer text-xs text-ink-muted">
+        <summary className="cursor-pointer text-[13px] text-ink-500">
           Dev-mode failure simulation
         </summary>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -124,7 +124,7 @@ export function PlanDetailActions({ plan }: { plan: PlanDetail }) {
       </details>
 
       {error ? (
-        <div className="text-xs text-red-600" role="alert">
+        <div className="text-[13px] text-red-600" role="alert">
           {error}
         </div>
       ) : null}

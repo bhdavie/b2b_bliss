@@ -45,7 +45,7 @@ export function AccountSettings({
   connections: AccountConnections;
 }) {
   return (
-    <div className="flex max-w-[980px] flex-col">
+    <div className="flex flex-col">
       <AccountInformation initial={initial} />
 
       <StackedSection
@@ -207,11 +207,11 @@ function StackedSection({
   // its own heading now, so the tier is a tighter body padding under a normal
   // head rather than a panel that starts flush with a ruled row.
   return (
-    <section className="mb-7 flex flex-col">
-      <Panel variant="filled" className="px-7 pb-[30px] pt-[30px]">
-        <div className={`flex flex-col gap-2 ${helper ? "mb-5" : "mb-4"}`}>
+    <section className="mb-3 flex flex-col">
+      <Panel variant="filled" className="p-5">
+        <div className={`flex flex-col gap-1 ${helper ? "mb-4" : "mb-4"}`}>
           <SectionHeading>{title}</SectionHeading>
-          {helper ? <p className="text-[17px] text-ink-400">{helper}</p> : null}
+          {helper ? <p className="text-[14px] text-ink-500">{helper}</p> : null}
         </div>
         <div className={dense ? "-mb-[18px]" : ""}>{children}</div>
       </Panel>
@@ -233,20 +233,20 @@ function FieldRow({
   const [editing, setEditing] = useState(false);
   return (
     <div
-      className={`flex flex-col gap-2 py-6 ${last ? "" : "border-b border-sand-100"}`}
+      className={`flex flex-col gap-2 py-4 first:pt-0 ${last ? "" : "border-b border-sand-100"}`}
     >
       <FieldLabel>{label}</FieldLabel>
       {!editing ? (
         // The edit control sits beside its value, not at the row's far edge.
         <div className="flex items-baseline gap-[18px]">
-          <div className="min-w-0 whitespace-pre-line break-words text-xl tracking-[-0.012em] text-ink-900">
+          <div className="min-w-0 whitespace-pre-line break-words text-[14px] text-ink-900">
             {display !== "" ? display : <span className="text-ink-300">Not set</span>}
           </div>
           <button
             type="button"
             onClick={() => setEditing(true)}
             aria-label={`Edit ${label.toLowerCase()}`}
-            className="flex-none text-base font-medium text-brand-violet transition-colors hover:text-brand-violet-deep"
+            className="flex-none text-[14px] text-brand-violet transition-colors hover:text-brand-violet-deep"
           >
             Edit
           </button>
@@ -260,13 +260,13 @@ function FieldRow({
 
 function LockedRow({ label, display }: { label: string; display: string }) {
   return (
-    <div className="flex flex-col gap-2 border-b border-sand-100 py-6">
+    <div className="flex flex-col gap-2 border-b border-sand-100 py-4">
       <FieldLabel>{label}</FieldLabel>
       <div className="flex items-baseline gap-[18px]">
-        <div className="min-w-0 break-words text-xl tracking-[-0.012em] text-ink-900">
+        <div className="min-w-0 break-words text-[14px] text-ink-900">
           {display}
         </div>
-        <span className="flex flex-none items-center gap-[7px] text-[15px] text-ink-400">
+        <span className="flex flex-none items-center gap-[7px] text-[13px] text-ink-500">
           <LockIcon className="h-3.5 w-3.5" />
           Locked
         </span>
@@ -277,7 +277,7 @@ function LockedRow({ label, display }: { label: string; display: string }) {
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-xs uppercase tracking-[0.08em] text-ink-400">
+    <div className="text-[12px] uppercase tracking-[0.08em] text-ink-500">
       {children}
     </div>
   );
@@ -384,7 +384,7 @@ function Input({
       maxLength={maxLength}
       autoComplete={autoComplete}
       autoFocus={autoFocus}
-      className="w-full rounded-md border border-sand-200 bg-white px-3 py-2.5 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-violet focus:outline-none focus:shadow-focus-ring"
+      className="w-full rounded-md border border-sand-200 bg-white px-3 py-2.5 text-[13px] text-ink-900 placeholder:text-ink-500 focus:border-brand-violet focus:outline-none focus:shadow-focus-ring"
     />
   );
 }
@@ -445,7 +445,7 @@ function PropertyManagementSection({ connections }: { connections: AccountConnec
           }
         />
         {error ? (
-          <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+          <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</p>
         ) : null}
         <div className="mt-5 flex items-center gap-4">
           <Button href="/onboarding/connect-mews" variant="ghost">
@@ -455,7 +455,7 @@ function PropertyManagementSection({ connections }: { connections: AccountConnec
             type="button"
             onClick={handleDisconnect}
             disabled={disconnecting}
-            className="text-xs font-medium text-ink-400 transition-colors hover:text-brand-violet disabled:opacity-60"
+            className="text-[13px] text-ink-500 transition-colors hover:text-brand-violet disabled:opacity-60"
           >
             {disconnecting ? "Disconnecting" : "Disconnect"}
           </button>
@@ -498,7 +498,7 @@ function PropertyManagementSection({ connections }: { connections: AccountConnec
   if (pmsType === "cloudbeds") {
     return (
       <div>
-        <p className="text-sm text-ink-500">
+        <p className="text-[13px] text-ink-500">
           Authorize Bliss in your Cloudbeds account to charge cards through Cloudbeds.
         </p>
         {/* OAuth start: full-page navigation to the backend endpoint. */}
@@ -529,14 +529,14 @@ function ConnectedHeader({ provider, subtext }: { provider: { name: string; logo
     <div className="flex items-center gap-4">
       <ProviderLogo provider={provider} className="h-10" />
       <div>
-        <div className="flex items-center gap-2 text-lg font-semibold text-ink-900">
+        <div className="flex items-center gap-2 text-[14px] font-semibold text-ink-900">
           {provider.name}
           <span className="inline-flex items-center gap-1 text-brand-violet">
             <CheckIcon className="h-3.5 w-3.5" />
             Connected
           </span>
         </div>
-        <div className="mt-0.5 text-sm text-ink-500">{subtext}</div>
+        <div className="mt-0.5 text-[13px] text-ink-500">{subtext}</div>
       </div>
     </div>
   );
@@ -546,7 +546,7 @@ function ConnectedHeader({ provider, subtext }: { provider: { name: string; logo
 function ConnectPrompt({ text, href, label }: { text: string; href: string; label: string }) {
   return (
     <div>
-      <p className="text-sm text-ink-500">{text}</p>
+      <p className="text-[13px] text-ink-500">{text}</p>
       <Button href={href} variant="merchant" className="mt-5 inline-block">
         {label}
       </Button>

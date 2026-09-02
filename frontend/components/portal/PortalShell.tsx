@@ -46,7 +46,7 @@ export function PortalShell({
   // its own cards. See the note in app/(merchant)/(authenticated)/layout.tsx
   // for why this lives on the shell rather than on globals.css body.
   return (
-    <div className="min-h-screen bg-sand-100 font-inter text-ink-900">
+    <div className="min-h-screen bg-sand-100 font-inter text-[14px] font-normal leading-[1.4] text-ink-900">
       <aside className="flex flex-col justify-between border-sand-200 bg-sand-50 py-[34px] md:fixed md:inset-y-0 md:left-0 md:w-[264px] md:border-r">
         <div className="flex flex-col">
           <div className="flex flex-col gap-[5px] px-7 pb-10">
@@ -106,7 +106,7 @@ export function PortalShell({
             titles. /plan/[token] was the last route here with a title of its
             own; it moved into its first card, so every portal route now opens
             straight onto a card at the same offset. */}
-        <div className="mx-auto max-w-[1136px] px-6 pt-10 xl:px-16">
+        <div className="mx-auto max-w-[1320px] px-4 pt-6 xl:px-6">
           {children}
         </div>
       </main>

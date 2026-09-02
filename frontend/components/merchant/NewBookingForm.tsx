@@ -92,11 +92,11 @@ export function NewBookingForm({
   }
 
   return (
-    <form className="grid gap-6 md:grid-cols-[1fr_320px]" onSubmit={handleSubmit}>
+    <form className="grid gap-3 md:grid-cols-[1fr_320px]" onSubmit={handleSubmit}>
       {/* `head` is the back link, title and helper this page used to float on
           the sand ground above the form. They belong to the form, so they open
           the form's own card. */}
-      <section className="card space-y-4 p-6">
+      <section className="space-y-3 rounded-card border border-sand-200 bg-white p-5">
         {head}
         <label className="block">
           <span className="label">Service name</span>
@@ -170,7 +170,7 @@ export function NewBookingForm({
         </label>
 
         {error ? (
-          <div className="text-xs text-red-600" role="alert">
+          <div className="text-[13px] text-red-600" role="alert">
             {error}
           </div>
         ) : null}
@@ -197,7 +197,7 @@ export function NewBookingForm({
       {/* card, not card-subtle: card-subtle fills sand-50, which on the sand-100
           page ground reads as a tinted region rather than as a card. Every
           surface holding content in this app is white. */}
-      <aside className="card space-y-3 p-4">
+      <aside className="self-start space-y-3 rounded-card border border-sand-200 bg-white p-5">
         <SectionHeading className="mb-1">Plan preview</SectionHeading>
         <EligibilityPreview
           totalCents={totalCents}
@@ -220,7 +220,7 @@ function EligibilityPreview({
 }) {
   if (!appointmentDate || totalCents === null) {
     return (
-      <p className="text-xs text-ink-muted">
+      <p className="text-[13px] text-ink-500">
         Pick a date and total to see the eligible plans.
       </p>
     );
@@ -232,18 +232,18 @@ function EligibilityPreview({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-ink-muted">
+      <p className="text-[13px] text-ink-500">
         {preview.daysToAppointment} days out.{" "}
         {preview.options.length === 1
           ? "One plan option offered."
           : "Two plan options offered."}
       </p>
       {preview.depositAmountCents > 0 ? (
-        <div className="rounded-md border border-brand-purple/20 bg-brand-purple text-white px-3 py-2 text-xs">
+        <div className="rounded-md border border-brand-purple/20 bg-brand-purple text-white px-3 py-2 text-[13px]">
           <div className="text-[10px] text-white/80">
             Deposit today
           </div>
-          <div className="mt-0.5 text-[14px] font-medium tabular-nums">
+          <div className="mt-0.5 text-[14px] tabular-nums">
             {formatCents(preview.depositAmountCents)}
           </div>
         </div>
@@ -251,7 +251,7 @@ function EligibilityPreview({
       {preview.options.map((opt) => (
         <div
           key={opt.frequency}
-          className={`relative rounded-md border p-3 text-xs ${
+          className={`relative rounded-md border p-3 text-[13px] ${
             opt.recommended
               ? "border-brand-purple bg-brand-lavender/20"
               : "border-brand-neutral bg-white"
@@ -270,21 +270,21 @@ function EligibilityPreview({
             >
               {opt.frequency}
             </div>
-            <div className="text-ink-muted">{opt.numPayments} payments</div>
+            <div className="text-ink-500">{opt.numPayments} payments</div>
           </div>
-          <div className="mt-1 text-ink-muted">
+          <div className="mt-1 text-ink-500">
             {opt.numPayments - 1} of {formatCents(opt.perPaymentAmountCents)}
             {opt.finalPaymentAmountCents !== opt.perPaymentAmountCents
               ? ` then ${formatCents(opt.finalPaymentAmountCents)}`
               : ""}
           </div>
-          <div className="mt-2 text-[11px] text-ink-muted">
+          <div className="mt-2 text-[11px] text-ink-500">
             First: {formatScheduleDate(opt.dueDates[0] ?? "")} · Last:{" "}
             {formatScheduleDate(opt.dueDates[opt.dueDates.length - 1] ?? "")}
           </div>
         </div>
       ))}
-      <p className="text-[11px] text-ink-muted">
+      <p className="text-[11px] text-ink-500">
         Final payment lands at least 3 days before the appointment so any retry
         clears before your date.
       </p>
@@ -300,7 +300,7 @@ function IneligibleHint({
   switch (preview.reason) {
     case "too_close":
       return (
-        <p className="text-xs text-ink-muted">
+        <p className="text-[13px] text-ink-500">
           This date is in <strong>{preview.daysToAppointment} days</strong>,
           inside your minimum lead time. Customer will be prompted to pay
           directly.
@@ -308,35 +308,35 @@ function IneligibleHint({
       );
     case "too_far":
       return (
-        <p className="text-xs text-ink-muted">
+        <p className="text-[13px] text-ink-500">
           This date is past your maximum lead time. Customer will be prompted
           to pay directly.
         </p>
       );
     case "amount_too_low":
       return (
-        <p className="text-xs text-ink-muted">
+        <p className="text-[13px] text-ink-500">
           Total is below your plan minimum. Customer will be prompted to pay
           in full.
         </p>
       );
     case "amount_too_high":
       return (
-        <p className="text-xs text-ink-muted">
+        <p className="text-[13px] text-ink-500">
           Total is above your plan maximum. Customer will be prompted to pay
           in full.
         </p>
       );
     case "deposit_too_high":
       return (
-        <p className="text-xs text-ink-muted">
+        <p className="text-[13px] text-ink-500">
           Your fixed deposit exceeds this booking total. Lower the deposit or
           set a max cap in plan rules.
         </p>
       );
     case "no_plan_fits":
       return (
-        <p className="text-xs text-ink-muted">
+        <p className="text-[13px] text-ink-500">
           No allowed cadence fits before this date. Try widening the lead time
           or enabling another frequency in plan rules.
         </p>
@@ -345,7 +345,7 @@ function IneligibleHint({
     case "ok":
     default:
       return (
-        <p className="text-xs text-ink-muted">
+        <p className="text-[13px] text-ink-500">
           Pick a date in the future to preview the plan.
         </p>
       );

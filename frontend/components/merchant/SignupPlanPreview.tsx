@@ -96,7 +96,7 @@ export function SignupPlanPreview() {
       {/* White, not the filled variant: the right panel it sits on is already
           sand-50, so a sand-50 card would vanish into it. Outlined keeps the
           sand-200 hairline and the 20px radius. */}
-      <Panel variant="outlined" className="bg-white px-7 py-[30px]">
+      <Panel radius="panel" variant="outlined" className="bg-white px-7 py-[30px]">
         {/* Plan progress. Decorative in the portal too: the two figures the bar
             encodes are printed underneath it. */}
         <div className="mb-9 flex flex-col gap-4">

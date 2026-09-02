@@ -57,12 +57,12 @@ export function PayEarlyButton({
           type="button"
           onClick={() => setOpen(true)}
           disabled={busy}
-          className="rounded-full bg-brand-violet p-[19px] text-center text-[17px] font-medium tracking-[-0.01em] text-white transition-colors hover:bg-brand-violet-deep disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-full bg-brand-violet p-[19px] text-center text-[14px] tracking-[-0.01em] text-white transition-colors hover:bg-brand-violet-deep disabled:cursor-not-allowed disabled:opacity-50"
         >
           Make a payment
         </button>
         {error ? (
-          <div role="alert" className="text-xs text-red-700">
+          <div role="alert" className="text-[13px] text-red-700">
             {error}
           </div>
         ) : null}
@@ -72,7 +72,7 @@ export function PayEarlyButton({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="text-sm leading-[1.55] text-ink-400">
+      <div className="text-[13px] leading-[1.4] text-ink-500">
         Pay your next payment or your full balance.
       </div>
       <div className="flex flex-col gap-2">
@@ -80,7 +80,7 @@ export function PayEarlyButton({
           type="button"
           onClick={() => charge("next")}
           disabled={busy}
-          className="rounded-full bg-brand-violet p-[19px] text-center text-[17px] font-medium tracking-[-0.01em] text-white transition-colors hover:bg-brand-violet-deep disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-full bg-brand-violet p-[19px] text-center text-[14px] tracking-[-0.01em] text-white transition-colors hover:bg-brand-violet-deep disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Charging…" : `Charge ${formatDollars(amount)}`}
         </button>
@@ -88,7 +88,7 @@ export function PayEarlyButton({
           type="button"
           onClick={() => charge("remaining")}
           disabled={busy}
-          className="rounded-full border border-sand-500 p-[17px] text-center text-[17px] font-medium tracking-[-0.01em] text-brand-violet transition-colors hover:bg-sand-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-full border border-sand-500 p-[17px] text-center text-[14px] tracking-[-0.01em] text-brand-violet transition-colors hover:bg-sand-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Pay full balance {formatDollars(remaining)}
         </button>
@@ -96,13 +96,13 @@ export function PayEarlyButton({
           type="button"
           onClick={() => setOpen(false)}
           disabled={busy}
-          className="rounded-full p-[15px] text-center text-[15px] font-medium tracking-[-0.01em] text-ink-500 transition-colors hover:bg-sand-50 disabled:opacity-50"
+          className="rounded-full p-[15px] text-center text-[13px] tracking-[-0.01em] text-ink-500 transition-colors hover:bg-sand-50 disabled:opacity-50"
         >
           Cancel
         </button>
       </div>
       {error ? (
-        <div role="alert" className="text-xs text-red-700">
+        <div role="alert" className="text-[13px] text-red-700">
           {error}
         </div>
       ) : null}

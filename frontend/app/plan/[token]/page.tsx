@@ -44,11 +44,11 @@ export default async function PlanPortalPage(props: {
             screen in either surface with no card at all. Now the same empty-state
             card the plan lists use, so a dead link lands on a surface rather
             than on the page background. */}
-        <Panel variant="filled" className="items-center px-10 py-16 text-center">
-          <div className="text-[22px] font-medium tracking-[-0.015em] text-ink-900">
+        <Panel variant="filled" className="items-center px-5 py-10 text-center">
+          <div className="text-[15px] font-medium text-ink-900">
             Plan not found
           </div>
-          <p className="mt-2.5 max-w-[420px] text-[17px] text-ink-500">
+          <p className="mt-2.5 max-w-[420px] text-[14px] text-ink-500">
             This link is no longer active or the plan has been canceled. If you
             think this is a mistake, contact the property that sent you the link.
           </p>

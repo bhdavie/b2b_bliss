@@ -24,13 +24,15 @@ export default async function AuthenticatedLayout({
   // transitional auth screens, several of which paint no ground of their own
   // and would inherit an app colour they are not part of.
   return (
-    <div className="min-h-screen bg-sand-100 font-inter text-ink-900">
+    <div className="min-h-screen bg-sand-100 font-inter text-[14px] font-normal leading-[1.4] text-ink-900">
       <Sidebar email={session.email} businessName={session.businessName} />
       <main className="md:pl-[264px]">
         {/* pt-10, down from pt-16. With the PageHeader gone the first card
             would otherwise have started 64px down with nothing above it, which
             reads as the header's empty socket rather than as breathing room. */}
-        <div className="mx-auto max-w-[1136px] px-6 pb-[72px] pt-10 xl:px-16">
+        {/* Column widened 1136 -> 1320 and page padding cut (24/64 -> 16/24) so the
+            cards fill the viewport instead of floating in sand. */}
+        <div className="mx-auto max-w-[1320px] px-4 pb-10 pt-6 xl:px-6">
           {children}
         </div>
       </main>

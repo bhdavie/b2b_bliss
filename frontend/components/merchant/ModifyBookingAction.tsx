@@ -98,9 +98,9 @@ export function ModifyBookingAction({
   // there.
   if (!open) {
     return (
-      <Panel variant="filled" className="items-start px-7 py-[30px]">
-        <SectionHeading className="mb-2.5">Modify booking</SectionHeading>
-        <p className="mb-5 text-[17px] leading-[1.55] text-ink-400">
+      <Panel variant="filled" className="items-start p-5">
+        <SectionHeading className="mb-4">Modify booking</SectionHeading>
+        <p className="mb-3 text-[14px] leading-[1.4] text-ink-500">
           Change the dates or total. Paid and in-progress installments are kept;
           only the remaining schedule is rebuilt. Preview before you confirm.
         </p>
@@ -112,38 +112,38 @@ export function ModifyBookingAction({
   }
 
   return (
-    <Panel variant="filled" className="px-7 py-[30px]">
-      <SectionHeading className="mb-2.5">Modify booking</SectionHeading>
-      <p className="text-[17px] leading-[1.55] text-ink-400">
+    <Panel variant="filled" className="p-5">
+      <SectionHeading className="mb-4">Modify booking</SectionHeading>
+      <p className="text-[14px] leading-[1.4] text-ink-500">
         Change the dates or total. Paid and in-progress installments are kept; only the
         remaining schedule is rebuilt. Preview before you confirm.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <label className="block">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-brand-navy/55">
+          <span className="text-[12px] uppercase tracking-[0.08em] text-ink-500">
             Check-in
           </span>
           <input
             type="date"
             value={appt}
             onChange={(e) => setAppt(e.target.value)}
-            className="mt-1 w-full border border-brand-neutral px-2 py-1.5 text-sm"
+            className="mt-1 w-full border border-brand-neutral px-2 py-1.5 text-[13px]"
           />
         </label>
         <label className="block">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-brand-navy/55">
+          <span className="text-[12px] uppercase tracking-[0.08em] text-ink-500">
             Check-out
           </span>
           <input
             type="date"
             value={checkout}
             onChange={(e) => setCheckout(e.target.value)}
-            className="mt-1 w-full border border-brand-neutral px-2 py-1.5 text-sm"
+            className="mt-1 w-full border border-brand-neutral px-2 py-1.5 text-[13px]"
           />
         </label>
         <label className="block">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-brand-navy/55">
+          <span className="text-[12px] uppercase tracking-[0.08em] text-ink-500">
             Total ($)
           </span>
           <input
@@ -152,13 +152,13 @@ export function ModifyBookingAction({
             min="0"
             value={totalDollars}
             onChange={(e) => setTotalDollars(e.target.value)}
-            className="mt-1 w-full border border-brand-neutral px-2 py-1.5 text-sm tabular-nums"
+            className="mt-1 w-full border border-brand-neutral px-2 py-1.5 text-[13px] tabular-nums"
           />
         </label>
       </div>
 
       {error ? (
-        <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</p>
       ) : null}
 
       {preview ? (
@@ -166,8 +166,8 @@ export function ModifyBookingAction({
           <div className="text-[11px] font-semibold uppercase tracking-wide text-brand-purple">
             {preview.outcome === "REFUND_DUE" ? "Preview · refund due" : "Preview · rebuilt schedule"}
           </div>
-          <p className="mt-1 text-sm text-brand-navy">{preview.message}</p>
-          <div className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+          <p className="mt-1 text-[13px] text-ink-900">{preview.message}</p>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-[13px] sm:grid-cols-4">
             <Stat label="Collected" value={formatDollars(preview.collectedCents)} />
             <Stat label="Remaining" value={formatDollars(preview.remainingToCollectCents)} />
             {preview.overpaidCents > 0 ? (
@@ -177,12 +177,12 @@ export function ModifyBookingAction({
           </div>
           <ol className="mt-3 divide-y divide-brand-neutral border-t border-brand-neutral">
             {preview.schedule.map((r) => (
-              <li key={r.sequence} className="flex items-center justify-between py-1.5 text-xs">
-                <span className="text-brand-navy/70">
+              <li key={r.sequence} className="flex items-center justify-between py-1.5 text-[13px]">
+                <span className="text-ink-500">
                   #{r.sequence} · {formatScheduleDateShort(r.dueDate)} ·{" "}
                   <span className="uppercase">{r.status}</span>
                 </span>
-                <span className="tabular-nums text-brand-navy">{formatDollars(r.amountCents)}</span>
+                <span className="tabular-nums text-ink-900">{formatDollars(r.amountCents)}</span>
               </li>
             ))}
           </ol>
@@ -217,7 +217,7 @@ export function ModifyBookingAction({
             setError(null);
           }}
           disabled={busy !== null}
-          className="text-xs font-medium text-brand-navy/60 hover:text-brand-purple disabled:opacity-60"
+          className="text-[13px] text-ink-500 hover:text-brand-purple disabled:opacity-60"
         >
           Cancel
         </button>
@@ -229,8 +229,8 @@ export function ModifyBookingAction({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="border border-brand-neutral bg-white px-2.5 py-1.5">
-      <div className="text-[10px] uppercase tracking-wide text-brand-navy/55">{label}</div>
-      <div className="mt-0.5 text-sm font-semibold tabular-nums text-ink">{value}</div>
+      <div className="text-[12px] uppercase tracking-[0.08em] text-ink-500">{label}</div>
+      <div className="mt-0.5 text-[13px] font-semibold tabular-nums text-ink-900">{value}</div>
     </div>
   );
 }

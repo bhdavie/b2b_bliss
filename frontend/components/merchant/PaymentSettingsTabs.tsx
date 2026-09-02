@@ -39,12 +39,23 @@ export function PaymentSettingsTabs({ planRules }: { planRules: PlanRules }) {
   const [tab, setTab] = useState<TabKey>("rules");
 
   return (
-    <Panel variant="filled" className="overflow-hidden px-7 pt-[26px]">
+    <Panel variant="filled" className="overflow-hidden p-5">
       {/* Full-bleed rule: the row is pulled out to the card's edges so its
           underline reads as a divider across the card rather than a hairline
           floating inside it, then the buttons are pushed back onto the card's
-          own padding. */}
-      <div className="-mx-7 flex gap-9 overflow-x-auto border-b border-sand-200 px-7">
+          own padding.
+
+          flex-wrap, not overflow-x-auto. The row was nowrap and scrolled, but
+          the Panel clips its overflow, so below about 1280px the last tab
+          ("Failed payment handling") was simply cut off at the card edge with
+          no way to reach it: 78px lost at 1280, 178px at 1100. Wrapping keeps
+          every tab reachable at any width instead of hiding the rightmost one.
+          The column gap drops 36px -> 24px so wrapping is rarer to begin with.
+
+          pt-6 (24px) against the card's own px-5/py-3: 4px MORE headroom than a
+          normal card, because the row's full-bleed rule reads as a header strip
+          and needs to sit clear of the top edge rather than flush against it. */}
+      <div className="-mx-5 flex flex-wrap gap-x-5 border-b border-sand-200 px-5">
         {TABS.map((t) => {
           const active = tab === t.key;
           return (
@@ -53,10 +64,10 @@ export function PaymentSettingsTabs({ planRules }: { planRules: PlanRules }) {
               type="button"
               onClick={() => setTab(t.key)}
               aria-pressed={active}
-              className={`whitespace-nowrap px-0.5 pb-4 text-[17px] transition-colors ${
+              className={`whitespace-nowrap px-0.5 pb-4 text-[14px] transition-colors ${
                 active
                   ? "font-medium tracking-[-0.01em] text-brand-violet shadow-[inset_0_-2px_0_#8B5CF6]"
-                  : "text-ink-400 hover:text-ink-900"
+                  : "text-ink-500 hover:text-ink-900"
               }`}
             >
               {t.label}
@@ -65,7 +76,7 @@ export function PaymentSettingsTabs({ planRules }: { planRules: PlanRules }) {
         })}
       </div>
 
-      <div className="pb-[30px] pt-8">
+      <div className="pt-4">
         {tab === "rules" ? <PlanRulesCard initial={planRules} /> : null}
         {tab === "blackout" ? <BlackoutDatesCard initial={planRules} /> : null}
         {tab === "cancellation" ? (

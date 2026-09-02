@@ -40,19 +40,19 @@ export default async function InstallPage() {
   const pms = session.pmsType;
 
   return (
-    <div className="flex max-w-[1000px] flex-col">
+    <div className="flex flex-col">
       {/* The page's orienting line used to float above this card as a
           PageLead. It moved inside, because the card it was floating over is
           the one that answers it: the lead says Bliss goes into your booking
           engine, and the line under it names which engine is yours. Two
           sentences of the same thought, now on the same surface. */}
-      <Panel variant="filled" className="mb-7 gap-4 px-7 py-[30px]">
+      <Panel variant="filled" className="mb-3 gap-3 p-5">
         <SectionHeading className="mb-1">Your booking engine</SectionHeading>
-        <p className="text-lg leading-[1.55] text-ink-500">
+        <p className="text-[14px] leading-[1.4] text-ink-900">
           Add Bliss to your booking engine so guests see a payment plan while
           they book.
         </p>
-        <p className="text-lg leading-[1.55] text-ink-500">
+        <p className="text-[14px] leading-[1.4] text-ink-900">
           Bliss installs differently depending on which system takes your
           bookings. Yours is set up for{" "}
           <span className="font-medium text-ink-900">
@@ -68,11 +68,11 @@ export default async function InstallPage() {
 
       {pms === "mews" ? (
         <>
-          <Panel variant="filled" className="px-7 py-[30px]">
-            <SectionHeading className="mb-2.5">
+          <Panel variant="filled" className="p-5">
+            <SectionHeading className="mb-4">
               Add Bliss through Google Tag Manager
             </SectionHeading>
-            <p className="mb-6 max-w-[760px] text-[17px] leading-[1.55] text-ink-400">
+            <p className="mb-3 max-w-[760px] text-[14px] leading-[1.4] text-ink-500">
               This snippet carries your property&apos;s own identifier, so it
               picks up your plan rules automatically. If you change your plan
               settings later, the snippet does not need updating.
@@ -85,7 +85,7 @@ export default async function InstallPage() {
                   className="grid grid-cols-[36px_minmax(0,1fr)] gap-x-[22px]"
                 >
                   <div className="flex flex-col items-center">
-                    <div className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-brand-violet text-base font-semibold text-white">
+                    <div className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-brand-violet text-[14px] font-semibold text-white">
                       {i + 1}
                     </div>
                     {isLast ? null : (
@@ -93,7 +93,7 @@ export default async function InstallPage() {
                     )}
                   </div>
                   <div
-                    className={`text-[19px] leading-[1.45] text-ink-900 ${
+                    className={`text-[14px] leading-[1.4] text-ink-900 ${
                       isLast ? "pt-1.5" : "pb-[26px] pt-1.5"
                     }`}
                   >
@@ -113,13 +113,13 @@ export default async function InstallPage() {
 
       {pms === "cloudbeds" ? (
         <>
-          <Panel variant="filled" className="px-7 py-[30px]">
-            <SectionHeading className="mb-5">Add Bliss to your booking engine</SectionHeading>
+          <Panel variant="filled" className="p-5">
+            <SectionHeading className="mb-4">Add Bliss to your booking engine</SectionHeading>
             {/* The Cloudbeds equivalent is Booking Engine Extensions rather than
                 a Tag Manager container, so the snippet shape and the injection
                 point both differ from Mews. Not built yet; no snippet is shown
                 rather than one that would not load. */}
-            <p className="text-lg leading-[1.55] text-ink-500">
+            <p className="text-[14px] leading-[1.4] text-ink-900">
               The Cloudbeds install uses Booking Engine Extensions rather than a
               tag container. We are still building it, so there is nothing to
               paste yet. We will be in touch as soon as it is ready.
@@ -135,14 +135,14 @@ export default async function InstallPage() {
           default changed would have shown a new property nothing at all. */}
       {pms === "none" || pms === "stripe" ? (
         <>
-          <Panel variant="filled" className="gap-4 px-7 py-[30px]">
-            <SectionHeading className="mb-5">Add Bliss to your booking engine</SectionHeading>
-            <p className="text-lg leading-[1.55] text-ink-500">
+          <Panel variant="filled" className="gap-3 p-5">
+            <SectionHeading className="mb-4">Add Bliss to your booking engine</SectionHeading>
+            <p className="text-[14px] leading-[1.4] text-ink-900">
               You have not connected a booking engine yet, so there is nothing
               to install. Your guests can still pay over time through the
               payment links you send them.
             </p>
-            <p className="text-lg leading-[1.55] text-ink-500">
+            <p className="text-[14px] leading-[1.4] text-ink-900">
               Connect Mews or Cloudbeds in{" "}
               <span className="font-medium text-ink-900">Account settings</span>{" "}
               to show plans inside your booking engine.

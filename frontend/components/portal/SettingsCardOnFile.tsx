@@ -25,16 +25,16 @@ export function SettingsCardOnFile({
   const router = useRouter();
 
   return (
-    <Panel variant="filled" className="px-7 py-[30px]">
-      <SectionHeading className="mb-5">Card on file</SectionHeading>
+    <Panel variant="filled" className="p-5">
+      <SectionHeading className="mb-4">Card on file</SectionHeading>
       {card ? (
-        <div className="mb-[26px] flex items-center gap-4">
+        <div className="mb-3 flex items-center gap-3">
           <div className="h-8 w-12 flex-none rounded-sm bg-ink-900" />
           <div className="flex flex-col gap-[5px]">
-            <div className="text-[22px] font-medium tracking-[-0.015em] text-ink-900">
+            <div className="text-[14px] text-ink-900">
               {brandLabel(card.brand)} ···· {card.lastFour}
             </div>
-            <div className="text-base text-ink-400">
+            <div className="text-[14px] text-ink-500">
               Expires {String(card.expMonth).padStart(2, "0")}/
               {String(card.expYear).slice(-2)}
             </div>
@@ -42,9 +42,9 @@ export function SettingsCardOnFile({
         </div>
       ) : (
         // Not drawn in the export; kept on the same rhythm as the populated row.
-        <p className="mb-[26px] text-[17px] text-ink-500">No card on file.</p>
+        <p className="mb-3 text-[14px] text-ink-500">No card on file.</p>
       )}
-      <div className="mb-[26px] h-px bg-sand-200" />
+      <div className="mb-3 h-px bg-sand-200" />
       <UpdateCardSection
         token={token}
         stripeConfigured={stripeConfigured}

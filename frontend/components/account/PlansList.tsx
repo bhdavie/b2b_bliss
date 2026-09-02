@@ -38,10 +38,10 @@ export function PlansList({
   emptyBody?: string;
 }) {
   return (
-    <Panel variant="filled" className="px-10 pb-2 pt-9">
-      <div className={`flex flex-col gap-2 ${helper ? "mb-6" : "mb-5"}`}>
+    <Panel variant="filled" className="p-5">
+      <div className={`flex flex-col gap-1 ${helper ? "mb-4" : "mb-4"}`}>
         <SectionHeading>{title}</SectionHeading>
-        {helper ? <p className="text-[17px] text-ink-400">{helper}</p> : null}
+        {helper ? <p className="text-[14px] text-ink-500">{helper}</p> : null}
       </div>
 
       {plans.length === 0 ? (
@@ -49,18 +49,20 @@ export function PlansList({
         // replaces — same card, quieter type, centred. It sits inside the card
         // now rather than being a card of its own, so an empty list still reads
         // as this list being empty rather than as a different screen.
-        <div className="flex flex-col items-center px-4 pb-14 pt-8 text-center">
-          <div className="text-[22px] font-medium tracking-[-0.015em] text-ink-900">
+        <div className="flex flex-col items-center px-4 pb-8 pt-5 text-center">
+          <div className="text-[15px] font-medium text-ink-900">
             {emptyTitle}
           </div>
-          <p className="mt-2.5 max-w-[420px] text-[17px] text-ink-500">
+          <p className="mt-2.5 max-w-[420px] text-[14px] text-ink-500">
             {emptyBody}
           </p>
         </div>
       ) : (
-        plans.map((plan) => (
-          <PlanRow key={plan.planId} plan={plan} from={from} />
-        ))
+        <div>
+          {plans.map((plan) => (
+            <PlanRow key={plan.planId} plan={plan} from={from} />
+          ))}
+        </div>
       )}
     </Panel>
   );

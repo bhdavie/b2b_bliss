@@ -27,14 +27,14 @@ export function InstallSnippet({ snippet }: { snippet: string }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="overflow-hidden rounded-lg bg-ink-900 px-7 py-[26px]">
-        <pre className="m-0 whitespace-pre-wrap break-words font-mono text-[15px] leading-[1.75] text-sand-100">
+        <pre className="m-0 whitespace-pre-wrap break-words font-mono text-[13px] leading-[1.75] text-sand-100">
           <code>{snippet}</code>
         </pre>
       </div>
       <button
         type="button"
         onClick={handleCopy}
-        className="self-start rounded-full bg-brand-violet px-[30px] py-[15px] text-base font-medium tracking-[-0.01em] text-white transition-colors hover:bg-brand-violet-deep"
+        className="self-start rounded-full bg-brand-violet px-[30px] py-[15px] text-[14px] tracking-[-0.01em] text-white transition-colors hover:bg-brand-violet-deep"
       >
         {copied ? "Copied" : "Copy snippet"}
       </button>

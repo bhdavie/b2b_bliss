@@ -163,22 +163,22 @@ export function BlackoutDatesCard({
     // section it reveals. Drawing one here would nest a white card inside a
     // white card. Padding comes from the tab card too, so only the form's own
     // row rhythm survives.
-    <div className="flex flex-col gap-7">
+    <div className="flex flex-col gap-6">
       {/* No heading: the tab row above IS this card's head, and the active tab
           already says "Blackout dates". A heading here repeated it verbatim. */}
     <form onSubmit={handleSubmit} className="flex flex-col gap-8">
       <section className="grid gap-3 sm:grid-cols-[180px_1fr]">
         <div>
-          <div className="text-sm font-medium text-ink-900">Blackout dates</div>
-          <div className="mt-1 text-xs text-ink-400 leading-snug">
+          <div className="text-[13px] text-ink-900">Blackout dates</div>
+          <div className="mt-1 text-[13px] text-ink-500 leading-[1.4]">
             Blackout dates apply to the nights your guest is staying, not the day
             they book. If any night of a stay falls on a blackout date, no plan
             is offered for that stay.
           </div>
-          <div className="mt-3 text-xs font-medium text-ink-700">
+          <div className="mt-3 text-[13px] text-ink-900">
             {selected.size} {selected.size === 1 ? "day" : "days"} selected
           </div>
-          <div className="mt-1 text-xs text-ink-400 leading-snug">
+          <div className="mt-1 text-[13px] text-ink-500 leading-[1.4]">
             Click a day to toggle it. Shift-click to select a run of days.
           </div>
         </div>
@@ -187,14 +187,14 @@ export function BlackoutDatesCard({
           <div className="space-y-5">
             {months.map((month) => (
               <div key={month.key}>
-                <div className="text-xs font-semibold text-ink-700">
+                <div className="text-[13px] font-semibold text-ink-900">
                   {month.label}
                 </div>
                 <div className="mt-2 grid grid-cols-7 gap-1">
                   {WEEKDAYS.map((w, i) => (
                     <div
                       key={`${month.key}-wd-${i}`}
-                      className="text-center text-[10px] text-ink-400"
+                      className="text-center text-[10px] text-ink-500"
                     >
                       {w}
                     </div>
@@ -212,12 +212,12 @@ export function BlackoutDatesCard({
                         aria-pressed={isSelected}
                         aria-label={d.iso}
                         onClick={(ev) => toggle(d.iso, ev.shiftKey)}
-                        className={`h-7 rounded text-xs tabular-nums transition ${
+                        className={`h-7 rounded text-[13px] tabular-nums transition ${
                           !d.selectable
                             ? "cursor-default text-ink-300"
                             : isSelected
                               ? "border border-brand-violet bg-brand-violet-tint font-medium text-brand-violet"
-                              : "text-ink-700 hover:bg-sand-100"
+                              : "text-ink-900 hover:bg-sand-100"
                         }`}
                       >
                         {d.day}
@@ -232,13 +232,13 @@ export function BlackoutDatesCard({
       </section>
 
       {error ? (
-        <div className="text-base text-red-700" role="alert">
+        <div className="text-[14px] text-red-700" role="alert">
           {error}
         </div>
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-4 border-t border-sand-100 pt-6">
-        <div className="text-[17px] text-ink-400">
+        <div className="text-[14px] text-ink-500">
           {savedAt ? "Blackout dates saved" : "Guests see no plan option on these stays."}
         </div>
         <button type="submit" disabled={saving} className={saveButtonClassName}>

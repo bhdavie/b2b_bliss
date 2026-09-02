@@ -21,11 +21,11 @@ export default async function BookingsPage() {
   return (
     <>
       {bookings.length === 0 ? (
-        <Panel variant="filled" className="items-center px-10 py-16 text-center">
-          <div className="text-[22px] font-medium tracking-[-0.015em] text-ink-900">
+        <Panel variant="filled" className="items-center px-5 py-10 text-center">
+          <div className="text-[15px] font-medium text-ink-900">
             No bookings yet
           </div>
-          <p className="mt-2.5 max-w-[420px] text-[17px] text-ink-500">
+          <p className="mt-2.5 max-w-[420px] text-[14px] text-ink-500">
             Create your first booking to generate a shareable payment plan link.
             It&apos;ll show up here with its live status.
           </p>

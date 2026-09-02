@@ -25,10 +25,17 @@ export default async function AccountSettingsPage() {
 
   return (
     <PortalShell active="settings" email={data.email}>
-      <div className="flex flex-col pb-[72px]">
-        <div className="grid grid-cols-1 items-start gap-x-12 gap-y-7 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-          <Panel variant="filled" className="px-7 py-[30px]">
-            <SectionHeading className="mb-5">Account</SectionHeading>
+      <div className="flex flex-col pb-10">
+        {/* Stacked, not side by side. These were a 1fr + 420px pair, which
+            gave the Card on file panel a fixed narrow column holding one card
+            brand, four digits and an expiry: mostly empty, while the Account
+            panel opposite it ran its label/value rows at a width narrower than
+            it needed. Neither card earns a column of its own, and every other
+            stacked-card page in both surfaces reads as a single column, so this
+            one now does too. */}
+        <div className="flex flex-col gap-3">
+          <Panel variant="filled" className="p-5">
+            <SectionHeading className="mb-4">Account</SectionHeading>
             <div className="flex flex-col border-t border-sand-200">
               <Field label="Name" value={name} />
               <Field label="Email" value={data.email} />
@@ -48,9 +55,9 @@ export default async function AccountSettingsPage() {
               stripePublishableKey={portal.stripe.publishableKey}
             />
           ) : (
-            <Panel variant="filled" className="px-7 py-[30px]">
-              <SectionHeading className="mb-5">Card on file</SectionHeading>
-              <p className="text-[17px] text-ink-500">
+            <Panel variant="filled" className="p-5">
+              <SectionHeading className="mb-4">Card on file</SectionHeading>
+              <p className="text-[14px] text-ink-500">
                 No card on file yet. Your card is saved the first time you set
                 up a payment plan.
               </p>
@@ -68,14 +75,14 @@ export default async function AccountSettingsPage() {
  */
 function Field({ label, value }: { label: string; value: string | null }) {
   return (
-    <div className="flex items-baseline justify-between gap-8 border-b border-sand-200 py-6">
-      <div className="text-[17px] text-ink-500">{label}</div>
+    <div className="flex items-baseline justify-between gap-8 border-b border-sand-200 py-4">
+      <div className="text-[12px] uppercase tracking-[0.08em] text-ink-500">{label}</div>
       {value ? (
-        <div className="text-right text-[19px] font-medium tracking-[-0.01em] text-ink-900">
+        <div className="text-right text-[14px] tracking-[-0.01em] text-ink-900">
           {value}
         </div>
       ) : (
-        <div className="text-right text-[19px] text-ink-400">Not on file</div>
+        <div className="text-right text-[14px] text-ink-500">Not on file</div>
       )}
     </div>
   );

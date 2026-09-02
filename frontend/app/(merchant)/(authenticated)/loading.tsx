@@ -21,14 +21,14 @@ export default function MerchantLoading() {
     <div
       role="status"
       aria-label="Loading"
-      className="flex max-w-[980px] flex-col"
+      className="flex flex-col"
     >
       {/* The 44px title bar and 18px subtitle bar that used to open this
           skeleton are gone with the page headers themselves. Left in, they
           drew a header the real page no longer has, so every merchant
           navigation flashed a phantom head and then jumped the content up by
           about 110px when the route resolved. */}
-      <div className="flex flex-col gap-5 rounded-panel border border-sand-200 bg-white px-7 py-[30px]">
+      <div className="flex flex-col gap-3 rounded-card border border-sand-200 bg-white p-5">
         <div className="h-[15px] w-[180px] rounded-md bg-sand-100" />
         <div className="h-px w-full bg-sand-100" />
         <div className="h-[15px] w-[320px] max-w-full rounded-md bg-sand-100" />

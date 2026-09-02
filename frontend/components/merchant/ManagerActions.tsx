@@ -48,9 +48,9 @@ export function ManagerActions({
   }
 
   return (
-    <Panel variant="filled" className="px-7 py-[30px]">
-      <SectionHeading className="mb-2.5">Manage booking</SectionHeading>
-      <p className="text-[17px] leading-[1.55] text-ink-400">
+    <Panel variant="filled" className="p-5">
+      <SectionHeading className="mb-4">Manage booking</SectionHeading>
+      <p className="text-[14px] leading-[1.4] text-ink-500">
         Manager overrides. These supersede the booking&apos;s cancellation and
         refund policy and apply immediately.
       </p>
@@ -60,7 +60,7 @@ export function ManagerActions({
           type="button"
           onClick={() => setConfirming("cancel")}
           disabled={cancelled}
-          className="inline-flex items-center justify-center rounded-md border border-brand-purple px-4 py-2.5 text-sm font-medium text-brand-purple transition-colors hover:bg-brand-lavender/15 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center justify-center rounded-md border border-brand-purple px-4 py-2.5 text-[13px] text-brand-purple transition-colors hover:bg-brand-lavender/15 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {cancelled ? "Booking cancelled" : "Cancel booking"}
         </button>
@@ -68,14 +68,14 @@ export function ManagerActions({
           type="button"
           onClick={() => setConfirming("refund")}
           disabled={cancelled || refunded}
-          className="inline-flex items-center justify-center rounded-md border border-brand-purple px-4 py-2.5 text-sm font-medium text-brand-purple transition-colors hover:bg-brand-lavender/15 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center justify-center rounded-md border border-brand-purple px-4 py-2.5 text-[13px] text-brand-purple transition-colors hover:bg-brand-lavender/15 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {refunded ? `Refunded ${formatDollars(refundAmountCents ?? 0)}` : "Refund"}
         </button>
       </div>
 
       {error ? (
-        <p className="mt-3 text-sm text-red-600" role="alert">
+        <p className="mt-3 text-[13px] text-red-600" role="alert">
           {error}
         </p>
       ) : null}
@@ -130,14 +130,14 @@ function ConfirmDialog({
       }}
     >
       <div className="w-full max-w-md border border-brand-neutral bg-white p-6 shadow-elevated-lg">
-        <h3 className="text-lg font-bold text-brand-navy">{copy.title}</h3>
-        <p className="mt-2 text-sm leading-relaxed text-brand-navy/70">{copy.body}</p>
+        <h3 className="text-[14px] font-bold text-ink-900">{copy.title}</h3>
+        <p className="mt-2 text-[13px] leading-relaxed text-ink-500">{copy.body}</p>
         <div className="mt-5 flex justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-md px-4 py-2.5 text-sm font-medium text-brand-navy/70 transition-colors hover:text-brand-navy disabled:opacity-50"
+            className="rounded-md px-4 py-2.5 text-[13px] text-ink-500 transition-colors hover:text-ink-900 disabled:opacity-50"
           >
             Keep it
           </button>

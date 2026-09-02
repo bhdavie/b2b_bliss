@@ -14,7 +14,7 @@ export default async function SettingsPage() {
   if (!session) return null;
 
   return (
-    <div className="flex max-w-[980px] flex-col">
+    <div className="flex flex-col">
       <PaymentSettingsTabs planRules={planRules ?? DEFAULT_PLAN_RULES} />
     </div>
   );

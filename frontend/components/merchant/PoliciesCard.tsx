@@ -231,7 +231,7 @@ export function PoliciesCard({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-8">
       {show("cancellation") ? (
-      <div className="flex flex-col gap-7">
+      <div className="flex flex-col gap-6">
       {/* No heading: the tab row above IS this card's head, and the active tab
           already says "Cancellation policies". A heading here repeated it verbatim. */}
   
@@ -315,7 +315,7 @@ export function PoliciesCard({
       ) : null}
 
       {show("deadline") ? (
-      <div className="flex flex-col gap-7">
+      <div className="flex flex-col gap-6">
   
         <Row
           label="All installments due by"
@@ -348,7 +348,7 @@ export function PoliciesCard({
       ) : null}
 
       {show("failed") ? (
-      <div className="flex flex-col gap-7">
+      <div className="flex flex-col gap-6">
   
         <Row label="Retry policy" hint="How aggressively to retry a failed installment.">
           <div className="grid grid-cols-2 gap-3 max-w-md">
@@ -360,7 +360,7 @@ export function PoliciesCard({
               placeholder="3"
             />
             <label className="block">
-              <span className="text-xs text-ink-400">Spacing (days)</span>
+              <span className="text-[13px] text-ink-500">Spacing (days)</span>
               <select
                 value={form.retrySpacingDays}
                 onChange={(e) => update("retrySpacingDays", e.target.value as "1" | "3" | "7")}
@@ -412,7 +412,7 @@ export function PoliciesCard({
                     />
                   )}
                   <label className="block">
-                    <span className="text-xs text-ink-400">Apply</span>
+                    <span className="text-[13px] text-ink-500">Apply</span>
                     <select
                       value={form.lateFeeScope}
                       onChange={(e) => update("lateFeeScope", e.target.value as LateFeeScope)}
@@ -448,13 +448,13 @@ export function PoliciesCard({
       ) : null}
 
       {error ? (
-        <div className="text-base text-red-700" role="alert">
+        <div className="text-[14px] text-red-700" role="alert">
           {error}
         </div>
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="text-[17px] text-ink-400">
+        <div className="text-[14px] text-ink-500">
           {savedAt ? "Policies saved" : "These show on the customer's hosted page as trust signals."}
         </div>
         <button type="submit" disabled={saving} className={saveButtonClassName}>
@@ -527,8 +527,8 @@ function Row({
   return (
     <section className="grid gap-3 sm:grid-cols-[200px_1fr]">
       <div>
-        <div className="text-sm font-medium text-ink-900">{label}</div>
-        {hint ? <div className="mt-1 text-xs text-ink-400 leading-snug">{hint}</div> : null}
+        <div className="text-[13px] text-ink-900">{label}</div>
+        {hint ? <div className="mt-1 text-[13px] text-ink-500 leading-[1.4]">{hint}</div> : null}
       </div>
       <div>{children}</div>
     </section>
@@ -557,10 +557,10 @@ function OptionCard({
           : "border border-sand-200 bg-white hover:border-brand-violet"
       }`}
     >
-      <div className={`text-sm font-medium ${selected ? "text-brand-violet" : "text-ink-900"}`}>
+      <div className={`text-[13px] ${selected ? "text-brand-violet" : "text-ink-900"}`}>
         {label}
       </div>
-      <div className="mt-0.5 text-xs text-ink-400 leading-snug">{body}</div>
+      <div className="mt-0.5 text-[13px] text-ink-500 leading-[1.4]">{body}</div>
     </button>
   );
 }
@@ -579,7 +579,7 @@ function PillToggle({
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      className={`rounded-md py-2 text-sm transition-colors ${
+      className={`rounded-md py-2 text-[13px] transition-colors ${
         selected
           ? "border border-brand-violet bg-brand-violet-tint text-brand-violet"
           : "border border-sand-200 bg-white text-ink-900 hover:border-brand-violet"
@@ -622,7 +622,7 @@ function Toggle({
           }`}
         />
       </span>
-      <span className="text-sm text-ink-900">{label}</span>
+      <span className="text-[13px] text-ink-900">{label}</span>
     </label>
   );
 }
@@ -642,7 +642,7 @@ function NumberInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-ink-400">{label}</span>
+      <span className="text-[13px] text-ink-500">{label}</span>
       <Input
         type="number"
         inputMode="numeric"
@@ -669,7 +669,7 @@ function PercentInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-ink-400">{label}</span>
+      <span className="text-[13px] text-ink-500">{label}</span>
       <div className="relative mt-1.5">
         <Input
           type="number"
@@ -682,7 +682,7 @@ function PercentInput({
           placeholder={placeholder}
         />
         <span
-          className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-ink-400"
+          className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[13px] text-ink-500"
           aria-hidden="true"
         >
           %
@@ -705,10 +705,10 @@ function DollarInput({
 }) {
   return (
     <label className="block">
-      <span className="text-xs text-ink-400">{label}</span>
+      <span className="text-[13px] text-ink-500">{label}</span>
       <div className="relative mt-1.5">
         <span
-          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-ink-400"
+          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[13px] text-ink-500"
           aria-hidden="true"
         >
           $

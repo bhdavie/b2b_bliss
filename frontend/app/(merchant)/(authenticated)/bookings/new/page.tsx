@@ -35,15 +35,15 @@ export default async function NewBookingPage() {
         // head is not a compromise between two styles, it is the style.
         // Nothing is lost: the sidebar's Bookings tab plus "New booking" at the
         // top of the form say where you are, which is all the old title said.
-        <div className="mb-6 flex flex-col border-b border-sand-100 pb-5">
+        <div className="mb-3 flex flex-col border-b border-sand-100 pb-3">
           <Link
             href="/bookings"
-            className="mb-4 self-start text-[15px] text-brand-violet no-underline hover:underline"
+            className="mb-4 self-start text-[13px] text-brand-violet no-underline hover:underline"
           >
             ← Back to bookings
           </Link>
-          <SectionHeading className="mb-2.5">New booking</SectionHeading>
-          <p className="text-[17px] leading-[1.55] text-ink-400">
+          <SectionHeading className="mb-4">New booking</SectionHeading>
+          <p className="text-[14px] leading-[1.4] text-ink-500">
             Set the service, total, and date. We will derive the plan options
             automatically based on how far out the appointment is.
           </p>

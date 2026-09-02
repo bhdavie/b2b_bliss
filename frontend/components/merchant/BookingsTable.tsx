@@ -46,16 +46,16 @@ const STATUS_BADGE: Record<DerivedBookingStatus, { label: string; className: str
   },
   payments_complete: {
     label: "Payments complete",
-    className: "text-ink-400",
+    className: "text-ink-500",
     dot: "bg-sand-500",
   },
   booking_complete: {
     label: "Booking complete",
-    className: "text-ink-400",
+    className: "text-ink-500",
     dot: "bg-sand-500",
   },
-  cancelled: { label: "Cancelled", className: "text-ink-400", dot: "bg-sand-500" },
-  other: { label: "Other", className: "text-ink-400", dot: "bg-sand-500" },
+  cancelled: { label: "Cancelled", className: "text-ink-500", dot: "bg-sand-500" },
+  other: { label: "Other", className: "text-ink-500", dot: "bg-sand-500" },
 };
 
 // Tab membership is driven entirely by the live derived status — no stored
@@ -146,11 +146,15 @@ export function BookingsTable({
     // narrow what the table below shows, so they belong inside its surface —
     // unlike the /settings tab row, which chooses which card to render and
     // therefore stays outside.
-    // The controls take px-8 to line up with the table header and rows, which
-    // carry their own px-8 and stay full-bleed to the card edges.
-    <Panel variant="filled" className="overflow-hidden">
-      <div className="px-8 pt-[30px]">
-        <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
+    // The card carries the flat 16px padding like every other card. The header
+    // and rows still run edge to edge, but they do it by bleeding back out
+    // through -mx-4 rather than by the card having no padding of its own, so
+    // the card measures 16px on all four sides the way the rest of the app
+    // does. The px-4 on the header and rows puts the columns back on the
+    // card's own padding, which is what keeps them aligned with the controls.
+    <Panel variant="filled" className="overflow-hidden p-5">
+      <div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="inline-flex gap-1.5 rounded-full bg-sand-track p-[5px]">
             <TabButton active={tab === "active"} onClick={() => setTab("active")} count={counts.active}>
               Active
@@ -162,15 +166,15 @@ export function BookingsTable({
           {action ?? null}
         </div>
 
-        <div className="mb-7 grid grid-cols-1 gap-5 sm:grid-cols-[minmax(0,1fr)_240px_200px]">
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_240px_200px]">
           <div className="relative">
-            <SearchIcon className="pointer-events-none absolute left-[17px] top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+            <SearchIcon className="pointer-events-none absolute left-[17px] top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search guest or package"
-              className="w-full rounded-xl border-2 border-sand-500 bg-white py-[15px] pl-[45px] pr-[17px] text-[17px] text-ink-900 placeholder:text-ink-300 focus:border-brand-violet focus:outline-none focus:shadow-focus-ring"
+              className="w-full rounded-xl border-2 border-sand-500 bg-white py-[15px] pl-[45px] pr-[17px] text-[14px] text-ink-900 placeholder:text-ink-300 focus:border-brand-violet focus:outline-none focus:shadow-focus-ring"
             />
           </div>
           <Select value={status} onChange={(v) => setStatus(v as StatusFilter)} options={STATUS_OPTIONS} />
@@ -178,9 +182,9 @@ export function BookingsTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="-mx-5 overflow-x-auto">
         <div className="min-w-[860px]">
-          <div className="grid grid-cols-[minmax(0,1fr)_140px_125px_115px_170px] gap-x-4 border-y border-sand-200 bg-sand-50 px-8 py-[18px]">
+          <div className="grid grid-cols-[minmax(0,1fr)_140px_125px_115px_170px] gap-x-4 border-y border-sand-200 bg-sand-50 px-5 py-4">
             <Th>Booking package</Th>
             <Th>Guest</Th>
             <Th>Booking date</Th>
@@ -191,7 +195,7 @@ export function BookingsTable({
             <BookingRow key={b.id} booking={b} />
           ))}
           {filtered.length === 0 ? (
-            <div className="px-8 py-16 text-center text-[17px] text-ink-400">
+            <div className="px-5 py-10 text-center text-[14px] text-ink-500">
               {tab === "active"
                 ? "No active bookings match these filters."
                 : "Nothing in the archive yet. Cancelled and completed bookings land here."}
@@ -210,25 +214,25 @@ function BookingRow({ booking }: { booking: Booking }) {
   return (
     <Link
       href={`/bookings/${booking.id}`}
-      className="grid grid-cols-[minmax(0,1fr)_140px_125px_115px_170px] items-center gap-x-4 border-b border-sand-100 px-8 py-[22px] no-underline transition-colors last:border-b-0 hover:bg-sand-50 hover:no-underline"
+      className="grid grid-cols-[minmax(0,1fr)_140px_125px_115px_170px] items-center gap-x-4 border-b border-sand-100 px-5 py-4 no-underline last:border-b-0 transition-colors last:border-b-0 hover:bg-sand-50 hover:no-underline"
     >
-      <div className="truncate text-[17px] font-medium tracking-[-0.012em] text-ink-900">
+      <div className="truncate text-[14px] tracking-[-0.012em] text-ink-900">
         {booking.serviceName}
       </div>
-      <div className="truncate text-[17px] text-ink-700">
+      <div className="truncate text-[14px] text-ink-900">
         {booking.customerNameHint ?? booking.customerEmailHint ?? (
           <span className="text-ink-300">-</span>
         )}
       </div>
-      <div className="text-[17px] text-ink-500">
+      <div className="text-[14px] text-ink-900">
         {formatBookingDate(booking.createdAt)}
       </div>
-      <div className="text-right text-lg font-medium tabular-nums text-ink-900">
+      <div className="text-right text-[14px] tabular-nums text-ink-900">
         {booking.originalTotalAmountCents != null &&
         booking.originalTotalAmountCents > booking.totalAmountCents ? (
-          <div className="flex flex-col items-end leading-tight">
+          <div className="flex flex-col items-end leading-[1.4]">
             <span>{formatCents(booking.totalAmountCents)}</span>
-            <span className="text-[13px] text-ink-400 line-through">
+            <span className="text-[13px] text-ink-500 line-through">
               {formatCents(booking.originalTotalAmountCents)}
             </span>
           </div>
@@ -238,7 +242,7 @@ function BookingRow({ booking }: { booking: Booking }) {
       </div>
       <div>
         <span
-          className={`inline-flex items-center gap-2 text-[15px] font-medium ${
+          className={`inline-flex items-center gap-2 text-[13px] ${
             plain ? "" : "rounded-full px-[15px] py-[7px]"
           } ${badge.className}`}
         >
@@ -256,7 +260,7 @@ function BookingRow({ booking }: { booking: Booking }) {
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <div
-      className={`whitespace-nowrap text-xs uppercase tracking-[0.08em] text-ink-400 ${className}`}
+      className={`whitespace-nowrap text-[12px] uppercase tracking-[0.08em] text-ink-500 ${className}`}
     >
       {children}
     </div>
@@ -279,7 +283,7 @@ function TabButton({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`inline-flex items-center gap-[9px] rounded-full px-5 py-[11px] text-base tracking-[-0.01em] transition-colors ${
+      className={`inline-flex items-center gap-[9px] rounded-full px-5 py-[11px] text-[14px] tracking-[-0.01em] transition-colors ${
         active
           ? "bg-brand-violet font-medium text-white"
           : "text-ink-600 hover:text-ink-900"
@@ -287,7 +291,7 @@ function TabButton({
     >
       {children}
       <span
-        className={`rounded-full px-[9px] py-0.5 text-sm tabular-nums ${
+        className={`rounded-full px-[9px] py-0.5 text-[13px] tabular-nums ${
           active ? "bg-white/[.22] text-white" : "bg-sand-badge text-ink-600"
         }`}
       >
@@ -310,7 +314,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="rounded-xl border border-sand-500 bg-white px-[18px] py-4 text-[17px] text-ink-900 focus:border-brand-violet focus:outline-none focus:shadow-focus-ring"
+      className="rounded-xl border border-sand-500 bg-white px-[18px] py-4 text-[14px] text-ink-900 focus:border-brand-violet focus:outline-none focus:shadow-focus-ring"
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>

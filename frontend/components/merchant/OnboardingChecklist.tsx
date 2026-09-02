@@ -74,20 +74,20 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
   }
 
   return (
-    <Panel variant="filled" className="px-7 py-[30px]">
-      <div className="flex items-baseline justify-between gap-6">
+    <Panel variant="filled" className="p-5">
+      <div className="flex items-baseline justify-between gap-3">
         {/* Was 22px medium ink-900, one of eight competing in-card heading
             treatments. On the app's single one now, like every other card. */}
         <SectionHeading>Finish setting up your property</SectionHeading>
-        <span className="flex-none text-base text-ink-400">
+        <span className="flex-none text-[14px] text-ink-500">
           {status.steps.filter((s) => s.done && s.key !== "active").length} of {items.length} done
         </span>
       </div>
-      <p className="mt-2 text-[17px] text-ink-500">
+      <p className="mt-2 text-[14px] text-ink-500">
         A few quick steps and you can start taking payment plans.
       </p>
 
-      <ol className="mt-6 space-y-2">
+      <ol className="mt-3 space-y-2">
         {items.map((it, i) => {
           const isDone = done(it.key);
           const isCurrent = it.key === currentKey;
@@ -101,19 +101,19 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
             >
               <span
                 className={[
-                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold",
                   isDone
                     ? "bg-brand-violet text-white"
                     : isCurrent
                       ? "bg-brand-lavender text-brand-violet-deep"
-                      : "bg-sand-200 text-ink-400",
+                      : "bg-sand-200 text-ink-500",
                 ].join(" ")}
               >
                 {isDone ? "✓" : i + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-base font-medium text-ink-900">{it.label}</div>
-                <div className="mt-0.5 truncate text-sm text-ink-400">{it.hint}</div>
+                <div className="text-[14px] text-ink-900">{it.label}</div>
+                <div className="mt-0.5 truncate text-[13px] text-ink-500">{it.hint}</div>
               </div>
               {!isDone && it.href ? (
                 <Button
@@ -130,10 +130,10 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
       </ol>
 
       {error ? (
-        <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-base text-red-700">{error}</p>
+        <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-[14px] text-red-700">{error}</p>
       ) : null}
 
-      <div className="mt-6 flex flex-wrap items-center gap-4">
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <Button
           type="button"
           onClick={handleActivate}
@@ -144,7 +144,7 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
           {activating ? "Going live" : "Go live"}
         </Button>
         {!canActivate ? (
-          <span className="text-base text-ink-400">
+          <span className="text-[14px] text-ink-500">
             Finish the steps above to go live.
           </span>
         ) : null}

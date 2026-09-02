@@ -87,22 +87,22 @@ export function PlanPortal({
           border drawn round it.
 
           Padding went back up to py-[30px], the value every other card uses.
-          It was py-6 only while this card held a bar and one row of figures and
+          It was py-3 only while this card held a bar and one row of figures and
           nothing else. */}
-      <Panel variant="filled" className="mb-7 px-7 py-[30px]">
-        <div className="mb-6 flex flex-col border-b border-sand-100 pb-5">
+      <Panel variant="filled" className="mb-3 p-5">
+        <div className="mb-3 flex flex-col border-b border-sand-100 pb-3">
           {backHref ? (
             <Link
               href={backHref}
-              className="mb-4 self-start text-[15px] text-brand-violet no-underline hover:underline"
+              className="mb-4 self-start text-[13px] text-brand-violet no-underline hover:underline"
             >
               Back to your plans
             </Link>
           ) : null}
-          <SectionHeading className="mb-2.5">
+          <SectionHeading className="mb-4">
             {portal.merchant.businessName}
           </SectionHeading>
-          <p className="text-[17px] text-ink-500">
+          <p className="text-[14px] text-ink-500">
             {portal.booking.serviceName}
           </p>
         </div>
@@ -120,16 +120,16 @@ export function PlanPortal({
               style={{ width: `${paidPercent}%` }}
             />
           </div>
-          <div className="flex items-start justify-between gap-6">
+          <div className="flex items-start justify-between gap-3">
             <div className="flex flex-col gap-[7px]">
-              <div className="text-[15px] text-ink-400">Paid to date</div>
-              <div className="text-[17px] font-medium text-ink-900">
+              <div className="text-[12px] uppercase tracking-[0.08em] text-ink-500">Paid to date</div>
+              <div className="text-[14px] text-ink-900">
                 {formatDollars(portal.paidCents)}
               </div>
             </div>
             <div className="flex flex-col items-end gap-[7px]">
-              <div className="text-[15px] text-ink-400">Remaining</div>
-              <div className="text-[17px] font-medium text-ink-900">
+              <div className="text-[12px] uppercase tracking-[0.08em] text-ink-500">Remaining</div>
+              <div className="text-[14px] text-ink-900">
                 {formatDollars(portal.remainingCents)}
               </div>
             </div>
@@ -140,11 +140,11 @@ export function PlanPortal({
       {/* Plan-level notices. bg-white so the notice is a card like everything
           else here; it was an unfilled panel and took the page ground. */}
       {portal.plan.refundedAt ? (
-        <div className="mb-7 flex items-center gap-3 rounded-panel border border-sand-200 bg-white px-7 py-5">
+        <div className="mb-3 flex items-center gap-3 rounded-card border border-sand-200 bg-white p-5">
           <span className="rounded-full bg-brand-violet-tint px-[15px] py-[7px] text-[13px] font-medium uppercase tracking-[0.06em] text-brand-violet">
             Refunded
           </span>
-          <span className="text-[17px] text-ink-500">
+          <span className="text-[14px] text-ink-500">
             {formatDollars(portal.plan.refundAmountCents ?? 0)} has been
             refunded to you.
           </span>
@@ -155,14 +155,14 @@ export function PlanPortal({
           it is a state that appears and disappears, and merging it would make
           the masthead's height jump between two quite different layouts. */}
       {planComplete ? (
-        <Panel variant="filled" className="mb-7 gap-3 px-7 py-[30px]">
+        <Panel variant="filled" className="mb-3 gap-3 p-5">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-lavender text-brand-violet-deep">
             <CheckIcon />
           </div>
           <div className="text-[42px] font-medium leading-[1.08] tracking-[-0.03em] text-ink-900">
             You&apos;re all set
           </div>
-          <div className="text-lg text-ink-500">
+          <div className="text-[14px] text-ink-900">
             Your stay at {portal.merchant.businessName} is fully paid.{" "}
             {enjoyCopy}
           </div>
@@ -172,8 +172,8 @@ export function PlanPortal({
       {/* Booking — full content width, directly above the schedule. The four
           fields run across the row rather than stacking in two columns, since
           they now have the whole width the schedule uses. */}
-      <Panel variant="filled" className="mb-7 px-7 py-[30px]">
-        <SectionHeading className="mb-5">Booking</SectionHeading>
+      <Panel variant="filled" className="mb-3 p-5">
+        <SectionHeading className="mb-4">Booking</SectionHeading>
         <div className="grid grid-cols-2 gap-x-12 gap-y-6 sm:grid-cols-4">
           {portal.booking.customerNameHint ? (
             <Field
@@ -187,7 +187,7 @@ export function PlanPortal({
             value={formatScheduleDateLong(portal.booking.appointmentDate)}
           />
           <div className="flex flex-col gap-[7px]">
-            <div className="text-[15px] text-ink-400">Plan status</div>
+            <div className="text-[12px] uppercase tracking-[0.08em] text-ink-500">Plan status</div>
             <div className="flex">
               <span className="rounded-full bg-brand-violet-tint px-[15px] py-[7px] text-[13px] font-medium uppercase tracking-[0.06em] text-brand-violet">
                 {displayStatus.replace(/_/g, " ")}
@@ -199,28 +199,28 @@ export function PlanPortal({
 
 
       {/* Row 1 — schedule, with next payment and payment method beside it */}
-      <div className="mb-7 grid grid-cols-1 items-start gap-x-10 gap-y-9 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
-        <Panel variant="filled" className="px-7 py-[30px]">
-          <SectionHeading className="mb-5">Schedule</SectionHeading>
+      <div className="mb-3 grid grid-cols-1 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+        <Panel variant="filled" className="p-5">
+          <SectionHeading className="mb-4">Schedule</SectionHeading>
           <ScheduleTimeline schedule={portal.schedule} />
         </Panel>
 
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-3">
           {hasUpcoming ? (
-            <Panel variant="filled" className="px-7 pb-8 pt-[30px]">
+            <Panel variant="filled" className="p-5">
               {/* Was font-medium and brand-violet, the only SectionHeading in
                   either surface that overrode the treatment. Normalised: card
                   headings are one thing app-wide now, and the violet had to go
                   somewhere — it is still on this card, carried by the Pay
                   button and the 44px figure, which is where the emphasis
                   actually belongs. */}
-              <SectionHeading className="mb-[18px]">
+              <SectionHeading className="mb-4">
                 Next payment
               </SectionHeading>
               <div className="mb-3 text-[44px] font-medium leading-none tracking-[-0.035em] text-ink-900">
                 {formatDollars(nextDueAmount ?? 0)}
               </div>
-              <div className="mb-[26px] text-[17px] text-ink-500">
+              <div className="mb-3 text-[14px] text-ink-500">
                 Due {formatTimelineDate(nextDueDate ?? "")}
               </div>
               <PayEarlyButton
@@ -233,18 +233,18 @@ export function PlanPortal({
           ) : null}
 
           {!planComplete ? (
-            <Panel variant="filled" className="px-7 py-[30px]">
-              <SectionHeading className="mb-5">Payment method</SectionHeading>
+            <Panel variant="filled" className="p-5">
+              <SectionHeading className="mb-4">Payment method</SectionHeading>
               {portal.card ? (
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">
                     <div className="h-7 w-[42px] flex-none rounded-[5px] bg-ink-900" />
                     <div className="flex flex-col gap-[3px]">
-                      <div className="text-base text-ink-900">
+                      <div className="text-[14px] text-ink-900">
                         {brandLabel(portal.card.brand)} ····{" "}
                         {portal.card.lastFour}
                       </div>
-                      <div className="text-sm text-ink-400">
+                      <div className="text-[13px] text-ink-500">
                         Expires {String(portal.card.expMonth).padStart(2, "0")}/
                         {String(portal.card.expYear).slice(-2)}
                       </div>
@@ -259,7 +259,7 @@ export function PlanPortal({
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-4">
-                  <div className="text-base text-ink-400">No card on file.</div>
+                  <div className="text-[14px] text-ink-500">No card on file.</div>
                   <UpdateCardSection
                     token={token}
                     stripeConfigured={portal.stripe.configured}
@@ -282,12 +282,12 @@ export function PlanPortal({
           its column via col-start, and Cancel is pinned to row 1 of column 1 so
           the two tops line up. Leaving DOM order as summary-then-cancel keeps
           the single-column stacking below xl exactly as it reads today. */}
-      <div className="grid grid-cols-1 items-start gap-x-10 gap-y-9 pb-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+      <div className="grid grid-cols-1 items-start gap-3 pb-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
         <Panel
           variant="filled"
-          className="px-7 py-[30px] xl:col-start-2 xl:row-start-1"
+          className="p-4 xl:col-start-2 xl:row-start-1"
         >
-          <SectionHeading className="mb-5">Plan summary</SectionHeading>
+          <SectionHeading className="mb-4">Plan summary</SectionHeading>
           <div className="flex flex-col">
             {hasDiscount && portal.booking.originalTotalAmountCents != null ? (
               <>
@@ -313,7 +313,7 @@ export function PlanPortal({
             />
             <div className="h-px bg-sand-300" />
             <div className="flex items-baseline justify-between pt-[18px]">
-              <div className="text-[17px] font-medium text-ink-900">Total</div>
+              <div className="text-[14px] text-ink-900">Total</div>
               <div className="text-2xl font-medium tracking-[-0.02em] text-ink-900">
                 {formatDollars(totalDue)}
               </div>
@@ -326,9 +326,9 @@ export function PlanPortal({
         {!planComplete && portal.plan.status === "active" ? (
           <Panel
             variant="filled"
-            className="px-7 py-[30px] xl:col-start-1 xl:row-start-1"
+            className="p-4 xl:col-start-1 xl:row-start-1"
           >
-            <SectionHeading className="mb-5">Cancel plan</SectionHeading>
+            <SectionHeading className="mb-4">Cancel plan</SectionHeading>
             <div className="max-w-[560px]">
               <CancelPlanSection
                 token={token}
@@ -348,7 +348,7 @@ export function PlanPortal({
           column, not a block of content: same class of thing as the sidebar
           wordmark, which is why it takes the same exemption. Carding it would
           make the attribution look like a section of the plan. */}
-      <div className="-mx-6 border-t border-sand-200 px-6 pb-8 pt-7 text-sm text-ink-400 xl:-mx-16 xl:px-16">
+      <div className="-mx-4 border-t border-sand-200 px-4 pb-6 pt-5 text-[13px] text-ink-500 xl:-mx-6 xl:px-6">
         Powered by <BlissWordmark />
       </div>
     </div>
@@ -358,8 +358,8 @@ export function PlanPortal({
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-[7px]">
-      <div className="text-[15px] text-ink-400">{label}</div>
-      <div className="text-[19px] font-medium tracking-[-0.01em] text-ink-900">
+      <div className="text-[12px] uppercase tracking-[0.08em] text-ink-500">{label}</div>
+      <div className="text-[14px] tracking-[-0.01em] text-ink-900">
         {value}
       </div>
     </div>
@@ -377,7 +377,7 @@ function SummaryLine({
 }) {
   return (
     <div
-      className={`flex justify-between text-[17px] ${last ? "pb-[18px]" : "pb-4"}`}
+      className={`flex justify-between text-[14px] ${last ? "pb-[18px]" : "pb-4"}`}
     >
       <div className="text-ink-500">{label}</div>
       <div className="tabular-nums text-ink-900">{value}</div>
@@ -547,15 +547,15 @@ function ScheduleTimeline({ schedule }: { schedule: ScheduleEntry[] }) {
                     amount drop to the muted tone, so it reads as struck from
                     the plan rather than pending. */}
                 <div
-                  className={`min-w-0 text-[17px] font-medium tracking-[-0.01em] ${
-                    state === "canceled" ? "text-ink-400" : "text-ink-900"
+                  className={`min-w-0 text-[14px] tracking-[-0.01em] ${
+                    state === "canceled" ? "text-ink-500" : "text-ink-900"
                   }`}
                 >
                   {label}
                 </div>
                 <div
-                  className={`flex-none text-right text-[17px] ${
-                    state === "canceled" ? "text-ink-400" : "text-ink-700"
+                  className={`flex-none text-right text-[14px] ${
+                    state === "canceled" ? "text-ink-500" : "text-ink-900"
                   }`}
                 >
                   {formatDollars(entry.amountCents)}
@@ -563,7 +563,7 @@ function ScheduleTimeline({ schedule }: { schedule: ScheduleEntry[] }) {
               </div>
 
               {/* Line two: date and status together, muted and smaller. */}
-              <div className="mt-1 text-[13px] text-ink-400">{meta}</div>
+              <div className="mt-1 text-[13px] text-ink-500">{meta}</div>
             </div>
           </li>
         );

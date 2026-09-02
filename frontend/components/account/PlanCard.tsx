@@ -40,14 +40,14 @@ export function PlanRow({
     : formatScheduleDateLong(plan.appointmentDate);
 
   return (
-    <div className="border-b border-sand-100 py-7 last:border-b-0">
+    <div className="border-b border-sand-100 py-4 first:pt-0 last:border-b-0 last:pb-0">
       <div className="flex items-start justify-between gap-8">
-        <div className="flex min-w-0 flex-col gap-2.5">
-          <div className="text-[30px] font-medium leading-[1.1] tracking-[-0.025em] text-ink-900">
+        <div className="flex min-w-0 flex-col gap-1">
+          <div className="text-[14px] text-ink-900">
             {plan.merchantBusinessName}
           </div>
-          <div className="text-lg text-ink-500">{plan.serviceName}</div>
-          <div className="text-lg text-ink-500">{dateRange}</div>
+          <div className="text-[14px] text-ink-500">{plan.serviceName}</div>
+          <div className="text-[14px] text-ink-500">{dateRange}</div>
         </div>
         <div className="flex flex-none items-center gap-2">
           {plan.refunded ? <Pill tone="accent">Refunded</Pill> : null}
@@ -57,10 +57,10 @@ export function PlanRow({
         </div>
       </div>
 
-      <div className="mb-6 mt-[30px] h-px bg-sand-200" />
+      <div className="my-3 h-px bg-sand-200" />
 
-      <div className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center sm:gap-8">
-        <div className="flex flex-wrap items-baseline text-[17px] text-ink-500">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-6">
+        <div className="flex flex-wrap items-baseline text-[14px] text-ink-500">
           <span>
             Plan total{" "}
             <Figure>{formatDollars(plan.totalWithFeeCents)}</Figure>
@@ -80,7 +80,7 @@ export function PlanRow({
         </div>
         <Link
           href={href}
-          className="flex-none rounded-full border border-sand-500 px-[26px] py-[13px] text-base font-medium tracking-[-0.01em] text-brand-violet no-underline transition-colors hover:bg-sand-100 hover:no-underline"
+          className="flex-none rounded-full border border-sand-500 px-[26px] py-[13px] text-[14px] tracking-[-0.01em] text-brand-violet no-underline transition-colors hover:bg-sand-100 hover:no-underline"
         >
           View plan
         </Link>
