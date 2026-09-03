@@ -57,9 +57,10 @@
  *      teaser and the modal share ONE basis. The known issue both siblings
  *      carry — the teaser and the modal quoting different bases within a
  *      surface — does not exist here, on any of the three. See BASIS.
- *   5. The 5% Bliss fee is applied to the RATE CARD basis as well as the
- *      checkout one. Both siblings apply it only on their checkout-step block.
- *      See BLISS FEE.
+ *   5. The Bliss fee is ONE config value applied through ONE function, so it
+ *      reaches the rate-card basis and the checkout basis identically. On this
+ *      property it is zero: Detroit Foundation is on a free plan, so nothing
+ *      is added to the guest's total on either surface. See BLISS FEE.
  *
  * ---------------------------------------------------------------------------
  * DISCOVERY — cards first, dataLayer second
@@ -160,24 +161,32 @@
   // =========================================================================
   // BLISS FEE
   //
-  // 5%, matching every fee source in the repo:
+  // ZERO ON THIS PROPERTY, and that is a merchant fact rather than a stub:
+  // Detroit Foundation is on a free plan, so Bliss charges the guest nothing
+  // on top and the plan is written against the property's own total. The
+  // repo's other fee sources
   //   backend   PlanCreationService.BLISS_FEE_RATE      = 0.05
   //   frontend  frontend/lib/blissFee.ts BLISS_FEE_RATE = 0.05
+  // are the PAID-plan rate and are deliberately not mirrored here.
   //
-  // Applied ON TOP of the total: the guest pays the fee and the hotel is paid
-  // net, matching PlanCreationService.feeFor + buildSchedule.
+  // ONE VALUE, ONE APPLICATION POINT. The rate lives on CONFIG.blissFeeRate
+  // and is applied only by withFee(), which every basis on both surfaces goes
+  // through: the rate cards' nightly figure and stay total, and the checkout
+  // block's tax-inclusive Total. Raising it for a paid-plan demo is therefore
+  // a one-value edit that moves both surfaces together.
   //
-  // DIVERGENCE FROM BOTH SIBLINGS. There, the fee is applied only to the
-  // checkout-step block's basis; a rate-card trigger plans against the bare
-  // pre-tax stay total with no fee in it. This file applies it on BOTH kinds
-  // of surface: to the rate-card basis through withFee, gated by
-  // CONFIG.rateCards.applyFeeToBasis, and to the checkout block's
-  // tax-inclusive Total unconditionally, since applyDetailsAmount and
-  // summaryPerNightCents both apply the rate directly and consult no flag.
-  // Because it is applied to the nightly figure and the stay total alike, the
-  // teaser and the modal still reconcile exactly — see fromLine.
+  // THAT REPLACED A SPLIT THAT COULD NOT BE SET CONSISTENTLY. The rate cards
+  // used to be gated by CONFIG.rateCards.applyFeeToBasis while
+  // applyDetailsAmount and summaryPerNightCents applied the rate directly and
+  // read no flag, so clearing the flag left the fee on the checkout surface
+  // and zeroing the rate left the flag claiming a fee in the fine print.
+  //
+  // When non-zero the fee is applied ON TOP of the basis: the guest pays it
+  // and the hotel is paid net, matching PlanCreationService.feeFor +
+  // buildSchedule. Because it lands on the nightly figure and the stay total
+  // alike, the teaser and the modal reconcile at any rate, zero included —
+  // see fromLine.
   // =========================================================================
-  var BLISS_FEE_RATE = 0.05;
 
   // =========================================================================
   // PLAN RULES
@@ -252,6 +261,14 @@
 
     /** Where the rules came from, for the install report. */
     rulesSource: null,
+
+    /**
+     * The Bliss fee rate, as a fraction of the basis. See the BLISS FEE note:
+     * ZERO here because this property is on a free plan, and the ONE value
+     * both surfaces read. Applied only by withFee(); nothing else multiplies
+     * by it, so there is no second path that can disagree with this number.
+     */
+    blissFeeRate: 0,
 
     /**
      * Stay dates, read from the URL.
@@ -371,16 +388,6 @@
       excludeRatePattern: null,
 
       /**
-       * Add the 5% Bliss fee to the rate-card basis. See the BLISS FEE note:
-       * both siblings apply the fee only on their checkout-step block, and
-       * this file applies it on the rate cards too.
-       *
-       * RATE CARDS ONLY. The checkout block applies the fee unconditionally
-       * and never reads this flag, so clearing it leaves that block's fee in.
-       */
-      applyFeeToBasis: true,
-
-      /**
        * Is the dataLayer price tax-exclusive?
        *
        * UNKNOWN, and null means unknown rather than false. Both siblings print
@@ -419,8 +426,9 @@
      * basis from the rate cards' pre-tax nightly figure. That is why this
      * block's supporting line says only "No credit check" while the rate-card
      * one can say "Pre-tax · No credit check", and why the modal's fine print
-     * switches to "Tax and processing fee included" for this trigger. Same
-     * split both siblings carry.
+     * says "Tax included" for this trigger rather than quoting a pre-tax
+     * basis. Same split both siblings carry. It names a processing fee only
+     * when CONFIG.blissFeeRate is non-zero, which on this property it is not.
      */
     detailsStep: {
       /**
@@ -526,14 +534,30 @@
   }
 
   /**
-   * Applies the Bliss fee to a basis, when CONFIG says to. Both the nightly
-   * figure and the stay total go through this, which is what keeps the teaser
-   * and the modal on one basis: fee x nightly x nights == fee x stay total.
+   * The Bliss fee rate for this install, normalised. Anything that is not a
+   * finite positive number reads as no fee, so a bad override cannot put an
+   * NaN through the money path.
+   */
+  function feeRate() {
+    var r = CONFIG.blissFeeRate;
+    return typeof r === "number" && isFinite(r) && r > 0 ? r : 0;
+  }
+
+  /**
+   * Applies the Bliss fee to a basis. THE ONLY PLACE THE RATE IS APPLIED, on
+   * either surface: the rate cards' nightly figure and stay total, and the
+   * checkout block's tax-inclusive Total, all come through here. That is what
+   * keeps the teaser and the modal on one basis — fee x nightly x nights ==
+   * fee x stay total — and what makes the rate a single value to change.
+   *
+   * At the zero rate this returns the basis unchanged, so the guest's plan
+   * totals exactly what the property's own page says the stay costs.
    */
   function withFee(cents) {
     if (cents == null || !isFinite(cents)) return null;
-    if (!CONFIG.rateCards.applyFeeToBasis) return cents;
-    return Math.round(cents * (1 + BLISS_FEE_RATE));
+    var rate = feeRate();
+    if (!rate) return cents;
+    return Math.round(cents * (1 + rate));
   }
 
   var SYMBOL_CURRENCY = { "$": "USD", "£": "GBP", "€": "EUR", "¥": "JPY", "₹": "INR" };
@@ -2437,12 +2461,15 @@
 
   /** The modal's fine-print line, on the same evidence rule as above. */
   function basisLine(t) {
+    // THE FEE IS ONLY MENTIONED WHEN THERE IS ONE. At the zero rate withFee
+    // adds nothing to either basis, so naming a processing fee here would
+    // describe a charge the guest is not being asked to pay. Both branches
+    // read the same rate, so neither can claim a fee the other has dropped.
+    var hasFee = feeRate() > 0;
     // The two surfaces quote different bases, so the fine print follows the
     // basis rather than being one string. Same split both siblings carry.
-    if (t && t.kind === "details") return "Tax and processing fee included";
-    var fee = CONFIG.rateCards.applyFeeToBasis
-      ? "Includes the " + Math.round(BLISS_FEE_RATE * 100) + "% processing fee"
-      : null;
+    if (t && t.kind === "details") return hasFee ? "Tax and processing fee included" : "Tax included";
+    var fee = hasFee ? "Includes the " + Math.round(feeRate() * 100) + "% processing fee" : null;
     var tax = CONFIG.rateCards.priceIsTaxExclusive === true ? "Pre-tax" : "Based on the rate shown on this page";
     return fee ? tax + " · " + fee : tax;
   }
@@ -3572,7 +3599,7 @@
   /**
    * The checkout step's per-night figure:
    *
-   *   Z = Total x (1 + BLISS_FEE_RATE) / nights / payment count
+   *   Z = withFee(Total) / nights / payment count
    *
    * Ported from both siblings. Tax-INCLUSIVE, unlike the rate-card figure,
    * because it derives from the summary Total rather than a card's nightly
@@ -3592,8 +3619,12 @@
     if (totalCents == null || !isFinite(totalCents) || totalCents <= 0) return null;
     if (nights == null || nights <= 0) return null;
     if (!numPayments || numPayments <= 0) return null;
-    var withFeeCents = Math.round(totalCents * (1 + BLISS_FEE_RATE));
-    return Math.round(withFeeCents / nights / numPayments);
+    // Through withFee like every other basis, rather than multiplying by the
+    // rate here: one application point is what stops this surface and the rate
+    // cards drifting onto two different fees.
+    var basis = withFee(totalCents);
+    if (basis == null) return null;
+    return Math.round(basis / nights / numPayments);
   }
 
   // -------------------------------------------------------------------------
@@ -4227,7 +4258,7 @@
   }
 
   /**
-   * The checkout block's basis: the tax-inclusive Total plus the Bliss fee, and
+   * The checkout block's basis: the tax-inclusive Total through withFee, and
    * the nights from the summary card's own date range.
    *
    * BOTH FROM THE DOM. The dataLayer may not carry this booking at all, and on
@@ -4248,6 +4279,9 @@
     t.nights = stay ? stay.nights : null;
     t.checkin = stay ? stay.checkin : null;
     t.checkout = stay ? stay.checkout : null;
+    // Set on both paths, so a card that stops naming its room clears the old
+    // subtitle instead of leaving the last one standing under new numbers.
+    t.label = checkoutLabel(anchor);
 
     reportCheckoutStay(t, stay, total);
 
@@ -4257,10 +4291,11 @@
       t.amountSource = null;
       return;
     }
-    // The modal is written against the tax-inclusive total plus the Bliss fee —
-    // the same basis the block's own teaser uses, so the two agree by
-    // construction rather than by coincidence.
-    t.amountCents = Math.round(total * (1 + BLISS_FEE_RATE));
+    // The modal is written against the tax-inclusive total through withFee —
+    // the same basis, and the same fee rate, the block's own teaser uses, so
+    // the two agree by construction rather than by coincidence. At the zero
+    // rate that basis IS the property's Total, to the cent.
+    t.amountCents = withFee(total);
     // THE ONE THING THAT DIFFERS ON THIS SURFACE. A rate card gets its nightly
     // figure from the dataLayer or from the card's own price; here it is
     // derived from the tax-inclusive Total over the night count. Everything
@@ -4269,15 +4304,20 @@
     t.nightlyAmountCents = summaryPerNightCents(total, stay.nights, 1);
     t.currency = (state.dl && state.dl.currency) || null;
     t.rateName = null;
-    t.label = checkoutLabel(anchor);
     t.amountSource = "DOM (Trip Summary)";
   }
 
   /** The modal subtitle on the checkout step: the room, when the card names it. */
   function checkoutLabel(anchor) {
     if (!anchor || !anchor.summary) return null;
-    var room = pageRoomName();
-    if (room) return room;
+  var room = null;
+  try {
+    var lines = String(anchor.summary.textContent || "").split(/\n+/).map(function (s) { return s.replace(/\s+/g, " ").trim(); }).filter(Boolean);
+    for (var i = 1; i < lines.length; i++) {
+      if (/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}\s*[-–]/i.test(lines[i])) { room = lines[i - 1]; break; }
+    }
+  } catch (e) {}
+  if (room && room.length < 60 && !/\$/.test(room)) return room;
     if (state.dl && state.dl.hotelName) return state.dl.hotelName;
     return "Your stay";
   }
@@ -4874,9 +4914,9 @@
         "  |  checkout block: " + (hasCheckout ? "mounted, tax-inclusive Total basis" : "not on this page") +
         "  |  priced from the card rather than the dataLayer: " + (state.lastUnmatchedCount || 0) + "\n" +
         "  Amount basis: nightly price x nights" +
-        (CONFIG.rateCards.applyFeeToBasis
-          ? ", plus the " + Math.round(BLISS_FEE_RATE * 100) + "% Bliss fee"
-          : "") +
+        (feeRate() > 0
+          ? ", plus the " + Math.round(feeRate() * 100) + "% Bliss fee on both surfaces"
+          : ", with NO Bliss fee added on either surface (free plan)") +
         ". Teaser and modal share it, so they reconcile.\n" +
         "  Nightly price comes from the dataLayer when it carries the rate, else from the card. " +
         "The struck comparison price is never the basis."
