@@ -169,12 +169,13 @@
   //
   // DIVERGENCE FROM BOTH SIBLINGS. There, the fee is applied only to the
   // checkout-step block's basis; a rate-card trigger plans against the bare
-  // pre-tax stay total with no fee in it. This file has no checkout step, so
-  // following that rule would mean the fee never appears anywhere in the demo.
-  // It is applied to the rate-card basis instead, which is what
-  // CONFIG.rateCards.applyFeeToBasis carries. Because it is applied to the
-  // nightly figure and the stay total alike, the teaser and the modal still
-  // reconcile exactly — see fromLine.
+  // pre-tax stay total with no fee in it. This file applies it on BOTH kinds
+  // of surface: to the rate-card basis through withFee, gated by
+  // CONFIG.rateCards.applyFeeToBasis, and to the checkout block's
+  // tax-inclusive Total unconditionally, since applyDetailsAmount and
+  // summaryPerNightCents both apply the rate directly and consult no flag.
+  // Because it is applied to the nightly figure and the stay total alike, the
+  // teaser and the modal still reconcile exactly — see fromLine.
   // =========================================================================
   var BLISS_FEE_RATE = 0.05;
 
@@ -371,8 +372,11 @@
 
       /**
        * Add the 5% Bliss fee to the rate-card basis. See the BLISS FEE note:
-       * this is the one place this file's money differs from its siblings, and
-       * it is on because Olive has no checkout step for the fee to appear in.
+       * both siblings apply the fee only on their checkout-step block, and
+       * this file applies it on the rate cards too.
+       *
+       * RATE CARDS ONLY. The checkout block applies the fee unconditionally
+       * and never reads this flag, so clearing it leaves that block's fee in.
        */
       applyFeeToBasis: true,
 
