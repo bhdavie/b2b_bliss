@@ -21,6 +21,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +40,8 @@ public class AuthResource {
     // TEMPORARY MASTER PASSWORD BYPASS — remove with passwordLogin() below.
     private final MerchantDao merchantDao;
     private final MasterPassword masterPassword;
+    /** Lowercased. Emails dev-login accepts even when devLoginEnabled is false. */
+    private final Set<String> demoLoginEmails;
 
     public AuthResource(
             MagicLinkService magicLinkService,
@@ -47,7 +50,8 @@ public class AuthResource {
             boolean devLoginEnabled,
             int jwtTtlMinutes,
             MerchantDao merchantDao,
-            MasterPassword masterPassword
+            MasterPassword masterPassword,
+            Set<String> demoLoginEmails
     ) {
         this.magicLinkService = magicLinkService;
         this.jwtService = jwtService;
@@ -56,6 +60,7 @@ public class AuthResource {
         this.cookieMaxAgeSeconds = jwtTtlMinutes * 60;
         this.merchantDao = merchantDao;
         this.masterPassword = masterPassword;
+        this.demoLoginEmails = demoLoginEmails;
     }
 
     @POST
@@ -103,20 +108,31 @@ public class AuthResource {
      * is found-or-created for the email, marked verified, and a session cookie
      * is set. No password is involved.
      *
-     * <p>On outside production, and in production only when BLISS_DEMO_LOGIN is
-     * set — the hosted demo needs a sign-in that works without deliverable
-     * email. Otherwise 404, so the route does not exist.
+     * <p>Open outside production, and in production when BLISS_DEMO_LOGIN is
+     * set. It is additionally open — gate or no gate — for the specific
+     * addresses in BLISS_DEMO_LOGIN_EMAILS, which is how the public demo
+     * funnels keep signing anyone in as one curated demo property once the gate
+     * is shut. Everything else 404s, so the route does not exist for it.
+     *
+     * <p>The email is read and normalised BEFORE the gate is applied, because
+     * the allowlist check needs it. An address that is neither allowlisted nor
+     * covered by the gate gets the same 404 as before, so nothing about the
+     * closed case is observable from outside.
      */
     @POST
     @Path("/dev-login")
     public Response devLogin(DevLoginRequest req) {
-        if (!devLoginEnabled) {
-            return Response.status(404).entity(Map.of("error", "not_found")).build();
-        }
         if (req == null || req.email() == null || req.email().isBlank()) {
+            // 400 ahead of the gate: a request with no email is malformed
+            // whatever the gate says, and this leaks nothing about the gate
+            // because it cannot be reached with a real address.
             return Response.status(400).entity(Map.of("error", "email required")).build();
         }
-        Merchant merchant = magicLinkService.devLogin(req.email());
+        String normalized = req.email().trim().toLowerCase();
+        if (!devLoginEnabled && !demoLoginEmails.contains(normalized)) {
+            return Response.status(404).entity(Map.of("error", "not_found")).build();
+        }
+        Merchant merchant = magicLinkService.devLogin(normalized);
         log.info("Dev-login bypass issued session for merchant {} ({})",
                 merchant.id(), merchant.email());
         String jwt = jwtService.issue(merchant.email(), merchant.id().toString());

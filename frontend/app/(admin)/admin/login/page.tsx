@@ -52,34 +52,69 @@ export default function AdminLoginPage() {
       .catch(() => setMode("magic-link"));
   }, []);
 
+  // On screen when demo mode wants it, or when the TEMPORARY master password is
+  // configured. Neither holding leaves the form a pure magic-link request.
+  const showPassword = mode === "demo" || masterPasswordEnabled;
+
+  /**
+   * Explicit "email me a link" action, separate from the form submit, on a
+   * type="button" trigger so the required password field cannot block it.
+   */
+  async function handleMagicLink() {
+    setError(null);
+    if (!email) {
+      setError("Enter your email first.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await requestAdminMagicLink(email);
+      setSent(true);
+      setSubmitting(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign in failed");
+      setSubmitting(false);
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      // TEMPORARY MASTER PASSWORD BYPASS - REMOVE BEFORE REAL MERCHANT OR GUEST
-      // ONBOARDING. Mirrors the merchant page: tried first when a password was
-      // typed, falls through to the unchanged demo path on failure. Neither
-      // path can create an admin - the backend 401s an unknown address on both.
-      if (masterPasswordEnabled && password) {
-        try {
-          await adminPasswordLogin(email, password);
+      if (showPassword) {
+        // Blank is rejected rather than quietly sending a link, as on the
+        // merchant screen. Asking for a link is its own action below.
+        if (!password) {
+          setError("Enter your password.");
+          setSubmitting(false);
+          return;
+        }
+        // TEMPORARY MASTER PASSWORD BYPASS - REMOVE BEFORE REAL MERCHANT OR
+        // GUEST ONBOARDING. Falls through to the unchanged demo path on failure.
+        // Neither path can create an admin - the backend 401s an unknown
+        // address on both.
+        if (masterPasswordEnabled) {
+          try {
+            await adminPasswordLogin(email, password);
+            router.push("/admin");
+            router.refresh();
+            return;
+          } catch {
+            if (mode !== "demo") {
+              throw new Error("That email and password did not match.");
+            }
+          }
+        }
+        if (mode === "demo") {
+          // The password is not validated here. The address is what the backend
+          // checks, and it must already be an admin_users row.
+          await adminDevLogin(email);
           router.push("/admin");
           router.refresh();
           return;
-        } catch {
-          if (mode !== "demo") {
-            throw new Error("That email and password did not match.");
-          }
         }
-      }
-      if (mode === "demo") {
-        // The password is decorative and not validated, as on the merchant
-        // screen. The address is what the backend checks.
-        await adminDevLogin(email);
-        router.push("/admin");
-        router.refresh();
-        return;
+        throw new Error("That email and password did not match.");
       }
       await requestAdminMagicLink(email);
       setSent(true);
@@ -115,14 +150,13 @@ export default function AdminLoginPage() {
             autoComplete="email"
           />
 
-          {mode === "demo" || masterPasswordEnabled ? (
+          {showPassword ? (
             <AuthField
               label="Password"
               type="password"
-              // Required in demo mode as before; optional when the field is
-              // here only because MASTER_PASSWORD is set (TEMPORARY), so magic
-              // link stays reachable by leaving it blank.
-              required={mode === "demo"}
+              // Required now that blank is rejected. The link request below is a
+              // plain button, so it bypasses this validation.
+              required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
@@ -132,19 +166,28 @@ export default function AdminLoginPage() {
           {error ? <AuthError>{error}</AuthError> : null}
 
           <AuthSubmit disabled={submitting || mode === null}>
-            {buttonLabel(mode, submitting, password.length > 0)}
+            {buttonLabel(showPassword, submitting)}
           </AuthSubmit>
+
+          {showPassword ? (
+            <button
+              type="button"
+              onClick={handleMagicLink}
+              disabled={submitting || mode === null}
+              className="text-[13px] text-ink-500 underline underline-offset-2 hover:text-ink-700 disabled:opacity-50"
+            >
+              Email me a sign-in link instead
+            </button>
+          ) : null}
         </AuthForm>
       )}
     </AuthShell>
   );
 }
 
-// hasPassword is TEMPORARY, for the master-password bypass: a typed password in
-// magic-link mode signs in directly, so the button must stop promising an email.
-function buttonLabel(mode: Mode, submitting: boolean, hasPassword: boolean): string {
-  if (mode === "magic-link" && !hasPassword) {
-    return submitting ? "Sending link" : "Email me a link";
-  }
+// With a password on screen the submit always signs in; the link request is its
+// own action. Without one the form is still the link request itself.
+function buttonLabel(showPassword: boolean, submitting: boolean): string {
+  if (!showPassword) return submitting ? "Sending link" : "Email me a link";
   return submitting ? "Signing in" : "Sign in";
 }

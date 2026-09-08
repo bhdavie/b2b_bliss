@@ -37,7 +37,7 @@ INSERT INTO merchants (
 ) VALUES (
     '9b54a488-b308-4a6d-91cc-38983ff982ac',
     'j9l29fke',
-    'demo@marbrookhouse.com',
+    'demo@bliss-payments.com',
     'Marbrook House',
     'hotel',
     '118 Greenwich Avenue', 'Hudson', 'NY', '12534', 'US',

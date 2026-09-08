@@ -160,7 +160,7 @@ To hand the demo over to real auth: set `BLISS_POSTMARK_TOKEN`, then set
 ## Seeding the demo merchant
 
 `seed-demo` creates the Marbrook House demo merchant (slug `j9l29fke`, sign in as
-`demo@marbrookhouse.com`), its saved plan rules, and five fixture bookings with
+`demo@bliss-payments.com`), its saved plan rules, and five fixture bookings with
 their customers, plans and payment schedules — one per plan state, so the
 dashboard and the consumer portal both have something to render.
 

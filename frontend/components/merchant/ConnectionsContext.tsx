@@ -49,7 +49,7 @@ const SIMULATED_CONNECT_MS = 1200;
 const STORAGE_KEY = "bliss.connections.v1";
 const ACCOUNT_LABEL: Record<ConnKind, string> = {
   payments: "Acct ••• 4242",
-  pms: "demo@marbrookhouse.com",
+  pms: "demo@bliss-payments.com",
 };
 
 type Internal = { selectedName: string; state: ConnState };

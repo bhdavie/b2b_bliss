@@ -9,10 +9,12 @@
 // demo dataset is a test string, so it isn't shown as the brand.
 
 export const DEMO_HOTEL = {
-  // Unified Marbrook merchant: the funnel and the merchant dashboard now resolve
-  // to the same account (dev-login is find-or-create by email). The retired test
-  // copy was frontdesk@marbrookhouse.test.
-  email: "demo@marbrookhouse.com",
+  // The PUBLIC demo account, deliberately NOT a Marbrook address. dev-login is
+  // held open for this one email in production (BLISS_DEMO_LOGIN_EMAILS) so the
+  // live funnels can sign anyone in here, while the real Marbrook portal is a
+  // separate account that only the master password opens. The retired test copy
+  // was frontdesk@marbrookhouse.test.
+  email: "demo@bliss-payments.com",
   // Stable slug for the unified demo merchant, so the funnel can read its saved
   // policies via the public merchants endpoint without a merchant-session call.
   slug: "j9l29fke",
@@ -27,7 +29,9 @@ export const DEMO_HOTEL = {
 
 // Frozen constant for the preserved /inn/marbrook-classic demo — do not change it when DEMO_HOTEL changes.
 export const DEMO_HOTEL_CLASSIC = {
-  email: "demo@marbrookhouse.com",
+  // Same public demo account as DEMO_HOTEL - see the note there on why this is
+  // not a Marbrook address.
+  email: "demo@bliss-payments.com",
   slug: "j9l29fke",
   businessName: "Marbrook House",
   businessType: "hotel",

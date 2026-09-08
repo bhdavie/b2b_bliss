@@ -51,6 +51,13 @@ chargeCapCents: ${BLISS_CHARGE_CAP_CENTS:-0}
 # are untouched.
 masterPassword: ${MASTER_PASSWORD:-}
 
+# Emails that keep POST /api/v1/auth/dev-login open even when demoLogin is off.
+# Comma-separated; blank (the default) means demoLogin alone decides. This is
+# what lets the public demo funnels sign anyone in as one curated demo property
+# in production while dev-login stays shut for every other account. Merchant
+# only - the admin and guest dev-logins have no allowlist.
+demoLoginEmails: ${BLISS_DEMO_LOGIN_EMAILS:-}
+
 app:
   # Merchant dashboard (property.bliss-payments.com in prod): magic-link sign-in
   # and the Stripe Connect return url.

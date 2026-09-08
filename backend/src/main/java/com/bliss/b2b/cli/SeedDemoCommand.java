@@ -48,7 +48,10 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
 
     private static final String SCRIPT = "/demo-seed-marbrook.sql";
     private static final String SLUG = "j9l29fke";
-    private static final String EMAIL = "demo@marbrookhouse.com";
+    // The PUBLIC demo address, deliberately not a Marbrook one: this account is
+    // the open funnel anyone can sign into, while demo@marbrookhouse.com is the
+    // real Marbrook portal and is master-password-only.
+    private static final String EMAIL = "demo@bliss-payments.com";
 
     public SeedDemoCommand() {
         super("seed-demo", "Idempotently create the Marbrook House demo merchant and fixture bookings");

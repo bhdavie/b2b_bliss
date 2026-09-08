@@ -72,7 +72,10 @@ import jakarta.servlet.DispatcherType;
 import jakarta.servlet.FilterRegistration;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.eclipse.jetty.servlets.CrossOriginFilter;
 import org.flywaydb.core.Flyway;
 import org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature;
@@ -266,9 +269,22 @@ public class BlissApplication extends Application<BlissConfiguration> {
                     + "/api/v1/admin/auth/password-login will accept that one secret as any "
                     + "existing merchant or admin. Temporary — unset it before real onboarding.");
         }
+        // Emails dev-login still accepts once the demo gate is shut, so the public
+        // demo funnels keep working in production without leaving dev-login open
+        // as a way into every other merchant. Merchant only: AdminAuthResource
+        // and PublicAccountResource get no allowlist and close with the gate.
+        Set<String> demoLoginEmails = Arrays.stream(config.getDemoLoginEmails().split(","))
+                .map(e -> e.trim().toLowerCase())
+                .filter(e -> !e.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
+        if (!demoLoginEmails.isEmpty()) {
+            log.info("Dev-login allowlist active ({} address(es)): dev-login stays open for these "
+                    + "even when the demo gate is off", demoLoginEmails.size());
+        }
         environment.jersey().register(new AuthResource(
                 magicLinkService, jwtService, cookieOptions,
-                demoLoginEnabled, sessionTtlMinutes, merchantDao, masterPassword));
+                demoLoginEnabled, sessionTtlMinutes, merchantDao, masterPassword,
+                demoLoginEmails));
         // Bliss internal admin. Same cookie options and the same demo gate as
         // the merchant surface; the resource itself is what refuses to create
         // an admin, so BLISS_DEMO_LOGIN cannot mint one here the way it can
