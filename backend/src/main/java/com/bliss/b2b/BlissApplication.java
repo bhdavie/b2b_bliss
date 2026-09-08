@@ -26,6 +26,7 @@ import com.bliss.b2b.auth.AdminPrincipal;
 import com.bliss.b2b.auth.CookieOptions;
 import com.bliss.b2b.auth.JwtCookieAuthFilter;
 import com.bliss.b2b.auth.JwtService;
+import com.bliss.b2b.auth.MasterPassword;
 import com.bliss.b2b.auth.MerchantAuthenticator;
 import com.bliss.b2b.auth.MerchantPrincipal;
 import com.bliss.b2b.cli.SeedDemoCommand;
@@ -254,9 +255,20 @@ public class BlissApplication extends Application<BlissConfiguration> {
         log.info("Session cookies: secure={} sameSite={} domain={}",
                 cookieOptions.secure(), cookieOptions.sameSite(),
                 cookieOptions.domain() == null ? "(host-only)" : cookieOptions.domain());
+        // TEMPORARY MASTER PASSWORD BYPASS — REMOVE BEFORE REAL MERCHANT OR
+        // GUEST ONBOARDING. One shared secret signs in as any existing merchant
+        // or admin. Unset (the default) and both /password-login routes 404.
+        // Not folded into demoLoginEnabled: the bypass is for the case where
+        // magic link is otherwise the only way in. See auth/MasterPassword.
+        MasterPassword masterPassword = new MasterPassword(config.getMasterPassword());
+        if (masterPassword.isEnabled()) {
+            log.warn("MASTER_PASSWORD is set: POST /api/v1/auth/password-login and "
+                    + "/api/v1/admin/auth/password-login will accept that one secret as any "
+                    + "existing merchant or admin. Temporary — unset it before real onboarding.");
+        }
         environment.jersey().register(new AuthResource(
                 magicLinkService, jwtService, cookieOptions,
-                demoLoginEnabled, sessionTtlMinutes));
+                demoLoginEnabled, sessionTtlMinutes, merchantDao, masterPassword));
         // Bliss internal admin. Same cookie options and the same demo gate as
         // the merchant surface; the resource itself is what refuses to create
         // an admin, so BLISS_DEMO_LOGIN cannot mint one here the way it can
@@ -265,7 +277,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 adminUserDao, tokenDao, emailService, config.getApp(), magicLinkTtl);
         environment.jersey().register(new AdminAuthResource(
                 adminAuthService, jwtService, cookieOptions,
-                demoLoginEnabled, sessionTtlMinutes));
+                demoLoginEnabled, sessionTtlMinutes, masterPassword));
         environment.jersey().register(new AdminMerchantsResource(
                 new AdminMerchantsService(jdbi), clock));
         environment.jersey().register(new MerchantsResource(merchantDao, stripeService, emailService));

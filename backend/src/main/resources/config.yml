@@ -43,6 +43,14 @@ demoLogin: ${BLISS_DEMO_LOGIN:-false}
 # 0 (default) disables the cap.
 chargeCapCents: ${BLISS_CHARGE_CAP_CENTS:-0}
 
+# TEMPORARY MASTER PASSWORD BYPASS — REMOVE BEFORE REAL MERCHANT OR GUEST
+# ONBOARDING. When set, this one shared secret signs in as any existing merchant
+# or admin via POST /api/v1/auth/password-login and
+# POST /api/v1/admin/auth/password-login. Blank (the default) disables both
+# routes. Adds a way in only: magic link, the demoLogin gate and the guest flow
+# are untouched.
+masterPassword: ${MASTER_PASSWORD:-}
+
 app:
   # Merchant dashboard (property.bliss-payments.com in prod): magic-link sign-in
   # and the Stripe Connect return url.

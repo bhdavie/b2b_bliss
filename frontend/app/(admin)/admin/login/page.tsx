@@ -2,7 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { adminDevLogin, fetchDevAuthStatus, requestAdminMagicLink } from "@/lib/api";
+import {
+  adminDevLogin,
+  adminPasswordLogin,
+  fetchDevAuthStatus,
+  requestAdminMagicLink,
+} from "@/lib/api";
 import {
   AuthError,
   AuthField,
@@ -34,10 +39,16 @@ export default function AdminLoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  // TEMPORARY MASTER PASSWORD BYPASS - remove with the branch in handleSubmit.
+  // Same probe as the merchant page, which already serves both surfaces.
+  const [masterPasswordEnabled, setMasterPasswordEnabled] = useState(false);
 
   useEffect(() => {
     fetchDevAuthStatus()
-      .then((status) => setMode(status.devLoginEnabled ? "demo" : "magic-link"))
+      .then((status) => {
+        setMode(status.devLoginEnabled ? "demo" : "magic-link");
+        setMasterPasswordEnabled(status.masterPasswordEnabled);
+      })
       .catch(() => setMode("magic-link"));
   }, []);
 
@@ -46,6 +57,22 @@ export default function AdminLoginPage() {
     setError(null);
     setSubmitting(true);
     try {
+      // TEMPORARY MASTER PASSWORD BYPASS - REMOVE BEFORE REAL MERCHANT OR GUEST
+      // ONBOARDING. Mirrors the merchant page: tried first when a password was
+      // typed, falls through to the unchanged demo path on failure. Neither
+      // path can create an admin - the backend 401s an unknown address on both.
+      if (masterPasswordEnabled && password) {
+        try {
+          await adminPasswordLogin(email, password);
+          router.push("/admin");
+          router.refresh();
+          return;
+        } catch {
+          if (mode !== "demo") {
+            throw new Error("That email and password did not match.");
+          }
+        }
+      }
       if (mode === "demo") {
         // The password is decorative and not validated, as on the merchant
         // screen. The address is what the backend checks.
@@ -88,11 +115,14 @@ export default function AdminLoginPage() {
             autoComplete="email"
           />
 
-          {mode === "demo" ? (
+          {mode === "demo" || masterPasswordEnabled ? (
             <AuthField
               label="Password"
               type="password"
-              required
+              // Required in demo mode as before; optional when the field is
+              // here only because MASTER_PASSWORD is set (TEMPORARY), so magic
+              // link stays reachable by leaving it blank.
+              required={mode === "demo"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
@@ -102,7 +132,7 @@ export default function AdminLoginPage() {
           {error ? <AuthError>{error}</AuthError> : null}
 
           <AuthSubmit disabled={submitting || mode === null}>
-            {buttonLabel(mode, submitting)}
+            {buttonLabel(mode, submitting, password.length > 0)}
           </AuthSubmit>
         </AuthForm>
       )}
@@ -110,7 +140,11 @@ export default function AdminLoginPage() {
   );
 }
 
-function buttonLabel(mode: Mode, submitting: boolean): string {
-  if (mode === "magic-link") return submitting ? "Sending link" : "Email me a link";
+// hasPassword is TEMPORARY, for the master-password bypass: a typed password in
+// magic-link mode signs in directly, so the button must stop promising an email.
+function buttonLabel(mode: Mode, submitting: boolean, hasPassword: boolean): string {
+  if (mode === "magic-link" && !hasPassword) {
+    return submitting ? "Sending link" : "Email me a link";
+  }
   return submitting ? "Signing in" : "Sign in";
 }

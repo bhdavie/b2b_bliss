@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { devLogin, fetchDevAuthStatus, requestMagicLink } from "@/lib/api";
+import {
+  devLogin,
+  fetchDevAuthStatus,
+  passwordLogin,
+  requestMagicLink,
+} from "@/lib/api";
 import {
   AuthError,
   AuthField,
@@ -33,13 +38,21 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // TEMPORARY MASTER PASSWORD BYPASS - remove with the branch in handleSubmit.
+  // Tracked separately from `mode` because the bypass is independent of the
+  // demo gate: its whole purpose is the magic-link case, where there would
+  // otherwise be no password field to type into.
+  const [masterPasswordEnabled, setMasterPasswordEnabled] = useState(false);
 
   useEffect(() => {
     // fetchDevAuthStatus reports disabled if the probe itself fails, so an
     // unreachable backend lands on the magic-link path rather than offering a
     // sign-in that would 404.
     fetchDevAuthStatus()
-      .then((status) => setMode(status.devLoginEnabled ? "demo" : "magic-link"))
+      .then((status) => {
+        setMode(status.devLoginEnabled ? "demo" : "magic-link");
+        setMasterPasswordEnabled(status.masterPasswordEnabled);
+      })
       .catch(() => setMode("magic-link"));
   }, []);
 
@@ -48,6 +61,25 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
+      // TEMPORARY MASTER PASSWORD BYPASS - REMOVE BEFORE REAL MERCHANT OR GUEST
+      // ONBOARDING. Tried first whenever a password was typed and the backend
+      // reports one is configured. On failure this deliberately falls THROUGH
+      // rather than stopping, so the demo path below behaves exactly as it did
+      // before the bypass existed: a wrong password in demo mode still signs in
+      // via dev-login, as the decorative field always did.
+      if (masterPasswordEnabled && password) {
+        try {
+          await passwordLogin(email, password);
+          router.push("/home");
+          router.refresh();
+          return;
+        } catch {
+          if (mode !== "demo") {
+            // No dev-login to fall back to here, so this is the end of the road.
+            throw new Error("That email and password did not match.");
+          }
+        }
+      }
       if (mode === "demo") {
         // Demo sign-in: the password is decorative and not validated.
         // devLogin establishes the merchant session so the dashboard loads.
@@ -89,11 +121,14 @@ export default function LoginPage() {
           autoComplete="email"
         />
 
-        {mode === "demo" ? (
+        {mode === "demo" || masterPasswordEnabled ? (
           <AuthField
             label="Password"
             type="password"
-            required
+            // Required in demo mode as before. Optional when the field is here
+            // only because MASTER_PASSWORD is set (TEMPORARY): leaving it blank
+            // has to stay possible so magic link is still reachable.
+            required={mode === "demo"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
@@ -103,14 +138,19 @@ export default function LoginPage() {
         {error ? <AuthError>{error}</AuthError> : null}
 
         <AuthSubmit disabled={submitting || mode === null}>
-          {buttonLabel(mode, submitting)}
+          {buttonLabel(mode, submitting, password.length > 0)}
         </AuthSubmit>
       </AuthForm>
     </AuthShell>
   );
 }
 
-function buttonLabel(mode: Mode, submitting: boolean): string {
-  if (mode === "magic-link") return submitting ? "Sending link" : "Email me a link";
+// hasPassword is TEMPORARY, for the master-password bypass: in magic-link mode
+// a typed password means the submit signs in directly rather than emailing a
+// link, and the button has to stop promising an email it will not send.
+function buttonLabel(mode: Mode, submitting: boolean, hasPassword: boolean): string {
+  if (mode === "magic-link" && !hasPassword) {
+    return submitting ? "Sending link" : "Email me a link";
+  }
   return submitting ? "Signing in" : "Sign in";
 }

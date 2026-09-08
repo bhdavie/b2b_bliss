@@ -3,6 +3,7 @@ package com.bliss.b2b.api;
 import com.bliss.b2b.auth.AdminPrincipal;
 import com.bliss.b2b.auth.CookieOptions;
 import com.bliss.b2b.auth.JwtService;
+import com.bliss.b2b.auth.MasterPassword;
 import com.bliss.b2b.auth.SessionCookies;
 import com.bliss.b2b.domain.AdminUser;
 import com.bliss.b2b.service.AdminAuthService;
@@ -41,19 +42,23 @@ public class AdminAuthResource {
     private final CookieOptions cookieOptions;
     private final boolean devLoginEnabled;
     private final int cookieMaxAgeSeconds;
+    // TEMPORARY MASTER PASSWORD BYPASS — remove with passwordLogin() below.
+    private final MasterPassword masterPassword;
 
     public AdminAuthResource(
             AdminAuthService adminAuthService,
             JwtService jwtService,
             CookieOptions cookieOptions,
             boolean devLoginEnabled,
-            int jwtTtlMinutes
+            int jwtTtlMinutes,
+            MasterPassword masterPassword
     ) {
         this.adminAuthService = adminAuthService;
         this.jwtService = jwtService;
         this.cookieOptions = cookieOptions;
         this.devLoginEnabled = devLoginEnabled;
         this.cookieMaxAgeSeconds = jwtTtlMinutes * 60;
+        this.masterPassword = masterPassword;
     }
 
     /**
@@ -122,6 +127,46 @@ public class AdminAuthResource {
         return sessionResponse(admin.get());
     }
 
+    /**
+     * TEMPORARY MASTER PASSWORD BYPASS — REMOVE BEFORE REAL MERCHANT OR GUEST
+     * ONBOARDING. Admin mirror of
+     * {@link AuthResource#passwordLogin}: when {@code MASTER_PASSWORD} is set,
+     * submitting it signs in as any EXISTING admin. The class-level rule still
+     * holds — there is no admin signup, so an email without an
+     * {@code admin_users} row is rejected rather than provisioned. 404 whenever
+     * MASTER_PASSWORD is unset.
+     *
+     * <p>Removal: delete this method, the field and constructor parameter above,
+     * and see {@link com.bliss.b2b.auth.MasterPassword} for the rest.
+     */
+    @POST
+    @Path("/password-login")
+    public Response passwordLogin(PasswordLoginRequest req) {
+        if (!masterPassword.isEnabled()) {
+            return Response.status(404).entity(Map.of("error", "not_found")).build();
+        }
+        if (req == null || req.email() == null || req.email().isBlank()
+                || req.password() == null || req.password().isEmpty()) {
+            return Response.status(400)
+                    .entity(Map.of("error", "email and password required")).build();
+        }
+        if (!masterPassword.matches(req.password())) {
+            return Response.status(401).entity(Map.of("error", "invalid_credentials")).build();
+        }
+        // devLogin is the existing find-an-existing-admin lookup: it never
+        // creates, and it stamps last_login_at. Reused so the two bypasses
+        // cannot drift on what counts as an admin.
+        Optional<AdminUser> admin = adminAuthService.devLogin(req.email());
+        if (admin.isEmpty()) {
+            // Same 401 as a wrong password, so the short internal admin list
+            // cannot be enumerated through this route.
+            return Response.status(401).entity(Map.of("error", "invalid_credentials")).build();
+        }
+        log.warn("MASTER_PASSWORD bypass issued admin session for {} ({}) — temporary, "
+                + "remove before real onboarding", admin.get().id(), admin.get().email());
+        return sessionResponse(admin.get());
+    }
+
     @POST
     @Path("/sign-out")
     public Response signOut(@Auth Optional<AdminPrincipal> _principal) {
@@ -160,4 +205,8 @@ public class AdminAuthResource {
     public record MagicLinkRequest(@JsonProperty("email") String email) {}
     public record VerifyRequest(@JsonProperty("token") String token) {}
     public record DevLoginRequest(@JsonProperty("email") String email) {}
+    // TEMPORARY MASTER PASSWORD BYPASS — remove with passwordLogin().
+    public record PasswordLoginRequest(
+            @JsonProperty("email") String email,
+            @JsonProperty("password") String password) {}
 }

@@ -83,14 +83,38 @@ export async function signOut(): Promise<void> {
 
 export type DevAuthStatus = {
   devLoginEnabled: boolean;
+  // TEMPORARY MASTER PASSWORD BYPASS - remove with passwordLogin below.
+  masterPasswordEnabled: boolean;
 };
 
 export async function fetchDevAuthStatus(): Promise<DevAuthStatus> {
   const res = await fetch(`${API_BASE_URL}/api/v1/auth/dev-status`, {
     cache: "no-store",
   });
-  if (!res.ok) return { devLoginEnabled: false };
+  // Both flags default off when the probe fails, matching the existing rule
+  // that an unreachable backend must not make the page offer a sign-in that
+  // would 404.
+  if (!res.ok) return { devLoginEnabled: false, masterPasswordEnabled: false };
   return (await res.json()) as DevAuthStatus;
+}
+
+/**
+ * TEMPORARY MASTER PASSWORD BYPASS - REMOVE BEFORE REAL MERCHANT OR GUEST
+ * ONBOARDING. Posts the shared secret to /password-login, which signs in as an
+ * EXISTING merchant. 404 when MASTER_PASSWORD is unset, 401 for a wrong
+ * password or an unknown email - the caller treats all of those the same.
+ */
+export async function passwordLogin(
+  email: string,
+  password: string,
+): Promise<MerchantView> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/password-login`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  return unwrap<MerchantView>(res);
 }
 
 export async function devLogin(email: string): Promise<MerchantView> {
@@ -150,6 +174,24 @@ export async function adminDevLogin(email: string): Promise<AdminView> {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email }),
+  });
+  return unwrap<AdminView>(res);
+}
+
+/**
+ * TEMPORARY MASTER PASSWORD BYPASS - REMOVE BEFORE REAL MERCHANT OR GUEST
+ * ONBOARDING. Admin twin of {@link passwordLogin}. Still requires an existing
+ * admin_users row, so this cannot mint an admin any more than adminDevLogin can.
+ */
+export async function adminPasswordLogin(
+  email: string,
+  password: string,
+): Promise<AdminView> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/admin/auth/password-login`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
   });
   return unwrap<AdminView>(res);
 }

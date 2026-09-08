@@ -37,6 +37,17 @@ public class BlissConfiguration extends Configuration {
      */
     private long chargeCapCents = 0;
 
+    /**
+     * TEMPORARY MASTER PASSWORD BYPASS — REMOVE BEFORE REAL MERCHANT OR GUEST
+     * ONBOARDING. Env-driven via {@code MASTER_PASSWORD}. When set, the shared
+     * secret signs in as any existing merchant or admin through
+     * {@code POST /api/v1/auth/password-login} and
+     * {@code POST /api/v1/admin/auth/password-login}. Blank (the default)
+     * disables both routes entirely. See
+     * {@link com.bliss.b2b.auth.MasterPassword}.
+     */
+    private String masterPassword = "";
+
     @Valid
     @NotNull
     private AppConfig app = new AppConfig();
@@ -79,6 +90,9 @@ public class BlissConfiguration extends Configuration {
     @JsonProperty public void setDemoLogin(boolean demoLogin) { this.demoLogin = demoLogin; }
     @JsonProperty public long getChargeCapCents() { return chargeCapCents; }
     @JsonProperty public void setChargeCapCents(long chargeCapCents) { this.chargeCapCents = chargeCapCents; }
+    // TEMPORARY MASTER PASSWORD BYPASS — remove with the field above.
+    @JsonProperty public String getMasterPassword() { return masterPassword; }
+    @JsonProperty public void setMasterPassword(String masterPassword) { this.masterPassword = masterPassword; }
     @JsonProperty public AppConfig getApp() { return app; }
     @JsonProperty public void setApp(AppConfig app) { this.app = app; }
     @JsonProperty public DatabaseConfig getDatabase() { return database; }
