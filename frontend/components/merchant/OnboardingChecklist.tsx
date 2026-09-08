@@ -127,7 +127,44 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
             </li>
           );
         })}
+
+        {/* Visual placeholder only. Deliberately NOT an entry in `items`: that
+            array drives the "of N" denominator, the currentKey nudge and the
+            numbered badge, so a fifth entry there would read as a required step,
+            latch the "current" highlight onto itself forever (no matching
+            status.steps key means done() is false for good) and number itself 5.
+            This row never calls done(), carries no key the backend knows about,
+            and sits outside every completion path, so canActivate and "Go live"
+            are untouched by it. */}
+        <li
+          aria-disabled="true"
+          className="flex items-center gap-4 rounded-xl border border-sand-200 bg-sand-50 px-5 py-4"
+        >
+          {/* A dash rather than a number: this row is not one of the counted steps. */}
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sand-200 text-[13px] font-semibold text-ink-500">
+            &ndash;
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-[14px] text-ink-500">
+              Connect your bank account for payouts
+            </div>
+            <div className="mt-0.5 truncate text-[13px] text-ink-500">
+              Where your payouts will land
+            </div>
+          </div>
+          {/* A static pill, not a Button: nothing here may read as clickable. */}
+          <span className="shrink-0 rounded-full bg-sand-200 px-3 py-1 text-[12px] font-medium text-ink-500">
+            Coming soon
+          </span>
+        </li>
       </ol>
+
+      {/* Says out loud what the muted row and the unchanged "of N" counter imply,
+          so five rows against a total of four cannot be misread as a blocked
+          go-live. */}
+      <p className="mt-2 text-[13px] text-ink-500">
+        Payout setup is not required to go live.
+      </p>
 
       {error ? (
         <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-[14px] text-red-700">{error}</p>
