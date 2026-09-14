@@ -198,14 +198,30 @@ export function PlanPortal({
       </Panel>
 
 
-      {/* Row 1 — schedule, with next payment and payment method beside it */}
-      <div className="mb-3 grid grid-cols-1 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
-        <Panel variant="filled" className="p-5">
+      {/* Two columns, each an independent stack.
+
+          This used to be two grids, one per visual row, which tied the right
+          column's cards to the left column's row heights. Plan summary lived
+          in the second grid, so it could not start until the taller of
+          Schedule and the payment cards had finished: it dropped to line up
+          with Cancel plan and left a tall gap under Payment method.
+
+          One grid now, and the right column is a single flex column spanning
+          both rows. Its three cards stack on their own gap-3, so Plan summary
+          sits directly under Payment method whatever the left column does.
+          The left-hand cards keep explicit row placement so Schedule and
+          Cancel stay in column 1 and their tops sit where they did.
+
+          DOM order is untouched, which is what keeps the single-column
+          stacking below xl reading exactly as it does today: schedule, next
+          payment, payment method, plan summary, cancel. */}
+      <div className="grid grid-cols-1 items-start gap-3 pb-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+        <Panel variant="filled" className="p-5 xl:col-start-1 xl:row-start-1">
           <SectionHeading className="mb-4">Schedule</SectionHeading>
           <ScheduleTimeline schedule={portal.schedule} />
         </Panel>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 xl:col-start-2 xl:row-start-1 xl:row-span-2">
           {hasUpcoming ? (
             <Panel variant="filled" className="p-5">
               {/* Was font-medium and brand-violet, the only SectionHeading in
@@ -270,63 +286,49 @@ export function PlanPortal({
               )}
             </Panel>
           ) : null}
-        </div>
-      </div>
 
-      {/* Row 2 — the accounting breakdown, in the column it has always occupied,
-          with Cancel plan beside it in the left column. Cancel used to sit in a
-          band of its own below this row, which left a tall gap under the
-          shortened schedule.
-
-          Explicit col/row placement rather than DOM order: the summary keeps
-          its column via col-start, and Cancel is pinned to row 1 of column 1 so
-          the two tops line up. Leaving DOM order as summary-then-cancel keeps
-          the single-column stacking below xl exactly as it reads today. */}
-      <div className="grid grid-cols-1 items-start gap-3 pb-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
-        <Panel
-          variant="filled"
-          className="p-4 xl:col-start-2 xl:row-start-1"
-        >
-          <SectionHeading className="mb-4">Plan summary</SectionHeading>
-          <div className="flex flex-col">
-            {hasDiscount && portal.booking.originalTotalAmountCents != null ? (
-              <>
+          <Panel variant="filled" className="p-4">
+            <SectionHeading className="mb-4">Plan summary</SectionHeading>
+            <div className="flex flex-col">
+              {hasDiscount && portal.booking.originalTotalAmountCents != null ? (
+                <>
+                  <SummaryLine
+                    label="Subtotal"
+                    value={formatDollars(portal.booking.originalTotalAmountCents)}
+                  />
+                  <SummaryLine
+                    label={`Plan discount (${savingsPercent}%)`}
+                    value={`−${formatDollars(savings)}`}
+                  />
+                </>
+              ) : (
                 <SummaryLine
                   label="Subtotal"
-                  value={formatDollars(portal.booking.originalTotalAmountCents)}
+                  value={formatDollars(portal.plan.totalAmountCents)}
                 />
-                <SummaryLine
-                  label={`Plan discount (${savingsPercent}%)`}
-                  value={`−${formatDollars(savings)}`}
-                />
-              </>
-            ) : (
+              )}
               <SummaryLine
-                label="Subtotal"
-                value={formatDollars(portal.plan.totalAmountCents)}
+                label="Processing fee"
+                value={formatDollars(portal.processingFeeCents)}
+                last
               />
-            )}
-            <SummaryLine
-              label="Processing fee"
-              value={formatDollars(portal.processingFeeCents)}
-              last
-            />
-            <div className="h-px bg-sand-300" />
-            <div className="flex items-baseline justify-between pt-[18px]">
-              <div className="text-[14px] text-ink-900">Total</div>
-              <div className="text-2xl font-medium tracking-[-0.02em] text-ink-900">
-                {formatDollars(totalDue)}
+              <div className="h-px bg-sand-300" />
+              <div className="flex items-baseline justify-between pt-[18px]">
+                <div className="text-[14px] text-ink-900">Total</div>
+                <div className="text-2xl font-medium tracking-[-0.02em] text-ink-900">
+                  {formatDollars(totalDue)}
+                </div>
               </div>
             </div>
-          </div>
-        </Panel>
+          </Panel>
+        </div>
 
         {/* Not drawn in the design, which shows no cancel affordance. Kept on
             the chrome-free treatment, now beside the accounting. */}
         {!planComplete && portal.plan.status === "active" ? (
           <Panel
             variant="filled"
-            className="p-4 xl:col-start-1 xl:row-start-1"
+            className="p-4 xl:col-start-1 xl:row-start-2"
           >
             <SectionHeading className="mb-4">Cancel plan</SectionHeading>
             <div className="max-w-[560px]">
