@@ -6,6 +6,9 @@ import {
   API_BASE_URL,
   type AdminMerchantDetail,
   type AdminMerchantRow,
+  type AdminReferral,
+  type AdminReferralDetail,
+  type AdminReferralStatus,
   type AdminView,
   type AttentionResponse,
   type Booking,
@@ -100,6 +103,47 @@ export async function fetchAdminMerchantDetail(
     throw new Error(`fetchAdminMerchantDetail failed: ${res.status}`);
   }
   return (await res.json()) as AdminMerchantDetail;
+}
+
+/**
+ * Referrals, newest first, optionally narrowed to one status. Returns null on
+ * 401, matching fetchAdminMerchants.
+ */
+export async function fetchAdminReferrals(
+  status?: AdminReferralStatus | null,
+): Promise<AdminReferral[] | null> {
+  const headers = await adminSessionHeader();
+  if (!headers) return null;
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  const res = await fetch(`${API_BASE_URL}/api/v1/admin/referrals${query}`, {
+    headers,
+    cache: "no-store",
+  });
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    throw new Error(`fetchAdminReferrals failed: ${res.status}`);
+  }
+  return (await res.json()) as AdminReferral[];
+}
+
+/**
+ * One referral with the statuses it may move to. Null for both 401 and 404,
+ * matching fetchAdminMerchantDetail, so the page renders notFound() either way.
+ */
+export async function fetchAdminReferral(
+  id: string,
+): Promise<AdminReferralDetail | null> {
+  const headers = await adminSessionHeader();
+  if (!headers) return null;
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/admin/referrals/${encodeURIComponent(id)}`,
+    { headers, cache: "no-store" },
+  );
+  if (res.status === 401 || res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`fetchAdminReferral failed: ${res.status}`);
+  }
+  return (await res.json()) as AdminReferralDetail;
 }
 
 export async function fetchMerchantSession(): Promise<MerchantView | null> {

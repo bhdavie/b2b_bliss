@@ -87,7 +87,8 @@ sentry:
 
 cors:
   # Comma-separated list of origins permitted to call the API.
-  # Prod: https://property.bliss-payments.com,https://guest.bliss-payments.com
+  # Prod: https://property.bliss-payments.com,https://guest.bliss-payments.com,https://bliss-payments.com,https://www.bliss-payments.com
+  # The last two are the marketing site, which posts guest referrals.
   allowedOrigins: ${BLISS_CORS_ORIGINS:-http://localhost:3000}
 
 cookies:

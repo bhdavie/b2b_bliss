@@ -146,6 +146,103 @@ class BlissApplicationTest {
         assertThat(body).containsEntry("error", "stripe_not_configured");
     }
 
+    // Guest referral intake. Everything below fails before any DB work, so it
+    // runs without Postgres. Each test sends its own X-Forwarded-For, because
+    // the limiter is keyed on it and this app instance is shared by the class.
+
+    @Test
+    void publicReferral_invalidEmail_returns400() {
+        Response res = client.target(baseUrl() + "/api/v1/public/referrals")
+                .request()
+                .header("X-Forwarded-For", "198.51.100.10")
+                .post(jakarta.ws.rs.client.Entity.json(Map.of(
+                        "guestEmail", "not-an-email",
+                        "hotelName", "The Lumiares",
+                        "hotelCity", "Lisbon")));
+        assertThat(res.getStatus()).isEqualTo(400);
+        assertThat(res.readEntity(JSON_OBJECT)).containsEntry("error", "invalid_email");
+    }
+
+    @Test
+    void publicReferral_blankHotelCity_returns400() {
+        Response res = client.target(baseUrl() + "/api/v1/public/referrals")
+                .request()
+                .header("X-Forwarded-For", "198.51.100.11")
+                .post(jakarta.ws.rs.client.Entity.json(Map.of(
+                        "guestEmail", "maya@example.com",
+                        "hotelName", "The Lumiares",
+                        "hotelCity", "   ")));
+        assertThat(res.getStatus()).isEqualTo(400);
+        assertThat(res.readEntity(JSON_OBJECT)).containsEntry("error", "invalid_hotel_city");
+    }
+
+    @Test
+    void publicReferral_sixthPostFromOneIpInTheWindow_returns429() {
+        // Invalid bodies on purpose: the limiter counts every POST, and a 400
+        // never reaches the database, so the first five are cheap and DB-free.
+        // The key is the LAST X-Forwarded-For entry, the one the router
+        // appends, so a different client-supplied first entry on every request
+        // does not buy a fresh budget.
+        for (int i = 0; i < 5; i++) {
+            Response res = client.target(baseUrl() + "/api/v1/public/referrals")
+                    .request()
+                    .header("X-Forwarded-For", "10.9.9." + i + ", 198.51.100.20")
+                    .post(jakarta.ws.rs.client.Entity.json(Map.of("guestEmail", "")));
+            assertThat(res.getStatus()).as("attempt %d", i + 1).isEqualTo(400);
+        }
+        Response limited = client.target(baseUrl() + "/api/v1/public/referrals")
+                .request()
+                .header("X-Forwarded-For", "203.0.113.99, 198.51.100.20")
+                .post(jakarta.ws.rs.client.Entity.json(Map.of("guestEmail", "")));
+        assertThat(limited.getStatus()).isEqualTo(429);
+        assertThat(limited.getHeaderString("Retry-After")).isNotBlank();
+        assertThat(limited.readEntity(JSON_OBJECT)).containsEntry("error", "rate_limited");
+
+        // A different caller is unaffected.
+        Response other = client.target(baseUrl() + "/api/v1/public/referrals")
+                .request()
+                .header("X-Forwarded-For", "198.51.100.21")
+                .post(jakarta.ws.rs.client.Entity.json(Map.of("guestEmail", "")));
+        assertThat(other.getStatus()).isEqualTo(400);
+    }
+
+    // Admin referral queue. No cookie and a garbage token both stop at the
+    // admin auth filter, before AdminAuthenticator would touch admin_users.
+
+    @Test
+    void adminReferrals_requireAdminAuth() throws Exception {
+        String id = java.util.UUID.randomUUID().toString();
+
+        assertThat(client.target(baseUrl() + "/api/v1/admin/referrals").request().get().getStatus())
+                .isEqualTo(401);
+        assertThat(client.target(baseUrl() + "/api/v1/admin/referrals/" + id).request().get().getStatus())
+                .isEqualTo(401);
+        assertThat(client.target(baseUrl() + "/api/v1/admin/referrals")
+                .request()
+                .cookie("bliss_admin_session", "garbage")
+                .get().getStatus())
+                .isEqualTo(401);
+        // A merchant session cookie is the wrong cookie entirely.
+        assertThat(client.target(baseUrl() + "/api/v1/admin/referrals")
+                .request()
+                .cookie("bliss_session", "garbage")
+                .get().getStatus())
+                .isEqualTo(401);
+
+        // PATCH through java.net.http: the default Jersey client connector
+        // (HttpURLConnection) cannot send PATCH without a reflection workaround.
+        java.net.http.HttpClient http = java.net.http.HttpClient.newHttpClient();
+        java.net.http.HttpResponse<String> patch = http.send(
+                java.net.http.HttpRequest.newBuilder(
+                                java.net.URI.create(baseUrl() + "/api/v1/admin/referrals/" + id))
+                        .header("Content-Type", "application/json")
+                        .method("PATCH", java.net.http.HttpRequest.BodyPublishers.ofString(
+                                "{\"status\":\"contacted\"}"))
+                        .build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertThat(patch.statusCode()).isEqualTo(401);
+    }
+
     private static String baseUrl() {
         return "http://localhost:" + APP.getLocalPort();
     }

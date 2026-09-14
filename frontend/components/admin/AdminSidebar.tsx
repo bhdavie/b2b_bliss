@@ -6,11 +6,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AdminSignOutButton } from "./AdminSignOutButton";
 
-type NavItem = { href: string; label: string };
+/**
+ * `match` lists the path prefixes that light the item. Properties lives at the
+ * bare /admin root, so a plain prefix match on its href would also light it on
+ * /admin/referrals; its detail pages sit under /admin/properties instead.
+ */
+type NavItem = { href: string; label: string; match: string[] };
 
-// One item for now. Every authenticated admin route sits under /admin so the
-// prefix cannot collide with a merchant or guest route.
-const NAV: NavItem[] = [{ href: "/admin", label: "Properties" }];
+// Every authenticated admin route sits under /admin so the prefix cannot
+// collide with a merchant or guest route.
+const NAV: NavItem[] = [
+  { href: "/admin", label: "Properties", match: ["/admin/properties"] },
+  { href: "/admin/referrals", label: "Referrals", match: ["/admin/referrals"] },
+];
 
 export function AdminSidebar({ email, name }: { email: string; name?: string | null }) {
   const pathname = usePathname();
@@ -26,10 +34,14 @@ export function AdminSidebar({ email, name }: { email: string; name?: string | n
 
         <nav className="flex flex-col gap-0.5 px-4">
           {NAV.map((item) => {
-            // Exact match for /admin, prefix match for anything beneath it, so
-            // Properties stays lit on /admin/properties/{id}.
+            // Exact match on the href, or anything beneath one of its match
+            // prefixes, so Properties stays lit on /admin/properties/{id} and
+            // Referrals on /admin/referrals/{id}.
             const active =
-              pathname === item.href || pathname.startsWith(item.href + "/");
+              pathname === item.href ||
+              item.match.some(
+                (prefix) => pathname === prefix || pathname.startsWith(prefix + "/"),
+              );
             return (
               <Link
                 key={item.href}

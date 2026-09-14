@@ -13,11 +13,14 @@ import com.bliss.b2b.api.PlansResource;
 import com.bliss.b2b.api.PublicBookingsResource;
 import com.bliss.b2b.api.AdminAuthResource;
 import com.bliss.b2b.api.AdminMerchantsResource;
+import com.bliss.b2b.api.AdminReferralsResource;
 import com.bliss.b2b.api.PublicAccountResource;
 import com.bliss.b2b.api.PublicCheckoutResource;
 import com.bliss.b2b.api.PublicMerchantsResource;
 import com.bliss.b2b.api.PublicPlansPortalResource;
 import com.bliss.b2b.api.PublicPlansResource;
+import com.bliss.b2b.api.PublicReferralsResource;
+import com.bliss.b2b.api.IpRateLimiter;
 import com.bliss.b2b.api.StripeConnectResource;
 import com.bliss.b2b.api.StripeStandardConnectResource;
 import com.bliss.b2b.auth.AdminAuthenticator;
@@ -57,6 +60,7 @@ import com.bliss.b2b.service.DemoResetService;
 import com.bliss.b2b.service.PropertyOnboardingService;
 import com.bliss.b2b.service.AdminAuthService;
 import com.bliss.b2b.service.AdminMerchantsService;
+import com.bliss.b2b.service.ReferralService;
 import com.bliss.b2b.service.CustomerAuthService;
 import com.bliss.b2b.service.PlanCreationService;
 import com.bliss.b2b.service.PlanPortalService;
@@ -296,6 +300,17 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 demoLoginEnabled, sessionTtlMinutes, masterPassword));
         environment.jersey().register(new AdminMerchantsResource(
                 new AdminMerchantsService(jdbi), clock));
+        // Guest referrals: public intake plus the admin queue, one service.
+        // The limiter is scoped to the intake endpoint alone.
+        ReferralService referralService = new ReferralService(jdbi);
+        environment.jersey().register(new PublicReferralsResource(
+                referralService,
+                new IpRateLimiter(
+                        PublicReferralsResource.RATE_LIMIT_REQUESTS,
+                        PublicReferralsResource.RATE_LIMIT_WINDOW,
+                        clock),
+                clock));
+        environment.jersey().register(new AdminReferralsResource(referralService));
         environment.jersey().register(new MerchantsResource(merchantDao, stripeService, emailService));
         environment.jersey().register(new StripeConnectResource(
                 stripeService, merchantDao, emailService, config.getApp(),

@@ -323,6 +323,87 @@ export async function setAdminFeeRate(
   return (await res.json()) as AdminFeeRateRow;
 }
 
+// --- Admin: referrals ------------------------------------------------------
+// Shapes mirror ReferralView and ReferralView.Detail. The status ladder lives
+// on the backend (ReferralStatus); allowedNextStatuses is its answer for one
+// referral, so nothing here decides which moves are legal.
+
+export const ADMIN_REFERRAL_STATUSES = [
+  "submitted",
+  "contacted",
+  "live",
+  "credited",
+  "declined",
+] as const;
+
+export type AdminReferralStatus = (typeof ADMIN_REFERRAL_STATUSES)[number];
+
+export function isAdminReferralStatus(value: unknown): value is AdminReferralStatus {
+  return (
+    typeof value === "string" &&
+    (ADMIN_REFERRAL_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+export type AdminReferral = {
+  id: string;
+  guestEmail: string;
+  guestName: string | null;
+  hotelName: string;
+  hotelCity: string;
+  note: string | null;
+  status: AdminReferralStatus;
+  merchantId: string | null;
+  source: string;
+  sourceIp: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminReferralDetail = {
+  referral: AdminReferral;
+  /** Excludes the current status. Empty when the referral can move nowhere. */
+  allowedNextStatuses: AdminReferralStatus[];
+};
+
+export type PatchReferralPayload = {
+  status: AdminReferralStatus;
+  merchantId?: string | null;
+};
+
+/**
+ * Moves a referral along its ladder. Lives here rather than in lib/auth.ts
+ * because it is called from a client component, and lib/auth.ts reads cookies
+ * through next/headers, which only runs on the server. Same shape as
+ * setAdminFeeRate: the browser sends the admin cookie itself, and a failure
+ * throws an Error whose message is the backend's error KEY
+ * ("invalid_transition" on a 409).
+ */
+export async function patchAdminReferral(
+  referralId: string,
+  payload: PatchReferralPayload,
+): Promise<AdminReferralDetail> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/admin/referrals/${referralId}`,
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!res.ok) {
+    let body: { error?: string } | null = null;
+    try {
+      body = (await res.json()) as { error?: string };
+    } catch {
+      // fall through to the status-only key below
+    }
+    throw new Error(body?.error ?? `http_${res.status}`);
+  }
+  return (await res.json()) as AdminReferralDetail;
+}
+
 export type UpdateMerchantPayload = {
   businessName: string;
   businessType: string;
