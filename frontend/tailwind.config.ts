@@ -15,8 +15,9 @@ export const palette = {
     // collapse onto `ink` and the token names are now historical.
     navy: "#17131C",
     "navy-dark": "#17131C",
-    // Borders and secondary surfaces. Was a dusty blue, now the hairline.
-    dusty: "#E9E5E1",
+    // Borders and secondary surfaces. Now the cool hairline #E4E6EA, taken
+    // from the marketing site's neutral set. Was a warm sand hairline.
+    dusty: "#E4E6EA",
     // Secondary type. Was a muted purple, now the neutral muted tone.
     purple: "#6E6878",
     "purple-dark": "#5B21B6",
@@ -39,31 +40,37 @@ export const palette = {
     // from tint40 at the same hue: L 88.4% -> 84.3%, matching the step the
     // old lavender/hover pair used.
     "lavender-hover": "#C8B4FA",
-    // Recessed layer. Was a warm cream, now the sunken neutral.
-    cream: "#F6F4F1",
-    // Neutral dividers and secondary background.
-    neutral: "#E9E5E1",
+    // Recessed layer. Now the cool sunken neutral #F4F5F7. No longer a cream
+    // despite the token name, which is historical.
+    cream: "#F4F5F7",
+    // Cool neutral dividers and secondary background. Same value as `dusty`
+    // and as sand-200.
+    neutral: "#E4E6EA",
   },
-  // Neutral ramp. 50-300 come straight from the amethyst set. 400-600 are
-  // derived: they descend from `hairline` toward `muted` and are deliberately
-  // COOL (B>R>G, hue ~265deg) rather than the old warm sand, so they sit next
-  // to amethyst instead of fighting it. 400 carries the unpaid state in the
-  // payment timeline, which is why it stays as light as it does — see the
-  // contrast note on `brand.violet`.
+  // Neutral ramp, one hue family end to end: every step is B>G>R at hue
+  // ~215deg, matching the marketing site's cool neutral set. 50, 100, 200,
+  // 300 and 500 come straight from that set; 400 and 600 are derived to sit
+  // on the same hue at the lightness their roles need, replacing the
+  // amethyst-tinted steps that used to break the ramp at 400 and 600.
+  // 400 carries the unpaid state in the payment timeline, which is why it
+  // stays as light as it does. See the contrast note on `brand.violet`.
   sand: {
-    50: "#FDFCFB", // bone — sidebar, raised panel
-    100: "#F6F4F1", // sunken — recessed panel
-    200: "#E9E5E1", // hairline — default border, the workhorse
-    300: "#E9E5E1", // inactive timeline rail
-    400: "#E2DEE6", // future timeline node — L 74.1%, 3.19:1 vs amethyst
-    500: "#CBC6D2", // secondary-button border — L 57.7%
-    600: "#A9A3B4", // stronger divider — L 37.9%
-    // Two neutrals that sit off the numeric ramp — `track` falls between 50
-    // and 100, `badge` between 200 and 300 — so they are keyed by role
-    // rather than wedged in as half-steps. Both belong to the bookings tab
-    // control: the pill-group track, and the count badge on an inactive tab.
-    track: "#F6F4F1",
-    badge: "#E9E5E1",
+    50: "#FFFFFF", // bone: sidebar, raised panel. Now pure white
+    100: "#F4F5F7", // sunken: recessed panel, and the app page ground
+    200: "#E4E6EA", // hairline: default border, the workhorse
+    300: "#E4E6EA", // inactive timeline rail
+    400: "#DEE0E5", // future timeline node. 3.21:1 vs amethyst
+    500: "#C9CCD1", // secondary-button border. 1.61:1 on white, was 1.67:1
+    600: "#9EA3AC", // stronger divider, and the muted status dot. 2.53:1
+    // Three neutrals keyed by role rather than wedged into the numeric ramp
+    // as half-steps. `track` and `badge` belong to the bookings tab control:
+    // the pill-group track, and the count badge on an inactive tab. Both now
+    // sit exactly on a numbered step (track on 100, badge on 200) rather than
+    // between two, because the cool set has no half-step between them.
+    // `hover` is the hover surface, one step down from 100 toward 200.
+    track: "#F4F5F7",
+    badge: "#E4E6EA",
+    hover: "#EEF0F3",
   },
   ink: {
     DEFAULT: "#17131C",

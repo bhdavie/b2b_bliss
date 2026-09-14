@@ -47,15 +47,15 @@ const STATUS_BADGE: Record<DerivedBookingStatus, { label: string; className: str
   payments_complete: {
     label: "Payments complete",
     className: "text-ink-500",
-    dot: "bg-sand-500",
+    dot: "bg-sand-600",
   },
   booking_complete: {
     label: "Booking complete",
     className: "text-ink-500",
-    dot: "bg-sand-500",
+    dot: "bg-sand-600",
   },
-  cancelled: { label: "Cancelled", className: "text-ink-500", dot: "bg-sand-500" },
-  other: { label: "Other", className: "text-ink-500", dot: "bg-sand-500" },
+  cancelled: { label: "Cancelled", className: "text-ink-500", dot: "bg-sand-600" },
+  other: { label: "Other", className: "text-ink-500", dot: "bg-sand-600" },
 };
 
 // Tab membership is driven entirely by the live derived status — no stored

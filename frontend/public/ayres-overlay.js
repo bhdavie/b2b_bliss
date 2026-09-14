@@ -162,11 +162,11 @@
     // Selected option fill, and the RECOMMENDED chip fill.
     wash: "#F3EEFE",
     // Modal surface, and the unselected option fill.
-    bone: "#FDFCFB",
+    bone: "#FFFFFF",
     // Inset and secondary surfaces: the schedule box.
-    sunken: "#F6F4F1",
+    sunken: "#F4F5F7",
     // Dividers, the header underline, and inactive borders.
-    hairline: "#E9E5E1",
+    hairline: "#E4E6EA",
     // Primary text: headings, plan names, amounts.
     ink: "#17131C",
     // Secondary text (never a border; see hairline).
@@ -485,7 +485,7 @@
       ctaBg: "#5B21B6", // primary button background
       onCta: "#ffffff", // primary button text, and the tick glyph on ctaBg
       surface: "#ffffff",
-      divider: "#E9E5E1", // palette.brand.neutral — dividers, inactive borders
+      divider: "#E4E6EA", // palette.brand.neutral — dividers, inactive borders
       radius: "4px",
       radiusCard: "16px",
       radiusPill: "999px",

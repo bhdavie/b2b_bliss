@@ -96,7 +96,7 @@ export function PlanRow({
     //
     // White fill, sand-500 edge. sand-200 against a white parent was a 1.25:1
     // hairline that the parent's own identical hairline then competed with;
-    // sand-500 is 1.67:1 and is already this app's visible-edge token. Hover
+    // sand-500 is 1.61:1 and is already this app's visible-edge token. Hover
     // takes the border one step further to sand-600 and shifts the fill to
     // sand-50, matching how the merchant bookings rows respond.
     <Link

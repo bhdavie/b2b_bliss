@@ -43,14 +43,14 @@ import { Input } from "@/components/ui/Input";
 // side to cream, and the desk is what resolves out of the fade on the right.
 const HERO_SRC = "/auth-hero-checkin.webp";
 
-// The cream the artwork fades into. Deliberately a raw hex and deliberately
-// NOT sand-100: this is the marketing site's own ground (#F7F4EF on .hero and
-// .stats), and the fade only reads as continuous if the colour on this side
-// matches the colour the mask was authored against. sand-100 (#F6F4F1) is
-// within about one unit per channel and would look identical in isolation, but
-// it would quietly make this a Bliss-app value rather than a match to the site,
-// which is the thing that has to hold if either end is repainted.
-const HERO_CREAM = "#F7F4EF";
+// The ground the artwork fades into. Tracks the marketing site's cool neutral
+// ground (#F4F5F7 on .hero and .stats), not the Bliss app token, and stays a
+// raw hex for that reason: the fade only reads as continuous if the colour on
+// this side matches the colour the site was repainted to. It happens to be the
+// same value as sand-100 right now, so the two are visually indistinguishable,
+// but they are still separate decisions and the site is the one this follows.
+// If the site moves again, this moves with it and sand-100 does not.
+const HERO_CREAM = "#F4F5F7";
 
 export function AuthShell({
   heading,
@@ -140,12 +140,11 @@ export function AuthShell({
             this screen used to have: white on sand-100 is a 1.17:1 step and the
             sand-200 border did the rest.
             Over the illustration neither holds, and the fade does not rescue
-            it: flattening the left side to cream is what puts the card on flat
-            colour, but that colour is #F7F4EF, so white sits at roughly a
-            1.04:1 step against it — the card would read as a pale smudge
-            rather than a
-            raised surface, and the border alone cannot separate a light edge
-            from a light ground. shadow-elevated-lg is what re-establishes the
+            it: flattening the left side is what puts the card on flat
+            colour, but that colour is #F4F5F7, so white sits at roughly a
+            1.09:1 step against it. The card would read as a pale smudge rather
+            than a raised surface, and the border alone cannot separate a light
+            edge from a light ground. shadow-elevated-lg is what re-establishes the
             lift; it is the existing token (navy-tinted, from the same palette)
             rather than an arbitrary rgba, so it follows a palette change.
             No scrim or overlay: darkening the whole illustration to rescue the

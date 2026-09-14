@@ -141,7 +141,7 @@ function SetUp({ href }: { href: string }) {
       href={href}
       className="inline-flex items-center gap-2 text-[14px] text-ink-500 no-underline transition-colors hover:text-brand-violet hover:no-underline"
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-sand-500" aria-hidden="true" />
+      <span className="h-1.5 w-1.5 rounded-full bg-sand-600" aria-hidden="true" />
       Not connected · Set up
     </Link>
   );

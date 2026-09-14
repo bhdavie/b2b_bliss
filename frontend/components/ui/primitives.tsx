@@ -121,12 +121,16 @@ export function PageHeader({
  *    page ground. A bordered REGION rather than a raised surface.
  *  - "filled" — white fill plus the same sand-200 hairline. The card surface.
  *
- * `filled` was sand-50 (#FDFCFB) while the app page was #FFFFFF, which put the
- * card a step DARKER than the page it sat on: cards read as recessed, and the
- * border was doing all the work of separating them because a 1.02:1 fill step
- * cannot. Now the page is sand-100 (#F6F4F1) and the fill is white, so the card
- * is the lighter surface and the fill carries the separation on its own — a
- * 1.06:1 step, small but in the direction the eye expects.
+ * `filled` was sand-50 while the app page was white, which put the card a step
+ * DARKER than the page it sat on: cards read as recessed, and the border was
+ * doing all the work of separating them because a fill step that small cannot.
+ * Now the page is sand-100 (#F4F5F7) and the fill is white, so the card is the
+ * lighter surface and the fill carries the separation on its own, a 1.09:1
+ * step, small but in the direction the eye expects.
+ *
+ * Since the cool swap sand-50 is itself #FFFFFF, so `filled` spells its fill
+ * bg-white rather than bg-sand-50. Same pixels, but it says the fill is a
+ * surface rather than the lightest rung of the neutral ramp.
  *
  * The two variants are now genuinely different things rather than two shades of
  * the same thing, which is why `outlined` was left with no fill: on a sand-100

@@ -2692,18 +2692,18 @@ const BLISS_CSS = `
 .bliss-ui .trig[disabled]{cursor:default}
 
 .bliss-ui .scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.44);display:flex;align-items:center;justify-content:center;padding:16px}
-.bliss-ui .bliss-card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:#ffffff;color:#17131C;border:1px solid #E9E5E1;border-radius:16px;box-shadow:0 18px 56px rgba(0,0,0,.32)}
+.bliss-ui .bliss-card{width:560px;max-width:100%;max-height:calc(100vh - 32px);overflow:auto;background:#ffffff;color:#17131C;border:1px solid #E4E6EA;border-radius:16px;box-shadow:0 18px 56px rgba(0,0,0,.32)}
 .bliss-ui .bliss-card:focus{outline:none}
-.bliss-ui .head{display:flex;align-items:flex-start;gap:12px;padding:22px 24px;border-bottom:1px solid #E9E5E1}
+.bliss-ui .head{display:flex;align-items:flex-start;gap:12px;padding:22px 24px;border-bottom:1px solid #E4E6EA}
 .bliss-ui .head h2{font-size:17px;font-weight:600;line-height:1.3}
 .bliss-ui .head p{font-size:13px;color:#6E6878;margin-top:4px;line-height:1.4}
 .bliss-ui .x{margin-left:auto;background:none;border:0;cursor:pointer;font-size:20px;line-height:1;color:#6E6878}
 .bliss-ui .body{padding:20px 24px 24px}
 .bliss-ui .ctx{font-size:13px;color:#6E6878;margin-bottom:2px;line-height:1.5}
 .bliss-ui .fine{font-size:11px;color:#6E6878;margin-bottom:12px;line-height:1.4}
-.bliss-ui .disc{display:block;width:100%;text-align:left;margin:2px 0 8px;padding:8px 0;background:none;border:0;border-top:1px solid #E9E5E1;color:#17131C;font-size:12px;font-weight:600;cursor:pointer}
-.bliss-ui .sched{margin:0 0 12px;border:1px solid #E9E5E1;border-radius:4px}
-.bliss-ui .sched .row{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12px;border-bottom:1px solid #E9E5E1}
+.bliss-ui .disc{display:block;width:100%;text-align:left;margin:2px 0 8px;padding:8px 0;background:none;border:0;border-top:1px solid #E4E6EA;color:#17131C;font-size:12px;font-weight:600;cursor:pointer}
+.bliss-ui .sched{margin:0 0 12px;border:1px solid #E4E6EA;border-radius:4px}
+.bliss-ui .sched .row{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12px;border-bottom:1px solid #E4E6EA}
 .bliss-ui .sched .row:last-child{border-bottom:0}
 .bliss-ui .sched .n{width:18px;color:#6E6878}
 .bliss-ui .sched .d{color:#17131C}
@@ -2714,7 +2714,7 @@ const BLISS_CSS = `
    their own. Keeps .sched's bottom margin so the rhythm below is unchanged. */
 .bliss-ui .terms{margin:0 0 12px}
 .bliss-ui .terms .row{font-size:12px;color:#6E6878;line-height:1.45}
-.bliss-ui .opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 12px;margin-bottom:8px;background:transparent;color:#17131C;border:1px solid #E9E5E1;border-radius:16px;cursor:pointer}
+.bliss-ui .opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 12px;margin-bottom:8px;background:transparent;color:#17131C;border:1px solid #E4E6EA;border-radius:16px;cursor:pointer}
 .bliss-ui .opt[aria-pressed="true"]{border-color:#8B5CF6;border-width:2px;padding:10px 11px}
 .bliss-ui .opt .lbl{font-size:13px;font-weight:600}
 .bliss-ui .opt .sub{font-size:11px;color:#6E6878;margin-top:2px}
@@ -2723,9 +2723,9 @@ const BLISS_CSS = `
 .bliss-ui .opt .amt span{font-size:11px;color:#6E6878}
 .bliss-ui .tag{display:inline-block;font-size:9px;letter-spacing:.4px;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:#F3EEFE;border:1px solid #8B5CF6;color:#17131C;margin-left:6px;vertical-align:middle}
 .bliss-ui .cta{width:100%;padding:12px;border:0;border-radius:999px;background:#8B5CF6;color:#ffffff;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px}
-.bliss-ui .cta[disabled]{background:#E9E5E1;color:#6E6878;cursor:default}
+.bliss-ui .cta[disabled]{background:#E4E6EA;color:#6E6878;cursor:default}
 .bliss-ui .plan{margin:2px 0 0;font-size:14px;font-weight:600;line-height:1.4;color:#17131C}
-.bliss-ui .confirmed{margin-top:4px;padding:12px 0;border-top:1px solid #E9E5E1;font-size:13px;line-height:1.45;color:#17131C}
+.bliss-ui .confirmed{margin-top:4px;padding:12px 0;border-top:1px solid #E4E6EA;font-size:13px;line-height:1.45;color:#17131C}
 .bliss-ui .textbtn{display:block;width:100%;margin-top:10px;padding:6px 0;background:none;border:0;font-size:13px;line-height:1.45;color:#6E6878;cursor:pointer;text-align:center}
 .bliss-ui .textbtn:hover{text-decoration:underline}
 .bliss-ui .note{font-size:11px;color:#6E6878;margin-top:10px;line-height:1.45}

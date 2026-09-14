@@ -16,10 +16,12 @@ export default async function AuthenticatedLayout({
 
   // bg-sand-100 is the app's page ground, and this element is the only thing
   // that sets it. It used to be bg-white, which was a redundant repaint of the
-  // body's own white and left the page LIGHTER than the cards sitting on it —
-  // cards read as recessed, and #FFFFFF is not a value the palette defines.
-  // Sunken (#F6F4F1) under white cards restores the direction the token set
-  // describes. Deliberately not moved to globals.css body: body is shared with
+  // body's own white and left the page LIGHTER than the cards sitting on it,
+  // so cards read as recessed. Sunken (sand-100, #F4F5F7) under white cards
+  // restores the direction the token set describes. Note that #FFFFFF IS a
+  // palette value now: since the cool swap sand-50 is pure white, so the
+  // problem with bg-white here was never that it sat off-token, it was that it
+  // pointed the page the wrong way relative to the cards. Deliberately not moved to globals.css body: body is shared with
   // the guest checkout (/pay, /checkout), the hotel demo pages and the
   // transitional auth screens, several of which paint no ground of their own
   // and would inherit an app colour they are not part of.
