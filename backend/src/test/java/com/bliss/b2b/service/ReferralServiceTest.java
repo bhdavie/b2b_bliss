@@ -54,12 +54,19 @@ class ReferralServiceTest {
     }
 
     private static void ensureReferralsTable(Handle h) {
-        boolean exists = h.createQuery("SELECT to_regclass('public.referrals') IS NOT NULL")
+        // Each migration is checked for the object it creates, so a database
+        // that has had V28 but not V29 gets only the half it is missing.
+        applyIfMissing(h, "public.referrals", "/db/migration/V28__referrals.sql");
+        applyIfMissing(h, "public.referrers", "/db/migration/V29__referrers.sql");
+    }
+
+    private static void applyIfMissing(Handle h, String relation, String script) {
+        boolean exists = h.createQuery("SELECT to_regclass(:relation) IS NOT NULL")
+                .bind("relation", relation)
                 .mapTo(Boolean.class).one();
         if (exists) return;
-        try (InputStream in = ReferralServiceTest.class.getResourceAsStream(
-                "/db/migration/V28__referrals.sql")) {
-            assumeTrue(in != null, "V28__referrals.sql not on the classpath");
+        try (InputStream in = ReferralServiceTest.class.getResourceAsStream(script)) {
+            assumeTrue(in != null, script + " not on the classpath");
             h.createScript(new String(in.readAllBytes(), StandardCharsets.UTF_8)).execute();
         } catch (java.io.IOException e) {
             throw new RuntimeException(e);

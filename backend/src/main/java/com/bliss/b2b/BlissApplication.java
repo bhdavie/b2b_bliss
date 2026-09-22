@@ -309,8 +309,11 @@ public class BlissApplication extends Application<BlissConfiguration> {
                         PublicReferralsResource.RATE_LIMIT_REQUESTS,
                         PublicReferralsResource.RATE_LIMIT_WINDOW,
                         clock),
-                clock));
-        environment.jersey().register(new AdminReferralsResource(referralService));
+                clock,
+                emailService,
+                config.getApp().getMarketingBaseUrl()));
+        environment.jersey().register(new AdminReferralsResource(
+                referralService, emailService, config.getApp().getMarketingBaseUrl()));
         environment.jersey().register(new MerchantsResource(merchantDao, stripeService, emailService));
         environment.jersey().register(new StripeConnectResource(
                 stripeService, merchantDao, emailService, config.getApp(),

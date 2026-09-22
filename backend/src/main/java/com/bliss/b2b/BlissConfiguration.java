@@ -154,11 +154,19 @@ public class BlissConfiguration extends Configuration {
 
         @NotBlank
         private String consumerBaseUrl = "http://localhost:3000";
+        /**
+         * The marketing site (bliss-payments.com). Referral links are built
+         * against this, so it is the public origin a hotel will see, not the
+         * app or the checkout host.
+         */
+        private String marketingBaseUrl = "http://localhost:3000";
 
         @JsonProperty public String getMerchantBaseUrl() { return merchantBaseUrl; }
         @JsonProperty public void setMerchantBaseUrl(String merchantBaseUrl) { this.merchantBaseUrl = merchantBaseUrl; }
         @JsonProperty public String getConsumerBaseUrl() { return consumerBaseUrl; }
         @JsonProperty public void setConsumerBaseUrl(String consumerBaseUrl) { this.consumerBaseUrl = consumerBaseUrl; }
+        @JsonProperty public String getMarketingBaseUrl() { return marketingBaseUrl; }
+        @JsonProperty public void setMarketingBaseUrl(String marketingBaseUrl) { this.marketingBaseUrl = marketingBaseUrl; }
     }
 
     public static class CookieConfig {

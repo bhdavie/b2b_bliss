@@ -33,7 +33,7 @@ env: ${BLISS_ENV:-development}
 # also what the Marbrook funnel and the Mews authorize simulation rely on.
 #
 # Scoped to auth only — it does not reopen the dev plan endpoints or soften any
-# other production rule. Set false once BLISS_POSTMARK_TOKEN is configured and
+# other production rule. Set false once POSTMARK_SERVER_TOKEN is configured and
 # magic link should be the only way in; the sign-in page follows this flag with
 # no code change.
 demoLogin: ${BLISS_DEMO_LOGIN:-false}
@@ -65,6 +65,9 @@ app:
   # Consumer portal and checkout (guest.bliss-payments.com in prod): hosted pay
   # links and the manage-your-plan link in confirmation email.
   consumerBaseUrl: ${BLISS_CONSUMER_BASE_URL:-http://localhost:3000}
+  # Marketing site origin. Referral links (/hotels?ref=CODE) are built against
+  # this, so it must be the public site, not the app or checkout host.
+  marketingBaseUrl: ${BLISS_MARKETING_BASE_URL:-http://localhost:3000}
 
 database:
   # DATABASE_URL, when the platform sets it, overrides all three of these at

@@ -52,6 +52,49 @@ Full schema in docs/data-model.md. Core entities:
 - PaymentSchedule: the dated installments within a PaymentPlan
 - Customer: end consumer with cards on file
 - Payout: merchant disbursement at plan completion
+- Referrer: a guest with a referral code and link of their own (V29)
+- Referral: a hotel a guest wants on Bliss, attributed to a Referrer (V28, V29)
+
+## Guest referrals
+
+Guests refer hotels themselves. A guest gives us an email and gets a six
+character code and a link (`{marketingBaseUrl}/hotels?ref=CODE`). They send the
+hotel one of three ready made messages. The hotel lands on the marketing site
+with the code attached, and when it goes live the guest earns up to $1,000
+toward a stay there.
+
+**One status ladder, not two.** V29 extended the V28 ladder rather than adding a
+parallel one:
+
+```
+submitted -> clicked -> contacted -> demo_booked -> live -> credited
+     \__________\___________\____________\_________\____-> declined
+```
+
+`clicked` and `demo_booked` are the new rungs. What the product brief calls
+"paid" is `credited`, which already meant an admin applied the credit. Forward
+only, skips allowed, both ends final. The rule lives in `ReferralStatus` and
+nowhere else; the admin detail endpoint returns `allowedNext()` so the frontend
+renders options instead of mirroring the ladder.
+
+**`clicked_at` is not `status == CLICKED`.** The column records that the hotel
+opened the link. The status is a rung, and the ladder is forward only, so a
+hotel clicking again after we contacted them updates `clicked_at` and leaves the
+status alone. Read the column, not the status, for "did they ever visit".
+
+**Attribution: first click wins.** A hotel is credited to the first referrer
+whose link it opened. Later clicks on the same link update `clicked_at` and
+never open a second row; clicks from a different referrer's link are recorded on
+that referrer's own row and never move credit. Nothing rewrites `referrer_id`
+after it is set. The one place that could break this is an admin linking a
+merchant to a second referral, so `AdminReferralsResource` asks
+`ReferralService.firstClickHolder` first and returns 409 if the merchant is
+already spoken for. The rule is documented in `ReferralService` and restated in
+the marketing site's `lib/referrals.ts`.
+
+Emails go out on three transitions only (demo_booked, live, credited), from
+`EmailTemplates.referral*`, after the status has committed. `live` is the payout
+trigger; there is no demo kicker.
 
 ## v1 scope
 

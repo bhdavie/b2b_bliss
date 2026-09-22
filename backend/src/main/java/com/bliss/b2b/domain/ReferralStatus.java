@@ -8,9 +8,18 @@ import java.util.List;
  * {@link #DECLINED} from any status that has not been credited:
  *
  * <pre>
- *   SUBMITTED -> CONTACTED -> LIVE -> CREDITED
- *        \___________\__________\_______-> DECLINED
+ *   SUBMITTED -> CLICKED -> CONTACTED -> DEMO_BOOKED -> LIVE -> CREDITED
+ *        \__________\___________\____________\_________\_______-> DECLINED
  * </pre>
+ *
+ * <p>CLICKED and DEMO_BOOKED arrived with the guest referral link (V29).
+ * CREDITED is what the product brief calls "paid": an admin has applied the
+ * credit. There is no separate PAID, because one state does not need two names.
+ *
+ * <p>CLICKED is a rung, not the record of a visit. A hotel that opens the link
+ * again after we have contacted them cannot move the status backwards, so that
+ * later click updates {@code referrals.clicked_at} and leaves the status alone.
+ * Read clicked_at to answer "did they ever visit".
  *
  * Forward moves may skip steps (a hotel can go live without a recorded
  * "contacted"). Nothing moves backwards and nothing moves to its own status.
@@ -24,9 +33,11 @@ import java.util.List;
  */
 public enum ReferralStatus {
     SUBMITTED("submitted", 0),
-    CONTACTED("contacted", 1),
-    LIVE("live", 2),
-    CREDITED("credited", 3),
+    CLICKED("clicked", 1),
+    CONTACTED("contacted", 2),
+    DEMO_BOOKED("demo_booked", 3),
+    LIVE("live", 4),
+    CREDITED("credited", 5),
     /** Off the ladder: order is unused and never compared. */
     DECLINED("declined", -1);
 

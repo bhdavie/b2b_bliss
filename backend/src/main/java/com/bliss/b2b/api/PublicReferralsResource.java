@@ -1,18 +1,28 @@
 package com.bliss.b2b.api;
 
+import com.bliss.b2b.domain.Referral;
+import com.bliss.b2b.domain.ReferralMessages;
+import com.bliss.b2b.domain.Referrer;
+import com.bliss.b2b.integration.EmailService;
+import com.bliss.b2b.integration.EmailTemplates;
 import com.bliss.b2b.service.ReferralService;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,12 +66,212 @@ public class PublicReferralsResource {
     private final ReferralService service;
     private final IpRateLimiter rateLimiter;
     private final Clock clock;
+    private final EmailService emailService;
+    private final String marketingBaseUrl;
 
-    public PublicReferralsResource(ReferralService service, IpRateLimiter rateLimiter, Clock clock) {
+    public PublicReferralsResource(
+            ReferralService service,
+            IpRateLimiter rateLimiter,
+            Clock clock,
+            EmailService emailService,
+            String marketingBaseUrl) {
         this.service = service;
         this.rateLimiter = rateLimiter;
         this.clock = clock;
+        this.emailService = emailService;
+        this.marketingBaseUrl = stripTrailingSlash(marketingBaseUrl);
     }
+
+    // ------------------------------------------------------------------ kit
+
+    /**
+     * Gives a guest their referral link, creating them if this is the first
+     * time we have seen the address.
+     *
+     * <p>Idempotent on email, by design and not by accident: a guest who asks
+     * twice gets the same code, because a second code would split their credit
+     * across two links. The response is the same either way, so this cannot be
+     * used to find out whether an address is already signed up.
+     *
+     * <p>Rate limited on the IP AND the email, both against the same budget.
+     * The IP key stops one client scripting the endpoint; the email key stops a
+     * distributed script mailing one person repeatedly, which the IP key alone
+     * would not catch.
+     */
+    @POST
+    @Path("/start")
+    public Response start(StartRequest req, @Context HttpServletRequest http) {
+        String ip = callerIp(http);
+        IpRateLimiter.Decision byIp = rateLimiter.tryAcquire("ip:" + ip);
+        if (!byIp.allowed()) return rateLimited(byIp);
+
+        if (req == null) return badRequest("body_required", "Enter your email address.");
+        String email = trimToNull(req.email());
+        if (email == null || email.length() > MAX_EMAIL || !EMAIL.matcher(email).matches()) {
+            return badRequest("invalid_email", "Enter a valid email address.");
+        }
+        String hotelName = trimToNull(req.hotelName());
+        String hotelCity = trimToNull(req.hotelCity());
+        if (hotelName != null && hotelName.length() > MAX_HOTEL_FIELD) {
+            return badRequest("invalid_hotel_name",
+                    "The hotel's name must be " + MAX_HOTEL_FIELD + " characters or fewer.");
+        }
+        if (hotelCity != null && hotelCity.length() > MAX_HOTEL_FIELD) {
+            return badRequest("invalid_hotel_city",
+                    "The hotel's city must be " + MAX_HOTEL_FIELD + " characters or fewer.");
+        }
+
+        IpRateLimiter.Decision byEmail =
+                rateLimiter.tryAcquire("email:" + email.toLowerCase(java.util.Locale.ROOT));
+        if (!byEmail.allowed()) return rateLimited(byEmail);
+
+        Referrer referrer = service.startReferrer(email, clock.instant());
+
+        // A named hotel rides along as an ordinary referral, so the admin queue
+        // sees it exactly as it sees a V28 submission.
+        if (hotelName != null && hotelCity != null) {
+            service.create(
+                    new ReferralService.NewReferral(
+                            referrer.email(), null, hotelName, hotelCity, null, ip,
+                            referrer.id(), referrer.code()),
+                    clock.instant());
+        }
+
+        sendKitEmail(referrer);
+        return Response.status(201).entity(kitBody(referrer)).build();
+    }
+
+    /**
+     * The guest's status page, reached by the magic link in their email.
+     *
+     * <p>404 for an unknown token, with no distinction between "never existed"
+     * and "no longer valid", because there is nothing else it could usefully
+     * say and the difference would confirm a guess.
+     */
+    @GET
+    @Path("/status/{token}")
+    public Response status(@PathParam("token") String token) {
+        Optional<Referrer> referrer = service.findReferrerByToken(token);
+        if (referrer.isEmpty()) {
+            return Response.status(404).entity(Map.of("error", "unknown_token")).build();
+        }
+        Referrer r = referrer.get();
+        Map<String, Object> body = new LinkedHashMap<>(kitBody(r));
+        body.put("referrals", service.listByReferrer(r.id()).stream()
+                .map(PublicReferralsResource::publicReferral)
+                .toList());
+        return Response.ok(body).build();
+    }
+
+    // --------------------------------------------------------------- tracking
+
+    /**
+     * A hotel opened a guest's link. See ReferralService for first click wins.
+     *
+     * <p>Always 200, whether or not the code resolved. The marketing site calls
+     * this on every page load carrying a ?ref, including ones carrying a typo
+     * or a stale code, and a 404 there would be noise in its logs rather than
+     * information. {@code attributed} says whether anything was recorded.
+     */
+    @POST
+    @Path("/click")
+    public Response click(CodeRequest req) {
+        String code = req == null ? null : trimToNull(req.code());
+        if (code == null) return Response.ok(Map.of("attributed", false)).build();
+        return Response.ok(Map.of(
+                "attributed", service.recordClick(code, clock.instant()).isPresent())).build();
+    }
+
+    /** The hotel opened the Calendly widget from a link. Same always-200 contract as click. */
+    @POST
+    @Path("/demo-booked")
+    public Response demoBooked(CodeRequest req) {
+        String code = req == null ? null : trimToNull(req.code());
+        if (code == null) return Response.ok(Map.of("attributed", false)).build();
+        return Response.ok(Map.of(
+                "attributed", service.markDemoBooked(code, clock.instant()).isPresent())).build();
+    }
+
+    // ---------------------------------------------------------------- shared
+
+    private String referralLink(Referrer r) {
+        return marketingBaseUrl + "/hotels?ref=" + r.code();
+    }
+
+    private String statusUrl(Referrer r) {
+        return marketingBaseUrl + "/referrals/" + r.magicToken();
+    }
+
+    /**
+     * What the site renders for the kit. The messages come from the backend so
+     * the email and the page cannot drift; the site holds no copy of its own.
+     */
+    private Map<String, Object> kitBody(Referrer r) {
+        String link = referralLink(r);
+        ReferralMessages.Kit kit = ReferralMessages.forLink(link);
+        List<Map<String, Object>> messages = kit.all().stream()
+                .map(m -> {
+                    Map<String, Object> out = new LinkedHashMap<String, Object>();
+                    out.put("id", m.id());
+                    out.put("label", m.label());
+                    out.put("subject", m.subject());
+                    out.put("body", m.body());
+                    return out;
+                })
+                .toList();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("code", r.code());
+        body.put("link", link);
+        body.put("statusUrl", statusUrl(r));
+        body.put("messages", messages);
+        return body;
+    }
+
+    /** No guest email, no IP, no note. This shape is safe to hand a browser. */
+    private static Map<String, Object> publicReferral(Referral r) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", r.id().toString());
+        out.put("hotelName", r.hotelName());
+        out.put("hotelCity", r.hotelCity());
+        out.put("status", r.status().wire());
+        out.put("clickedAt", r.clickedAt() == null ? null : r.clickedAt().toString());
+        out.put("createdAt", r.createdAt().toString());
+        return out;
+    }
+
+    /**
+     * Never fails the request. The guest has their link on screen already, so a
+     * Postmark outage costs them the copy in their inbox and nothing else.
+     */
+    private void sendKitEmail(Referrer r) {
+        try {
+            emailService.send(EmailTemplates.referralLink(
+                    r.email(), r.code(), referralLink(r), statusUrl(r)));
+        } catch (RuntimeException e) {
+            log.error("Referral kit email failed for referrer {}", r.id(), e);
+        }
+    }
+
+    private static Response rateLimited(IpRateLimiter.Decision decision) {
+        return Response.status(429)
+                .header("Retry-After", decision.retryAfterSeconds())
+                .entity(Map.of(
+                        "error", "rate_limited",
+                        "message", "You've sent a few of these already. Try again in a little while."))
+                .build();
+    }
+
+    private static String stripTrailingSlash(String url) {
+        if (url == null) return "";
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
+
+    public record StartRequest(
+            @JsonProperty("email") String email,
+            @JsonProperty("hotelName") String hotelName,
+            @JsonProperty("hotelCity") String hotelCity) {}
+
+    public record CodeRequest(@JsonProperty("code") String code) {}
 
     @POST
     public Response create(ReferralRequest req, @Context HttpServletRequest http) {

@@ -6,6 +6,7 @@ import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.domain.PaymentPlan;
 import com.bliss.b2b.domain.PaymentScheduleEntry;
 import com.bliss.b2b.domain.PaymentScheduleStatus;
+import com.bliss.b2b.domain.ReferralMessages;
 import com.bliss.b2b.domain.ScheduleKind;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
@@ -674,5 +675,158 @@ public final class EmailTemplates {
                 Sign in to your dashboard to create your first booking.
                 """.formatted(name)
         );
+    }
+
+    // --------------------------------------------------------- guest referrals
+
+    /**
+     * The four guest-facing referral emails. All plain Bliss sender, no
+     * property: a referral is between the guest and us until the hotel is
+     * live, so "{property} via Bliss" would name a merchant that may not exist.
+     *
+     * <p>Copy discipline for every string below is {@link ReferralMessages}'s:
+     * no em dashes, no colons as connectors, no figure other than the $1,000
+     * the guest is owed. These go to the guest, so the $1,000 belongs here in a
+     * way it never does in the messages the hotel receives.
+     */
+
+    /** Sent by POST /public/referrals/start. Carries the link, the three messages and the status page. */
+    public static EmailMessage referralLink(
+            String to, String code, String link, String statusUrl) {
+        ReferralMessages.Kit kit = ReferralMessages.forLink(link);
+
+        StringBuilder textMessages = new StringBuilder();
+        StringBuilder htmlMessages = new StringBuilder();
+        for (ReferralMessages.Message m : kit.all()) {
+            textMessages.append("\n").append(m.label().toUpperCase(Locale.US)).append("\n");
+            if (m.subject() != null) {
+                textMessages.append("Subject. ").append(m.subject()).append("\n");
+            }
+            textMessages.append("\n").append(m.body()).append("\n");
+
+            htmlMessages.append(heading(m.label()));
+            if (m.subject() != null) {
+                htmlMessages.append(para("Subject. " + m.subject()));
+            }
+            htmlMessages.append(
+                    "<tr><td style=\"padding:8px 40px 0 40px;\">"
+                    + "<div style=\"font-family:" + SANS + ";font-size:14px;line-height:1.7;color:"
+                    + INK + ";background-color:" + SAND + ";border:1px solid " + HAIRLINE + ";"
+                    + "border-radius:12px;padding:16px 18px;white-space:pre-wrap;\">"
+                    + esc(m.body()) + "</div></td></tr>");
+        }
+
+        String rows = heading("Your referral link")
+                + para("Send this to any hotel you would like to book with. When one of "
+                    + "them starts taking Bliss, we cover up to $1,000 of your next stay there.")
+                + "<tr><td style=\"padding:8px 40px 0 40px;font-family:" + SANS + ";font-size:18px;"
+                + "font-weight:600;color:" + VIOLET + ";word-break:break-all;\">"
+                + esc(link) + "</td></tr>"
+                + para("Your code is " + code + ".")
+                + htmlMessages
+                + heading("Track it")
+                + para("This link shows every hotel you have referred and where each one has got to. "
+                    + "Keep it, there is no password.")
+                + button(statusUrl, "See your referrals");
+
+        String text = "Your referral link\n\n"
+                + "Send this to any hotel you would like to book with. When one of them "
+                + "starts taking Bliss, we cover up to $1,000 of your next stay there.\n\n"
+                + link + "\n\n"
+                + "Your code is " + code + ".\n"
+                + textMessages
+                + "\nTRACK IT\n\n"
+                + "This link shows every hotel you have referred and where each one has "
+                + "got to. Keep it, there is no password.\n\n"
+                + statusUrl + "\n";
+
+        return new EmailMessage(to, "Your Bliss referral link", text, referralShell(rows), "Bliss");
+    }
+
+    /** Sent when an admin moves a referral to demo_booked. */
+    public static EmailMessage referralDemoBooked(String to, String hotelName, String statusUrl) {
+        String hotel = hotelName == null || hotelName.isBlank() ? "A hotel you referred" : hotelName;
+        String rows = heading("The hotel you referred just booked a demo")
+                + para(hotel + " has booked a call with us. Nothing for you to do. "
+                    + "We will let you know if they go live.")
+                + button(statusUrl, "See your referrals");
+        String text = "The hotel you referred just booked a demo\n\n"
+                + hotel + " has booked a call with us. Nothing for you to do. "
+                + "We will let you know if they go live.\n\n"
+                + statusUrl + "\n";
+        return new EmailMessage(
+                to, "The hotel you referred just booked a demo", text, referralShell(rows), "Bliss");
+    }
+
+    /**
+     * Sent when an admin moves a referral to live. This is the payout trigger.
+     *
+     * <p>TODO: the next-steps copy is a placeholder. Brad is writing how the
+     * credit is claimed (whether we issue it against a booking the guest
+     * already has, or hold it until they book). Until that is settled this
+     * email promises the amount and says we will be in touch, which is true and
+     * does not commit us to a mechanism.
+     */
+    public static EmailMessage referralLive(String to, String hotelName, String statusUrl) {
+        String hotel = hotelName == null || hotelName.isBlank() ? "A hotel you referred" : hotelName;
+        String subject = "You've earned up to $1,000 at " + hotel;
+        // TODO(brad): replace the next two sentences with the real claim steps.
+        String nextSteps = "We will email you shortly with how to use it.";
+        String rows = heading(subject)
+                + para(hotel + " is now taking Bliss, and that is down to you. "
+                    + "You have earned up to $1,000 toward your next stay there.")
+                + para(nextSteps)
+                + button(statusUrl, "See your referrals");
+        String text = subject + "\n\n"
+                + hotel + " is now taking Bliss, and that is down to you. "
+                + "You have earned up to $1,000 toward your next stay there.\n\n"
+                + nextSteps + "\n\n"
+                + statusUrl + "\n";
+        return new EmailMessage(to, subject, text, referralShell(rows), "Bliss");
+    }
+
+    /** Sent when an admin moves a referral to credited. */
+    public static EmailMessage referralCredited(String to, String hotelName, String statusUrl) {
+        String hotel = hotelName == null || hotelName.isBlank() ? "the hotel you referred" : hotelName;
+        String rows = heading("Your credit is ready")
+                + para("Your credit for " + hotel + " has been applied. "
+                    + "It comes off your next stay there.")
+                + button(statusUrl, "See your referrals");
+        String text = "Your credit is ready\n\n"
+                + "Your credit for " + hotel + " has been applied. "
+                + "It comes off your next stay there.\n\n"
+                + statusUrl + "\n";
+        return new EmailMessage(to, "Your credit is ready", text, referralShell(rows), "Bliss");
+    }
+
+    /**
+     * The card these four sit in. Same shape as {@link #guestMagicLink}'s,
+     * without the per-merchant footer, because a referral has no property
+     * attached until the hotel is live.
+     */
+    private static String referralShell(String innerRows) {
+        return "<!DOCTYPE html>"
+            + "<html><head><meta charset=\"utf-8\">"
+            + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+            + "<meta name=\"color-scheme\" content=\"light dark\">"
+            + "<meta name=\"supported-color-schemes\" content=\"light dark\">"
+            + "</head>"
+            + "<body style=\"margin:0;padding:0;background-color:" + SAND + ";\">"
+            + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\""
+            + " style=\"background-color:" + SAND + ";margin:0;padding:0;\">"
+            + "<tr><td align=\"center\" style=\"padding:32px 12px;\">"
+            + "<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\""
+            + " style=\"width:100%;max-width:600px;background-color:" + WHITE + ";"
+            + "border:1px solid " + HAIRLINE + ";border-radius:16px;\">"
+            + "<tr><td style=\"padding:32px 40px 0 40px;font-family:Georgia,'Times New Roman',serif;"
+            + "font-size:26px;font-weight:bold;color:" + VIOLET + ";line-height:1;\">Bliss</td></tr>"
+            + innerRows
+            + "<tr><td style=\"padding:0 40px 36px 40px;\"></td></tr>"
+            + "</table>"
+            + "<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\""
+            + " style=\"width:100%;max-width:600px;\">"
+            + "<tr><td style=\"padding:20px 40px 8px 40px;font-family:" + SANS + ";font-size:12px;"
+            + "line-height:1.6;color:" + MUTED + ";\">Sent by Bliss</td></tr></table>"
+            + "</td></tr></table></body></html>";
     }
 }
