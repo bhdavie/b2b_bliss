@@ -25,22 +25,34 @@ import { Input } from "@/components/ui/Input";
  * they carry no state of their own, so they need no directive either.
  * next/image is safe under the same rule: it renders in either graph.
  *
- * Not yet adopted by signup, verify or check-email. Those are next, which is
- * why subhead, children and footer are all optional: verify and check-email
- * have a heading and no form, and signup wraps its own two-panel grid around a
- * column of this shape.
+ * Six screens render through it today: the property sign-in (/login), the
+ * guest sign-in (/account/login), the admin sign-in, /account/verify and
+ * /account/check-email. subhead, children and footer are all optional because
+ * verify and check-email have a heading and no form. Signup is still on its own
+ * older chrome and its two-panel plan preview; it is the one left to move.
+ *
+ * `hero` picks the backdrop. The two sign-ins named in the photo move pass
+ * "property" and "guest" and get the marketing site's photographs full-bleed;
+ * everything else takes the default and renders the illustration exactly as it
+ * did before. See the two blocks of constants below.
  */
 
-// The marketing site's check-in illustration, copied into public/ from
-// bliss_b2b_website/public/stats-checkin-v2.webp — the artwork behind that
-// site's stats band, not its hero (the hero carries a different scene, guests
-// arriving under a porte-cochere). 3840x2143, aspect 1.79.
+// ILLUSTRATION VARIANT (the default). The marketing site's check-in
+// illustration, copied into public/ from bliss_b2b_website/public/
+// stats-checkin-v2.webp — the artwork behind that site's stats band. 3840x2143,
+// aspect 1.79.
 //
-// The composition is what the layout below is built around: the left ~half is
-// an empty cream wall with a palm and a chair, and the front desk — key
-// cubbies, clerk, guest with a suitcase — sits in the right half. So the card
-// parks on the left over the empty side, the fade in globals.css flattens that
-// side to cream, and the desk is what resolves out of the fade on the right.
+// The composition is what the illustration layout is built around: the left
+// ~half is an empty cream wall with a palm and a chair, and the front desk sits
+// in the right half. So the card parks on the left over the empty side, the
+// fade in globals.css flattens that side to cream, and the desk resolves out of
+// the fade on the right.
+//
+// Still the default because three screens beyond the two sign-ins render
+// through this shell — the admin sign-in, /account/verify and
+// /account/check-email — and none of them were in scope for the photo move.
+// They render exactly what they rendered before. If they should follow, pass
+// them a `hero` and this constant, the fade in globals.css and the asset all go.
 const HERO_SRC = "/auth-hero-checkin.webp";
 
 // The ground the artwork fades into. Tracks the marketing site's cool neutral
@@ -50,27 +62,258 @@ const HERO_SRC = "/auth-hero-checkin.webp";
 // same value as sand-100 right now, so the two are visually indistinguishable,
 // but they are still separate decisions and the site is the one this follows.
 // If the site moves again, this moves with it and sand-100 does not.
+// Illustration variant only: the photo variants sit on white.
 const HERO_CREAM = "#F4F5F7";
+
+// PHOTO VARIANTS. The marketing site's two hero photographs at the same three
+// widths it serves, copied into public/ with their names unchanged so a
+// re-export there lands here as a straight file copy. Not regenerated.
+//
+// Which photo goes to which screen follows the site's own split: property
+// sign-in takes the /hotels hero (brass bell, ledger and key on white marble),
+// guest sign-in takes the guest hero (breakfast tray and ribbon on white
+// linen).
+//
+// object-position: right bottom for the same reason the site anchors them
+// there — the subject sits in the bottom-right of a 1.79 frame, so that corner
+// survives whichever way `cover` crops: viewports narrower than 1.79 crop off
+// the left, wider ones off the top.
+const PHOTO_HEROES = {
+  property: {
+    src: "/hotels-hero.webp",
+    srcSet:
+      "/hotels-hero@1600.webp 1600w, /hotels-hero.webp 2400w, /hotels-hero@3840.webp 3840w",
+  },
+  guest: {
+    src: "/guest-hero.webp",
+    srcSet:
+      "/guest-hero@1600.webp 1600w, /guest-hero.webp 2400w, /guest-hero@3840.webp 3840w",
+  },
+} as const;
+
+/** Which backdrop a screen renders behind the card. */
+export type AuthHero = keyof typeof PHOTO_HEROES | "illustration";
+
+// The grey fade for the PHOTO variants. Same device as the illustration's
+// .auth-hero-fade and the same #F4F5F7, re-cut for these two frames: the class
+// in globals.css is tuned to the illustration (solid to 42%, clear by 72%) and
+// belongs to it, and on a photograph a ramp running to 72% greys out half the
+// picture. The element below still carries .auth-hero-fade, so the lineage is
+// one name in the DOM and the class stays the fallback; this overrides only the
+// stop geometry. The tidier home for it is globals.css the day that file is in
+// scope.
+//
+// STOPS IN PIXELS, not percentages, because the thing the solid zone has to
+// cover is a fixed-px box: the card is 576px wide at a 89px offset, so its
+// right edge is at 665px at EVERY desktop width. Percentage stops would track
+// the viewport instead and leave the card's right edge sitting mid-ramp at
+// 1280 while over-covering at 1920. 677px is the card's edge plus 12px.
+//
+// WHERE IT LANDS AT 1440x900. Both photographs are 1.79 frames covering a 1.6
+// viewport, so `cover` scales to height and crops ~171px off the left:
+//  - guest: the ribbon's leftmost sweep is at 50.2% of the frame, which lands
+//    at 638px. That is BEHIND the card (89-665px), so the ribbon is first
+//    visible at the card's edge and the ramp's 65px is what touches it. The
+//    tray and cups sit past 1150px, untouched.
+//  - property: the leftmost object in the marble frame is the dark card at
+//    56.8% of the frame, landing at 744px. The ramp is clear at 742px, so it
+//    stops 2px short of it. The bell, ledger and key are further right again.
+// The ramp is 65px where the illustration's is 432px, which is the "shorten the
+// ramp" trade: it has to end before those props. Five eased stops rather than a
+// straight line because what reads as a band is the sudden change in SLOPE
+// where a linear ramp meets zero, not the ramp itself.
+const PHOTO_FADE =
+  "linear-gradient(to right," +
+  " #F4F5F7 0px," +
+  " #F4F5F7 677px," +
+  " rgba(244, 245, 247, 0.82) 694px," +
+  " rgba(244, 245, 247, 0.55) 710px," +
+  " rgba(244, 245, 247, 0.28) 724px," +
+  " rgba(244, 245, 247, 0.09) 734px," +
+  " rgba(244, 245, 247, 0) 742px)";
+
+// The desktop size bump, photo variants only. The card goes from max-w-md to
+// max-w-xl there, which is 128px of extra width, and type left at the small
+// card's sizes would read as small content in a big box. Every one of these is
+// one step up from what the card carries, all behind `lg:` so the phone card is
+// untouched, and they are complete literals so Tailwind's scanner sees them.
+//   padding  p-8 (32px)             -> p-10 (40px), the Card component's next tier
+//   wordmark text-2xl (24px)        -> text-3xl (30px)
+//   heading  32px/1.15              -> 38px/1.12
+//   inputs   16px, 17/15px padding  -> 18px, 21/19px padding
+// The inputs are reached through `.input` rather than by threading a size prop
+// down through AuthField: that component is shared with the admin sign-in and
+// the verify screens, which keep the small card, so the bump has to be scoped
+// to this card rather than to the field.
+const BIG_CARD =
+  "lg:p-10 lg:[&_.input]:px-[21px] lg:[&_.input]:py-[19px] lg:[&_.input]:text-lg";
+const BIG_WORDMARK = "lg:text-3xl";
+const BIG_HEADING = "lg:text-[38px] lg:leading-[1.12]";
 
 export function AuthShell({
   heading,
   subhead,
+  hero = "illustration",
   children,
   footer,
 }: {
   heading: string;
   subhead?: string;
+  /** Defaults to the illustration, which is what every screen not named in the photo move still renders. */
+  hero?: AuthHero;
   children?: ReactNode;
   footer?: ReactNode;
 }) {
+  const photo = hero === "illustration" ? null : PHOTO_HEROES[hero];
+  // Only the photo variants grow. The illustration screens keep the card
+  // they have: their fade is cut to a max-w-md card's right edge.
+  const big = photo !== null;
+
+  // Identical in both variants, so the card cannot drift between them.
+  const card = (
+    // `.card` is rounded-panel + sand-200 border + white fill, and carries no
+    // shadow of its own.
+    // On the illustration that is not enough: the fade puts the card on flat
+    // #F4F5F7, where white sits at roughly a 1.09:1 step and would read as a
+    // pale smudge rather than a raised surface.
+    // On the photographs it is not enough either, and for the opposite reason —
+    // both are bright, near-white surfaces (marble, linen), so the card's white
+    // fill has even less to separate it from its ground. The brief allows a
+    // veil here and it is not needed: shadow-elevated-lg plus `.card`'s own
+    // sand-200 edge, both existing tokens, do the separating. Darkening the
+    // photograph to rescue the card would cost the screen the brand read the
+    // photograph is here for.
+    <Card
+      padding="xl"
+      className={big ? `shadow-elevated-lg ${BIG_CARD}` : "shadow-elevated-lg"}
+    >
+      {/* Wordmark sits INSIDE the card, above the heading, left aligned to it so
+          the two read as one lockup. It stays Georgia bold via BlissWordmark's
+          inline style — the one thing here that is not Inter. It is `block` so
+          the heading's own top margin is the only thing setting the gap. */}
+      <BlissWordmark
+        className={
+          big
+            ? `block text-2xl text-brand-violet ${BIG_WORDMARK}`
+            : "block text-2xl text-brand-violet"
+        }
+      />
+
+      <h1
+        className={
+          big
+            ? `mt-5 font-display text-[32px] leading-[1.15] tracking-[-0.01em] text-ink-900 ${BIG_HEADING}`
+            : "mt-5 font-display text-[32px] leading-[1.15] tracking-[-0.01em] text-ink-900"
+        }
+      >
+        {heading}
+      </h1>
+
+      {subhead ? <p className="mt-2 text-sm text-ink-500">{subhead}</p> : null}
+
+      {children ? <div className="mt-7">{children}</div> : null}
+
+      {footer ? (
+        <p className="mt-6 text-center text-xs text-ink-400">{footer}</p>
+      ) : null}
+    </Card>
+  );
+
+  if (photo) {
+    return (
+      // Two layouts in one element, split at lg, which is where this shell
+      // already moved the card and so stays the screen's only breakpoint:
+      //  - below lg it is a plain column, card first and the photograph as a
+      //    320px band under it. This is the marketing heroes' mobile treatment,
+      //    where the background stops being a background and becomes a band
+      //    (.g-hero at max-width: 860px). No vertical centring: the card sits
+      //    under its top padding and the band follows, so nothing can overflow
+      //    off the top of a short viewport.
+      //  - at lg the photograph becomes an absolute full-bleed layer and the
+      //    card is the only thing left in flow, vertically centred against the
+      //    viewport and anchored left on the marketing text column's line.
+      // `relative isolate` is required, not decorative: it opens the stacking
+      // context the layers below resolve against. Ground is white, not the
+      // illustration's cream — both photographs are white-linen scenes.
+      <main className="relative isolate flex min-h-screen flex-col bg-white font-inter lg:flex-row lg:items-center lg:justify-start">
+        {/* React hoists this into <head>. It is the same preload the marketing
+            site emits for these files, and unconditional for the same reason:
+            the photograph is on screen at every width, as the background above
+            lg and as the band below it, so it is never a wasted fetch. */}
+        <link
+          rel="preload"
+          as="image"
+          fetchPriority="high"
+          imageSrcSet={photo.srcSet}
+          imageSizes="100vw"
+        />
+
+        {/* Layer 0 — the photograph.
+            A plain <img> rather than next/image, the same call the marketing
+            site documents on its own heroes: next/image would regenerate its
+            own srcset at Next's device widths and discard the three widths
+            these files were cut at. The preload above and fetchPriority give it
+            the loading priority that rule exists to protect.
+            alt="" because it is decoration — the screen's meaning is entirely
+            in the card, and announcing the photograph would only add noise. */}
+        <div className="order-2 h-80 w-full shrink-0 overflow-hidden lg:absolute lg:inset-0 lg:z-0 lg:order-none lg:h-full">
+          {/* eslint-disable-next-line @next/next/no-img-element -- see above. */}
+          <img
+            className="block h-full w-full object-cover object-right-bottom"
+            src={photo.src}
+            srcSet={photo.srcSet}
+            sizes="100vw"
+            alt=""
+            fetchPriority="high"
+            decoding="async"
+          />
+        </div>
+
+        {/* Layer 10 — the grey fade, over the photograph and under the card.
+            Desktop only, the same line the illustration variant draws: below lg
+            the photograph is a band UNDER the card rather than behind it, so a
+            left-hand fade would have nothing to do. `hidden lg:block` rather
+            than leaning on the class's own media query, because the stops
+            below are an inline style and inline styles answer to no breakpoint.
+            pointer-events-none is load-bearing, not tidiness: this div spans
+            the viewport, so without it the half of it that overlaps the card
+            would swallow clicks meant for the fields underneath. */}
+        <div
+          aria-hidden
+          style={{ backgroundImage: PHOTO_FADE }}
+          className="auth-hero-fade pointer-events-none absolute inset-0 z-10 hidden lg:block"
+        />
+
+        {/* Layer 20 — the card. `lg:relative` is what makes the z-index apply,
+            so the photograph can never outrank it whichever utilities survive.
+            Size and content are untouched: w-full max-w-md, as before.
+            Below lg: centred in its gutters, and pb-11 is the 44px the
+            marketing heroes leave between the copy and the band.
+            lg:ml-[89px] is the marketing hero's text column: the nav card's
+            content edge, --nav-inset-x (64px) plus its 1px border and 24px
+            padding. The site derives it as --g-edge on .g-hero; there is no nav
+            card on this screen to derive it from, so it is written out. The
+            card's left edge lands on the marketing headline's line.
+            A MARGIN, not the padding this started as. Tailwind's preflight puts
+            every box on border-box, so an 89px padding-left came out of the
+            max-width rather than sitting beside it: the desktop card measured
+            max-w-md minus 89 = 359px, narrower than the same card on a phone.
+            As a margin the offset sits outside the box and max-w-xl is the
+            card's real width, 576px, with its right edge at 665px — which is
+            the number the fade's solid zone is cut to. */}
+        <div className="order-1 mx-auto w-full max-w-md px-6 pb-11 pt-16 lg:relative lg:z-20 lg:order-none lg:mx-0 lg:ml-[89px] lg:max-w-xl lg:px-0 lg:py-16">
+          {card}
+        </div>
+      </main>
+    );
+  }
+
   return (
     // `relative isolate` is required, not decorative: the artwork below is
-    // absolutely positioned at -z-10, and `isolate` opens a stacking context so
-    // that negative index resolves against this <main> rather than escaping
-    // behind the page and disappearing under the body background.
+    // absolutely positioned, and `isolate` opens a stacking context so the
+    // layers resolve against this <main> rather than escaping behind the page.
     //
-    // Horizontal placement is the whole point of the layout and is the one
-    // thing that changes at the breakpoint:
+    // Horizontal placement is the one thing that changes at the breakpoint:
     //  - below lg the card centres (justify-center) so it stays balanced on a
     //    phone or a narrow tablet, where a left-anchored card would crowd the
     //    edge and leave dead space opposite it;
@@ -134,45 +377,7 @@ export function AuthShell({
       />
 
       {/* Layer 20 — the card. `relative` is what makes the z-index apply. */}
-      <div className="relative z-20 w-full max-w-md">
-        {/* `.card` is rounded-panel + sand-200 border + white fill. It carries
-            no shadow of its own, which was right against the flat sand-100 page
-            this screen used to have: white on sand-100 is a 1.17:1 step and the
-            sand-200 border did the rest.
-            Over the illustration neither holds, and the fade does not rescue
-            it: flattening the left side is what puts the card on flat
-            colour, but that colour is #F4F5F7, so white sits at roughly a
-            1.09:1 step against it. The card would read as a pale smudge rather
-            than a raised surface, and the border alone cannot separate a light
-            edge from a light ground. shadow-elevated-lg is what re-establishes the
-            lift; it is the existing token (navy-tinted, from the same palette)
-            rather than an arbitrary rgba, so it follows a palette change.
-            No scrim or overlay: darkening the whole illustration to rescue the
-            card would cost the artwork its brightness and the screen its brand
-            read. Elevating the card is the cheaper half of the trade. */}
-        <Card padding="xl" className="shadow-elevated-lg">
-          {/* Wordmark now sits INSIDE the card, above the heading, and left
-              aligned to it so the two read as one lockup. It stays Georgia bold
-              via BlissWordmark's inline style — the one thing here that is not
-              Inter. It is `block` so the heading's own top margin is the only
-              thing setting the gap. */}
-          <BlissWordmark className="block text-2xl text-brand-violet" />
-
-          <h1 className="mt-5 font-display text-[32px] leading-[1.15] tracking-[-0.01em] text-ink-900">
-            {heading}
-          </h1>
-
-          {subhead ? (
-            <p className="mt-2 text-sm text-ink-500">{subhead}</p>
-          ) : null}
-
-          {children ? <div className="mt-7">{children}</div> : null}
-
-          {footer ? (
-            <p className="mt-6 text-center text-xs text-ink-400">{footer}</p>
-          ) : null}
-        </Card>
-      </div>
+      <div className="relative z-20 w-full max-w-md">{card}</div>
     </main>
   );
 }
