@@ -118,8 +118,8 @@ Backend reads from env vars with sensible local defaults (see [backend/src/main/
 | `BLISS_CONSUMER_BASE_URL` | `http://localhost:3000` | consumer portal base. Builds hosted pay links and the manage-your-plan link |
 | `BLISS_COOKIE_SAMESITE` | `Lax` | `Lax`, `Strict` or `None`. `None` requires secure cookies, which are on only when `BLISS_ENV=production` |
 | `BLISS_COOKIE_DOMAIN` | empty | empty = host-only. Set to a shared parent (e.g. `.bliss-payments.com`) when the frontend and API are on different subdomains |
-| `BLISS_POSTMARK_TOKEN` | empty | activates Postmark (logs instead of sending when empty) |
-| `BLISS_EMAIL_FROM` | `no-reply@bliss.com` | must be a Postmark-verified sender once a token is set |
+| `POSTMARK_SERVER_TOKEN` | empty | activates Postmark (logs instead of sending when empty) |
+| `POSTMARK_FROM_EMAIL` | `no-reply@bliss.com` | must be a Postmark-verified sender once a token is set |
 | `STRIPE_SECRET_KEY` | empty | `sk_test_...` to activate Stripe Connect endpoints |
 | `STRIPE_PUBLISHABLE_KEY` | empty | optional, used client-side later |
 | `STRIPE_WEBHOOK_SECRET` | empty | `whsec_...` from `stripe listen` |
@@ -141,7 +141,7 @@ switching between them is an env var, not a deploy.
 **Magic link** is the real path: `/signup` (find-or-create, so it works for an
 existing merchant too) posts to `/api/v1/auth/magic-link`, the email carries
 `BLISS_MERCHANT_BASE_URL/verify?token=…`, and `/verify` exchanges it for the
-session cookie. It needs `BLISS_POSTMARK_TOKEN` set and the sender verified —
+session cookie. It needs `POSTMARK_SERVER_TOKEN` set and the sender verified —
 without a token the link is only written to the log, so nothing arrives.
 
 **Demo sign-in** (`POST /api/v1/auth/dev-login`) takes any email and issues a
@@ -154,7 +154,7 @@ live or dead with it.
 (`/api/v1/dev/*`, which fabricate card declines) stay shut in production
 regardless — a demo needs a way to sign in, not a way to forge payment failures.
 
-To hand the demo over to real auth: set `BLISS_POSTMARK_TOKEN`, then set
+To hand the demo over to real auth: set `POSTMARK_SERVER_TOKEN`, then set
 `BLISS_DEMO_LOGIN=false`. The sign-in page follows on its own.
 
 ## Seeding the demo merchant

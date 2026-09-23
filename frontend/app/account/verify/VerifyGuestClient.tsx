@@ -40,6 +40,10 @@ export function VerifyGuestClient() {
 
   return (
     <AuthShell
+      // Guest flow. This and the Suspense fallback in page.tsx render the same
+      // screen a beat apart, so they have to carry the same backdrop or the
+      // photograph swaps under the reader as the client component mounts.
+      hero="guest"
       heading={status === "error" ? "That link expired" : "Signing you in"}
       subhead={
         status === "error"

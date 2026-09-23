@@ -45,6 +45,10 @@ export default async function AccountLoginPage() {
       <AuthShell
         heading="Welcome back"
         subhead="Sign in to see your payment plans across every Bliss property."
+        // The marketing guest hero: breakfast tray and ribbon on white linen,
+        // the same photograph a guest met on the marketing site on the way
+        // here.
+        hero="guest"
         footer={
           <>
             Don&rsquo;t have an account yet? Your account is created

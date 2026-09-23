@@ -1,8 +1,10 @@
 package com.bliss.b2b.domain;
 
+import static com.bliss.b2b.domain.ReferralStatus.CLICKED;
 import static com.bliss.b2b.domain.ReferralStatus.CONTACTED;
 import static com.bliss.b2b.domain.ReferralStatus.CREDITED;
 import static com.bliss.b2b.domain.ReferralStatus.DECLINED;
+import static com.bliss.b2b.domain.ReferralStatus.DEMO_BOOKED;
 import static com.bliss.b2b.domain.ReferralStatus.LIVE;
 import static com.bliss.b2b.domain.ReferralStatus.SUBMITTED;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -58,7 +60,11 @@ class ReferralStatusTest {
 
     @Test
     void allowedNextListsTheLadderInOrder() {
-        assertThat(SUBMITTED.allowedNext()).containsExactly(CONTACTED, LIVE, CREDITED, DECLINED);
+        assertThat(SUBMITTED.allowedNext())
+                .containsExactly(CLICKED, CONTACTED, DEMO_BOOKED, LIVE, CREDITED, DECLINED);
+        assertThat(CLICKED.allowedNext())
+                .containsExactly(CONTACTED, DEMO_BOOKED, LIVE, CREDITED, DECLINED);
+        assertThat(DEMO_BOOKED.allowedNext()).containsExactly(LIVE, CREDITED, DECLINED);
         assertThat(LIVE.allowedNext()).containsExactly(CREDITED, DECLINED);
         assertThat(DECLINED.allowedNext()).containsExactly(DECLINED);
     }

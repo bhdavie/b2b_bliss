@@ -6,7 +6,10 @@ import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.domain.PaymentPlan;
 import com.bliss.b2b.domain.PaymentScheduleEntry;
 import com.bliss.b2b.domain.PaymentScheduleStatus;
+import com.bliss.b2b.domain.ReferralMessages;
 import com.bliss.b2b.domain.ScheduleKind;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -179,6 +182,21 @@ public final class EmailTemplates {
     private static final String INK = "#17131C";
     private static final String MUTED = "#6E6878";
     private static final String SAND = "#F6F4F1";
+    /**
+     * The referral emails' ground, and deliberately NOT {@link #SAND}. The site's
+     * guest page sets its FAQ band on this exact value and the referral mail is
+     * the other half of that flow, so the two are the same grey rather than two
+     * neighbouring ones. The plan and sign-in mails keep the cream: they belong
+     * to the merchant side, which the site never repainted.
+     */
+    private static final String REFERRAL_GROUND = "#E4E6EA";
+    /**
+     * The edge for anything filled with {@link #REFERRAL_GROUND}. {@link #HAIRLINE}
+     * is LIGHTER than that grey (233,229,225 against 228,230,234), so it drew a
+     * pale halo around the DM box rather than an edge. One neutral darker, which
+     * is the same step the site takes for its own controls on this ground.
+     */
+    private static final String REFERRAL_EDGE = "#C9CCD1";
     private static final String WHITE = "#FFFFFF";
     private static final String HAIRLINE = "#E9E5E1";
     private static final String INK_400 = "#898294";
@@ -674,5 +692,301 @@ public final class EmailTemplates {
                 Sign in to your dashboard to create your first booking.
                 """.formatted(name)
         );
+    }
+
+    // --------------------------------------------------------- guest referrals
+
+    /**
+     * The four guest-facing referral emails. All plain Bliss sender, no
+     * property: a referral is between the guest and us until the hotel is
+     * live, so "{property} via Bliss" would name a merchant that may not exist.
+     *
+     * <p>Copy discipline for every string below is {@link ReferralMessages}'s:
+     * no em dashes, no colons as connectors, no figure other than the $1,000
+     * the guest is owed. These go to the guest, so the $1,000 belongs here in a
+     * way it never does in the messages the hotel receives.
+     */
+
+    /**
+     * Sent by POST /public/referrals/start. The guest's link, the three ways to
+     * use it, and the page that tracks where each one got to.
+     *
+     * <p>This is now the ONLY place those three are delivered. The site used to
+     * render them behind copy buttons and shows a confirmation instead, so a
+     * guest who never gets the mail has nothing, which is why a failed send now
+     * fails the request rather than being swallowed. See sendKitEmail.
+     *
+     * @param marketingBaseUrl BLISS_MARKETING_BASE_URL. Mail clients do not
+     *     resolve relative image paths, so the photograph needs an absolute URL,
+     *     and hard-coding a host would send localhost images from production.
+     */
+    public static EmailMessage referralLink(
+            String to, String code, String link, String statusUrl, String marketingBaseUrl) {
+        ReferralMessages.Kit kit = ReferralMessages.forLink(link);
+        String site = stripTrailingSlash(marketingBaseUrl);
+        String mailtoUrl = mailto(kit.email().subject(), kit.email().body());
+        // One line, and the only line, of the front desk message. The rest of
+        // that Message is the raw link, which this mail already shows below.
+        //
+        // The lead-in is added HERE rather than in ReferralMessages, because the
+        // status page renders that same message under the heading "At the front
+        // desk" and would then say it twice. This mail has no heading over the
+        // line, so it carries its own.
+        String deskLine = "At the front desk? " + firstLine(kit.desk().body());
+
+        String rows =
+                // The photograph, full bleed across the card with nothing beside
+                // it. width and height are real attributes as well as styles
+                // because Outlook reads the attributes and ignores the CSS;
+                // display:block kills the baseline gap clients leave under an
+                // inline image. With images blocked this collapses to the alt
+                // text on one line and every row below it still reads in order.
+                "<tr><td style=\"padding:24px 0 0 0;\">"
+                + "<img src=\"" + esc(site + "/email/referral-bed.jpg") + "\" width=\"600\" height=\"200\""
+                + " alt=\"A breakfast tray with two cups, a key card and a purple ribbon on a white bed\""
+                + " style=\"display:block;width:100%;max-width:600px;height:auto;border:0;"
+                + "outline:none;text-decoration:none;\"></td></tr>"
+
+                + heading("Your link is ready")
+                + para("Send it to any hotel you'd love to book with. When they start "
+                    + "taking Bliss, we cover up to $1,000 of your next stay there.")
+
+                + button(mailtoUrl, "Email a hotel")
+                + small("Opens your email app with the message ready. Just add the "
+                    + "hotel's address.")
+
+                + subheading("Prefer Instagram? Paste this into a DM.")
+                + quoteBox(kit.instagram().body())
+
+                + para(deskLine)
+
+                + linkLine(link)
+                + small("Your code is " + code + ".")
+
+                + button(statusUrl, "See your referrals")
+                + small("Track every hotel you send it to.");
+
+        String text = "Your link is ready\n\n"
+                + "Send it to any hotel you'd love to book with. When they start taking "
+                + "Bliss, we cover up to $1,000 of your next stay there.\n\n"
+                + "EMAIL A HOTEL\n"
+                + "Subject: " + kit.email().subject() + "\n\n"
+                + kit.email().body() + "\n\n"
+                + "PREFER INSTAGRAM? PASTE THIS INTO A DM.\n\n"
+                + kit.instagram().body() + "\n\n"
+                + deskLine + "\n\n"
+                + "Your link\n"
+                + link + "\n"
+                + "Your code is " + code + ".\n\n"
+                + "SEE YOUR REFERRALS\n"
+                + "Track every hotel you send it to.\n"
+                + statusUrl + "\n\n"
+                + "You're getting this because you asked for a referral link at "
+                + "bliss-payments.com. Questions? Email info@bliss-payments.com.\n"
+                + "Terms " + site + REFERRAL_TERMS_PATH + "\n";
+
+        return new EmailMessage(
+                to, "Your Bliss referral link", text, referralShell(rows, site), "Bliss");
+    }
+
+    /**
+     * The line an inbox list shows beside the subject. Hidden inside the body by
+     * the trio that works across clients together and not separately: zero font
+     * size and line height, zero opacity, and the max-height/overflow pair Gmail
+     * needs. The run of zero-width non-joiners after it stops a client dragging
+     * the next real sentence in behind the preheader to fill the space.
+     */
+    private static final String PREHEADER_TEXT = "Send it to a hotel you'd like to book with.";
+
+    /**
+     * The referral program's own part of the terms, not the terms as a whole.
+     * This mail is about that program, so its footer points at the section
+     * rather than the top of a page whose first fifteen clauses govern the
+     * payment service instead.
+     *
+     * <p>The fragment is the id on that section's heading in the site's
+     * app/terms/page.tsx, where it is also defined as REFERRAL_TERMS in
+     * lib/routes.ts. Nothing can import across the two repositories, so this is
+     * the second copy of that path and the one that has to move with it.
+     */
+    private static final String REFERRAL_TERMS_PATH = "/terms#referral-program";
+
+    private static String preheader(String text) {
+        return "<div style=\"display:none;font-size:1px;line-height:1px;max-height:0;"
+            + "max-width:0;opacity:0;overflow:hidden;mso-hide:all;\">" + esc(text)
+            + "&#8203;&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;"
+            + "&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;&zwnj;</div>";
+    }
+
+    /**
+     * A mailto with no recipient, so the guest picks the hotel in their own client.
+     *
+     * <p>URLEncoder, then "+" patched back to %20. URLEncoder writes form
+     * encoding, where a space is a plus; that is right in a query string and
+     * wrong in a mailto, where clients paste the plus into the body literally.
+     * Newlines come through as %0A either way, which is what preserves the
+     * paragraph breaks the copy was written with.
+     */
+    private static String mailto(String subject, String body) {
+        return "mailto:?subject=" + encodeMailto(subject) + "&body=" + encodeMailto(body);
+    }
+
+    private static String encodeMailto(String raw) {
+        return URLEncoder.encode(raw, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+
+    private static String firstLine(String body) {
+        int nl = body.indexOf('\n');
+        return nl < 0 ? body : body.substring(0, nl);
+    }
+
+    private static String stripTrailingSlash(String url) {
+        if (url == null || url.isBlank()) return "";
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
+
+    /** Section label. Steps down from {@link #heading}, so the mail has one top line and a rank below it. */
+    private static String subheading(String text) {
+        return "<tr><td style=\"padding:30px 40px 0 40px;font-family:" + SANS + ";font-size:17px;"
+            + "line-height:1.4;font-weight:600;color:" + INK + ";\">" + esc(text) + "</td></tr>";
+    }
+
+    /** The one light box left in this mail, holding the DM to paste. */
+    private static String quoteBox(String body) {
+        return "<tr><td style=\"padding:12px 40px 0 40px;\">"
+            + "<div style=\"font-family:" + SANS + ";font-size:15px;line-height:1.65;color:" + INK
+            + ";background-color:" + REFERRAL_GROUND + ";border:1px solid " + REFERRAL_EDGE
+            + ";border-radius:12px;"
+            + "padding:16px 18px;\">" + esc(body) + "</div></td></tr>";
+    }
+
+    /** The raw link, wrapping rather than running off the side of a phone. */
+    private static String linkLine(String link) {
+        return "<tr><td style=\"padding:26px 40px 0 40px;font-family:" + SANS + ";font-size:14px;"
+            + "line-height:1.6;font-weight:600;word-break:break-all;\">"
+            + "<a href=\"" + esc(link) + "\" style=\"color:" + VIOLET + ";text-decoration:none;\">"
+            + esc(link) + "</a></td></tr>";
+    }
+
+    /** The quiet line under a button or a link. */
+    private static String small(String text) {
+        return "<tr><td style=\"padding:10px 40px 0 40px;font-family:" + SANS + ";font-size:13px;"
+            + "line-height:1.55;color:" + MUTED + ";\">" + esc(text) + "</td></tr>";
+    }
+
+
+    /** Sent when an admin moves a referral to demo_booked. */
+    public static EmailMessage referralDemoBooked(String to, String hotelName, String statusUrl) {
+        String hotel = hotelName == null || hotelName.isBlank() ? "A hotel you referred" : hotelName;
+        String rows = heading("The hotel you referred just booked a demo")
+                + para(hotel + " has booked a call with us. Nothing for you to do. "
+                    + "We will let you know if they go live.")
+                + button(statusUrl, "See your referrals");
+        String text = "The hotel you referred just booked a demo\n\n"
+                + hotel + " has booked a call with us. Nothing for you to do. "
+                + "We will let you know if they go live.\n\n"
+                + statusUrl + "\n";
+        return new EmailMessage(
+                to, "The hotel you referred just booked a demo", text, referralShell(rows), "Bliss");
+    }
+
+    /**
+     * Sent when an admin moves a referral to live. This is the payout trigger.
+     *
+     * <p>TODO: the next-steps copy is a placeholder. Brad is writing how the
+     * credit is claimed (whether we issue it against a booking the guest
+     * already has, or hold it until they book). Until that is settled this
+     * email promises the amount and says we will be in touch, which is true and
+     * does not commit us to a mechanism.
+     */
+    public static EmailMessage referralLive(String to, String hotelName, String statusUrl) {
+        String hotel = hotelName == null || hotelName.isBlank() ? "A hotel you referred" : hotelName;
+        String subject = "You've earned up to $1,000 at " + hotel;
+        // TODO(brad): replace the next two sentences with the real claim steps.
+        String nextSteps = "We will email you shortly with how to use it.";
+        String rows = heading(subject)
+                + para(hotel + " is now taking Bliss, and that is down to you. "
+                    + "You have earned up to $1,000 toward your next stay there.")
+                + para(nextSteps)
+                + button(statusUrl, "See your referrals");
+        String text = subject + "\n\n"
+                + hotel + " is now taking Bliss, and that is down to you. "
+                + "You have earned up to $1,000 toward your next stay there.\n\n"
+                + nextSteps + "\n\n"
+                + statusUrl + "\n";
+        return new EmailMessage(to, subject, text, referralShell(rows), "Bliss");
+    }
+
+    /** Sent when an admin moves a referral to credited. */
+    public static EmailMessage referralCredited(String to, String hotelName, String statusUrl) {
+        String hotel = hotelName == null || hotelName.isBlank() ? "the hotel you referred" : hotelName;
+        String rows = heading("Your credit is ready")
+                + para("Your credit for " + hotel + " has been applied. "
+                    + "It comes off your next stay there.")
+                + button(statusUrl, "See your referrals");
+        String text = "Your credit is ready\n\n"
+                + "Your credit for " + hotel + " has been applied. "
+                + "It comes off your next stay there.\n\n"
+                + statusUrl + "\n";
+        return new EmailMessage(to, "Your credit is ready", text, referralShell(rows), "Bliss");
+    }
+
+    /**
+     * The card these four sit in. Same shape as {@link #guestMagicLink}'s,
+     * without the per-merchant footer, because a referral has no property
+     * attached until the hotel is live.
+     */
+    /**
+     * The three status emails further down the flow keep the short footer. Only
+     * the kit email carries the "why you are getting this" line and the terms
+     * link, because it is the one sent in response to something the guest did.
+     */
+    private static String referralShell(String innerRows) {
+        return referralShell(innerRows, null);
+    }
+
+    /**
+     * @param site marketing base URL for the terms link, or null for the short
+     *     footer. Never a bare "" from a missing env var by accident: the caller
+     *     passes what BLISS_MARKETING_BASE_URL resolved to, and a blank one
+     *     degrades to the short footer rather than linking to a bare fragment.
+     */
+    private static String referralShell(String innerRows, String site) {
+        return "<!DOCTYPE html>"
+            + "<html><head><meta charset=\"utf-8\">"
+            + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+            + "<meta name=\"color-scheme\" content=\"light dark\">"
+            + "<meta name=\"supported-color-schemes\" content=\"light dark\">"
+            + "</head>"
+            + "<body style=\"margin:0;padding:0;background-color:" + REFERRAL_GROUND + ";\">"
+            // First thing in the body, before any visible markup, which is where
+            // a client looks for the line to show beside the subject. Only the
+            // kit mail sets one; the status mails say enough in their subject.
+            + (site == null || site.isBlank() ? "" : preheader(PREHEADER_TEXT))
+            + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\""
+            + " style=\"background-color:" + REFERRAL_GROUND + ";margin:0;padding:0;\">"
+            + "<tr><td align=\"center\" style=\"padding:32px 12px;\">"
+            + "<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\""
+            + " style=\"width:100%;max-width:600px;background-color:" + WHITE + ";"
+            + "border:1px solid " + HAIRLINE + ";border-radius:16px;\">"
+            + "<tr><td style=\"padding:32px 40px 0 40px;font-family:Georgia,'Times New Roman',serif;"
+            + "font-size:26px;font-weight:bold;color:" + VIOLET + ";line-height:1;\">Bliss</td></tr>"
+            + innerRows
+            + "<tr><td style=\"padding:0 40px 36px 40px;\"></td></tr>"
+            + "</table>"
+            + "<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\""
+            + " style=\"width:100%;max-width:600px;\">"
+            + "<tr><td style=\"padding:20px 40px 8px 40px;font-family:" + SANS + ";font-size:12px;"
+            + "line-height:1.6;color:" + MUTED + ";\">"
+            + (site == null || site.isBlank()
+                ? "Sent by Bliss"
+                : "You're getting this because you asked for a referral link at "
+                  + "bliss-payments.com. Questions? Email "
+                  + "<a href=\"mailto:info@bliss-payments.com\" style=\"color:" + MUTED + ";\">"
+                  + "info@bliss-payments.com</a>."
+                  + "<br><a href=\"" + esc(site + REFERRAL_TERMS_PATH) + "\" style=\"color:" + MUTED
+                  + ";\">Terms</a>")
+            + "</td></tr></table>"
+            + "</td></tr></table></body></html>";
     }
 }

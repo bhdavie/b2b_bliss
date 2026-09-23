@@ -138,6 +138,10 @@ export default function LoginPage() {
     <AuthShell
       heading="Welcome back"
       subhead="Sign in to your property dashboard."
+      // The marketing /hotels hero: brass bell, ledger and key on white
+      // marble. This is the property-facing surface, so it takes the
+      // property-facing photograph.
+      hero="property"
       footer={
         <>
           New here?{" "}

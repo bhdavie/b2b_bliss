@@ -6,7 +6,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Dev default. Prints messages to the application log so magic links and
  * notifications can be retrieved without a real email provider. Replaced by
- * PostmarkEmailService when BLISS_POSTMARK_TOKEN is set.
+ * PostmarkEmailService when POSTMARK_SERVER_TOKEN is set.
  */
 public class LoggingEmailService implements EmailService {
 
