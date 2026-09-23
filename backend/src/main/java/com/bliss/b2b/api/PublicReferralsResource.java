@@ -137,7 +137,10 @@ public class PublicReferralsResource {
                     clock.instant());
         }
 
-        sendKitEmail(referrer);
+        // The 201 is now conditional on the mail going out, because the mail is
+        // the whole delivery. See sendKitEmail.
+        Response failure = sendKitEmail(referrer);
+        if (failure != null) return failure;
         return Response.status(201).entity(kitBody(referrer)).build();
     }
 
@@ -240,15 +243,40 @@ public class PublicReferralsResource {
     }
 
     /**
-     * Never fails the request. The guest has their link on screen already, so a
-     * Postmark outage costs them the copy in their inbox and nothing else.
+     * FAILS THE REQUEST NOW, which is a deliberate reversal.
+     *
+     * <p>It used to swallow the error and let /start return 201, on the reasoning
+     * that the guest already had their link on screen so a provider outage cost
+     * them only the copy in their inbox. That reasoning died with the on-page
+     * kit: the email is the only place the link and the three messages are
+     * delivered, so a swallowed failure now hands the guest a success screen and
+     * nothing else. It also made a misconfiguration indistinguishable from a
+     * working send at every layer above this one, which is exactly how a blank
+     * Postmark token went unnoticed.
+     *
+     * <p>The referrer row stays. It is committed before this runs, the code is
+     * already allocated, and startReferrer returns the existing row for a known
+     * email, so a retry re-sends to the same referrer rather than making a
+     * second one. Nothing here rolls back.
+     *
+     * @return null when the mail went, or the error Response to return as is.
      */
-    private void sendKitEmail(Referrer r) {
+    private Response sendKitEmail(Referrer r) {
         try {
             emailService.send(EmailTemplates.referralLink(
-                    r.email(), r.code(), referralLink(r), statusUrl(r)));
+                    r.email(), r.code(), referralLink(r), statusUrl(r), marketingBaseUrl));
+            return null;
         } catch (RuntimeException e) {
             log.error("Referral kit email failed for referrer {}", r.id(), e);
+            // 502, not 500: the failure is a downstream provider, and the row
+            // this endpoint owns was written correctly. `error` is the key the
+            // site checks; `message` is what it shows if it has nothing better.
+            return Response.status(502)
+                    .entity(Map.of(
+                            "error", "email_not_sent",
+                            "message", "Something went wrong sending your link. Try again, "
+                                + "or email info@bliss-payments.com."))
+                    .build();
         }
     }
 
