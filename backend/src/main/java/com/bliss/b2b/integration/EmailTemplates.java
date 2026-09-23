@@ -783,7 +783,7 @@ public final class EmailTemplates {
                 + statusUrl + "\n\n"
                 + "You're getting this because you asked for a referral link at "
                 + "bliss-payments.com. Questions? Email info@bliss-payments.com.\n"
-                + "Terms " + site + "/terms\n";
+                + "Terms " + site + REFERRAL_TERMS_PATH + "\n";
 
         return new EmailMessage(
                 to, "Your Bliss referral link", text, referralShell(rows, site), "Bliss");
@@ -797,6 +797,19 @@ public final class EmailTemplates {
      * the next real sentence in behind the preheader to fill the space.
      */
     private static final String PREHEADER_TEXT = "Send it to a hotel you'd like to book with.";
+
+    /**
+     * The referral program's own part of the terms, not the terms as a whole.
+     * This mail is about that program, so its footer points at the section
+     * rather than the top of a page whose first fifteen clauses govern the
+     * payment service instead.
+     *
+     * <p>The fragment is the id on that section's heading in the site's
+     * app/terms/page.tsx, where it is also defined as REFERRAL_TERMS in
+     * lib/routes.ts. Nothing can import across the two repositories, so this is
+     * the second copy of that path and the one that has to move with it.
+     */
+    private static final String REFERRAL_TERMS_PATH = "/terms#referral-program";
 
     private static String preheader(String text) {
         return "<div style=\"display:none;font-size:1px;line-height:1px;max-height:0;"
@@ -936,7 +949,7 @@ public final class EmailTemplates {
      * @param site marketing base URL for the terms link, or null for the short
      *     footer. Never a bare "" from a missing env var by accident: the caller
      *     passes what BLISS_MARKETING_BASE_URL resolved to, and a blank one
-     *     degrades to the short footer rather than linking to "/terms".
+     *     degrades to the short footer rather than linking to a bare fragment.
      */
     private static String referralShell(String innerRows, String site) {
         return "<!DOCTYPE html>"
@@ -971,7 +984,7 @@ public final class EmailTemplates {
                   + "bliss-payments.com. Questions? Email "
                   + "<a href=\"mailto:info@bliss-payments.com\" style=\"color:" + MUTED + ";\">"
                   + "info@bliss-payments.com</a>."
-                  + "<br><a href=\"" + esc(site + "/terms") + "\" style=\"color:" + MUTED
+                  + "<br><a href=\"" + esc(site + REFERRAL_TERMS_PATH) + "\" style=\"color:" + MUTED
                   + ";\">Terms</a>")
             + "</td></tr></table>"
             + "</td></tr></table></body></html>";
