@@ -12,6 +12,10 @@ export default async function GuestCheckEmailPage(props: {
 
   return (
     <AuthShell
+      // Guest flow, so the bed photograph, same as /account/login. It used to
+      // take the illustration default, which put a different backdrop on the
+      // screen the sign-in hands straight over to.
+      hero="guest"
       heading="Check your email"
       subhead={
         email

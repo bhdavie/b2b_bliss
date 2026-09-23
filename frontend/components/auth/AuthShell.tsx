@@ -31,10 +31,17 @@ import { Input } from "@/components/ui/Input";
  * verify and check-email have a heading and no form. Signup is still on its own
  * older chrome and its two-panel plan preview; it is the one left to move.
  *
- * `hero` picks the backdrop. The two sign-ins named in the photo move pass
- * "property" and "guest" and get the marketing site's photographs full-bleed;
- * everything else takes the default and renders the illustration exactly as it
- * did before. See the two blocks of constants below.
+ * `hero` picks the backdrop, and it now follows the FLOW rather than the
+ * screen: every guest screen takes the bed photograph and every property screen
+ * the marble one, so a reader handed from /account/login to /account/check-email
+ * to /account/verify never sees the backdrop change under them. That is what
+ * the three guest screens below the sign-in were missing -- they took the
+ * default and rendered the illustration.
+ *
+ * The admin sign-in is the one screen still on the illustration. It belongs to
+ * neither flow and has no photograph of its own on the marketing site, so it
+ * keeps what it had; the illustration variant, HERO_SRC, HERO_CREAM and the
+ * .auth-hero-fade stops in globals.css are all still live for it alone.
  */
 
 // ILLUSTRATION VARIANT (the default). The marketing site's check-in
@@ -48,11 +55,10 @@ import { Input } from "@/components/ui/Input";
 // fade in globals.css flattens that side to cream, and the desk resolves out of
 // the fade on the right.
 //
-// Still the default because three screens beyond the two sign-ins render
-// through this shell — the admin sign-in, /account/verify and
-// /account/check-email — and none of them were in scope for the photo move.
-// They render exactly what they rendered before. If they should follow, pass
-// them a `hero` and this constant, the fade in globals.css and the asset all go.
+// Still the default, but ONE screen takes it now: the admin sign-in.
+// /account/verify and /account/check-email followed the guest sign-in onto the
+// photograph. The day admin follows something too, this constant, HERO_CREAM,
+// the fade in globals.css and the asset all go together.
 const HERO_SRC = "/auth-hero-checkin.webp";
 
 // The ground the artwork fades into. Tracks the marketing site's cool neutral
@@ -78,18 +84,41 @@ const HERO_CREAM = "#F4F5F7";
 // there — the subject sits in the bottom-right of a 1.79 frame, so that corner
 // survives whichever way `cover` crops: viewports narrower than 1.79 crop off
 // the left, wider ones off the top.
+//
+// MOBILE IS A DIFFERENT PHOTOGRAPH, not a crop of the landscape one. The site
+// cuts a portrait frame for each hero at 3072x5504 and serves it under 860px,
+// because a 1.79 frame squeezed into a phone's ~0.46 loses either the subject
+// or the ground the card sits on. Same three widths, same names, same rule that
+// the unsuffixed file is the MIDDLE one.
 const PHOTO_HEROES = {
   property: {
     src: "/hotels-hero.webp",
     srcSet:
       "/hotels-hero@1600.webp 1600w, /hotels-hero.webp 2400w, /hotels-hero@3840.webp 3840w",
+    mobileSrcSet:
+      "/hotels-hero-mobile@800.webp 800w, /hotels-hero-mobile.webp 1200w, /hotels-hero-mobile@1600.webp 1600w",
   },
   guest: {
     src: "/guest-hero.webp",
     srcSet:
       "/guest-hero@1600.webp 1600w, /guest-hero.webp 2400w, /guest-hero@3840.webp 3840w",
+    mobileSrcSet:
+      "/guest-hero-mobile@800.webp 800w, /guest-hero-mobile.webp 1200w, /guest-hero-mobile@1600.webp 1600w",
   },
 } as const;
+
+// THE BREAKPOINT, and it is not this shell's `lg`. The marketing site switches
+// its heroes to the portrait frame at 860px, and these are its files, so the
+// <picture> and the mobile layout below both use that line rather than lg
+// (1024). That leaves three tiers rather than two, deliberately:
+//   <= 860   portrait photograph full bleed, card over its open top half
+//   861-1023 the band layout this shell already had, landscape photograph
+//   >= 1024  the desktop layout, unchanged
+// The middle tier is the one that would break if the two lines disagreed: a
+// 1.79 frame full-bleed behind a 900px-wide portrait viewport crops to almost
+// nothing. Keeping the band there costs nothing and stays coherent.
+const MOBILE_MEDIA = "(max-width: 860px)";
+const DESKTOP_MEDIA = "(min-width: 861px)";
 
 /** Which backdrop a screen renders behind the card. */
 export type AuthHero = keyof typeof PHOTO_HEROES | "illustration";
@@ -131,6 +160,52 @@ const PHOTO_FADE =
   " rgba(244, 245, 247, 0.28) 724px," +
   " rgba(244, 245, 247, 0.09) 734px," +
   " rgba(244, 245, 247, 0) 742px)";
+
+// THE MOBILE FADE, <= 860 only. Same grey and the same eased shape, turned
+// through ninety degrees: the card sits ACROSS the top of the frame here rather
+// than in a column down its left, so a left-to-right ramp would have nothing to
+// do. It replaces PHOTO_FADE at this width rather than joining it, because two
+// scrims over one photograph is twice the grey for one job.
+//
+// PERCENTAGES here where the desktop fade is in pixels, and for the same
+// reason the desktop one is not: what the solid zone has to cover is the card,
+// and on a phone the card's bottom edge is not a fixed number. It moves with
+// the viewport height, with the screen (the sign-ins carry a form, verify and
+// check-email do not) and with whether the heading wraps. A percentage tracks
+// the viewport, which is the closest available proxy.
+//
+// STOPS: solid to 54%, clear by 66%, and that is as tight a cut as the screen
+// allows rather than a comfortable one. The objects in both portrait frames are
+// gathered along the foot -- the bell's top edge is at 48.6% of the property
+// frame and the tray's at 54.9% of the guest one -- and `cover` shows the whole
+// frame height at every phone aspect, so those percentages ARE viewport
+// percentages.
+//
+// It does NOT clear before either object, and no fade here can. The card is
+// top-anchored with a fixed height, so its bottom edge lands at 48.8% to 61.5%
+// across the four phone cases measured, and in every one of them that is at or
+// BELOW where the objects start. A fade that covers the card therefore covers
+// the top of the objects by construction. 54/66 is cut to the card rather than
+// past it, so what the objects lose is the least the geometry permits.
+//
+// One more thing this cannot do, which is why it is not in pixels like the
+// desktop fade: the card's bottom is a fixed pixel value (it does not move with
+// viewport height) while the objects sit at fixed PERCENTAGES (they do). No
+// single set of stops tracks both. Percentages follow the objects, which is the
+// edge that matters here, and leave the card's last few percent on the ramp at
+// 390x844.
+// Five eased stops rather than a straight line, for the reason the desktop fade
+// gives: what reads as a band is the change in SLOPE where a linear ramp meets
+// zero, not the ramp.
+const MOBILE_FADE =
+  "linear-gradient(to bottom," +
+  " #F4F5F7 0%," +
+  " #F4F5F7 54%," +
+  " rgba(244, 245, 247, 0.82) 57%," +
+  " rgba(244, 245, 247, 0.55) 60%," +
+  " rgba(244, 245, 247, 0.28) 62.5%," +
+  " rgba(244, 245, 247, 0.09) 64.5%," +
+  " rgba(244, 245, 247, 0) 66%)";
 
 // The desktop size bump, photo variants only. The card goes from max-w-md to
 // max-w-xl there, which is 128px of extra width, and type left at the small
@@ -235,7 +310,7 @@ export function AuthShell({
       // `relative isolate` is required, not decorative: it opens the stacking
       // context the layers below resolve against. Ground is white, not the
       // illustration's cream — both photographs are white-linen scenes.
-      <main className="relative isolate flex min-h-screen flex-col bg-white font-inter lg:flex-row lg:items-center lg:justify-start">
+      <main className="relative isolate flex min-h-screen flex-col bg-white font-inter max-[860px]:min-h-svh lg:flex-row lg:items-center lg:justify-start">
         {/* React hoists this into <head>. It is the same preload the marketing
             site emits for these files, and unconditional for the same reason:
             the photograph is on screen at every width, as the background above
@@ -244,6 +319,15 @@ export function AuthShell({
           rel="preload"
           as="image"
           fetchPriority="high"
+          media={MOBILE_MEDIA}
+          imageSrcSet={photo.mobileSrcSet}
+          imageSizes="100vw"
+        />
+        <link
+          rel="preload"
+          as="image"
+          fetchPriority="high"
+          media={DESKTOP_MEDIA}
           imageSrcSet={photo.srcSet}
           imageSizes="100vw"
         />
@@ -256,17 +340,34 @@ export function AuthShell({
             the loading priority that rule exists to protect.
             alt="" because it is decoration — the screen's meaning is entirely
             in the card, and announcing the photograph would only add noise. */}
-        <div className="order-2 h-80 w-full shrink-0 overflow-hidden lg:absolute lg:inset-0 lg:z-0 lg:order-none lg:h-full">
-          {/* eslint-disable-next-line @next/next/no-img-element -- see above. */}
-          <img
-            className="block h-full w-full object-cover object-right-bottom"
-            src={photo.src}
-            srcSet={photo.srcSet}
-            sizes="100vw"
-            alt=""
-            fetchPriority="high"
-            decoding="async"
-          />
+        <div className="order-2 h-80 w-full shrink-0 overflow-hidden max-[860px]:absolute max-[860px]:inset-0 max-[860px]:z-0 max-[860px]:h-full lg:absolute lg:inset-0 lg:z-0 lg:order-none lg:h-full">
+          <picture>
+            {/* First matching source wins and the <img> is the fallback, so a
+                phone fetches only the portrait and everything else only the
+                landscape. One file per viewport, never both. */}
+            <source
+              media={MOBILE_MEDIA}
+              srcSet={photo.mobileSrcSet}
+              sizes="100vw"
+            />
+            {/* No eslint-disable any more: @next/next/no-img-element does not
+                fire on an <img> inside a <picture>, which is the one shape
+                next/image cannot express. The reasoning above still holds
+                either way, and the preloads carry the loading priority.
+                object-bottom at <= 860: the portrait frames gather their
+                objects along the foot, and both are taller than any phone, so
+                `cover` crops the TOP, which is open linen or marble either
+                way. object-right-bottom stays the landscape anchor above it. */}
+            <img
+              className="block h-full w-full object-cover object-right-bottom max-[860px]:object-bottom"
+              src={photo.src}
+              srcSet={photo.srcSet}
+              sizes="100vw"
+              alt=""
+              fetchPriority="high"
+              decoding="async"
+            />
+          </picture>
         </div>
 
         {/* Layer 10 — the grey fade, over the photograph and under the card.
@@ -282,6 +383,18 @@ export function AuthShell({
           aria-hidden
           style={{ backgroundImage: PHOTO_FADE }}
           className="auth-hero-fade pointer-events-none absolute inset-0 z-10 hidden lg:block"
+        />
+
+        {/* The same layer at <= 860, top to bottom. A separate ELEMENT rather
+            than a media query on the one above, because both sets of stops are
+            inline styles and an inline style answers to no breakpoint. Each is
+            shown by a utility and hidden outside its own tier, so exactly one
+            ever paints. 861-1023 gets neither: the photograph is a band under
+            the card there, not behind it, so there is nothing to fade. */}
+        <div
+          aria-hidden
+          style={{ backgroundImage: MOBILE_FADE }}
+          className="auth-hero-fade pointer-events-none absolute inset-0 z-10 hidden max-[860px]:block"
         />
 
         {/* Layer 20 — the card. `lg:relative` is what makes the z-index apply,
@@ -301,7 +414,13 @@ export function AuthShell({
             As a margin the offset sits outside the box and max-w-xl is the
             card's real width, 576px, with its right edge at 665px — which is
             the number the fade's solid zone is cut to. */}
-        <div className="order-1 mx-auto w-full max-w-md px-6 pb-11 pt-16 lg:relative lg:z-20 lg:order-none lg:mx-0 lg:ml-[89px] lg:max-w-xl lg:px-0 lg:py-16">
+        {/* At <= 860 the photograph is behind this rather than under it, so the
+            card needs a positioned context and a z-index of its own -- the same
+            job lg:relative lg:z-20 does above. It takes the full width between
+            the page gutters (max-w-none against the max-w-md the band layout
+            keeps) and stays under its own top padding, so it sits across the
+            open top half of the frame rather than centring into the objects. */}
+        <div className="order-1 mx-auto w-full max-w-md px-6 pb-11 pt-16 max-[860px]:relative max-[860px]:z-20 max-[860px]:max-w-none lg:relative lg:z-20 lg:order-none lg:mx-0 lg:ml-[89px] lg:max-w-xl lg:px-0 lg:py-16">
           {card}
         </div>
       </main>

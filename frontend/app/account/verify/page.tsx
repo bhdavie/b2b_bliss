@@ -8,6 +8,7 @@ export default function GuestVerifyPage() {
     <Suspense
       fallback={
         <AuthShell
+          hero="guest"
           heading="Signing you in"
           subhead="One moment while we open your account."
         />
