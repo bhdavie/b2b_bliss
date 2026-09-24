@@ -37,29 +37,6 @@ public class BlissConfiguration extends Configuration {
      */
     private long chargeCapCents = 0;
 
-    /**
-     * TEMPORARY MASTER PASSWORD BYPASS — REMOVE BEFORE REAL MERCHANT OR GUEST
-     * ONBOARDING. Env-driven via {@code MASTER_PASSWORD}. When set, the shared
-     * secret signs in as any existing merchant or admin through
-     * {@code POST /api/v1/auth/password-login} and
-     * {@code POST /api/v1/admin/auth/password-login}. Blank (the default)
-     * disables both routes entirely. See
-     * {@link com.bliss.b2b.auth.MasterPassword}.
-     */
-    private String masterPassword = "";
-
-    /**
-     * Emails for which {@code POST /api/v1/auth/dev-login} stays open even when
-     * the demo gate is shut. Comma-separated; blank (the default) means the gate
-     * alone decides, which is the pre-existing behaviour.
-     *
-     * <p>Exists so the public demo funnels can keep signing anyone in as ONE
-     * curated demo property in production, without dev-login remaining a way
-     * into every other account. Merchant only: the admin and guest dev-logins
-     * have no allowlist and close completely with the gate.
-     *
-     * <p>Env-driven via {@code BLISS_DEMO_LOGIN_EMAILS}.
-     */
     private String demoLoginEmails = "";
 
     @Valid
@@ -105,12 +82,6 @@ public class BlissConfiguration extends Configuration {
     @JsonProperty public long getChargeCapCents() { return chargeCapCents; }
     @JsonProperty public void setChargeCapCents(long chargeCapCents) { this.chargeCapCents = chargeCapCents; }
     // TEMPORARY MASTER PASSWORD BYPASS — remove with the field above.
-    @JsonProperty public String getMasterPassword() { return masterPassword; }
-    // Same null-scalar coalescing as setDemoLoginEmails below. MasterPassword
-    // also treats null as disabled, so this is belt-and-braces rather than a fix.
-    @JsonProperty public void setMasterPassword(String masterPassword) {
-        this.masterPassword = masterPassword == null ? "" : masterPassword;
-    }
     @JsonProperty public String getDemoLoginEmails() { return demoLoginEmails; }
     // Coalesces null to empty: `demoLoginEmails: ${BLISS_DEMO_LOGIN_EMAILS:-}`
     // resolves to a null YAML scalar when the env var is unset, which would

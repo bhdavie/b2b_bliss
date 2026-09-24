@@ -29,7 +29,6 @@ import com.bliss.b2b.auth.AdminPrincipal;
 import com.bliss.b2b.auth.CookieOptions;
 import com.bliss.b2b.auth.JwtCookieAuthFilter;
 import com.bliss.b2b.auth.JwtService;
-import com.bliss.b2b.auth.MasterPassword;
 import com.bliss.b2b.auth.MerchantAuthenticator;
 import com.bliss.b2b.auth.MerchantPrincipal;
 import com.bliss.b2b.cli.SeedDemoCommand;
@@ -240,16 +239,28 @@ public class BlissApplication extends Application<BlissConfiguration> {
         // production, and BLISS_DEMO_LOGIN keeps it on in production for the
         // hosted demo — which is also what keeps the Marbrook funnel and the
         // Mews authorize simulation working, since both call it.
-        boolean demoLoginEnabled = !config.isProduction() || config.isDemoLogin();
+        // PRODUCTION IS ALLOWLIST ONLY NOW. This used to be
+        //   !config.isProduction() || config.isDemoLogin()
+        // which meant BLISS_DEMO_LOGIN=true opened dev-login to ANY address in
+        // production, and dev-login provisions a verified merchant for an address
+        // it does not know. That was a bigger hole than the master password
+        // removed alongside it: no secret required, and it created accounts
+        // rather than only reaching existing ones.
+        //
+        // The demo funnels do not need it. They run on BLISS_DEMO_LOGIN_EMAILS,
+        // which AuthResource honours whatever this flag says, so the hosted demo
+        // keeps working with the gate shut. BLISS_DEMO_LOGIN is now read only to
+        // warn that it no longer does anything.
+        boolean demoLoginEnabled = !config.isProduction();
         // Everything else dev-only stays keyed to the environment alone.
         // DevPlansResource fabricates card declines and rewrites plan state, so
         // BLISS_DEMO_LOGIN must not reopen it: a demo needs a way to sign in,
         // not a way to forge payment failures.
         boolean devEndpointsEnabled = !config.isProduction();
         if (config.isProduction() && config.isDemoLogin()) {
-            log.warn("BLISS_DEMO_LOGIN=true in production: POST /api/v1/auth/dev-login will issue a "
-                    + "merchant session for any email, with no password. Intended for the hosted demo. "
-                    + "Set BLISS_DEMO_LOGIN=false to make magic-link sign-in the only way in.");
+            log.warn("BLISS_DEMO_LOGIN=true in production no longer opens dev-login. Production is "
+                    + "allowlist only: BLISS_DEMO_LOGIN_EMAILS is the whole of it. The variable can "
+                    + "be unset.");
         }
         // One CookieOptions for both session cookies (merchant and customer) so
         // their scope cannot drift apart. Secure tracks production; SameSite and
@@ -262,17 +273,6 @@ public class BlissApplication extends Application<BlissConfiguration> {
         log.info("Session cookies: secure={} sameSite={} domain={}",
                 cookieOptions.secure(), cookieOptions.sameSite(),
                 cookieOptions.domain() == null ? "(host-only)" : cookieOptions.domain());
-        // TEMPORARY MASTER PASSWORD BYPASS — REMOVE BEFORE REAL MERCHANT OR
-        // GUEST ONBOARDING. One shared secret signs in as any existing merchant
-        // or admin. Unset (the default) and both /password-login routes 404.
-        // Not folded into demoLoginEnabled: the bypass is for the case where
-        // magic link is otherwise the only way in. See auth/MasterPassword.
-        MasterPassword masterPassword = new MasterPassword(config.getMasterPassword());
-        if (masterPassword.isEnabled()) {
-            log.warn("MASTER_PASSWORD is set: POST /api/v1/auth/password-login and "
-                    + "/api/v1/admin/auth/password-login will accept that one secret as any "
-                    + "existing merchant or admin. Temporary — unset it before real onboarding.");
-        }
         // Emails dev-login still accepts once the demo gate is shut, so the public
         // demo funnels keep working in production without leaving dev-login open
         // as a way into every other merchant. Merchant only: AdminAuthResource
@@ -281,13 +281,16 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 .map(e -> e.trim().toLowerCase())
                 .filter(e -> !e.isEmpty())
                 .collect(Collectors.toUnmodifiableSet());
-        if (!demoLoginEmails.isEmpty()) {
-            log.info("Dev-login allowlist active ({} address(es)): dev-login stays open for these "
-                    + "even when the demo gate is off", demoLoginEmails.size());
+        if (demoLoginEmails.isEmpty() && config.isProduction()) {
+            log.info("No dev-login allowlist in production: magic link is the only way in.");
+        } else if (!demoLoginEmails.isEmpty()) {
+            log.info("Dev-login allowlist active ({} address(es)): in production these are the ONLY "
+                    + "addresses dev-login accepts, and an admin address among them is refused",
+                    demoLoginEmails.size());
         }
         environment.jersey().register(new AuthResource(
                 magicLinkService, jwtService, cookieOptions,
-                demoLoginEnabled, sessionTtlMinutes, merchantDao, masterPassword,
+                demoLoginEnabled, sessionTtlMinutes, merchantDao, adminUserDao,
                 demoLoginEmails));
         // Bliss internal admin. Same cookie options and the same demo gate as
         // the merchant surface; the resource itself is what refuses to create
@@ -297,7 +300,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 adminUserDao, tokenDao, emailService, config.getApp(), magicLinkTtl);
         environment.jersey().register(new AdminAuthResource(
                 adminAuthService, jwtService, cookieOptions,
-                demoLoginEnabled, sessionTtlMinutes, masterPassword));
+                demoLoginEnabled, sessionTtlMinutes));
         environment.jersey().register(new AdminMerchantsResource(
                 new AdminMerchantsService(jdbi), clock));
         // Guest referrals: public intake plus the admin queue, one service.

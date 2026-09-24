@@ -127,6 +127,37 @@ class BlissApplicationTest {
         assertThat(body).containsEntry("error", "invalid_appointment_date");
     }
 
+    /**
+     * The master password is gone, so both routes it added are gone with it.
+     * 404 rather than 401: the methods no longer exist, so Jersey has nothing
+     * mapped at either path.
+     *
+     * <p>This is the regression guard for the removal. The old bypass accepted
+     * one shared secret as ANY existing merchant or admin; if either route ever
+     * comes back, this fails before it reaches production again.
+     */
+    @Test
+    void passwordLoginRoutesNoLongerExist() {
+        for (String path : new String[] {
+                "/api/v1/auth/password-login", "/api/v1/admin/auth/password-login" }) {
+            Response res = client.target(baseUrl() + path)
+                    .request()
+                    .post(jakarta.ws.rs.client.Entity.json(
+                            Map.of("email", "anyone@example.test", "password", "anything")));
+            assertThat(res.getStatus()).as(path).isEqualTo(404);
+        }
+    }
+
+    /** dev-status stopped reporting whether a master password is configured. */
+    @Test
+    void devStatusDoesNotReportAMasterPassword() {
+        Response res = client.target(baseUrl() + "/api/v1/auth/dev-status").request().get();
+        assertThat(res.getStatus()).isEqualTo(200);
+        assertThat(res.readEntity(JSON_OBJECT))
+                .containsKey("devLoginEnabled")
+                .doesNotContainKey("masterPasswordEnabled");
+    }
+
     @Test
     void publicCheckout_stripeNotConfigured_returns503() {
         // Stripe is intentionally not configured in the test config, so any

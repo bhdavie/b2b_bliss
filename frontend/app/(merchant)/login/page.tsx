@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import {
   devLogin,
   fetchDevAuthStatus,
-  passwordLogin,
   requestMagicLink,
 } from "@/lib/api";
 import {
@@ -38,28 +37,21 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // TEMPORARY MASTER PASSWORD BYPASS - remove with the branch in handleSubmit.
-  // Tracked separately from `mode` because the bypass is independent of the
-  // demo gate: its whole purpose is the magic-link case, where there would
-  // otherwise be no password field to type into.
-  const [masterPasswordEnabled, setMasterPasswordEnabled] = useState(false);
 
   useEffect(() => {
     // fetchDevAuthStatus reports disabled if the probe itself fails, so an
     // unreachable backend lands on the magic-link path rather than offering a
     // sign-in that would 404.
     fetchDevAuthStatus()
-      .then((status) => {
-        setMode(status.devLoginEnabled ? "demo" : "magic-link");
-        setMasterPasswordEnabled(status.masterPasswordEnabled);
-      })
+      .then((status) => setMode(status.devLoginEnabled ? "demo" : "magic-link"))
       .catch(() => setMode("magic-link"));
   }, []);
 
-  // The password field is on screen when demo mode wants it, or when the
-  // TEMPORARY master password is configured. When neither holds there is no
-  // password to type and the form stays a pure magic-link request.
-  const showPassword = mode === "demo" || masterPasswordEnabled;
+  // Demo mode is the only thing that puts a password field on screen now, and
+  // even there the value is never checked: dev-login takes the email alone. The
+  // master password that used to add this field in magic-link mode is gone, so
+  // outside demo mode the form is a pure magic-link request.
+  const showPassword = mode === "demo";
 
   /**
    * Explicit "email me a link" action, separate from the form submit.
@@ -95,23 +87,6 @@ export default function LoginPage() {
           setError("Enter your password.");
           setSubmitting(false);
           return;
-        }
-        // TEMPORARY MASTER PASSWORD BYPASS - REMOVE BEFORE REAL MERCHANT OR
-        // GUEST ONBOARDING. Tried first when the backend reports one is
-        // configured. On failure this deliberately falls THROUGH in demo mode,
-        // so local demos behave exactly as they did before the bypass existed:
-        // a wrong password still signs in via dev-login.
-        if (masterPasswordEnabled) {
-          try {
-            await passwordLogin(email, password);
-            router.push("/home");
-            router.refresh();
-            return;
-          } catch {
-            if (mode !== "demo") {
-              throw new Error("That email and password did not match.");
-            }
-          }
         }
         if (mode === "demo") {
           // Demo sign-in: the password is not validated. devLogin establishes
