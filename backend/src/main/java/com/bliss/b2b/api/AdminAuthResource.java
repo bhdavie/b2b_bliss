@@ -2,6 +2,7 @@ package com.bliss.b2b.api;
 
 import com.bliss.b2b.auth.AdminPrincipal;
 import com.bliss.b2b.auth.CookieOptions;
+import com.bliss.b2b.auth.DemoPassword;
 import com.bliss.b2b.auth.JwtService;
 import com.bliss.b2b.auth.SessionCookies;
 import com.bliss.b2b.domain.AdminUser;
@@ -41,19 +42,23 @@ public class AdminAuthResource {
     private final CookieOptions cookieOptions;
     private final boolean devLoginEnabled;
     private final int cookieMaxAgeSeconds;
+    // TEMPORARY DEMO PASSWORD — remove with passwordLogin() below.
+    private final DemoPassword demoPassword;
 
     public AdminAuthResource(
             AdminAuthService adminAuthService,
             JwtService jwtService,
             CookieOptions cookieOptions,
             boolean devLoginEnabled,
-            int jwtTtlMinutes
+            int jwtTtlMinutes,
+            DemoPassword demoPassword
     ) {
         this.adminAuthService = adminAuthService;
         this.jwtService = jwtService;
         this.cookieOptions = cookieOptions;
         this.devLoginEnabled = devLoginEnabled;
         this.cookieMaxAgeSeconds = jwtTtlMinutes * 60;
+        this.demoPassword = demoPassword;
     }
 
     /**
@@ -122,6 +127,47 @@ public class AdminAuthResource {
         return sessionResponse(admin.get());
     }
 
+    /**
+     * TEMPORARY DEMO PASSWORD — REMOVE BEFORE REAL MERCHANT OR GUEST ONBOARDING.
+     *
+     * <p>Admin twin of {@link AuthResource#passwordLogin}, on the same
+     * {@link DemoPassword}: the email must be in BLISS_DEMO_LOGIN_EMAILS, the
+     * password must be MASTER_PASSWORD, and an admin_users row must already exist.
+     * Every other outcome is the same 401 as the merchant route, so the short
+     * internal admin list cannot be enumerated here. 404 when the demo password
+     * is off.
+     *
+     * <p>Before fe5f691 this accepted the secret for ANY admin. The allowlist is
+     * the difference: only admins named in it can use a password at all, and
+     * the rest sign in by magic link.
+     */
+    @POST
+    @Path("/password-login")
+    public Response passwordLogin(PasswordLoginRequest req) {
+        if (!demoPassword.isEnabled()) {
+            return Response.status(404).entity(Map.of("error", "not_found")).build();
+        }
+        if (req == null || req.email() == null || req.email().isBlank()
+                || req.password() == null || req.password().isEmpty()) {
+            return Response.status(400)
+                    .entity(Map.of("error", "email and password required")).build();
+        }
+        String normalized = req.email().trim().toLowerCase();
+        if (!demoPassword.admits(normalized, req.password())) {
+            return AuthResource.invalidCredentials();
+        }
+        // devLogin is the existing find-an-existing-admin lookup: it never
+        // creates, and it stamps last_login_at. Reused so the two cannot drift
+        // on what counts as an admin.
+        Optional<AdminUser> admin = adminAuthService.devLogin(normalized);
+        if (admin.isEmpty()) {
+            return AuthResource.invalidCredentials();
+        }
+        log.warn("Demo password issued admin session for {} ({}) — temporary, "
+                + "remove before real onboarding", admin.get().id(), admin.get().email());
+        return sessionResponse(admin.get());
+    }
+
     @POST
     @Path("/sign-out")
     public Response signOut(@Auth Optional<AdminPrincipal> _principal) {
@@ -160,5 +206,8 @@ public class AdminAuthResource {
     public record MagicLinkRequest(@JsonProperty("email") String email) {}
     public record VerifyRequest(@JsonProperty("token") String token) {}
     public record DevLoginRequest(@JsonProperty("email") String email) {}
-    // TEMPORARY MASTER PASSWORD BYPASS — remove with passwordLogin().
+    // TEMPORARY DEMO PASSWORD — remove with passwordLogin().
+    public record PasswordLoginRequest(
+            @JsonProperty("email") String email,
+            @JsonProperty("password") String password) {}
 }

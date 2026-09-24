@@ -37,6 +37,29 @@ public class BlissConfiguration extends Configuration {
      */
     private long chargeCapCents = 0;
 
+    /**
+     * TEMPORARY DEMO PASSWORD — REMOVE BEFORE REAL MERCHANT OR GUEST ONBOARDING.
+     * Env-driven via {@code MASTER_PASSWORD}. The shared secret for
+     * merchant, admin and guest {@code /password-login} routes, which accept it
+     * ONLY for the addresses in {@link #demoLoginEmails}, and only for an account
+     * that already exists. Blank (the default) disables all three. See
+     * {@link com.bliss.b2b.auth.DemoPassword}.
+     */
+    private String masterPassword = "";
+
+    /**
+     * Emails for which {@code POST /api/v1/auth/dev-login} stays open even when
+     * the demo gate is shut, and the only emails the three {@code /password-login}
+     * routes will sign in. Comma-separated; blank (the default) means the gate
+     * alone decides dev-login, and password-login is off.
+     *
+     * <p>Exists so the public demo funnels and demo accounts can keep signing in
+     * as curated demo properties in production, without either route being a
+     * way into every other account. For dev-login it is merchant only: the admin
+     * and guest dev-logins have no allowlist and close completely with the gate.
+     *
+     * <p>Env-driven via {@code BLISS_DEMO_LOGIN_EMAILS}.
+     */
     private String demoLoginEmails = "";
 
     @Valid
@@ -81,7 +104,13 @@ public class BlissConfiguration extends Configuration {
     @JsonProperty public void setDemoLogin(boolean demoLogin) { this.demoLogin = demoLogin; }
     @JsonProperty public long getChargeCapCents() { return chargeCapCents; }
     @JsonProperty public void setChargeCapCents(long chargeCapCents) { this.chargeCapCents = chargeCapCents; }
-    // TEMPORARY MASTER PASSWORD BYPASS — remove with the field above.
+    // TEMPORARY DEMO PASSWORD — remove with the field above.
+    @JsonProperty public String getMasterPassword() { return masterPassword; }
+    // Same null-scalar coalescing as setDemoLoginEmails below. MasterPassword
+    // also treats null as disabled, so this is belt-and-braces rather than a fix.
+    @JsonProperty public void setMasterPassword(String masterPassword) {
+        this.masterPassword = masterPassword == null ? "" : masterPassword;
+    }
     @JsonProperty public String getDemoLoginEmails() { return demoLoginEmails; }
     // Coalesces null to empty: `demoLoginEmails: ${BLISS_DEMO_LOGIN_EMAILS:-}`
     // resolves to a null YAML scalar when the env var is unset, which would

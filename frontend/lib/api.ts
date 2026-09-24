@@ -83,6 +83,9 @@ export async function signOut(): Promise<void> {
 
 export type DevAuthStatus = {
   devLoginEnabled: boolean;
+  // TEMPORARY DEMO PASSWORD - remove with passwordLogin below. True when the
+  // backend has MASTER_PASSWORD set and a non-empty demo allowlist.
+  masterPasswordEnabled: boolean;
 };
 
 export async function fetchDevAuthStatus(): Promise<DevAuthStatus> {
@@ -92,8 +95,27 @@ export async function fetchDevAuthStatus(): Promise<DevAuthStatus> {
   // Both flags default off when the probe fails, matching the existing rule
   // that an unreachable backend must not make the page offer a sign-in that
   // would 404.
-  if (!res.ok) return { devLoginEnabled: false };
+  if (!res.ok) return { devLoginEnabled: false, masterPasswordEnabled: false };
   return (await res.json()) as DevAuthStatus;
+}
+
+/**
+ * TEMPORARY DEMO PASSWORD - REMOVE BEFORE REAL MERCHANT OR GUEST ONBOARDING.
+ * Signs in one of the allowlisted demo merchants with MASTER_PASSWORD. Nobody
+ * else: any other email, an admin, or a wrong password is the same 401, and 404
+ * when the backend has it switched off. The caller treats all of those alike.
+ */
+export async function passwordLogin(
+  email: string,
+  password: string,
+): Promise<MerchantView> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/password-login`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  return unwrap<MerchantView>(res);
 }
 
 export async function devLogin(email: string): Promise<MerchantView> {
@@ -153,6 +175,25 @@ export async function adminDevLogin(email: string): Promise<AdminView> {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email }),
+  });
+  return unwrap<AdminView>(res);
+}
+
+/**
+ * TEMPORARY DEMO PASSWORD - REMOVE BEFORE REAL MERCHANT OR GUEST ONBOARDING.
+ * Admin twin of {@link passwordLogin}: an allowlisted address that already has
+ * an admin_users row, with MASTER_PASSWORD. Cannot mint an admin any more than
+ * adminDevLogin can.
+ */
+export async function adminPasswordLogin(
+  email: string,
+  password: string,
+): Promise<AdminView> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/admin/auth/password-login`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
   });
   return unwrap<AdminView>(res);
 }

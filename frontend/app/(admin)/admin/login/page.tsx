@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   adminDevLogin,
+  adminPasswordLogin,
   fetchDevAuthStatus,
   requestAdminMagicLink,
 } from "@/lib/api";
@@ -38,17 +39,22 @@ export default function AdminLoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  // TEMPORARY DEMO PASSWORD - remove with the branch in handleSubmit. Same
+  // probe as the merchant page: the admin route is on the same backend rule.
+  const [masterPasswordEnabled, setMasterPasswordEnabled] = useState(false);
 
   useEffect(() => {
     fetchDevAuthStatus()
-      .then((status) => setMode(status.devLoginEnabled ? "demo" : "magic-link"))
+      .then((status) => {
+        setMode(status.devLoginEnabled ? "demo" : "magic-link");
+        setMasterPasswordEnabled(status.masterPasswordEnabled);
+      })
       .catch(() => setMode("magic-link"));
   }, []);
 
-  // Demo mode only, and even there the value is never checked: adminDevLogin
-  // takes the email alone and the address must already be an admin_users row.
-  // Outside demo mode the form is a pure magic-link request.
-  const showPassword = mode === "demo";
+  // On screen when demo mode wants it, or when the TEMPORARY demo password is
+  // live. Neither holding leaves the form a pure magic-link request.
+  const showPassword = mode === "demo" || masterPasswordEnabled;
 
   /**
    * Explicit "email me a link" action, separate from the form submit, on a
@@ -83,6 +89,22 @@ export default function AdminLoginPage() {
           setError("Enter your password.");
           setSubmitting(false);
           return;
+        }
+        // TEMPORARY DEMO PASSWORD - REMOVE BEFORE REAL MERCHANT OR GUEST
+        // ONBOARDING. Only an allowlisted address that is already an admin can
+        // succeed. Falls through to the unchanged demo path on failure. Neither
+        // path can create an admin: the backend 401s an unknown address on both.
+        if (masterPasswordEnabled) {
+          try {
+            await adminPasswordLogin(email, password);
+            router.push("/admin");
+            router.refresh();
+            return;
+          } catch {
+            if (mode !== "demo") {
+              throw new Error("That email and password did not match.");
+            }
+          }
         }
         if (mode === "demo") {
           // The password is not validated here. The address is what the backend

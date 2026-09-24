@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.bliss.b2b.BlissConfiguration.JwtConfig;
 import com.bliss.b2b.auth.CookieOptions;
+import com.bliss.b2b.auth.DemoPassword;
 import com.bliss.b2b.auth.JwtService;
+import com.bliss.b2b.auth.MasterPassword;
 import com.bliss.b2b.domain.AdminUser;
 import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.domain.MerchantStatus;
@@ -21,8 +23,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 /**
- * The dev-login gate, which is the only bypass left now that the master password
- * is gone.
+ * The dev-login gate. The demo password has its own file,
+ * {@link AuthResourcePasswordLoginTest}.
  *
  * <p>Three properties, and the third is the one worth the file on its own: an
  * admin address must not get through even when it is on the allowlist, and must
@@ -90,12 +92,6 @@ class AuthResourceDevLoginTest {
         assertThat(provisioned).hasValue(0);
     }
 
-    @Test
-    void devStatusNoLongerAdvertisesAMasterPassword() {
-        Object entity = resource(Set.of(DEMO), Set.of()).devStatus().getEntity();
-        assertThat(entity.toString()).contains("devLoginEnabled").doesNotContain("masterPassword");
-    }
-
     // ---------------------------------------------------------------- helpers
 
     /**
@@ -110,8 +106,9 @@ class AuthResourceDevLoginTest {
                 // false = the production gate. The allowlist is the only way through.
                 false,
                 60,
-                null, // merchantDao: only the deleted password-login used it
+                null, // merchantDao: only password-login uses it
                 adminUserDao(admins),
+                new DemoPassword(new MasterPassword(null), allowlist),
                 allowlist);
     }
 

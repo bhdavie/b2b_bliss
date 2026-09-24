@@ -28,7 +28,9 @@ import com.bliss.b2b.auth.AdminJwtCookieAuthFilter;
 import com.bliss.b2b.auth.AdminPrincipal;
 import com.bliss.b2b.auth.CookieOptions;
 import com.bliss.b2b.auth.JwtCookieAuthFilter;
+import com.bliss.b2b.auth.DemoPassword;
 import com.bliss.b2b.auth.JwtService;
+import com.bliss.b2b.auth.MasterPassword;
 import com.bliss.b2b.auth.MerchantAuthenticator;
 import com.bliss.b2b.auth.MerchantPrincipal;
 import com.bliss.b2b.cli.SeedDemoCommand;
@@ -288,10 +290,26 @@ public class BlissApplication extends Application<BlissConfiguration> {
                     + "addresses dev-login accepts, and an admin address among them is refused",
                     demoLoginEmails.size());
         }
+        // TEMPORARY DEMO PASSWORD — REMOVE BEFORE REAL MERCHANT OR GUEST
+        // ONBOARDING. Signs in the allowlisted addresses above with an email and
+        // MASTER_PASSWORD, on the merchant, admin and guest password-login
+        // routes alike, and nobody else. Each route also requires an account of
+        // its own kind to exist already; none creates one. Off unless both
+        // MASTER_PASSWORD and the allowlist are set. See auth/DemoPassword.
+        MasterPassword masterPassword = new MasterPassword(config.getMasterPassword());
+        DemoPassword demoPassword = new DemoPassword(masterPassword, demoLoginEmails);
+        if (demoPassword.isEnabled()) {
+            log.warn("MASTER_PASSWORD is set: the merchant, admin and guest password-login routes "
+                    + "accept it for the {} allowlisted address(es) only. Temporary, unset before "
+                    + "real onboarding.", demoLoginEmails.size());
+        } else if (masterPassword.isEnabled()) {
+            log.warn("MASTER_PASSWORD is set but BLISS_DEMO_LOGIN_EMAILS is empty, so "
+                    + "password-login is off: there is no address it may sign in.");
+        }
         environment.jersey().register(new AuthResource(
                 magicLinkService, jwtService, cookieOptions,
                 demoLoginEnabled, sessionTtlMinutes, merchantDao, adminUserDao,
-                demoLoginEmails));
+                demoPassword, demoLoginEmails));
         // Bliss internal admin. Same cookie options and the same demo gate as
         // the merchant surface; the resource itself is what refuses to create
         // an admin, so BLISS_DEMO_LOGIN cannot mint one here the way it can
@@ -300,7 +318,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 adminUserDao, tokenDao, emailService, config.getApp(), magicLinkTtl);
         environment.jersey().register(new AdminAuthResource(
                 adminAuthService, jwtService, cookieOptions,
-                demoLoginEnabled, sessionTtlMinutes));
+                demoLoginEnabled, sessionTtlMinutes, demoPassword));
         environment.jersey().register(new AdminMerchantsResource(
                 new AdminMerchantsService(jdbi), clock));
         // Guest referrals: public intake plus the admin queue, one service.
@@ -343,7 +361,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new PublicAccountResource(
                 customerAuthService, magicLinkService, demoLoginEnabled,
                 paymentPlanDao, customerDao, clock, cookieOptions,
-                sessionTtlMinutes));
+                sessionTtlMinutes, demoPassword));
         environment.jersey().register(new PlanRulesResource(planRulesService, onboardingService));
         environment.jersey().register(new PropertyOnboardingResource(onboardingService));
         environment.jersey().register(new com.bliss.b2b.api.CloudbedsOAuthResource(

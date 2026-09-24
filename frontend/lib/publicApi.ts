@@ -712,14 +712,31 @@ export async function devCustomerLogin(email: string): Promise<GuestAuthResult> 
   return guestAuthPost("dev-login", { email });
 }
 
-export type GuestDevAuthStatus = { devLoginEnabled: boolean };
+/**
+ * TEMPORARY DEMO PASSWORD - REMOVE BEFORE REAL MERCHANT OR GUEST ONBOARDING.
+ * Signs in an allowlisted address that already has a guest account, with
+ * MASTER_PASSWORD. Never creates one. Every refusal is the same 401
+ * invalid_credentials, and 404 when the backend has it switched off.
+ */
+export async function guestPasswordLogin(
+  email: string,
+  password: string,
+): Promise<GuestAuthResult> {
+  return guestAuthPost("password-login", { email, password });
+}
+
+export type GuestDevAuthStatus = {
+  devLoginEnabled: boolean;
+  // TEMPORARY DEMO PASSWORD - remove with guestPasswordLogin above.
+  masterPasswordEnabled: boolean;
+};
 
 /** Which sign-in path the backend is offering. Mirrors the merchant probe. */
 export async function fetchGuestDevAuthStatus(): Promise<GuestDevAuthStatus> {
   const res = await fetch(`${API_BASE_URL}/api/v1/public/account/dev-status`, {
     cache: "no-store",
   });
-  if (!res.ok) return { devLoginEnabled: false };
+  if (!res.ok) return { devLoginEnabled: false, masterPasswordEnabled: false };
   return (await res.json()) as GuestDevAuthStatus;
 }
 

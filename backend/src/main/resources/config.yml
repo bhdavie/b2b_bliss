@@ -43,8 +43,15 @@ demoLogin: ${BLISS_DEMO_LOGIN:-false}
 # 0 (default) disables the cap.
 chargeCapCents: ${BLISS_CHARGE_CAP_CENTS:-0}
 
+# TEMPORARY DEMO PASSWORD - REMOVE BEFORE REAL MERCHANT OR GUEST ONBOARDING.
+# The shared secret for the merchant, admin and guest /password-login routes.
+# It signs in ONLY the addresses in demoLoginEmails below, and only into an
+# account that already exists; it never creates one. Blank (the default), or an
+# empty allowlist, and all three routes 404.
+masterPassword: ${MASTER_PASSWORD:-}
 
-# Emails that keep POST /api/v1/auth/dev-login open even when demoLogin is off.
+# Emails that keep POST /api/v1/auth/dev-login open even when demoLogin is off,
+# and the only emails the password-login routes accept.
 # Comma-separated; blank (the default) means demoLogin alone decides. This is
 # what lets the public demo funnels sign anyone in as one curated demo property
 # in production while dev-login stays shut for every other account. Merchant

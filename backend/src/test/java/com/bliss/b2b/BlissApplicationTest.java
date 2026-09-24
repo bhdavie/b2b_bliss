@@ -2,6 +2,7 @@ package com.bliss.b2b;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.dropwizard.testing.ConfigOverride;
 import io.dropwizard.testing.ResourceHelpers;
 import io.dropwizard.testing.junit5.DropwizardAppExtension;
 import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
@@ -29,7 +30,10 @@ class BlissApplicationTest {
 
     private static final DropwizardAppExtension<BlissConfiguration> APP = new DropwizardAppExtension<>(
             BlissApplication.class,
-            ResourceHelpers.resourceFilePath("config-test.yml"));
+            ResourceHelpers.resourceFilePath("config-test.yml"),
+            // Demo password switched on, so dev-status reports it below.
+            ConfigOverride.config("masterPassword", "test-master-password"),
+            ConfigOverride.config("demoLoginEmails", "demo@marbrook.test"));
 
     private static Client client;
 
@@ -127,35 +131,14 @@ class BlissApplicationTest {
         assertThat(body).containsEntry("error", "invalid_appointment_date");
     }
 
-    /**
-     * The master password is gone, so both routes it added are gone with it.
-     * 404 rather than 401: the methods no longer exist, so Jersey has nothing
-     * mapped at either path.
-     *
-     * <p>This is the regression guard for the removal. The old bypass accepted
-     * one shared secret as ANY existing merchant or admin; if either route ever
-     * comes back, this fails before it reaches production again.
-     */
+    /** dev-status reports the demo password, which is what shows the field. */
     @Test
-    void passwordLoginRoutesNoLongerExist() {
-        for (String path : new String[] {
-                "/api/v1/auth/password-login", "/api/v1/admin/auth/password-login" }) {
-            Response res = client.target(baseUrl() + path)
-                    .request()
-                    .post(jakarta.ws.rs.client.Entity.json(
-                            Map.of("email", "anyone@example.test", "password", "anything")));
-            assertThat(res.getStatus()).as(path).isEqualTo(404);
-        }
-    }
-
-    /** dev-status stopped reporting whether a master password is configured. */
-    @Test
-    void devStatusDoesNotReportAMasterPassword() {
+    void devStatusReportsTheDemoPassword() {
         Response res = client.target(baseUrl() + "/api/v1/auth/dev-status").request().get();
         assertThat(res.getStatus()).isEqualTo(200);
         assertThat(res.readEntity(JSON_OBJECT))
                 .containsKey("devLoginEnabled")
-                .doesNotContainKey("masterPasswordEnabled");
+                .containsEntry("masterPasswordEnabled", true);
     }
 
     @Test

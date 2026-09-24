@@ -2,6 +2,7 @@ package com.bliss.b2b.api;
 
 import com.bliss.b2b.auth.CookieOptions;
 import com.bliss.b2b.auth.JwtService;
+import com.bliss.b2b.auth.DemoPassword;
 import com.bliss.b2b.auth.MerchantPrincipal;
 import com.bliss.b2b.auth.SessionCookies;
 import com.bliss.b2b.domain.Merchant;
@@ -37,8 +38,9 @@ public class AuthResource {
     private final CookieOptions cookieOptions;
     private final boolean devLoginEnabled;
     private final int cookieMaxAgeSeconds;
-    // TEMPORARY MASTER PASSWORD BYPASS — remove with passwordLogin() below.
+    // TEMPORARY DEMO PASSWORD — remove these two with passwordLogin() below.
     private final MerchantDao merchantDao;
+    private final DemoPassword demoPassword;
     /**
      * Only so dev-login can refuse an address that is an admin. An admin must
      * never be reachable through a merchant bypass: dev-login PROVISIONS a
@@ -58,6 +60,7 @@ public class AuthResource {
             int jwtTtlMinutes,
             MerchantDao merchantDao,
             AdminUserDao adminUserDao,
+            DemoPassword demoPassword,
             Set<String> demoLoginEmails
     ) {
         this.magicLinkService = magicLinkService;
@@ -67,6 +70,7 @@ public class AuthResource {
         this.cookieMaxAgeSeconds = jwtTtlMinutes * 60;
         this.merchantDao = merchantDao;
         this.adminUserDao = adminUserDao;
+        this.demoPassword = demoPassword;
         this.demoLoginEmails = demoLoginEmails;
     }
 
@@ -123,9 +127,7 @@ public class AuthResource {
      * <p>BLISS_DEMO_LOGIN no longer opens this in production, and that is the
      * point of the change. It used to, and with it on this endpoint would
      * provision a verified merchant for ANY address submitted to it, with a
-     * session attached and no secret required. That was a larger hole than the
-     * master password it sat beside, which at least needed a shared secret and
-     * could only reach accounts that already existed.
+     * session attached and no secret required.
      *
      * <p>The email is read and normalised BEFORE the gate is applied, because
      * the allowlist check needs it. An address that is neither allowlisted nor
@@ -169,18 +171,91 @@ public class AuthResource {
     }
 
     /**
+     * TEMPORARY DEMO PASSWORD — REMOVE BEFORE REAL MERCHANT OR GUEST ONBOARDING.
+     *
+     * <p>Email and password sign-in for the hosted demo accounts, on the rule in
+     * {@link DemoPassword}. It succeeds only when ALL of these hold, and every
+     * other outcome is the same 401:
+     * <ul>
+     *   <li>the email is in BLISS_DEMO_LOGIN_EMAILS,</li>
+     *   <li>the password matches MASTER_PASSWORD,</li>
+     *   <li>the email has no admin_users row,</li>
+     *   <li>a merchant already exists for it. This never creates one.</li>
+     * </ul>
+     *
+     * <p>One 401 for all of them, so the route cannot be used to ask which
+     * addresses are demo accounts, admins or merchants. It 404s when disabled
+     * (MASTER_PASSWORD unset, or the allowlist empty), so the route does not
+     * appear to exist.
+     *
+     * <p>Before fe5f691 this accepted the secret for ANY existing merchant. The
+     * allowlist and the admin refusal are what make this one tolerable. Admins
+     * have their own route on AdminAuthResource, on the same allowlist.
+     */
+    @POST
+    @Path("/password-login")
+    public Response passwordLogin(PasswordLoginRequest req) {
+        if (!demoPassword.isEnabled()) {
+            return Response.status(404).entity(Map.of("error", "not_found")).build();
+        }
+        if (req == null || req.email() == null || req.email().isBlank()
+                || req.password() == null || req.password().isEmpty()) {
+            return Response.status(400)
+                    .entity(Map.of("error", "email and password required")).build();
+        }
+        String normalized = req.email().trim().toLowerCase();
+        if (!demoPassword.admits(normalized, req.password())) {
+            return invalidCredentials();
+        }
+        // ADMINS ARE NEVER REACHABLE HERE, allowlisted or not: an allowlisted
+        // admin signs in on the admin route, never as a merchant. Same 401, so
+        // this is not a way to ask whether an address is an admin.
+        if (adminUserDao.findByEmail(normalized).isPresent()) {
+            log.warn("Password-login refused for {}: address is an admin", normalized);
+            return invalidCredentials();
+        }
+        Optional<Merchant> merchant = merchantDao.findByEmail(normalized);
+        if (merchant.isEmpty()) {
+            return invalidCredentials();
+        }
+        Merchant m = merchant.get();
+        log.warn("Demo password issued merchant session for {} ({}) — temporary, "
+                + "remove before real onboarding", m.id(), m.email());
+        String jwt = jwtService.issue(m.email(), m.id().toString());
+        return Response.ok(MerchantView.from(m))
+                .header(HttpHeaders.SET_COOKIE,
+                        SessionCookies.buildSetCookie(jwt, cookieMaxAgeSeconds, cookieOptions))
+                .build();
+    }
+
+    /** The one refusal every password-login route gives, admin and guest included. */
+    static Response invalidCredentials() {
+        return Response.status(401).entity(Map.of("error", "invalid_credentials")).build();
+    }
+
+    /**
      * Public probe the sign-in page reads to decide which path to render.
      * {@code devLoginEnabled: true} means {@code POST /dev-login} will accept any
      * email with no password. It is true outside production and false in
      * production, full stop: see the gate on {@link #devLogin}.
      *
-     * <p>It no longer reports masterPasswordEnabled. That bypass is gone, and
-     * with it the password field on both sign-in pages.
+     * <p>{@code masterPasswordEnabled: true} means {@code POST /password-login}
+     * is live, so the page shows the password field. The admin sign-in page
+     * reads it too: the admin route is on the same {@link DemoPassword}. The key keeps its old
+     * name, though it now also requires a non-empty allowlist, so the frontend
+     * that was deployed before fe5f691 reads it correctly while the two
+     * deploys land at different times.
+     *
+     * <p>This does advertise that a demo password exists. That is strictly
+     * smaller than what devLoginEnabled already says, and it goes away with
+     * MASTER_PASSWORD.
      */
     @GET
     @Path("/dev-status")
     public Response devStatus() {
-        return Response.ok(Map.of("devLoginEnabled", devLoginEnabled)).build();
+        return Response.ok(Map.of(
+                "devLoginEnabled", devLoginEnabled,
+                "masterPasswordEnabled", demoPassword.isEnabled())).build();
     }
 
     @POST
@@ -194,5 +269,8 @@ public class AuthResource {
     public record MagicLinkRequest(@JsonProperty("email") String email) {}
     public record VerifyRequest(@JsonProperty("token") String token) {}
     public record DevLoginRequest(@JsonProperty("email") String email) {}
-    // TEMPORARY MASTER PASSWORD BYPASS — remove with passwordLogin().
+    // TEMPORARY DEMO PASSWORD — remove with passwordLogin().
+    public record PasswordLoginRequest(
+            @JsonProperty("email") String email,
+            @JsonProperty("password") String password) {}
 }

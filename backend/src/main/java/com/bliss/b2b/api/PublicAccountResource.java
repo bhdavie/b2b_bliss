@@ -1,6 +1,7 @@
 package com.bliss.b2b.api;
 
 import com.bliss.b2b.auth.CookieOptions;
+import com.bliss.b2b.auth.DemoPassword;
 import com.bliss.b2b.auth.SessionCookies;
 import com.bliss.b2b.domain.Customer;
 import com.bliss.b2b.persistence.CustomerDao;
@@ -62,6 +63,8 @@ public class PublicAccountResource {
     private final Clock clock;
     private final CookieOptions cookieOptions;
     private final int cookieMaxAgeSeconds;
+    // TEMPORARY DEMO PASSWORD — remove with passwordLogin() below.
+    private final DemoPassword demoPassword;
 
     public PublicAccountResource(
             CustomerAuthService authService,
@@ -71,7 +74,8 @@ public class PublicAccountResource {
             CustomerDao customerDao,
             Clock clock,
             CookieOptions cookieOptions,
-            int jwtTtlMinutes) {
+            int jwtTtlMinutes,
+            DemoPassword demoPassword) {
         this.authService = authService;
         this.magicLinkService = magicLinkService;
         this.devLoginEnabled = devLoginEnabled;
@@ -86,6 +90,7 @@ public class PublicAccountResource {
         // Tying the two together means the cookie disappears exactly when the
         // token it carries stops being worth anything.
         this.cookieMaxAgeSeconds = jwtTtlMinutes * 60;
+        this.demoPassword = demoPassword;
     }
 
     /**
@@ -170,13 +175,54 @@ public class PublicAccountResource {
     }
 
     /**
+     * TEMPORARY DEMO PASSWORD — REMOVE BEFORE REAL MERCHANT OR GUEST ONBOARDING.
+     *
+     * <p>Guest twin of {@link AuthResource#passwordLogin}, on the same
+     * {@link DemoPassword}: the email must be in BLISS_DEMO_LOGIN_EMAILS, the
+     * password must be MASTER_PASSWORD, and a customer row must already exist.
+     * Every other outcome is the same 401. It never creates a guest account,
+     * which only a property sending a plan link does. 404 when the demo password
+     * is off.
+     *
+     * <p>Unlike /magic-link, an unknown address is NOT told apart here: a
+     * distinct "no account" answer would say which allowlisted addresses are
+     * guests to anyone holding the password.
+     */
+    @POST
+    @Path("/password-login")
+    public Response passwordLogin(PasswordLoginRequest req) {
+        if (!demoPassword.isEnabled()) {
+            return Response.status(404).entity(Map.of("error", "not_found")).build();
+        }
+        if (req == null || req.email() == null || req.email().isBlank()
+                || req.password() == null || req.password().isEmpty()) {
+            return Response.status(400)
+                    .entity(Map.of("error", "email and password required")).build();
+        }
+        String normalized = req.email().trim().toLowerCase();
+        if (!demoPassword.admits(normalized, req.password())) {
+            return AuthResource.invalidCredentials();
+        }
+        Optional<Customer> customer = customerDao.findByEmail(normalized);
+        if (customer.isEmpty()) {
+            return AuthResource.invalidCredentials();
+        }
+        log.warn("Demo password issued guest session for customer {} — temporary, "
+                + "remove before real onboarding", customer.get().id());
+        return sessionResponse(customer.get());
+    }
+
+    /**
      * Public probe the guest sign-in page reads to decide which path to render,
-     * mirroring GET /api/v1/auth/dev-status on the merchant side.
+     * mirroring GET /api/v1/auth/dev-status on the merchant side, including
+     * {@code masterPasswordEnabled} for the TEMPORARY demo password.
      */
     @GET
     @Path("/dev-status")
     public Response devStatus() {
-        return Response.ok(Map.of("devLoginEnabled", devLoginEnabled)).build();
+        return Response.ok(Map.of(
+                "devLoginEnabled", devLoginEnabled,
+                "masterPasswordEnabled", demoPassword.isEnabled())).build();
     }
 
     private Response sessionResponse(Customer customer) {
@@ -243,8 +289,13 @@ public class PublicAccountResource {
         }
     }
 
-    /** Body for both /magic-link and /dev-login. No password field any more. */
+    /** Body for both /magic-link and /dev-login. */
     public record MagicLinkRequest(@JsonProperty("email") String email) {}
 
     public record VerifyRequest(@JsonProperty("token") String token) {}
+
+    // TEMPORARY DEMO PASSWORD — remove with passwordLogin().
+    public record PasswordLoginRequest(
+            @JsonProperty("email") String email,
+            @JsonProperty("password") String password) {}
 }
