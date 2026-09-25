@@ -208,7 +208,9 @@ public class PublicPlansPortalResource {
         int status = switch (e.code()) {
             case "not_found" -> 404;
             case "plan_not_pending", "not_mews_rail", "mews_not_connected", "card_request_first",
-                    "mews_currency_missing", "mews_platform_unknown" -> 409;
+                    "mews_currency_missing", "mews_platform_unknown", "stay_not_set",
+                    "stay_unavailable" -> 409;
+            case "mews_unreachable" -> 502;
             case "card_not_found" -> 400;
             case "charge_declined" -> 402;
             case "charge_failed" -> 502;

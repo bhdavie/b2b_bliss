@@ -34,7 +34,8 @@ import org.slf4j.LoggerFactory;
  * {@code Client} in the JSON body. The {@code Client} string is
  * {@value #CLIENT}.
  *
- * <p>Charging is out of scope here by design; no operation moves money.
+ * <p>Money moves through {@link #chargeStoredCard} only. The reservation
+ * calls never attach a card, so Mews itself never charges one.
  */
 public class MewsAdapter implements PmsAdapter {
 
@@ -61,6 +62,9 @@ public class MewsAdapter implements PmsAdapter {
     private static final String AGE_CATEGORIES_GET_ALL = "/api/connector/v1/ageCategories/getAll";
     private static final String SERVICES_GET_AVAILABILITY = "/api/connector/v1/services/getAvailability/2024-01-22";
     private static final String RESERVATIONS_PRICE = "/api/connector/v1/reservations/price";
+    private static final String RESERVATIONS_ADD = "/api/connector/v1/reservations/add";
+    private static final String RESERVATIONS_CONFIRM = "/api/connector/v1/reservations/confirm";
+    private static final String RESERVATIONS_CANCEL = "/api/connector/v1/reservations/cancel";
 
     /** Pages followed per catalogue list call; a small property never gets near it. */
     private static final int MAX_PAGES = 10;
@@ -443,6 +447,77 @@ public class MewsAdapter implements PmsAdapter {
             throw new PmsAdapterException("Mews returned no price for the stay");
         }
         return new StayPrice(toMinorUnits(gross.decimalValue()), currency);
+    }
+
+    // --- Reservations -------------------------------------------------------
+
+    /**
+     * Creates the stay as an {@code Optional} reservation: the room is held,
+     * but Mews sends nothing to the guest yet. {@link #confirmReservation}
+     * turns it into a booking once the first installment is taken.
+     *
+     * <p>{@code CheckRateApplicability} is off because the Bliss rate is
+     * private, and Mews would otherwise refuse it without a voucher code.
+     * Overbooking is still checked, so a room sold since the quote is refused
+     * here rather than double-booked. No {@code CreditCardId} is passed: with
+     * a card attached, Mews charges it under the rate's payment policy.
+     *
+     * @param releasedUtc when Mews may release the hold if it is never confirmed
+     * @return the new reservation id
+     */
+    public String addOptionalReservation(String serviceId, String customerId, String categoryId,
+            String rateId, String adultAgeCategoryId, int adults, Instant startUtc, Instant endUtc,
+            Instant releasedUtc, String identifier, String notes) {
+        Map<String, Object> reservation = new LinkedHashMap<>();
+        reservation.put("Identifier", identifier);
+        reservation.put("State", "Optional");
+        reservation.put("StartUtc", startUtc.toString());
+        reservation.put("EndUtc", endUtc.toString());
+        reservation.put("ReleasedUtc", releasedUtc.toString());
+        reservation.put("CustomerId", customerId);
+        reservation.put("RequestedCategoryId", categoryId);
+        reservation.put("RateId", rateId);
+        reservation.put("PersonCounts", List.of(Map.of("AgeCategoryId", adultAgeCategoryId, "Count", adults)));
+        if (notes != null && !notes.isBlank()) {
+            reservation.put("Notes", notes);
+        }
+        Map<String, Object> body = auth();
+        body.put("ServiceId", serviceId);
+        body.put("SendConfirmationEmail", false);
+        body.put("CheckRateApplicability", false);
+        body.put("CheckOverbooking", true);
+        body.put("Reservations", List.of(reservation));
+
+        String id = textOrNull(post(RESERVATIONS_ADD, body).path("Reservations").path(0).path("Reservation"), "Id");
+        if (id == null || id.isBlank()) {
+            throw new PmsAdapterException("Mews created no reservation for " + identifier);
+        }
+        log.info("Mews optional reservation {} held for {}", id, identifier);
+        return id;
+    }
+
+    /** Confirms an {@code Optional} reservation. With {@code sendEmail}, Mews sends its confirmation. */
+    public void confirmReservation(String reservationId, boolean sendEmail) {
+        Map<String, Object> body = auth();
+        body.put("ReservationIds", List.of(reservationId));
+        body.put("SendConfirmationEmail", sendEmail);
+        post(RESERVATIONS_CONFIRM, body);
+        log.info("Mews reservation {} confirmed (email={})", reservationId, sendEmail);
+    }
+
+    /**
+     * Cancels a reservation without posting Mews' own cancellation fee: under
+     * a Bliss plan the property's plan rules decide what the guest keeps.
+     * {@code notes} is required by Mews and shows on the reservation.
+     */
+    public void cancelReservation(String reservationId, boolean sendEmail, String notes) {
+        Map<String, Object> body = auth();
+        body.put("ReservationIds", List.of(reservationId));
+        body.put("PostCancellationFee", false);
+        body.put("SendEmail", sendEmail);
+        body.put("Notes", notes);
+        post(RESERVATIONS_CANCEL, body);
+        log.info("Mews reservation {} canceled (email={})", reservationId, sendEmail);
     }
 
     /** A stay total in integer minor units, with its currency. */

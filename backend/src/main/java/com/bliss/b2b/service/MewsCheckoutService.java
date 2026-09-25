@@ -43,9 +43,17 @@ import org.slf4j.LoggerFactory;
  *   <li>{@link #cardConfirm} — after the embed's client-side {@code onSuccess},
  *       verify server-side by reading {@code getStoredCards} for the plan's Mews
  *       customer and matching the vaulted card (the client's id alone is not
- *       trusted). On a match, vault the card ids, charge the first installment
- *       inline, and activate the plan.
+ *       trusted). On a match, reserve the stay in Mews, charge the first
+ *       installment against that reservation, and activate the plan.
  * </ol>
+ *
+ * <p><b>Reservation order.</b> The room is held as an {@code Optional}
+ * reservation (no Mews email), the first installment is charged with that
+ * {@code ReservationId}, and only then is the reservation confirmed, which is
+ * when Mews emails the guest. A declined card releases the hold with no email,
+ * so a guest is never told they have a booking they do not. The reservation id
+ * is stored the moment Mews returns it, so a retried confirm reuses the hold
+ * rather than creating a second reservation.
  *
  * <p>Network calls to Mews are kept outside DB transactions.
  */
@@ -54,17 +62,25 @@ public class MewsCheckoutService {
     private static final Logger log = LoggerFactory.getLogger(MewsCheckoutService.class);
 
     private static final Duration REQUEST_TTL = Duration.ofDays(7);
+    /**
+     * How long Mews may keep an unconfirmed hold. The hold is created and then
+     * confirmed or released within one request, so this only matters if the
+     * process dies in between; a day leaves time to sort that out by hand.
+     */
+    private static final Duration HOLD_TTL = Duration.ofHours(24);
 
     private final Jdbi jdbi;
     private final MewsAdapterFactory mewsFactory;
+    private final MewsStayService stayService;
     private final Clock clock;
 
     private final PlanNotificationService notificationService;
 
-    public MewsCheckoutService(Jdbi jdbi, MewsAdapterFactory mewsFactory,
+    public MewsCheckoutService(Jdbi jdbi, MewsAdapterFactory mewsFactory, MewsStayService stayService,
             PlanNotificationService notificationService, Clock clock) {
         this.jdbi = jdbi;
         this.mewsFactory = mewsFactory;
+        this.stayService = stayService;
         this.notificationService = notificationService;
         this.clock = clock;
     }
@@ -76,9 +92,11 @@ public class MewsCheckoutService {
      */
     public CardRequestResult cardRequest(String bookingToken) {
         Ctx ctx = jdbi.withHandle(h -> loadContext(h, bookingToken));
-        // Resolved before any Mews call, so an unknown platform never leaves a
-        // half-made customer or card request behind.
+        // Resolved before any Mews call, so an unknown platform or a booking
+        // with no room to reserve never leaves a half-made customer or card
+        // request behind.
         String dataBaseUrl = appBaseUrl(ctx.connection.platformUrl());
+        requireStay(ctx);
 
         MewsAdapter adapter = mewsFactory.adapterForConnection(ctx.connection);
         PmsCustomer mewsCustomer = adapter.findOrCreateCustomer(new PmsCustomerRef(
@@ -121,6 +139,8 @@ public class MewsCheckoutService {
                     "Open a card request before confirming.");
         }
 
+        requireStay(ctx);
+
         MewsAdapter adapter = mewsFactory.adapterForConnection(ctx.connection);
 
         // Server-side verification: the card must actually exist in Mews for this
@@ -134,13 +154,19 @@ public class MewsCheckoutService {
 
         PaymentScheduleEntry first = jdbi.withHandle(h ->
                 h.attach(PaymentScheduleDao.class).listForPlan(ctx.plan.id())).get(0);
+
+        // 1. Hold the room. Reuses a hold a previous attempt already made.
+        String reservationId = holdRoom(ctx, adapter, mewsCustomerId);
+
+        // 2. Take the first installment against that reservation.
         PmsChargeResult result;
         try {
             result = adapter.chargeStoredCard(
                     mewsCustomerId, matched.id(), first.amountCents(), currency,
-                    null, "Bliss first installment");
+                    reservationId, "Bliss first installment");
         } catch (PmsAdapterException e) {
-            // Transport / gateway error: leave the plan pending.
+            // Transport / gateway error: the charge may or may not have landed,
+            // so the hold stays and the plan stays pending. A retry reuses both.
             log.info("Mews first charge errored for plan {}: {}", ctx.plan.id(), e.getMessage());
             throw new MewsCheckoutException("charge_failed",
                     "Could not charge the card. " + e.getMessage());
@@ -148,9 +174,22 @@ public class MewsCheckoutService {
 
         PmsChargeStatus status = result.status();
         if (status == PmsChargeStatus.FAILED || status == PmsChargeStatus.CANCELED) {
-            // Hard decline: leave the plan inactive.
+            // Hard decline: release the hold quietly and leave the plan pending,
+            // so the guest can try another card.
+            releaseHold(ctx, adapter, reservationId, "Card declined at Bliss checkout");
             throw new MewsCheckoutException("charge_declined",
                     "The card was declined (state=" + result.rawState() + ").");
+        }
+
+        // 3. Confirm. This is when Mews sends the guest its confirmation email.
+        // The money is taken, so a failure here must not undo the plan: the
+        // hold stays Optional, and it is logged for the property to confirm.
+        try {
+            adapter.confirmReservation(reservationId, true);
+        } catch (PmsAdapterException e) {
+            log.error("Mews reservation {} for plan {} was charged but could not be confirmed: {}. "
+                    + "Confirm it in Mews before {}.", reservationId, ctx.plan.id(), e.getMessage(),
+                    Instant.now(clock).plus(HOLD_TTL));
         }
 
         // Accepted (Charged, or in-flight Pending/Verifying/Unknown). Persist the
@@ -194,6 +233,69 @@ public class MewsCheckoutService {
     }
 
     // --- helpers -----------------------------------------------------------
+
+    /** A Mews plan can only be confirmed for a booking that says what to reserve. */
+    private static void requireStay(Ctx ctx) {
+        Booking b = ctx.booking;
+        if (b.mewsResourceCategoryId() == null || b.mewsRateId() == null || b.adultCount() == null
+                || !ctx.connection.isBookingSetupComplete()) {
+            throw new MewsCheckoutException("stay_not_set",
+                    "This booking has no room to reserve. Start again from the property's booking page.");
+        }
+    }
+
+    /**
+     * The booking's Mews reservation: the one already recorded, or a new
+     * Optional hold. The id is stored before anything else happens. If another
+     * request stored one first, this hold is released and theirs is used.
+     */
+    private String holdRoom(Ctx ctx, MewsAdapter adapter, String mewsCustomerId) {
+        if (ctx.booking.mewsReservationId() != null) {
+            return ctx.booking.mewsReservationId();
+        }
+        String reservationId;
+        try {
+            MewsStayService.StayTimes times = stayService.timesFor(ctx.merchant.slug(),
+                    ctx.booking.appointmentDate(), ctx.booking.checkoutDate());
+            reservationId = adapter.addOptionalReservation(
+                    ctx.connection.serviceId(), mewsCustomerId,
+                    ctx.booking.mewsResourceCategoryId(), ctx.booking.mewsRateId(),
+                    ctx.connection.adultAgeCategoryId(), ctx.booking.adultCount(),
+                    times.startUtc(), times.endUtc(), Instant.now(clock).plus(HOLD_TTL),
+                    ctx.booking.bookingToken(), "Bliss payment plan " + ctx.plan.id());
+        } catch (MewsStayService.MewsStayException e) {
+            throw new MewsCheckoutException("mews_unreachable", e.getMessage());
+        } catch (PmsAdapterException e) {
+            // Most often the room sold since the quote (overbooking check).
+            // Nothing has been charged.
+            log.info("Mews hold refused for plan {}: {}", ctx.plan.id(), e.getMessage());
+            throw new MewsCheckoutException("stay_unavailable",
+                    "That room was just booked for your dates. Nothing was charged.");
+        }
+        int stored = jdbi.withHandle(h ->
+                h.attach(BookingDao.class).setMewsReservationId(ctx.booking.id(), reservationId));
+        if (stored == 1) {
+            return reservationId;
+        }
+        releaseHold(ctx, adapter, reservationId, "Duplicate hold from a concurrent Bliss checkout");
+        return jdbi.withHandle(h -> h.attach(BookingDao.class).findById(ctx.booking.id()))
+                .map(Booking::mewsReservationId)
+                .orElseThrow(() -> new MewsCheckoutException("not_found", "booking not found"));
+    }
+
+    /**
+     * Cancels an unconfirmed hold without emailing the guest, and forgets it so
+     * the next attempt holds afresh. A failed cancel is logged, not raised: the
+     * hold still lapses at its release time.
+     */
+    private void releaseHold(Ctx ctx, MewsAdapter adapter, String reservationId, String notes) {
+        try {
+            adapter.cancelReservation(reservationId, false, notes);
+        } catch (PmsAdapterException e) {
+            log.warn("Could not release Mews hold {} for plan {}: {}", reservationId, ctx.plan.id(), e.getMessage());
+        }
+        jdbi.useHandle(h -> h.attach(BookingDao.class).clearMewsReservationId(ctx.booking.id(), reservationId));
+    }
 
     private Ctx loadContext(org.jdbi.v3.core.Handle h, String bookingToken) {
         if (bookingToken == null || bookingToken.isBlank()) {

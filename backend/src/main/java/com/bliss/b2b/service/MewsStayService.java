@@ -172,7 +172,13 @@ public class MewsStayService {
         return new StayTimes(startUtc, endUtc, firstNight, lastNight);
     }
 
-    record StayTimes(Instant startUtc, Instant endUtc, Instant firstNightUtc, Instant lastNightUtc) {
+    public record StayTimes(Instant startUtc, Instant endUtc, Instant firstNightUtc, Instant lastNightUtc) {
+    }
+
+    /** Arrival and departure instants for a property's stay, from its cached catalogue. */
+    public StayTimes timesFor(String merchantSlug, LocalDate checkin, LocalDate checkout) {
+        Ctx ctx = context(merchantSlug);
+        return stayTimes(ZoneId.of(ctx.connection().timeZone()), checkin, checkout, catalogue(ctx).service());
     }
 
     /** Exact id first, then an exact name, then a name containing the label (either way round). */

@@ -227,7 +227,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         // Mews guest card-capture seam (per-property credentials via the factory).
         com.bliss.b2b.service.MewsCheckoutService mewsCheckoutService =
                 new com.bliss.b2b.service.MewsCheckoutService(
-                        jdbi, mewsAdapterFactory, planNotificationService, clock);
+                        jdbi, mewsAdapterFactory, mewsStayService, planNotificationService, clock);
         JwtService jwtService = new JwtService(config.getJwt(), sessionTtl);
         CustomerAuthService customerAuthService = new CustomerAuthService(
                 customerDao, jwtService, clock);

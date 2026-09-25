@@ -120,4 +120,24 @@ public interface BookingDao {
             @Bind("categoryId") String categoryId,
             @Bind("rateId") String rateId,
             @Bind("adults") int adults);
+
+    /**
+     * Records the Mews reservation backing this booking, only if none is
+     * recorded yet. Returns 0 when another request got there first, so the
+     * caller can release its own hold instead of overwriting.
+     */
+    @SqlUpdate("""
+            UPDATE bookings
+            SET mews_reservation_id = :reservationId
+            WHERE id = :id AND mews_reservation_id IS NULL
+            """)
+    int setMewsReservationId(@Bind("id") UUID id, @Bind("reservationId") String reservationId);
+
+    /** Forgets a released hold, only if it is still the one recorded. */
+    @SqlUpdate("""
+            UPDATE bookings
+            SET mews_reservation_id = NULL
+            WHERE id = :id AND mews_reservation_id = :reservationId
+            """)
+    int clearMewsReservationId(@Bind("id") UUID id, @Bind("reservationId") String reservationId);
 }
