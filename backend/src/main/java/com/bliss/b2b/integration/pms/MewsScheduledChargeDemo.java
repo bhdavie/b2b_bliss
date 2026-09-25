@@ -1,6 +1,9 @@
 package com.bliss.b2b.integration.pms;
 
 import com.bliss.b2b.BlissConfiguration.PmsConfig.MewsPmsConfig;
+import com.bliss.b2b.persistence.migration.V30__Encrypt_pms_connection_tokens;
+import com.bliss.b2b.security.TokenCipher;
+import com.bliss.b2b.security.TokenCipher.Field;
 import com.bliss.b2b.service.InstallmentChargeService;
 import com.bliss.b2b.service.InstallmentChargeService.JdbiLedger;
 import com.bliss.b2b.service.InstallmentChargeService.PassResult;
@@ -38,6 +41,16 @@ import org.jdbi.v3.sqlobject.SqlObjectPlugin;
  */
 public final class MewsScheduledChargeDemo {
 
+    // Public Mews demo credentials for the Gross pricing UK demo property (the
+    // "Are you ready to integrate with Mews?" client). docs.mews.com states the
+    // demo environment is completely public and must never hold real data, so
+    // these are safe to commit. This program is run by hand and never by the
+    // application; real properties bring their own tokens.
+    private static final String DEMO_CLIENT_TOKEN =
+            "E0D439EE522F44368DC78E1BFB03710C-D24FB11DBE31D4621C4817E028D9E1D";
+    private static final String DEMO_ACCESS_TOKEN =
+            "C66EF7B239D24632943D115EDE9CB810-EA00F8FD8294692C940F6B5A8F9453D";
+
     private static final String DEMO_EMAIL = "bliss.pms.demo@example.com";
 
     // Fixed ids so reruns are idempotent (the plan + schedule are recreated).
@@ -51,6 +64,9 @@ public final class MewsScheduledChargeDemo {
 
     public static void main(String[] args) {
         MewsPmsConfig config = new MewsPmsConfig();
+        config.setPlatformUrl(MewsPlatform.DEMO_API);
+        config.setClientToken(DEMO_CLIENT_TOKEN);
+        config.setAccessToken(DEMO_ACCESS_TOKEN);
         MewsAdapter adapter = new MewsAdapter(config);
 
         System.out.println("== Mews scheduled-charge demo ==");
@@ -81,7 +97,13 @@ public final class MewsScheduledChargeDemo {
         String url = env("DATABASE_URL", "jdbc:postgresql://localhost:5432/bliss");
         String user = env("PGUSER", "bliss");
         String pass = env("PGPASSWORD", "bliss_dev");
-        Flyway.configure().dataSource(url, user, pass).load().migrate();
+        // Same key the backend uses, or the development key when unset, so the
+        // connection seeded below is readable by the app as well as this pass.
+        TokenCipher cipher = TokenCipher.fromConfig(env("BLISS_TOKEN_ENCRYPTION_KEY", ""), false);
+        Flyway.configure().dataSource(url, user, pass)
+                .locations("classpath:db/migration")
+                .javaMigrations(new V30__Encrypt_pms_connection_tokens(cipher))
+                .load().migrate();
         Jdbi jdbi = Jdbi.create(url, user, pass)
                 .installPlugin(new SqlObjectPlugin())
                 .installPlugin(new PostgresPlugin());
@@ -91,14 +113,14 @@ public final class MewsScheduledChargeDemo {
         //    charge pass resolves credentials per-property, not from a global.
         LocalDate today = LocalDate.now();
         UUID scheduleId = seedMewsRailPlan(jdbi, customer, card, currency, today);
-        seedMewsConnection(jdbi, config, cfg, currency);
+        seedMewsConnection(jdbi, cipher, config, cfg, currency);
         System.out.println();
         System.out.println("Seeded Mews-rail plan + property connection; installment due " + today);
         printRow(jdbi, scheduleId, "before");
 
         // 4. Run the charge pass. The service resolves this property's adapter
         //    from its stored connection via MewsAdapterFactory.
-        MewsAdapterFactory factory = new MewsAdapterFactory(jdbi);
+        MewsAdapterFactory factory = new MewsAdapterFactory(jdbi, cipher, 0);
         InstallmentChargeService service = new InstallmentChargeService(
                 new JdbiLedger(jdbi), factory, Clock.systemUTC());
         PassResult result = service.runDuePass(today);
@@ -212,7 +234,8 @@ public final class MewsScheduledChargeDemo {
      * validated, so MewsAdapterFactory resolves this merchant's credentials.
      */
     private static void seedMewsConnection(
-            Jdbi jdbi, MewsPmsConfig config, PmsPropertyConfiguration cfg, String currency) {
+            Jdbi jdbi, TokenCipher cipher, MewsPmsConfig config, PmsPropertyConfiguration cfg,
+            String currency) {
         jdbi.useHandle(h -> h.createUpdate("""
                 INSERT INTO merchant_mews_connections (
                     merchant_id, platform_url, client_token, access_token,
@@ -232,8 +255,8 @@ public final class MewsScheduledChargeDemo {
                 """)
                 .bind("merchantId", MERCHANT_ID)
                 .bind("platformUrl", config.getPlatformUrl())
-                .bind("clientToken", config.getClientToken())
-                .bind("accessToken", config.getAccessToken())
+                .bind("clientToken", cipher.encrypt(Field.MEWS_CLIENT_TOKEN, MERCHANT_ID, config.getClientToken()))
+                .bind("accessToken", cipher.encrypt(Field.MEWS_ACCESS_TOKEN, MERCHANT_ID, config.getAccessToken()))
                 .bind("enterpriseId", cfg.enterpriseId())
                 .bind("enterpriseName", cfg.name())
                 .bind("currency", currency)

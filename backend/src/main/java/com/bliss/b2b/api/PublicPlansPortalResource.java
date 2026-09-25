@@ -207,7 +207,8 @@ public class PublicPlansPortalResource {
     private static Response mapMewsError(MewsCheckoutException e) {
         int status = switch (e.code()) {
             case "not_found" -> 404;
-            case "plan_not_pending", "not_mews_rail", "mews_not_connected", "card_request_first" -> 409;
+            case "plan_not_pending", "not_mews_rail", "mews_not_connected", "card_request_first",
+                    "mews_currency_missing", "mews_platform_unknown" -> 409;
             case "card_not_found" -> 400;
             case "charge_declined" -> 402;
             case "charge_failed" -> 502;

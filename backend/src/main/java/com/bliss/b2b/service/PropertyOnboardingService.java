@@ -1,6 +1,5 @@
 package com.bliss.b2b.service;
 
-import com.bliss.b2b.BlissConfiguration.PmsConfig.MewsPmsConfig;
 import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.domain.MewsConnection;
 import com.bliss.b2b.domain.OnboardingState;
@@ -9,6 +8,7 @@ import com.bliss.b2b.domain.CloudbedsConnection;
 import com.bliss.b2b.domain.StripeConnection;
 import com.bliss.b2b.integration.pms.MewsAdapter;
 import com.bliss.b2b.integration.pms.MewsAdapterFactory;
+import com.bliss.b2b.integration.pms.MewsPlatform;
 import com.bliss.b2b.integration.pms.PmsAdapterException;
 import com.bliss.b2b.integration.pms.PmsPropertyConfiguration;
 import com.bliss.b2b.persistence.MerchantCloudbedsConnectionDao;
@@ -32,9 +32,6 @@ import org.slf4j.LoggerFactory;
 public class PropertyOnboardingService {
 
     private static final Logger log = LoggerFactory.getLogger(PropertyOnboardingService.class);
-
-    /** Mews demo platform url, reused when a property leaves the field blank. */
-    private static final String DEFAULT_PLATFORM_URL = new MewsPmsConfig().getPlatformUrl();
 
     private final MerchantDao merchantDao;
     private final MerchantMewsConnectionDao connectionDao;
@@ -176,8 +173,18 @@ public class PropertyOnboardingService {
             throw new PropertyOnboardingException(
                     "missing_tokens", "Both a client token and an access token are required.");
         }
-        String effectiveUrl = (platformUrl == null || platformUrl.isBlank())
-                ? DEFAULT_PLATFORM_URL : platformUrl.trim();
+        // Required, and only a known Mews environment. No default: a blank url
+        // used to fall back to the public demo, which would quietly validate a
+        // real property's tokens against the wrong Mews.
+        if (platformUrl == null || platformUrl.isBlank()) {
+            throw new PropertyOnboardingException(
+                    "missing_platform_url", "A Mews platform URL is required.");
+        }
+        String effectiveUrl = MewsPlatform.normalize(platformUrl).orElseThrow(() ->
+                new PropertyOnboardingException(
+                        "unsupported_platform_url",
+                        "Use " + MewsPlatform.PRODUCTION_API + " for your live property, or "
+                                + MewsPlatform.DEMO_API + " for the Mews demo."));
 
         MewsAdapter adapter = mewsFactory.adapterForCredentials(
                 effectiveUrl, clientToken.trim(), accessToken.trim());
@@ -191,9 +198,9 @@ public class PropertyOnboardingService {
                     "Could not connect to Mews with those tokens. " + e.getMessage());
         }
 
-        connectionDao.upsertValidated(
+        mewsFactory.saveValidatedConnection(
                 merchant.id(), effectiveUrl, clientToken.trim(), accessToken.trim(),
-                cfg.enterpriseId(), cfg.name(), cfg.defaultCurrency(), Instant.now(clock));
+                cfg, Instant.now(clock));
         merchantDao.updatePmsType(merchant.id(), PmsType.MEWS.wire());
         advanceTo(merchant, OnboardingState.PMS_CONNECTED);
 

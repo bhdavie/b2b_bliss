@@ -21,10 +21,9 @@ import org.slf4j.LoggerFactory;
 
 /**
  * {@link PmsAdapter} over the Mews Connector API. Built on the JDK
- * {@link HttpClient} + Jackson so it adds no dependency, matching the existing
- * {@link com.bliss.b2b.integration.MewsApiClient} (reservation sync). This is a
- * separate surface: it covers the PMS payment rail (configuration, customers,
- * stored cards) and does not touch the sync path or any Stripe code.
+ * {@link HttpClient} + Jackson so it adds no dependency. It covers the PMS
+ * payment rail (configuration, customers, stored cards) and does not touch any
+ * Stripe code.
  *
  * <p>All Mews calls are POST with {@code ClientToken}, {@code AccessToken} and
  * {@code Client} in the JSON body. The {@code Client} string is

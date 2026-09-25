@@ -14,6 +14,9 @@ import org.jdbi.v3.sqlobject.statement.SqlUpdate;
  * reads it (via {@link com.bliss.b2b.integration.pms.CloudbedsAdapterFactory}) so
  * each property charges against its own tokens, and the OAuth callback writes it.
  * Mirrors {@link MerchantMewsConnectionDao} / {@link MerchantStripeConnectionDao}.
+ * Tokens are written and read sealed by
+ * {@link com.bliss.b2b.security.TokenCipher}; the table's CHECK rejects
+ * anything else.
  */
 @RegisterRowMapper(CloudbedsConnectionRowMapper.class)
 public interface MerchantCloudbedsConnectionDao {
@@ -32,7 +35,7 @@ public interface MerchantCloudbedsConnectionDao {
                 status, connected_at
             ) VALUES (
                 :merchantId, :propertyId, :propertyName, :currency,
-                :accessToken, :refreshToken, :accessTokenExpiresAt,
+                :encryptedAccessToken, :encryptedRefreshToken, :accessTokenExpiresAt,
                 'connected', :connectedAt
             )
             ON CONFLICT (merchant_id) DO UPDATE SET
@@ -50,8 +53,8 @@ public interface MerchantCloudbedsConnectionDao {
             @Bind("propertyId") String propertyId,
             @Bind("propertyName") String propertyName,
             @Bind("currency") String currency,
-            @Bind("accessToken") String accessToken,
-            @Bind("refreshToken") String refreshToken,
+            @Bind("encryptedAccessToken") String encryptedAccessToken,
+            @Bind("encryptedRefreshToken") String encryptedRefreshToken,
             @Bind("accessTokenExpiresAt") Instant accessTokenExpiresAt,
             @Bind("connectedAt") Instant connectedAt
     );
@@ -62,16 +65,16 @@ public interface MerchantCloudbedsConnectionDao {
      */
     @SqlUpdate("""
             UPDATE merchant_cloudbeds_connections
-            SET access_token = :accessToken,
-                refresh_token = :refreshToken,
+            SET access_token = :encryptedAccessToken,
+                refresh_token = :encryptedRefreshToken,
                 access_token_expires_at = :accessTokenExpiresAt,
                 status = 'connected'
             WHERE merchant_id = :merchantId
             """)
     int updateTokens(
             @Bind("merchantId") UUID merchantId,
-            @Bind("accessToken") String accessToken,
-            @Bind("refreshToken") String refreshToken,
+            @Bind("encryptedAccessToken") String encryptedAccessToken,
+            @Bind("encryptedRefreshToken") String encryptedRefreshToken,
             @Bind("accessTokenExpiresAt") Instant accessTokenExpiresAt
     );
 

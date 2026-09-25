@@ -309,33 +309,16 @@ UPDATE merchants
         OR status != 'active');
 
 -- Marbrook House Mews connection -------------------------------------------
--- Public Mews demo credentials for the shared "Gross pricing UK" demo property.
--- The same pair already appears in BlissConfiguration.MewsPmsConfig and in
--- ConnectMewsStep.tsx; docs.mews.com states the demo environment is completely
--- public and must never hold real data, so they are safe to seed.
---
--- NOTE the currency: this shared demo enterprise reports GBP, so a Mews-rail
--- plan quotes in GBP regardless of what the rest of the demo shows in USD.
-INSERT INTO merchant_mews_connections (
-    merchant_id, platform_url, client_token, access_token,
-    enterprise_id, enterprise_name, currency, validated_at
-) VALUES (
-    '9b54a488-b308-4a6d-91cc-38983ff982ac',
-    'https://api.mews-demo.com',
-    'E0D439EE522F44368DC78E1BFB03710C-D24FB11DBE31D4621C4817E028D9E1D',
-    'C66EF7B239D24632943D115EDE9CB810-EA00F8FD8294692C940F6B5A8F9453D',
-    '851df8c8-90f2-4c4a-8e01-a4fc46b25178',
-    'API Hotel Gross Pricing (DO NOT CHANGE THE NAME)',
-    'USD',
-    now()
-)
-ON CONFLICT (merchant_id) DO NOTHING;
+-- Inserted by SeedDemoCommand after this script, not here: the tokens are
+-- sealed with the application's key (V30), which SQL cannot reach, and the
+-- table's CHECK rejects a plaintext insert. The currency correction below
+-- still lives here because it touches no token.
 
 -- The seed owns the currency, the enterprise does not.
 --
 -- The shared demo enterprise reports GBP, but every amount in this system is a
 -- Bliss-side dollar figure (plan totals come from the checkout request or
--- MewsSyncService.PLACEHOLDER_TOTAL_CENTS, never from a Mews reservation) and
+-- the retired demo sync's placeholder, never from a Mews reservation) and
 -- the frontend renders USD unconditionally. Nothing converts between
 -- currencies: MewsAdapter.chargeStoredCard sends Currency and GrossValue as
 -- independent fields, so this string only LABELS an amount that is already
@@ -435,26 +418,5 @@ INSERT INTO merchant_plan_rules (
 ON CONFLICT (merchant_id) DO NOTHING;
 
 -- Marbrook Grand Cloudbeds connection ---------------------------------------
--- Synthetic tokens: no Cloudbeds object backs these, matching the pm_seed_*
--- convention used for cards above. Enough for the dashboard to report the
--- property as connected and for CloudbedsAdapterFactory to resolve a row.
---
--- access_token_expires_at is relative to seed time rather than a fixed
--- timestamp, so re-seeding a stale database does not produce an
--- already-expired connection.
-INSERT INTO merchant_cloudbeds_connections (
-    merchant_id, property_id, property_name, currency,
-    access_token, refresh_token, access_token_expires_at,
-    status, connected_at
-) VALUES (
-    '6d3ae2b1-0000-4000-8000-000000000002',
-    'cb_demo_property_318842',
-    'Marbrook Grand',
-    'USD',
-    'cb_seed_access_token_marbrook_grand',
-    'cb_seed_refresh_token_marbrook_grand',
-    now() + interval '365 days',
-    'connected',
-    now()
-)
-ON CONFLICT (merchant_id) DO NOTHING;
+-- Inserted by SeedDemoCommand after this script, for the same reason as the
+-- Marbrook House Mews connection above.

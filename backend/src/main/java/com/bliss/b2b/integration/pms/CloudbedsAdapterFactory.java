@@ -6,6 +6,8 @@ import com.bliss.b2b.integration.cloudbeds.CloudbedsOAuthClient;
 import com.bliss.b2b.integration.cloudbeds.CloudbedsOAuthClient.CloudbedsOAuthException;
 import com.bliss.b2b.integration.cloudbeds.CloudbedsTokens;
 import com.bliss.b2b.persistence.MerchantCloudbedsConnectionDao;
+import com.bliss.b2b.security.TokenCipher;
+import com.bliss.b2b.security.TokenCipher.Field;
 import com.bliss.b2b.service.InstallmentChargeService.ChargeContext;
 import com.bliss.b2b.service.InstallmentChargeService.ChargeContextResolver;
 import java.time.Clock;
@@ -28,6 +30,8 @@ import org.slf4j.LoggerFactory;
  * same property serialize on a per-merchant lock and re-check expiry inside it,
  * so only the first caller performs the network refresh and rewrites the tokens;
  * the rest reuse the freshly-stored access token.
+ *
+ * <p>This is the one place a stored Cloudbeds token is sealed or opened.
  */
 public class CloudbedsAdapterFactory implements ChargeContextResolver {
 
@@ -38,6 +42,7 @@ public class CloudbedsAdapterFactory implements ChargeContextResolver {
     private static final Duration REFRESH_SKEW = Duration.ofMinutes(5);
 
     private final MerchantCloudbedsConnectionDao connectionDao;
+    private final TokenCipher cipher;
     private final CloudbedsOAuthClient oauthClient;
     private final CloudbedsPmsConfig config;
     private final long chargeCapCents;
@@ -47,19 +52,18 @@ public class CloudbedsAdapterFactory implements ChargeContextResolver {
     private final ConcurrentHashMap<UUID, Object> refreshLocks = new ConcurrentHashMap<>();
 
     public CloudbedsAdapterFactory(
-            Jdbi jdbi, CloudbedsOAuthClient oauthClient, CloudbedsPmsConfig config,
+            Jdbi jdbi, TokenCipher cipher, CloudbedsOAuthClient oauthClient, CloudbedsPmsConfig config,
             long chargeCapCents, Clock clock) {
-        this.connectionDao = jdbi.onDemand(MerchantCloudbedsConnectionDao.class);
-        this.oauthClient = oauthClient;
-        this.config = config;
-        this.chargeCapCents = chargeCapCents;
-        this.clock = clock;
+        this(jdbi.onDemand(MerchantCloudbedsConnectionDao.class), cipher, oauthClient, config,
+                chargeCapCents, clock);
     }
 
     CloudbedsAdapterFactory(
-            MerchantCloudbedsConnectionDao connectionDao, CloudbedsOAuthClient oauthClient,
-            CloudbedsPmsConfig config, long chargeCapCents, Clock clock) {
+            MerchantCloudbedsConnectionDao connectionDao, TokenCipher cipher,
+            CloudbedsOAuthClient oauthClient, CloudbedsPmsConfig config,
+            long chargeCapCents, Clock clock) {
         this.connectionDao = connectionDao;
+        this.cipher = cipher;
         this.oauthClient = oauthClient;
         this.config = config;
         this.chargeCapCents = chargeCapCents;
@@ -85,6 +89,25 @@ public class CloudbedsAdapterFactory implements ChargeContextResolver {
         return adapter.getPropertyConfiguration();
     }
 
+    /**
+     * Seals the tokens and stores a property's connection after a successful
+     * OAuth code exchange. Callers pass plaintext; only ciphertext reaches the
+     * database.
+     */
+    public void saveConnection(
+            UUID merchantId, PmsPropertyConfiguration property, CloudbedsTokens tokens,
+            Instant accessTokenExpiresAt, Instant connectedAt) {
+        connectionDao.upsert(
+                merchantId,
+                property.enterpriseId(),
+                property.name(),
+                property.defaultCurrency(),
+                cipher.encrypt(Field.CLOUDBEDS_ACCESS_TOKEN, merchantId, tokens.accessToken()),
+                cipher.encrypt(Field.CLOUDBEDS_REFRESH_TOKEN, merchantId, tokens.refreshToken()),
+                accessTokenExpiresAt,
+                connectedAt);
+    }
+
     @Override
     public Optional<ChargeContext> resolve(UUID merchantId) {
         return freshConnection(merchantId)
@@ -95,8 +118,10 @@ public class CloudbedsAdapterFactory implements ChargeContextResolver {
     }
 
     private CloudbedsAdapter adapterFor(CloudbedsConnection conn) {
+        String accessToken = cipher.decrypt(
+                Field.CLOUDBEDS_ACCESS_TOKEN, conn.merchantId(), conn.encryptedAccessToken());
         return new CloudbedsAdapter(
-                config.getApiBaseUrl(), conn.accessToken(), conn.propertyId(), chargeCapCents);
+                config.getApiBaseUrl(), accessToken, conn.propertyId(), chargeCapCents);
     }
 
     /**
@@ -126,10 +151,14 @@ public class CloudbedsAdapterFactory implements ChargeContextResolver {
                 return current;
             }
             try {
-                CloudbedsTokens tokens = oauthClient.refresh(current.refreshToken());
+                CloudbedsTokens tokens = oauthClient.refresh(cipher.decrypt(
+                        Field.CLOUDBEDS_REFRESH_TOKEN, merchantId, current.encryptedRefreshToken()));
                 Instant expiresAt = Instant.now(clock).plusSeconds(tokens.expiresInSeconds());
                 connectionDao.updateTokens(
-                        merchantId, tokens.accessToken(), tokens.refreshToken(), expiresAt);
+                        merchantId,
+                        cipher.encrypt(Field.CLOUDBEDS_ACCESS_TOKEN, merchantId, tokens.accessToken()),
+                        cipher.encrypt(Field.CLOUDBEDS_REFRESH_TOKEN, merchantId, tokens.refreshToken()),
+                        expiresAt);
                 log.info("Refreshed Cloudbeds access token for merchant {} (expires {})",
                         merchantId, expiresAt);
                 return connectionDao.findByMerchant(merchantId).orElse(current);

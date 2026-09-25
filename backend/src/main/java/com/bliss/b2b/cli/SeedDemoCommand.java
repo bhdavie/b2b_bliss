@@ -2,6 +2,8 @@ package com.bliss.b2b.cli;
 
 import com.bliss.b2b.BlissConfiguration;
 import com.bliss.b2b.persistence.DatabaseUrlResolver;
+import com.bliss.b2b.security.TokenCipher;
+import com.bliss.b2b.security.TokenCipher.Field;
 import io.dropwizard.core.cli.ConfiguredCommand;
 import io.dropwizard.core.setup.Bootstrap;
 import java.io.IOException;
@@ -9,6 +11,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.sql.Statement;
 import java.util.Optional;
+import java.util.UUID;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
@@ -53,6 +56,19 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
     // real Marbrook portal and is master-password-only.
     private static final String EMAIL = "demo@bliss-payments.com";
 
+    /** Marbrook House, the Mews-rail demo property. */
+    private static final UUID MARBROOK_HOUSE_ID = UUID.fromString("9b54a488-b308-4a6d-91cc-38983ff982ac");
+    /** Marbrook Grand, the Cloudbeds-rail demo property. */
+    private static final UUID MARBROOK_GRAND_ID = UUID.fromString("6d3ae2b1-0000-4000-8000-000000000002");
+
+    // Public Mews demo credentials for the shared "Gross pricing UK" demo
+    // property. docs.mews.com states the demo environment is completely public
+    // and must never hold real data, so they are safe to seed.
+    private static final String MEWS_DEMO_CLIENT_TOKEN =
+            "E0D439EE522F44368DC78E1BFB03710C-D24FB11DBE31D4621C4817E028D9E1D";
+    private static final String MEWS_DEMO_ACCESS_TOKEN =
+            "C66EF7B239D24632943D115EDE9CB810-EA00F8FD8294692C940F6B5A8F9453D";
+
     public SeedDemoCommand() {
         super("seed-demo", "Idempotently create the Marbrook House demo merchant and fixture bookings");
     }
@@ -71,6 +87,8 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
         BlissConfiguration.DatabaseConfig db = configuration.getDatabase();
 
         String script = readScript();
+        TokenCipher cipher = TokenCipher.fromConfig(
+                configuration.getTokenEncryptionKey(), configuration.isProduction());
 
         // No connection pool: this is a single short-lived process running one
         // script.
@@ -83,6 +101,7 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
 
             Counts before = Counts.read(handle);
             execute(handle, script);
+            seedPmsConnections(handle, cipher);
             Counts after = Counts.read(handle);
 
             if (after.equals(before)) {
@@ -108,6 +127,53 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
         } catch (Exception e) {
             throw new IllegalStateException("Failed executing " + SCRIPT + ": " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * The two demo PMS connections, which the SQL script cannot insert because
+     * their tokens are sealed with the application's key (V30). Same rules as
+     * the script: ON CONFLICT DO NOTHING, so an existing row is left alone.
+     */
+    private static void seedPmsConnections(Handle handle, TokenCipher cipher) {
+        handle.createUpdate("""
+                INSERT INTO merchant_mews_connections (
+                    merchant_id, platform_url, client_token, access_token,
+                    enterprise_id, enterprise_name, currency, validated_at
+                ) VALUES (
+                    :merchantId, 'https://api.mews-demo.com', :clientToken, :accessToken,
+                    '851df8c8-90f2-4c4a-8e01-a4fc46b25178',
+                    'API Hotel Gross Pricing (DO NOT CHANGE THE NAME)',
+                    'USD', now()
+                )
+                ON CONFLICT (merchant_id) DO NOTHING
+                """)
+                .bind("merchantId", MARBROOK_HOUSE_ID)
+                .bind("clientToken", cipher.encrypt(
+                        Field.MEWS_CLIENT_TOKEN, MARBROOK_HOUSE_ID, MEWS_DEMO_CLIENT_TOKEN))
+                .bind("accessToken", cipher.encrypt(
+                        Field.MEWS_ACCESS_TOKEN, MARBROOK_HOUSE_ID, MEWS_DEMO_ACCESS_TOKEN))
+                .execute();
+
+        // Synthetic Cloudbeds tokens: no Cloudbeds object backs these. Expiry is
+        // relative to seed time so re-seeding never yields an expired connection.
+        handle.createUpdate("""
+                INSERT INTO merchant_cloudbeds_connections (
+                    merchant_id, property_id, property_name, currency,
+                    access_token, refresh_token, access_token_expires_at,
+                    status, connected_at
+                ) VALUES (
+                    :merchantId, 'cb_demo_property_318842', 'Marbrook Grand', 'USD',
+                    :accessToken, :refreshToken, now() + interval '365 days',
+                    'connected', now()
+                )
+                ON CONFLICT (merchant_id) DO NOTHING
+                """)
+                .bind("merchantId", MARBROOK_GRAND_ID)
+                .bind("accessToken", cipher.encrypt(
+                        Field.CLOUDBEDS_ACCESS_TOKEN, MARBROOK_GRAND_ID, "cb_seed_access_token_marbrook_grand"))
+                .bind("refreshToken", cipher.encrypt(
+                        Field.CLOUDBEDS_REFRESH_TOKEN, MARBROOK_GRAND_ID, "cb_seed_refresh_token_marbrook_grand"))
+                .execute();
     }
 
     private static Optional<String> findMerchantId(Handle handle) {

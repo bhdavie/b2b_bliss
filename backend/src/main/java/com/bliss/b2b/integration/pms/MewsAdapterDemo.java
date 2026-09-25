@@ -35,6 +35,16 @@ import java.util.List;
  */
 public final class MewsAdapterDemo {
 
+    // Public Mews demo credentials for the Gross pricing UK demo property (the
+    // "Are you ready to integrate with Mews?" client). docs.mews.com states the
+    // demo environment is completely public and must never hold real data, so
+    // these are safe to commit. This program is run by hand and never by the
+    // application; real properties bring their own tokens.
+    private static final String DEMO_CLIENT_TOKEN =
+            "E0D439EE522F44368DC78E1BFB03710C-D24FB11DBE31D4621C4817E028D9E1D";
+    private static final String DEMO_ACCESS_TOKEN =
+            "C66EF7B239D24632943D115EDE9CB810-EA00F8FD8294692C940F6B5A8F9453D";
+
     /** Charge amount for the demo, in integer minor units (1.00 in the property currency). */
     private static final long DEMO_AMOUNT_MINOR_UNITS = 100;
 
@@ -42,8 +52,10 @@ public final class MewsAdapterDemo {
     }
 
     public static void main(String[] args) {
-        // Defaults on MewsPmsConfig are the public Mews demo credentials.
         MewsPmsConfig config = new MewsPmsConfig();
+        config.setPlatformUrl(MewsPlatform.DEMO_API);
+        config.setClientToken(DEMO_CLIENT_TOKEN);
+        config.setAccessToken(DEMO_ACCESS_TOKEN);
         MewsAdapter adapter = new MewsAdapter(config);
 
         System.out.println("== Mews PMS adapter demo ==");

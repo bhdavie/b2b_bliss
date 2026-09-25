@@ -10,6 +10,7 @@ import com.bliss.b2b.domain.PaymentScheduleEntry;
 import com.bliss.b2b.domain.PmsType;
 import com.bliss.b2b.integration.pms.MewsAdapter;
 import com.bliss.b2b.integration.pms.MewsAdapterFactory;
+import com.bliss.b2b.integration.pms.MewsPlatform;
 import com.bliss.b2b.integration.pms.PmsAdapterException;
 import com.bliss.b2b.integration.pms.PmsCardCollectionRequest;
 import com.bliss.b2b.integration.pms.PmsChargeResult;
@@ -53,8 +54,6 @@ public class MewsCheckoutService {
     private static final Logger log = LoggerFactory.getLogger(MewsCheckoutService.class);
 
     private static final Duration REQUEST_TTL = Duration.ofDays(7);
-    private static final String DEFAULT_APP_BASE_URL = "https://app.mews-demo.com";
-    private static final String DEFAULT_CURRENCY = "GBP";
 
     private final Jdbi jdbi;
     private final MewsAdapterFactory mewsFactory;
@@ -77,6 +76,9 @@ public class MewsCheckoutService {
      */
     public CardRequestResult cardRequest(String bookingToken) {
         Ctx ctx = jdbi.withHandle(h -> loadContext(h, bookingToken));
+        // Resolved before any Mews call, so an unknown platform never leaves a
+        // half-made customer or card request behind.
+        String dataBaseUrl = appBaseUrl(ctx.connection.platformUrl());
 
         MewsAdapter adapter = mewsFactory.adapterForConnection(ctx.connection);
         PmsCustomer mewsCustomer = adapter.findOrCreateCustomer(new PmsCustomerRef(
@@ -93,7 +95,7 @@ public class MewsCheckoutService {
         log.info("Mews card request {} for plan {} (customer {})",
                 request.requestId(), ctx.plan.id(), mewsCustomer.id());
         return new CardRequestResult(
-                request.requestId(), appBaseUrl(ctx.connection.platformUrl()), mewsCustomer.id());
+                request.requestId(), dataBaseUrl, mewsCustomer.id());
     }
 
     /**
@@ -104,6 +106,13 @@ public class MewsCheckoutService {
      */
     public CardConfirmResult cardConfirm(String bookingToken, String clientPaymentMethodId) {
         Ctx ctx = jdbi.withHandle(h -> loadContext(h, bookingToken));
+        // Fail closed before touching the card: charging needs the property's
+        // own currency, and guessing one would label the amount wrongly.
+        String currency = ctx.connection.currency();
+        if (currency == null || currency.isBlank()) {
+            throw new MewsCheckoutException("mews_currency_missing",
+                    "This property's Mews connection has no currency set.");
+        }
 
         String mewsCustomerId = jdbi.withHandle(h ->
                 h.attach(CustomerDao.class).findMewsCustomerId(ctx.customer.id()).orElse(null));
@@ -125,9 +134,6 @@ public class MewsCheckoutService {
 
         PaymentScheduleEntry first = jdbi.withHandle(h ->
                 h.attach(PaymentScheduleDao.class).listForPlan(ctx.plan.id())).get(0);
-        String currency = (ctx.connection.currency() == null || ctx.connection.currency().isBlank())
-                ? DEFAULT_CURRENCY : ctx.connection.currency();
-
         PmsChargeResult result;
         try {
             result = adapter.chargeStoredCard(
@@ -237,12 +243,11 @@ public class MewsCheckoutService {
         return obfuscated.substring(obfuscated.length() - 4);
     }
 
-    /** api.mews-demo.com -> app.mews-demo.com, matching the checkout embed host. */
+    /** The checkout embed host for the connection's Mews environment; no guessing. */
     private static String appBaseUrl(String platformUrl) {
-        if (platformUrl == null || platformUrl.isBlank()) {
-            return DEFAULT_APP_BASE_URL;
-        }
-        return platformUrl.replace("://api.", "://app.");
+        return MewsPlatform.appBaseUrl(platformUrl).orElseThrow(() ->
+                new MewsCheckoutException("mews_platform_unknown",
+                        "This property's Mews connection points at an unrecognised platform."));
     }
 
     private record Ctx(

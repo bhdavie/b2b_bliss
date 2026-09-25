@@ -6,7 +6,6 @@ import com.bliss.b2b.api.DemoResetResource;
 import com.bliss.b2b.api.DevPlansResource;
 import com.bliss.b2b.api.HelloResource;
 import com.bliss.b2b.api.MerchantsResource;
-import com.bliss.b2b.api.MewsController;
 import com.bliss.b2b.api.PlanRulesResource;
 import com.bliss.b2b.api.PropertyOnboardingResource;
 import com.bliss.b2b.api.PlansResource;
@@ -36,8 +35,6 @@ import com.bliss.b2b.auth.MerchantPrincipal;
 import com.bliss.b2b.cli.SeedDemoCommand;
 import com.bliss.b2b.integration.EmailService;
 import com.bliss.b2b.integration.EmailServiceFactory;
-import com.bliss.b2b.integration.MewsApiClient;
-import com.bliss.b2b.integration.MewsConfig;
 import com.bliss.b2b.integration.StripeConnectResolver;
 import com.bliss.b2b.integration.StripeConnectService;
 import com.bliss.b2b.integration.StripeConnectStandardService;
@@ -52,10 +49,11 @@ import com.bliss.b2b.persistence.MerchantDao;
 import com.bliss.b2b.persistence.MerchantPlanRulesDao;
 import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentScheduleDao;
+import com.bliss.b2b.persistence.migration.V30__Encrypt_pms_connection_tokens;
+import com.bliss.b2b.security.TokenCipher;
 import com.bliss.b2b.service.BookingService;
 import com.bliss.b2b.service.CancellationService;
 import com.bliss.b2b.service.MagicLinkService;
-import com.bliss.b2b.service.MewsSyncService;
 import com.bliss.b2b.service.MerchantPlanRulesService;
 import com.bliss.b2b.service.DemoResetService;
 import com.bliss.b2b.service.PropertyOnboardingService;
@@ -120,10 +118,14 @@ public class BlissApplication extends Application<BlissConfiguration> {
         // production deploy that is still carrying the dev signing key, and let
         // a platform-supplied DATABASE_URL replace the local-dev credentials.
         requireProductionJwtSecret(config);
+        // Same fail-fast rule for the PMS credential key: production without one
+        // refuses to boot here, before a migration or a charge could need it.
+        TokenCipher tokenCipher =
+                TokenCipher.fromConfig(config.getTokenEncryptionKey(), config.isProduction());
         DatabaseUrlResolver.applyFromEnvironment(config.getDatabase());
 
         SentryBootstrap.init(config.getSentry());
-        runMigrationsIfEnabled(config);
+        runMigrationsIfEnabled(config, tokenCipher);
         registerCors(config, environment);
 
         // Emit Instants and LocalDates as ISO 8601 strings, not Jackson's
@@ -181,7 +183,6 @@ public class BlissApplication extends Application<BlissConfiguration> {
         com.bliss.b2b.persistence.MerchantStripeConnectionDao stripeConnectionDao =
                 jdbi.onDemand(com.bliss.b2b.persistence.MerchantStripeConnectionDao.class);
         StripeConnectResolver stripeConnectResolver = new StripeConnectResolver(jdbi);
-        MewsApiClient mewsApiClient = new MewsApiClient(MewsConfig.load());
         BookingService bookingService = new BookingService(bookingDao);
         PlanEligibilityService eligibilityService = new PlanEligibilityService();
         MerchantPlanRulesService planRulesService = new MerchantPlanRulesService(planRulesDao);
@@ -195,8 +196,6 @@ public class BlissApplication extends Application<BlissConfiguration> {
         PlanCreationService planCreationService = new PlanCreationService(
                 jdbi, eligibilityService, stripePaymentsService, stripeConnectResolver,
                 emailService, planNotificationService, clock, config.getApp());
-        MewsSyncService mewsSyncService = new MewsSyncService(
-                mewsApiClient, jdbi, eligibilityService, planCreationService, clock);
         CancellationService cancellationService = new CancellationService(
                 paymentPlanDao, paymentScheduleDao, bookingDao, planRulesService);
         PlanPortalService planPortalService = new PlanPortalService(
@@ -206,7 +205,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         com.bliss.b2b.persistence.MerchantMewsConnectionDao mewsConnectionDao =
                 jdbi.onDemand(com.bliss.b2b.persistence.MerchantMewsConnectionDao.class);
         com.bliss.b2b.integration.pms.MewsAdapterFactory mewsAdapterFactory =
-                new com.bliss.b2b.integration.pms.MewsAdapterFactory(jdbi, chargeCapCents);
+                new com.bliss.b2b.integration.pms.MewsAdapterFactory(jdbi, tokenCipher, chargeCapCents);
         // Per-property Cloudbeds OAuth: connection store, OAuth client, and the
         // factory that resolves each property's tokens (transparent single-flight
         // refresh) and is the charge pass's Cloudbeds resolver.
@@ -216,7 +215,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 new com.bliss.b2b.integration.cloudbeds.CloudbedsOAuthClient(config.getPms().getCloudbeds());
         com.bliss.b2b.integration.pms.CloudbedsAdapterFactory cloudbedsAdapterFactory =
                 new com.bliss.b2b.integration.pms.CloudbedsAdapterFactory(
-                        jdbi, cloudbedsOAuthClient, config.getPms().getCloudbeds(), chargeCapCents, clock);
+                        jdbi, tokenCipher, cloudbedsOAuthClient, config.getPms().getCloudbeds(),
+                        chargeCapCents, clock);
         PropertyOnboardingService onboardingService = new PropertyOnboardingService(
                 merchantDao, mewsConnectionDao, stripeConnectionDao, cloudbedsConnectionDao,
                 mewsAdapterFactory, clock);
@@ -233,7 +233,6 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 config.isProduction() ? "production" : "development");
 
         environment.jersey().register(new HelloResource());
-        environment.jersey().register(new MewsController(mewsSyncService, mewsApiClient));
         // Two separate gates, deliberately not one flag.
         //
         // Demo sign-in (POST /api/v1/auth/dev-login) accepts any email and
@@ -365,8 +364,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new PlanRulesResource(planRulesService, onboardingService));
         environment.jersey().register(new PropertyOnboardingResource(onboardingService));
         environment.jersey().register(new com.bliss.b2b.api.CloudbedsOAuthResource(
-                cloudbedsOAuthClient, cloudbedsAdapterFactory, cloudbedsConnectionDao,
-                onboardingService, config.getApp(), clock));
+                cloudbedsOAuthClient, cloudbedsAdapterFactory, onboardingService, config.getApp(), clock));
         environment.jersey().register(new PlansResource(
                 paymentPlanDao, paymentScheduleDao, bookingDao, cancellationService));
         environment.jersey().register(new DevPlansResource(
@@ -484,7 +482,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         log.info("CORS enabled for origins: {}", origins);
     }
 
-    private void runMigrationsIfEnabled(BlissConfiguration config) {
+    private void runMigrationsIfEnabled(BlissConfiguration config, TokenCipher tokenCipher) {
         BlissConfiguration.DatabaseConfig db = config.getDatabase();
         if (!db.isRunMigrations()) {
             log.info("Database migrations disabled by config; skipping Flyway");
@@ -494,6 +492,9 @@ public class BlissApplication extends Application<BlissConfiguration> {
         Flyway flyway = Flyway.configure()
                 .dataSource(db.getUrl(), db.getUser(), db.getPassword())
                 .locations("classpath:db/migration")
+                // Java migrations that need the application's key. Not on the
+                // scanned location, so Flyway only ever builds them from here.
+                .javaMigrations(new V30__Encrypt_pms_connection_tokens(tokenCipher))
                 .load();
         flyway.migrate();
     }

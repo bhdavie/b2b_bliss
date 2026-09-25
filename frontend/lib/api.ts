@@ -482,7 +482,7 @@ export async function selectPms(pmsType: PmsType): Promise<OnboardingStatus> {
 }
 
 export type MewsConnectPayload = {
-  platformUrl?: string;
+  platformUrl: string;
   clientToken: string;
   accessToken: string;
 };
@@ -664,22 +664,6 @@ export async function completeStripeConnectStandardDemo(): Promise<StripeConnect
     },
   );
   return unwrap<StripeConnectStatus>(res);
-}
-
-export type MewsConnection = {
-  connected: boolean;
-  enterpriseName?: string;
-  city?: string;
-  countryCode?: string;
-};
-
-/** Read-only probe confirming the .env Mews credentials resolve to a live property. */
-export async function fetchMewsConnection(): Promise<MewsConnection> {
-  const res = await fetch(
-    `${API_BASE_URL}/api/v1/mews/marketplace/connection`,
-    { cache: "no-store" },
-  );
-  return unwrap<MewsConnection>(res);
 }
 
 export type BookingStatus =

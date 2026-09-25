@@ -23,14 +23,16 @@ public interface MerchantMewsConnectionDao {
     /**
      * Inserts or replaces a property's connection with a validated enterprise
      * identity. Called only after {@code configuration/get} succeeds, so
-     * {@code validatedAt} is always set here.
+     * {@code validatedAt} is always set here. Tokens arrive already sealed by
+     * {@link com.bliss.b2b.security.TokenCipher}; the table's CHECK rejects
+     * anything else.
      */
     @SqlUpdate("""
             INSERT INTO merchant_mews_connections (
                 merchant_id, platform_url, client_token, access_token,
                 enterprise_id, enterprise_name, currency, validated_at
             ) VALUES (
-                :merchantId, :platformUrl, :clientToken, :accessToken,
+                :merchantId, :platformUrl, :encryptedClientToken, :encryptedAccessToken,
                 :enterpriseId, :enterpriseName, :currency, :validatedAt
             )
             ON CONFLICT (merchant_id) DO UPDATE SET
@@ -54,8 +56,8 @@ public interface MerchantMewsConnectionDao {
     void upsertValidated(
             @Bind("merchantId") UUID merchantId,
             @Bind("platformUrl") String platformUrl,
-            @Bind("clientToken") String clientToken,
-            @Bind("accessToken") String accessToken,
+            @Bind("encryptedClientToken") String encryptedClientToken,
+            @Bind("encryptedAccessToken") String encryptedAccessToken,
             @Bind("enterpriseId") String enterpriseId,
             @Bind("enterpriseName") String enterpriseName,
             @Bind("currency") String currency,

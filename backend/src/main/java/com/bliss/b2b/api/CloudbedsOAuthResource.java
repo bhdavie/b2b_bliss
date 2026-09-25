@@ -8,7 +8,6 @@ import com.bliss.b2b.integration.cloudbeds.CloudbedsTokens;
 import com.bliss.b2b.integration.pms.CloudbedsAdapterFactory;
 import com.bliss.b2b.integration.pms.PmsAdapterException;
 import com.bliss.b2b.integration.pms.PmsPropertyConfiguration;
-import com.bliss.b2b.persistence.MerchantCloudbedsConnectionDao;
 import com.bliss.b2b.service.PropertyOnboardingService;
 import io.dropwizard.auth.Auth;
 import jakarta.ws.rs.GET;
@@ -51,7 +50,6 @@ public class CloudbedsOAuthResource {
 
     private final CloudbedsOAuthClient oauthClient;
     private final CloudbedsAdapterFactory adapterFactory;
-    private final MerchantCloudbedsConnectionDao connectionDao;
     private final PropertyOnboardingService onboardingService;
     private final AppConfig appConfig;
     private final Clock clock;
@@ -59,13 +57,11 @@ public class CloudbedsOAuthResource {
     public CloudbedsOAuthResource(
             CloudbedsOAuthClient oauthClient,
             CloudbedsAdapterFactory adapterFactory,
-            MerchantCloudbedsConnectionDao connectionDao,
             PropertyOnboardingService onboardingService,
             AppConfig appConfig,
             Clock clock) {
         this.oauthClient = oauthClient;
         this.adapterFactory = adapterFactory;
-        this.connectionDao = connectionDao;
         this.onboardingService = onboardingService;
         this.appConfig = appConfig;
         this.clock = clock;
@@ -105,15 +101,7 @@ public class CloudbedsOAuthResource {
             CloudbedsTokens tokens = oauthClient.exchangeCode(code);
             PmsPropertyConfiguration property = adapterFactory.identifyProperty(tokens.accessToken());
             Instant expiresAt = Instant.now(clock).plusSeconds(tokens.expiresInSeconds());
-            connectionDao.upsert(
-                    merchantId,
-                    property.enterpriseId(),
-                    property.name(),
-                    property.defaultCurrency(),
-                    tokens.accessToken(),
-                    tokens.refreshToken(),
-                    expiresAt,
-                    Instant.now(clock));
+            adapterFactory.saveConnection(merchantId, property, tokens, expiresAt, Instant.now(clock));
             onboardingService.markCloudbedsConnected(merchantId);
             log.info("Cloudbeds connected for merchant {} (property {})",
                     merchantId, property.enterpriseId());

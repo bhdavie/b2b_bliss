@@ -16,11 +16,17 @@ import { Panel } from "@/components/ui/primitives";
 // account settings uses, violet pill beside ghost pill, rather than a full-width
 // button over a text link.
 
+const LIVE_PLATFORM_URL = "https://api.mews.com";
 const DEMO_PLATFORM_URL = "https://api.mews-demo.com";
 // Public Mews demo credentials (Gross pricing UK demo property). Safe to ship:
 // docs.mews.com states the demo environment is completely public.
 const DEMO_CLIENT_TOKEN = "E0D439EE522F44368DC78E1BFB03710C-D24FB11DBE31D4621C4817E028D9E1D";
 const DEMO_ACCESS_TOKEN = "C66EF7B239D24632943D115EDE9CB810-EA00F8FD8294692C940F6B5A8F9453D";
+
+// The fill-demo button is for local development and demo builds only. Opt in
+// with NEXT_PUBLIC_MEWS_DEMO_FILL=true; it is inlined at build time, so any
+// other value (including unset) leaves the button out of the page.
+const SHOW_DEMO_FILL = process.env.NEXT_PUBLIC_MEWS_DEMO_FILL === "true";
 
 export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsConnectResult | null }) {
   const [platformUrl, setPlatformUrl] = useState("");
@@ -43,7 +49,7 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
     setSubmitting(true);
     try {
       const res = await connectMews({
-        platformUrl: platformUrl.trim() || undefined,
+        platformUrl: platformUrl.trim(),
         clientToken: clientToken.trim(),
         accessToken: accessToken.trim(),
       });
@@ -93,14 +99,15 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
           <Input
             id="platformUrl"
             type="text"
-            placeholder={DEMO_PLATFORM_URL}
+            placeholder={LIVE_PLATFORM_URL}
             value={platformUrl}
             onChange={(e) => setPlatformUrl(e.target.value)}
             autoComplete="off"
+            required
             className="mt-1.5"
           />
           <p className="mt-2 text-base text-ink-400">
-            Leave blank to use the Mews demo environment.
+            Use {LIVE_PLATFORM_URL} for your live property.
           </p>
         </div>
         <div>
@@ -140,15 +147,19 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
       <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-sand-100 pt-6">
         <Button
           type="submit"
-          disabled={submitting || !clientToken.trim() || !accessToken.trim()}
+          disabled={
+            submitting || !platformUrl.trim() || !clientToken.trim() || !accessToken.trim()
+          }
           variant="merchant"
         >
           {submitting ? "Validating with Mews" : "Validate and connect"}
         </Button>
 
-        <Button type="button" onClick={fillDemo} variant="ghost">
-          Use demo credentials
-        </Button>
+        {SHOW_DEMO_FILL ? (
+          <Button type="button" onClick={fillDemo} variant="ghost">
+            Use demo credentials
+          </Button>
+        ) : null}
       </div>
     </form>
   );

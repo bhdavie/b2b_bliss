@@ -48,6 +48,14 @@ public class BlissConfiguration extends Configuration {
     private String masterPassword = "";
 
     /**
+     * Base64 of 32 random bytes; seals stored PMS credentials. Env-driven via
+     * {@code BLISS_TOKEN_ENCRYPTION_KEY}. Blank falls back to a development key
+     * outside production and refuses to boot in production. See
+     * {@link com.bliss.b2b.security.TokenCipher}.
+     */
+    private String tokenEncryptionKey = "";
+
+    /**
      * Emails for which {@code POST /api/v1/auth/dev-login} stays open even when
      * the demo gate is shut, and the only emails the three {@code /password-login}
      * routes will sign in. Comma-separated; blank (the default) means the gate
@@ -102,6 +110,8 @@ public class BlissConfiguration extends Configuration {
     @JsonProperty public void setEnv(String env) { this.env = env; }
     @JsonProperty public boolean isDemoLogin() { return demoLogin; }
     @JsonProperty public void setDemoLogin(boolean demoLogin) { this.demoLogin = demoLogin; }
+    @JsonProperty public String getTokenEncryptionKey() { return tokenEncryptionKey; }
+    @JsonProperty public void setTokenEncryptionKey(String tokenEncryptionKey) { this.tokenEncryptionKey = tokenEncryptionKey; }
     @JsonProperty public long getChargeCapCents() { return chargeCapCents; }
     @JsonProperty public void setChargeCapCents(long chargeCapCents) { this.chargeCapCents = chargeCapCents; }
     // TEMPORARY DEMO PASSWORD — remove with the field above.
@@ -259,9 +269,7 @@ public class BlissConfiguration extends Configuration {
     }
 
     /**
-     * PMS-native rails. Distinct from the reservation-sync Mews integration
-     * (which loads its own credentials from {@code .env} via
-     * {@link com.bliss.b2b.integration.MewsConfig}); this block feeds the
+     * PMS-native rails. This block feeds the
      * {@link com.bliss.b2b.integration.pms.PmsAdapter} and follows the same
      * Dropwizard config pattern as {@link StripeConfig}. Nested per provider so
      * a second PMS is a new sub-block, not more flat fields.
@@ -323,15 +331,13 @@ public class BlissConfiguration extends Configuration {
         }
 
         public static class MewsPmsConfig {
-            // Public Mews demo credentials for the Gross pricing UK demo
-            // property (the "Are you ready to integrate with Mews?" client).
-            // docs.mews.com states demo environments are completely public and
-            // must never hold real data, so these are safe to commit as
-            // defaults. Override platformUrl/clientToken/accessToken via
-            // config.yml or MEWS_* environment for any real property.
-            private String platformUrl = "https://api.mews-demo.com";
-            private String clientToken = "E0D439EE522F44368DC78E1BFB03710C-D24FB11DBE31D4621C4817E028D9E1D";
-            private String accessToken = "C66EF7B239D24632943D115EDE9CB810-EA00F8FD8294692C940F6B5A8F9453D";
+            // No defaults. Each property brings its own url and tokens (see
+            // MewsAdapterFactory); a blank value here fails the adapter's
+            // isConfigured check rather than quietly pointing at the shared
+            // Mews demo enterprise.
+            private String platformUrl = "";
+            private String clientToken = "";
+            private String accessToken = "";
 
             @JsonProperty public String getPlatformUrl() { return platformUrl; }
             @JsonProperty public void setPlatformUrl(String platformUrl) { this.platformUrl = platformUrl; }

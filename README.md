@@ -108,9 +108,11 @@ Backend reads from env vars with sensible local defaults (see [backend/src/main/
 | `BLISS_DB_PASSWORD` | `bliss_dev` | ignored when `DATABASE_URL` is set |
 | `PORT` | `8080` | application connector. Heroku injects this |
 | `BLISS_ADMIN_PORT` | `8081` | admin connector |
-| `BLISS_DEMO_LOGIN` | `false` | keeps the password-less demo sign-in (`POST /auth/dev-login`) available under `BLISS_ENV=production`, and with it the Marbrook funnel and Mews authorize simulation. Auth only — it does not reopen the dev plan endpoints. Set `false` once Postmark is configured to make magic link the only way in |
+| `BLISS_DEMO_LOGIN` | `false` | under `BLISS_ENV=production` it no longer opens dev-login (`BLISS_DEMO_LOGIN_EMAILS` alone decides that). What it still does there: flags every new signup `is_demo=true` and opens the unauthenticated `POST /api/v1/dev/reset-demo-accounts`, which deletes every `is_demo` account. Keep it `false` anywhere a real property signs up |
+| `BLISS_DEMO_LOGIN_EMAILS` | empty | comma-separated. In production, the only addresses dev-login accepts and the only addresses `MASTER_PASSWORD` can sign in |
 | `BLISS_JWT_SECRET` | dev placeholder | must be ≥ 32 bytes. **Boot fails when `BLISS_ENV=production` and this is still the dev default** |
 | `BLISS_JWT_TTL_MINUTES` | `60` | |
+| `BLISS_TOKEN_ENCRYPTION_KEY` | empty | base64 of 32 random bytes (`openssl rand -base64 32`). Seals stored Mews and Cloudbeds tokens. **Boot fails when `BLISS_ENV=production` and this is empty**; elsewhere a public development key is used. Losing it means every PMS property reconnects |
 | `BLISS_SENTRY_DSN` | empty | Sentry disabled when empty |
 | `BLISS_RUN_MIGRATIONS` | `true` | set `false` in tests |
 | `BLISS_CORS_ORIGINS` | `http://localhost:3000` | comma-separated origins permitted to call the API |
@@ -131,6 +133,7 @@ Frontend reads from `NEXT_PUBLIC_*` (see [frontend/.env.example](./frontend/.env
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080` | |
 | `NEXT_PUBLIC_SENTRY_DSN` | empty | Sentry disabled when empty |
 | `NEXT_PUBLIC_ENV` | `development` | |
+| `NEXT_PUBLIC_MEWS_DEMO_FILL` | unset | `true` shows the "Use demo credentials" button on the Mews connect step. Build-time; leave unset in production |
 
 ## Merchant sign-in
 

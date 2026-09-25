@@ -3,11 +3,16 @@ package com.bliss.b2b.integration.pms;
 import com.bliss.b2b.BlissConfiguration.PmsConfig.MewsPmsConfig;
 import com.bliss.b2b.domain.MewsConnection;
 import com.bliss.b2b.persistence.MerchantMewsConnectionDao;
+import com.bliss.b2b.security.TokenCipher;
+import com.bliss.b2b.security.TokenCipher.Field;
 import com.bliss.b2b.service.InstallmentChargeService.ChargeContext;
 import com.bliss.b2b.service.InstallmentChargeService.ChargeContextResolver;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.jdbi.v3.core.Jdbi;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Builds {@link MewsAdapter}s bound to a specific property's Connector
@@ -25,39 +30,43 @@ import org.jdbi.v3.core.Jdbi;
  *
  * <p>The global demo {@link MewsPmsConfig} is no longer used for charging; each
  * property brings its own tokens.
+ *
+ * <p>This is the one place a stored Mews token is sealed or opened
+ * ({@link #saveValidatedConnection} and {@link #adapterForConnection}), so
+ * plaintext tokens exist only inside an adapter that is about to call Mews.
  */
 public class MewsAdapterFactory implements ChargeContextResolver {
 
-    /**
-     * Fallback currency when a connection has no stored currency yet.
-     *
-     * <p>USD, not the shared Mews demo enterprise's GBP. Every amount in this
-     * system is a Bliss-side dollar figure — plan totals come from the checkout
-     * request or MewsSyncService.PLACEHOLDER_TOTAL_CENTS, never from a Mews
-     * reservation — and the frontend formats them as USD unconditionally
-     * (frontend/lib/publicApi.ts, frontend/lib/eligibility.ts). Nothing converts
-     * between currencies anywhere: chargeStoredCard sends Currency and
-     * GrossValue as independent fields, so this string only labels an amount
-     * that is already fixed. GBP here mislabelled dollar figures as pounds.
-     */
-    private static final String DEFAULT_CURRENCY = "USD";
+    private static final Logger log = LoggerFactory.getLogger(MewsAdapterFactory.class);
 
     private final MerchantMewsConnectionDao connectionDao;
+    private final TokenCipher cipher;
     /** Demo charge cap in cents, threaded into every adapter this factory builds. */
     private final long chargeCapCents;
 
-    public MewsAdapterFactory(Jdbi jdbi) {
-        this(jdbi, 0);
+    public MewsAdapterFactory(Jdbi jdbi, TokenCipher cipher, long chargeCapCents) {
+        this(jdbi.onDemand(MerchantMewsConnectionDao.class), cipher, chargeCapCents);
     }
 
-    public MewsAdapterFactory(Jdbi jdbi, long chargeCapCents) {
-        this.connectionDao = jdbi.onDemand(MerchantMewsConnectionDao.class);
+    MewsAdapterFactory(MerchantMewsConnectionDao connectionDao, TokenCipher cipher, long chargeCapCents) {
+        this.connectionDao = connectionDao;
+        this.cipher = cipher;
         this.chargeCapCents = chargeCapCents;
     }
 
-    MewsAdapterFactory(MerchantMewsConnectionDao connectionDao) {
-        this.connectionDao = connectionDao;
-        this.chargeCapCents = 0;
+    /**
+     * Seals the tokens and stores a property's validated connection. Callers
+     * pass plaintext; only ciphertext reaches the database.
+     */
+    public void saveValidatedConnection(
+            UUID merchantId, String platformUrl, String clientToken, String accessToken,
+            PmsPropertyConfiguration enterprise, Instant validatedAt) {
+        connectionDao.upsertValidated(
+                merchantId, platformUrl,
+                cipher.encrypt(Field.MEWS_CLIENT_TOKEN, merchantId, clientToken),
+                cipher.encrypt(Field.MEWS_ACCESS_TOKEN, merchantId, accessToken),
+                enterprise.enterpriseId(), enterprise.name(), enterprise.defaultCurrency(),
+                validatedAt);
     }
 
     /**
@@ -69,21 +78,36 @@ public class MewsAdapterFactory implements ChargeContextResolver {
         return new MewsAdapter(configOf(platformUrl, clientToken, accessToken), chargeCapCents);
     }
 
-    /** A Mews adapter bound to a stored connection's credentials. */
+    /** A Mews adapter bound to a stored connection's credentials, opened here. */
     public MewsAdapter adapterForConnection(MewsConnection connection) {
+        UUID merchantId = connection.merchantId();
         return new MewsAdapter(configOf(
-                connection.platformUrl(), connection.clientToken(), connection.accessToken()),
+                connection.platformUrl(),
+                cipher.decrypt(Field.MEWS_CLIENT_TOKEN, merchantId, connection.encryptedClientToken()),
+                cipher.decrypt(Field.MEWS_ACCESS_TOKEN, merchantId, connection.encryptedAccessToken())),
                 chargeCapCents);
     }
 
+    /**
+     * Empty when the property has no validated connection, or when that
+     * connection has no currency. There is deliberately no fallback currency:
+     * chargeStoredCard sends Currency and GrossValue as independent fields, so
+     * a guessed currency would label a real charge wrongly rather than fail.
+     * The charge pass leaves the installment scheduled, so it charges on the
+     * first pass after the currency is set.
+     */
     @Override
     public Optional<ChargeContext> resolve(UUID merchantId) {
         return connectionDao.findByMerchant(merchantId)
                 .filter(MewsConnection::isValidated)
-                .map(conn -> new ChargeContext(
-                        adapterForConnection(conn),
-                        conn.currency() == null || conn.currency().isBlank()
-                                ? DEFAULT_CURRENCY : conn.currency()));
+                .filter(conn -> {
+                    boolean hasCurrency = conn.currency() != null && !conn.currency().isBlank();
+                    if (!hasCurrency) {
+                        log.warn("Mews connection for merchant {} has no currency; not charging", merchantId);
+                    }
+                    return hasCurrency;
+                })
+                .map(conn -> new ChargeContext(adapterForConnection(conn), conn.currency()));
     }
 
     /**

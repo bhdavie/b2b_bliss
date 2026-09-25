@@ -7,6 +7,8 @@ import java.util.UUID;
  * A property's Cloudbeds OAuth connection: the identified {@code propertyId} plus
  * the access/refresh tokens. {@code accessTokenExpiresAt} drives the transparent
  * refresh in {@link com.bliss.b2b.integration.pms.CloudbedsAdapterFactory}.
+ * The tokens are held as stored, sealed by
+ * {@link com.bliss.b2b.security.TokenCipher}; only that factory opens them.
  *
  * <p>Distinct from the Mews connection (long-lived Connector tokens) and the
  * Stripe connection (connected account); this is the OAuth rail and lives in its
@@ -17,8 +19,8 @@ public record CloudbedsConnection(
         String propertyId,
         String propertyName,
         String currency,
-        String accessToken,
-        String refreshToken,
+        String encryptedAccessToken,
+        String encryptedRefreshToken,
         Instant accessTokenExpiresAt,
         String status,
         Instant connectedAt,

@@ -3,10 +3,8 @@
 // deterministic so re-running the install reuses the same demo merchant
 // (dev-login is find-or-create) rather than piling up rows.
 //
-// Note: this is the *displayed* brand. The flow also makes a live Mews
-// configuration/get call (see fetchMewsConnection) to prove the .env
-// credentials resolve to a real property, but the real enterprise name in the
-// demo dataset is a test string, so it isn't shown as the brand.
+// Note: this is the *displayed* brand only; the install flow makes no Mews
+// call of its own.
 
 export const DEMO_HOTEL = {
   // The PUBLIC demo account, deliberately NOT a Marbrook address. dev-login is

@@ -4,14 +4,13 @@ import { BlissWordmark } from "@/components/BlissWordmark";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { devLogin, fetchMewsConnection, updateMerchant } from "@/lib/api";
+import { useState } from "react";
+import { devLogin, updateMerchant } from "@/lib/api";
 import { DEMO_HOTEL } from "@/lib/mewsDemo";
 
 // Simulated Mews OAuth consent screen. "Authorize" provisions (find-or-create)
 // the Bliss demo merchant for this property and hands off into Bliss
-// onboarding. No real OAuth — the .env Mews credentials are already trusted;
-// this screen makes the handoff look real and verifies the live connection.
+// onboarding. No real OAuth: this screen only makes the handoff look real.
 
 const SCOPES = [
   {
@@ -34,21 +33,6 @@ export default function AuthorizePage() {
     "consent",
   );
   const [error, setError] = useState<string | null>(null);
-  const [enterprise, setEnterprise] = useState<string | null>(null);
-
-  // Background live probe — proves the .env credentials resolve to a real Mews
-  // property. Non-blocking; the consent screen renders regardless.
-  useEffect(() => {
-    fetchMewsConnection()
-      .then((c) => {
-        if (c.connected) {
-          setEnterprise(c.enterpriseName ?? "Mews property");
-        }
-      })
-      .catch(() => {
-        /* connection chip just won't show */
-      });
-  }, []);
 
   async function handleAuthorize() {
     setError(null);
@@ -115,13 +99,6 @@ export default function AuthorizePage() {
             </span>{" "}
             on Mews.
           </p>
-
-          {enterprise ? (
-            <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              Live Mews connection verified
-            </div>
-          ) : null}
 
           {/* Scopes */}
           <div className="mt-6 space-y-3">

@@ -50,6 +50,13 @@ chargeCapCents: ${BLISS_CHARGE_CAP_CENTS:-0}
 # empty allowlist, and all three routes 404.
 masterPassword: ${MASTER_PASSWORD:-}
 
+# Seals stored PMS credentials (Mews Connector tokens, Cloudbeds OAuth tokens).
+# Base64 of 32 random bytes: `openssl rand -base64 32`. Blank uses a public
+# development key outside production and refuses to boot in production. Keep a
+# copy somewhere safe: losing it means every Mews and Cloudbeds property has to
+# reconnect.
+tokenEncryptionKey: ${BLISS_TOKEN_ENCRYPTION_KEY:-}
+
 # Emails that keep POST /api/v1/auth/dev-login open even when demoLogin is off,
 # and the only emails the password-login routes accept.
 # Comma-separated; blank (the default) means demoLogin alone decides. This is
