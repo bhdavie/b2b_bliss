@@ -338,6 +338,7 @@ export function PlanPortal({
                 appointmentDate={portal.booking.appointmentDate}
                 paidCents={portal.paidCents}
                 processingFeeCents={portal.processingFeeCents}
+                rail={portal.rail}
               />
             </div>
           </Panel>

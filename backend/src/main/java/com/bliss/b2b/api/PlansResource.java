@@ -121,14 +121,20 @@ public class PlansResource {
         if (id == null) return notFound();
         PaymentPlan plan = planDao.findByIdForMerchant(id, principal.merchant().id()).orElse(null);
         if (plan == null) return notFound();
-        CancellationService.CancellationOutcome outcome =
-                cancellationService.cancel(plan, Instant.now(), "merchant_initiated");
+        CancellationService.CancellationOutcome outcome;
+        try {
+            outcome = cancellationService.cancel(plan, Instant.now(), "merchant_initiated");
+        } catch (com.bliss.b2b.service.MewsStayCanceller.StayCancellationException e) {
+            return Response.status(502).entity(Map.of(
+                    "error", "pms_unavailable", "message", e.getMessage())).build();
+        }
         return Response.ok(Map.of(
                 "status", "ok",
                 "newPlanStatus", "canceled",
                 "refundCents", outcome.assessment().refundCents(),
                 "feeCents", outcome.assessment().feeCents(),
-                "netRefundCents", outcome.assessment().netRefundCents()
+                "netRefundCents", outcome.assessment().netRefundCents(),
+                "creditCents", outcome.assessment().creditCents()
         )).build();
     }
 

@@ -630,7 +630,7 @@ export async function payRemainingBalance(
  */
 export async function cancelPlan(
   token: string,
-): Promise<{ ok: true } | { ok: false; error: PortalActionError; status: number }> {
+): Promise<{ ok: true; creditCents: number } | { ok: false; error: PortalActionError; status: number }> {
   const res = await fetch(
     `${API_BASE_URL}/api/v1/public/plans/${encodeURIComponent(token)}/cancel`,
     { method: "POST", headers: { "Content-Type": "application/json" } },
@@ -646,7 +646,8 @@ export async function cancelPlan(
       },
     };
   }
-  return { ok: true };
+  // Mews stays are credited toward a future stay rather than refunded.
+  return { ok: true, creditCents: Number((body as { creditCents?: number }).creditCents ?? 0) };
 }
 
 export async function createPortalSetupIntent(

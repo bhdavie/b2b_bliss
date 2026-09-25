@@ -111,11 +111,17 @@ public class PublicPlansPortalResource {
         if (token == null || token.isBlank()) return notFound();
         try {
             // State transition only. The refund/fee assessment is computed and
-            // logged inside CancellationService but not posted to Stripe.
-            portalService.cancelPlan(token);
-            return Response.ok(Map.of("status", "ok")).build();
+            // logged inside CancellationService but not posted to Stripe. A Mews
+            // stay is cancelled in Mews and credited; creditCents says how much.
+            var outcome = portalService.cancelPlan(token);
+            return Response.ok(Map.of(
+                    "status", "ok",
+                    "creditCents", outcome.assessment().creditCents())).build();
         } catch (PortalException e) {
             return mapError(e);
+        } catch (com.bliss.b2b.service.MewsStayCanceller.StayCancellationException e) {
+            return Response.status(502).entity(Map.of(
+                    "error", "pms_unavailable", "message", e.getMessage())).build();
         } catch (RuntimeException e) {
             log.error("Unexpected error in cancel for token={}", token, e);
             return Response.status(500).entity(Map.of("error", "internal_error")).build();

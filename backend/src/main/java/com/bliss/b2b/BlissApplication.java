@@ -202,8 +202,13 @@ public class BlissApplication extends Application<BlissConfiguration> {
         PlanCreationService planCreationService = new PlanCreationService(
                 jdbi, eligibilityService, stripePaymentsService, stripeConnectResolver,
                 emailService, planNotificationService, mewsStayService, clock, config.getApp());
+        // Mews stays: cancelled in Mews first, then credited rather than refunded.
         CancellationService cancellationService = new CancellationService(
-                paymentPlanDao, paymentScheduleDao, bookingDao, planRulesService);
+                paymentPlanDao, paymentScheduleDao, bookingDao, planRulesService,
+                new com.bliss.b2b.service.MewsStayCanceller(mewsAdapterFactory),
+                jdbi.onDemand(com.bliss.b2b.persistence.GuestCreditDao.class),
+                jdbi.onDemand(com.bliss.b2b.persistence.MerchantMewsConnectionDao.class),
+                merchantDao, customerDao, emailService);
         PlanPortalService planPortalService = new PlanPortalService(
                 jdbi, stripePaymentsService, stripeConnectResolver, cancellationService, clock);
         // Property onboarding + per-property Mews connection. The factory both

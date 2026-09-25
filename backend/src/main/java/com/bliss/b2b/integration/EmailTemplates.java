@@ -152,6 +152,43 @@ public final class EmailTemplates {
                 "New booking accepted: " + booking.serviceName(), body);
     }
 
+    /**
+     * To the hotel when a guest cancels a Mews stay booked through Bliss. The
+     * guest gets no cash refund; the amount is credit toward a future stay,
+     * which the hotel applies by hand because Mews has nowhere to hold it.
+     */
+    public static EmailMessage merchantGuestCreditIssued(
+            Merchant merchant,
+            Booking booking,
+            String guestEmail,
+            long creditCents,
+            String currency
+    ) {
+        String body = """
+                A guest cancelled their stay, and Bliss cancelled the reservation in Mews.
+
+                Stay: %s
+                Check-in: %s
+                Mews reservation: %s
+                Guest: %s
+
+                Future-stay credit: %s %s
+
+                The guest was not refunded in cash. Please apply this credit when they
+                book with you again. The payments they made remain on the cancelled
+                reservation's bill in Mews.
+                """.formatted(
+                booking.serviceName(),
+                LONG_DATE.format(booking.appointmentDate()),
+                booking.mewsReservationId(),
+                guestEmail == null ? "unknown" : guestEmail,
+                formatDollars(creditCents),
+                currency
+        );
+        return new EmailMessage(merchant.email(),
+                "Guest credit issued: " + booking.serviceName(), body);
+    }
+
     // ---- Guest transactional emails ---------------------------------------
     //
     // Table-based, inline-styled HTML with a plain-text alternative on every

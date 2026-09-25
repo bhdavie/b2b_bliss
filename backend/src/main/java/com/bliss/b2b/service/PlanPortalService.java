@@ -73,14 +73,14 @@ public class PlanPortalService {
      * logged there but not executed. Throws {@link PortalException} when the
      * plan is absent or already in a terminal state.
      */
-    public void cancelPlan(String bookingToken) {
+    public CancellationService.CancellationOutcome cancelPlan(String bookingToken) {
         PaymentPlan plan = jdbi.withHandle(handle ->
                 resolveOrThrow(handle, bookingToken).plan());
         if (plan.status() != PaymentPlanStatus.ACTIVE) {
             throw new PortalException(
                     PortalErrorCode.PLAN_NOT_ACTIVE, "plan is not active");
         }
-        cancellationService.cancel(plan, Instant.now(clock), "customer_initiated");
+        return cancellationService.cancel(plan, Instant.now(clock), "customer_initiated");
     }
 
     public Optional<PortalSnapshot> getPortal(String bookingToken) {

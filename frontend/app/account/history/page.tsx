@@ -1,6 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { fetchAccountPlans } from "@/lib/publicApi";
+import { fetchAccountPlans, formatDollars } from "@/lib/publicApi";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { Panel } from "@/components/ui/primitives";
 import { PlansList } from "@/components/account/PlansList";
@@ -8,7 +8,7 @@ import { PlansList } from "@/components/account/PlansList";
 export default async function AccountHistoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ canceled?: string }>;
+  searchParams: Promise<{ canceled?: string; credit?: string }>;
 }) {
   const cookieStore = await cookies();
   if (!cookieStore.get("bliss_customer_session")?.value) {
@@ -20,7 +20,11 @@ export default async function AccountHistoryPage({
     redirect("/account/login");
   }
 
-  const canceledToken = (await searchParams).canceled ?? null;
+  const params = await searchParams;
+  const canceledToken = params.canceled ?? null;
+  // Set when a Mews stay was cancelled: the credit toward a future stay.
+  const creditCents = Number.parseInt(params.credit ?? "", 10);
+  const hasCredit = Number.isFinite(creditCents) && creditCents > 0;
 
   // Pin the just-cancelled plan to the top; everything else is most recent
   // stay first. Descending rather than /account's ascending: these stays have
@@ -47,6 +51,12 @@ export default async function AccountHistoryPage({
               Your plan has been cancelled and the remaining payments are
               stopped.
             </p>
+            {hasCredit ? (
+              <p className="text-[14px] text-ink-500">
+                {formatDollars(creditCents)} is now credit toward a future stay with the
+                property. They&apos;ll apply it when you book with them again.
+              </p>
+            ) : null}
           </Panel>
         ) : null}
 

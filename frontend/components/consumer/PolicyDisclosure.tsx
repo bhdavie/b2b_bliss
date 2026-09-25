@@ -9,8 +9,15 @@ import {
  * configured refund, cancellation-fee, payment-deadline, and late-fee
  * rules. Not buried fine print — three short lines a customer can scan.
  */
-export function PolicyDisclosure({ policies }: { policies: PublicPolicies }) {
-  const refundLine = refundCopy(policies);
+export function PolicyDisclosure({
+  policies,
+  creditInsteadOfRefund = false,
+}: {
+  policies: PublicPolicies;
+  /** Mews stays: a cancellation is credited toward a future stay, never refunded in cash. */
+  creditInsteadOfRefund?: boolean;
+}) {
+  const refundLine = creditInsteadOfRefund ? creditCopy(policies) : refundCopy(policies);
   const cancelFeeLine = cancellationFeeCopy(policies);
   const dueLine = dueDateCopy(policies);
   const failureLine = failedPaymentCopy(policies);
@@ -66,6 +73,26 @@ export function refundCopy(policies: PublicPolicies): string {
     }
     case "credit_only":
       return "No cash refunds. Paid amount becomes credit toward a future booking.";
+  }
+}
+
+/**
+ * The refund policy as it applies to a Mews stay, where whatever the policy
+ * would return is credited toward a future stay at the property instead.
+ */
+export function creditCopy(policies: PublicPolicies): string {
+  switch (policies.refundPolicy) {
+    case "full":
+    case "credit_only":
+      return "Cancel before check-in and everything you've paid becomes credit toward a future stay here.";
+    case "none":
+      return "Payments already made stay with the property if you cancel.";
+    case "first_installment_only":
+      return "Cancel and your first installment becomes credit toward a future stay here. Later payments stay with the property.";
+    case "sliding_scale": {
+      const t = policies.refundSlidingThresholdPercent ?? 50;
+      return `Cancel before ${t}% through your plan and what you've paid becomes credit toward a future stay here.`;
+    }
   }
 }
 

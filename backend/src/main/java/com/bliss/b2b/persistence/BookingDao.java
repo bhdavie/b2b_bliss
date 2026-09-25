@@ -140,4 +140,8 @@ public interface BookingDao {
             WHERE id = :id AND mews_reservation_id = :reservationId
             """)
     int clearMewsReservationId(@Bind("id") UUID id, @Bind("reservationId") String reservationId);
+
+    /** Marks a booking canceled once its stay has been cancelled. */
+    @SqlUpdate("UPDATE bookings SET status = 'canceled' WHERE id = :id")
+    int markCanceled(@Bind("id") UUID id);
 }

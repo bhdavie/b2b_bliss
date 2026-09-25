@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { cancelPlan, formatDollars } from "@/lib/publicApi";
+import { cancelPlan, formatDollars, type PublicRail } from "@/lib/publicApi";
 import { Button } from "@/components/ui/Button";
 
 // Policy-gated cancel. Refundability is derived from the rate name in the
@@ -31,12 +31,14 @@ export function CancelPlanSection({
   appointmentDate,
   paidCents,
   processingFeeCents,
+  rail,
 }: {
   token: string;
   serviceName: string;
   appointmentDate: string;
   paidCents: number;
   processingFeeCents: number;
+  rail?: PublicRail;
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -45,6 +47,63 @@ export function CancelPlanSection({
 
   const refundability = deriveRefundability(serviceName);
   const inWindow = moreThan48hAway(appointmentDate);
+  // A Mews stay is cancelled in the hotel's system and credited toward a
+  // future stay there, never refunded in cash. The amount follows the hotel's
+  // cancellation policy and is settled by the server, so it is shown after.
+  const isMewsStay = rail === "mews";
+
+  async function confirmMewsCancel() {
+    setBusy(true);
+    setError(null);
+    let res;
+    try {
+      res = await cancelPlan(token);
+    } catch {
+      setBusy(false);
+      setError("Something went wrong. Please check your connection and try again.");
+      return;
+    }
+    if (res.ok) {
+      const credit = res.creditCents > 0 ? `&credit=${res.creditCents}` : "";
+      router.push(`/account/history?canceled=${encodeURIComponent(token)}${credit}`);
+      return;
+    }
+    if (res.status === 404 || res.status === 409) {
+      router.push(`/account/history?canceled=${encodeURIComponent(token)}`);
+      return;
+    }
+    setBusy(false);
+    // 502: the hotel's system couldn't be reached. Nothing changed, and the
+    // server's message says so.
+    setError(res.status === 502 ? res.error.message : "We could not cancel your stay. Please try again.");
+  }
+
+  if (isMewsStay) {
+    return (
+      <div className="space-y-3">
+        <p className="text-[13px] text-ink-500">
+          Cancelling your stay stops every remaining payment. What you&apos;ve paid becomes credit
+          toward a future stay at this property, following its cancellation policy. You&apos;ll see
+          the amount once your stay is cancelled.
+        </p>
+        {error ? <p className="text-[13px] text-red-600">{error}</p> : null}
+        {confirming ? (
+          <div className="flex gap-2">
+            <Button type="button" onClick={confirmMewsCancel} disabled={busy} variant="primary">
+              {busy ? "Cancelling" : "Confirm cancellation"}
+            </Button>
+            <Button type="button" onClick={() => setConfirming(false)} disabled={busy} variant="ghost">
+              Keep my stay
+            </Button>
+          </div>
+        ) : (
+          <Button type="button" onClick={() => setConfirming(true)} variant="ghost">
+            Cancel stay
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   // Non-refundable rate: cancel is not offered.
   if (refundability === "nonrefundable") {

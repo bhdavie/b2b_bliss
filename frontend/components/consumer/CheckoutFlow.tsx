@@ -183,7 +183,10 @@ export function CheckoutFlow({
           perPaymentCents={distribution.perPaymentCents}
           finalPaymentCents={distribution.finalPaymentCents}
         />
-        <PolicyDisclosure policies={merchant.policies} />
+        <PolicyDisclosure
+          policies={merchant.policies}
+          creditInsteadOfRefund={merchant.rail === "mews"}
+        />
       </div>
 
       {step === "plan" ? (
