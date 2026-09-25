@@ -44,6 +44,8 @@ export type CheckoutCart = {
   name: string | null;
   email: string | null;
   phone: string | null;
+  /** Mews rail: the room and adults the total was quoted for. */
+  mewsStay?: { categoryId: string; adults: number } | null;
 };
 
 type Step = "plan" | "card" | "confirmed";
@@ -53,9 +55,12 @@ export function CheckoutFlow({
   cart,
   returnUrl,
   feeRate,
+  staySlot,
 }: {
   merchant: PublicMerchant;
   cart: CheckoutCart;
+  /** Rendered under the property header, before the summary. The Mews rail puts its room and adults picker here. */
+  staySlot?: React.ReactNode;
   // Resolved server-side from the route's slug and threaded through, so every
   // figure on this page and its confirmation quotes the one rate.
   feeRate: number;
@@ -111,6 +116,7 @@ export function CheckoutFlow({
     return (
       <>
         <MerchantBlock merchant={merchant.merchant} />
+        {staySlot}
         <CheckoutSummaryCard
           cart={cart}
           originalTotalCents={preview.originalTotalAmountCents}
@@ -144,6 +150,7 @@ export function CheckoutFlow({
   return (
     <>
       <MerchantBlock merchant={merchant.merchant} />
+      {staySlot}
       <CheckoutSummaryCard
         cart={cart}
         originalTotalCents={preview.originalTotalAmountCents}
@@ -221,6 +228,8 @@ export function CheckoutFlow({
                 customerPhone: cart.phone,
                 paymentMethodId: "mews_placeholder",
                 frequency: publicOption.frequency,
+                mewsResourceCategoryId: cart.mewsStay?.categoryId ?? null,
+                adultCount: cart.mewsStay?.adults ?? null,
               });
               if (!result.ok) return { ok: false, message: result.error.message };
               setConfirmed(result.data);

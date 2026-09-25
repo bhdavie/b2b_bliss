@@ -106,4 +106,18 @@ public interface BookingDao {
             @Bind("discountedTotalCents") long discountedTotalCents,
             @Bind("originalTotalCents") long originalTotalCents
     );
+
+    /** Records the Mews room, rate and adults a customer-initiated booking was priced for. */
+    @SqlUpdate("""
+            UPDATE bookings
+            SET mews_resource_category_id = :categoryId,
+                mews_rate_id = :rateId,
+                adult_count = :adults
+            WHERE id = :id
+            """)
+    int setMewsStay(
+            @Bind("id") UUID id,
+            @Bind("categoryId") String categoryId,
+            @Bind("rateId") String rateId,
+            @Bind("adults") int adults);
 }

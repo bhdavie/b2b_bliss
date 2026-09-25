@@ -16,7 +16,11 @@ public class PlanCreationException extends RuntimeException {
         CARD_DECLINED,
         CARD_REQUIRES_ACTION,
         STRIPE_ERROR,
-        INVALID_INPUT
+        INVALID_INPUT,
+        /** The Mews room is no longer free for those dates. */
+        STAY_UNAVAILABLE,
+        /** The property's Mews could not be reached to price or book the stay. */
+        PMS_UNAVAILABLE
     }
 
     private final Reason reason;

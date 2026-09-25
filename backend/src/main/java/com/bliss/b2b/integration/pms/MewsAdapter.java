@@ -1,6 +1,7 @@
 package com.bliss.b2b.integration.pms;
 
 import com.bliss.b2b.BlissConfiguration.PmsConfig.MewsPmsConfig;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -58,6 +59,8 @@ public class MewsAdapter implements PmsAdapter {
     private static final String RATES_GET_ALL = "/api/connector/v1/rates/getAll";
     private static final String RESOURCE_CATEGORIES_GET_ALL = "/api/connector/v1/resourceCategories/getAll";
     private static final String AGE_CATEGORIES_GET_ALL = "/api/connector/v1/ageCategories/getAll";
+    private static final String SERVICES_GET_AVAILABILITY = "/api/connector/v1/services/getAvailability/2024-01-22";
+    private static final String RESERVATIONS_PRICE = "/api/connector/v1/reservations/price";
 
     /** Pages followed per catalogue list call; a small property never gets near it. */
     private static final int MAX_PAGES = 10;
@@ -85,7 +88,9 @@ public class MewsAdapter implements PmsAdapter {
     public MewsAdapter(MewsPmsConfig config, long chargeCapCents) {
         this(config,
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(),
-                new ObjectMapper(),
+                // Decimals as BigDecimal, never double: prices from
+                // reservations/price go straight into plan totals.
+                new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS),
                 chargeCapCents);
     }
 
@@ -383,6 +388,67 @@ public class MewsAdapter implements PmsAdapter {
         return Optional.empty();
     }
 
+    // --- Availability and pricing -------------------------------------------
+
+    /**
+     * Free rooms per category for each night from {@code firstNightUtc} to
+     * {@code lastNightUtc} inclusive, as usable rooms minus occupied ones.
+     * Both instants must be local midnight of a night, in UTC, which is the
+     * time-unit boundary Mews requires. "Usable" already leaves out rooms that
+     * are out of order.
+     */
+    public Map<String, int[]> getFreeRoomsPerNight(String serviceId, Instant firstNightUtc, Instant lastNightUtc) {
+        Map<String, Object> body = auth();
+        body.put("ServiceId", serviceId);
+        body.put("FirstTimeUnitStartUtc", firstNightUtc.toString());
+        body.put("LastTimeUnitStartUtc", lastNightUtc.toString());
+        body.put("Metrics", List.of("UsableResources", "Occupied"));
+        JsonNode root = post(SERVICES_GET_AVAILABILITY, body);
+        Map<String, int[]> out = new LinkedHashMap<>();
+        for (JsonNode c : root.path("ResourceCategoryAvailabilities")) {
+            JsonNode usable = c.path("Metrics").path("UsableResources");
+            JsonNode occupied = c.path("Metrics").path("Occupied");
+            int[] free = new int[usable.size()];
+            for (int i = 0; i < free.length; i++) {
+                free[i] = usable.path(i).asInt(0) - occupied.path(i).asInt(0);
+            }
+            out.put(textOrNull(c, "ResourceCategoryId"), free);
+        }
+        return out;
+    }
+
+    /**
+     * The tax-inclusive total Mews would charge for one stay, from
+     * reservations/price. This, not anything the browser sends, is what a
+     * Bliss plan is written against.
+     */
+    public StayPrice priceStay(String serviceId, String categoryId, String rateId,
+            String adultAgeCategoryId, int adults, Instant startUtc, Instant endUtc) {
+        Map<String, Object> reservation = new LinkedHashMap<>();
+        reservation.put("Identifier", "quote");
+        reservation.put("StartUtc", startUtc.toString());
+        reservation.put("EndUtc", endUtc.toString());
+        reservation.put("RequestedCategoryId", categoryId);
+        reservation.put("RateId", rateId);
+        reservation.put("PersonCounts", List.of(Map.of("AgeCategoryId", adultAgeCategoryId, "Count", adults)));
+        Map<String, Object> body = auth();
+        body.put("ServiceId", serviceId);
+        body.put("Reservations", List.of(reservation));
+
+        JsonNode prices = post(RESERVATIONS_PRICE, body).path("ReservationPrices");
+        JsonNode total = prices.path(0).path("TotalAmount");
+        String currency = textOrNull(total, "Currency");
+        JsonNode gross = total.path("GrossValue");
+        if (currency == null || !gross.isNumber()) {
+            throw new PmsAdapterException("Mews returned no price for the stay");
+        }
+        return new StayPrice(toMinorUnits(gross.decimalValue()), currency);
+    }
+
+    /** A stay total in integer minor units, with its currency. */
+    public record StayPrice(long totalMinorUnits, String currency) {
+    }
+
     /**
      * Follows Mews' cursor paging for a getAll call and returns every item in
      * {@code arrayField}. Stops at {@link #MAX_PAGES} rather than looping on a
@@ -559,6 +625,20 @@ public class MewsAdapter implements PmsAdapter {
         return BigDecimal.valueOf(amountMinorUnits)
                 .movePointLeft(MINOR_UNIT_SCALE)
                 .setScale(MINOR_UNIT_SCALE, RoundingMode.UNNECESSARY);
+    }
+
+    /**
+     * Inverse of {@link #toGrossValue}. Exact: a price with more than two
+     * decimals is an error, never silently rounded.
+     */
+    static long toMinorUnits(BigDecimal majorUnits) {
+        try {
+            return majorUnits.setScale(MINOR_UNIT_SCALE, RoundingMode.UNNECESSARY)
+                    .movePointRight(MINOR_UNIT_SCALE)
+                    .longValueExact();
+        } catch (ArithmeticException e) {
+            throw new PmsAdapterException("Mews price " + majorUnits + " is not a whole number of cents");
+        }
     }
 
     /** Parses a Mews "YYYY-MM" expiration into {year, month}, or null. */

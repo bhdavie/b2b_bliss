@@ -22,5 +22,10 @@ public record Booking(
         String customerEmailHint,
         String customerPhoneHint,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        // Mews stay (V31). Null for bookings that are not Mews reservations.
+        String mewsReservationId,
+        String mewsResourceCategoryId,
+        String mewsRateId,
+        Integer adultCount
 ) {}

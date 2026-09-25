@@ -1,4 +1,5 @@
 import { CheckoutFlow, type CheckoutCart } from "@/components/consumer/CheckoutFlow";
+import { MewsStayCheckout } from "@/components/consumer/MewsStayCheckout";
 import { InactiveLink } from "@/components/consumer/InactiveLink";
 import { PageChrome } from "@/components/consumer/PageChrome";
 import { fetchPublicMerchant } from "@/lib/publicApi";
@@ -31,7 +32,10 @@ export default async function CheckoutPage(props: {
     );
   }
 
-  const parsed = parseCart(raw);
+  // A Mews property prices the stay from Mews, so the link's total is only a
+  // hint there and may be missing. Everywhere else it is the booking amount.
+  const isMews = merchant.rail === "mews";
+  const parsed = parseCart(raw, isMews);
   if (parsed.kind === "missing") {
     return (
       <PageChrome>
@@ -57,6 +61,23 @@ export default async function CheckoutPage(props: {
 
   const returnUrl = firstOf(raw.return_url) ?? null;
 
+  if (isMews) {
+    const adults = Number.parseInt(firstOf(raw.adults) ?? "", 10);
+    return (
+      <PageChrome>
+        <MewsStayCheckout
+          merchant={merchant}
+          cart={parsed.cart}
+          initialRoom={firstOf(raw.room) ?? null}
+          initialCategoryId={firstOf(raw.category_id) ?? null}
+          initialAdults={Number.isFinite(adults) && adults > 0 ? adults : null}
+          returnUrl={returnUrl}
+          feeRate={feeRate}
+        />
+      </PageChrome>
+    );
+  }
+
   return (
     <PageChrome>
       <CheckoutFlow
@@ -74,16 +95,17 @@ type Parsed =
   | { kind: "missing"; missing: string[] }
   | { kind: "invalid"; reason: string };
 
-function parseCart(p: SearchParams): Parsed {
+function parseCart(p: SearchParams, totalOptional: boolean): Parsed {
   const total = firstOf(p.total);
   const checkin = firstOf(p.checkin);
   const missing: string[] = [];
-  if (!total) missing.push("total");
+  if (!total && !totalOptional) missing.push("total");
   if (!checkin) missing.push("checkin");
   if (missing.length > 0) return { kind: "missing", missing };
 
-  const totalCents = Number.parseInt(total!, 10);
-  if (!Number.isFinite(totalCents) || totalCents <= 0) {
+  // Mews: 0 until the stay is quoted; the quote replaces it.
+  const totalCents = total ? Number.parseInt(total, 10) : 0;
+  if (!totalOptional && (!Number.isFinite(totalCents) || totalCents <= 0)) {
     return { kind: "invalid", reason: "total must be a positive integer (cents)" };
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(checkin!)) {

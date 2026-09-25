@@ -76,6 +76,8 @@ public class PublicPlansResource {
             case ELIGIBILITY_FAILED -> 422;
             case STRIPE_ERROR -> 502;
             case INVALID_INPUT -> 400;
+            case STAY_UNAVAILABLE -> 409;
+            case PMS_UNAVAILABLE -> 502;
         };
         log.info("Plan creation rejected reason={} message={}", e.reason(), e.getMessage());
         return Response.status(status).entity(Map.of(

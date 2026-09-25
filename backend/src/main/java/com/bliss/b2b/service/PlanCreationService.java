@@ -193,6 +193,7 @@ public class PlanCreationService {
         }
     }
 
+    private final MewsStayService mewsStayService;
     private final Jdbi jdbi;
     private final PlanEligibilityService eligibilityService;
     private final StripePaymentsService stripeService;
@@ -210,9 +211,11 @@ public class PlanCreationService {
             StripeConnectResolver stripeConnectResolver,
             EmailService emailService,
             PlanNotificationService notificationService,
+            MewsStayService mewsStayService,
             Clock clock,
             AppConfig appConfig
     ) {
+        this.mewsStayService = mewsStayService;
         this.jdbi = jdbi;
         this.eligibilityService = eligibilityService;
         this.stripeService = stripeService;
@@ -256,9 +259,6 @@ public class PlanCreationService {
         if (input.merchantSlug() == null || input.merchantSlug().isBlank()) {
             throw new PlanCreationException(Reason.INVALID_INPUT, "merchantSlug required");
         }
-        if (input.totalAmountCents() <= 0) {
-            throw new PlanCreationException(Reason.INVALID_INPUT, "totalAmountCents must be positive");
-        }
         if (input.appointmentDate() == null) {
             throw new PlanCreationException(Reason.INVALID_INPUT, "appointmentDate (checkin) required");
         }
@@ -269,6 +269,17 @@ public class PlanCreationService {
         if (input.checkoutDate() != null && input.checkoutDate().isBefore(input.appointmentDate())) {
             throw new PlanCreationException(Reason.INVALID_INPUT,
                     "checkoutDate must be on or after appointmentDate");
+        }
+
+        // A Mews stay is priced by Mews, now, outside the transaction (it is a
+        // network call). The browser's total is ignored for it entirely.
+        Merchant preMerchant = jdbi.withExtension(MerchantDao.class, d -> d.findBySlug(input.merchantSlug()))
+                .orElseThrow(() -> new PlanCreationException(Reason.BOOKING_NOT_FOUND, "merchant not found"));
+        MewsStayService.StayQuote stay = preMerchant.pmsType() == com.bliss.b2b.domain.PmsType.MEWS
+                ? priceMewsStay(input) : null;
+        long totalAmountCents = stay != null ? stay.totalCents() : input.totalAmountCents();
+        if (totalAmountCents <= 0) {
+            throw new PlanCreationException(Reason.INVALID_INPUT, "totalAmountCents must be positive");
         }
 
         Outcome outcome = jdbi.inTransaction(handle -> {
@@ -287,7 +298,7 @@ public class PlanCreationService {
                     token,
                     serviceName,
                     null, // service_description — customer's free text is stored as serviceName
-                    input.totalAmountCents(),
+                    totalAmountCents,
                     input.appointmentDate(),
                     input.checkoutDate(),
                     null, // cancellationPolicy — uses merchant policy stack
@@ -295,6 +306,11 @@ public class PlanCreationService {
                     trimToNull(input.customerEmail()),
                     trimToNull(input.customerPhone()),
                     BookingSource.CUSTOMER_INITIATED.wire());
+            if (stay != null) {
+                Booking inserted = bookingDao.findByToken(token)
+                        .orElseThrow(() -> new IllegalStateException("booking insert disappeared"));
+                bookingDao.setMewsStay(inserted.id(), stay.categoryId(), stay.rateId(), stay.adults());
+            }
             Booking booking = bookingDao.findByToken(token)
                     .orElseThrow(() -> new IllegalStateException("booking insert disappeared"));
 
@@ -309,6 +325,38 @@ public class PlanCreationService {
                     input.customerPhone(), input.paymentMethodId(), input.frequency(), input.demoCard());
         });
         return finalize(outcome);
+    }
+
+    /**
+     * Fresh Mews price for the room and adults the guest chose. A sold-out room
+     * or an unreachable Mews stops plan creation before anything is written.
+     */
+    private MewsStayService.StayQuote priceMewsStay(CustomerCheckoutInput input) {
+        if (input.mewsResourceCategoryId() == null || input.mewsResourceCategoryId().isBlank()
+                || input.adultCount() == null) {
+            throw new PlanCreationException(Reason.INVALID_INPUT, "Choose a room and the number of adults.");
+        }
+        if (input.checkoutDate() == null) {
+            throw new PlanCreationException(Reason.INVALID_INPUT, "A check-out date is required.");
+        }
+        MewsStayService.StayQuote quote;
+        try {
+            quote = mewsStayService.quoteFresh(input.merchantSlug(), input.appointmentDate(),
+                    input.checkoutDate(), input.mewsResourceCategoryId(), input.adultCount());
+        } catch (MewsStayService.MewsStayException e) {
+            Reason reason = switch (e.code()) {
+                case "mews_unreachable" -> Reason.PMS_UNAVAILABLE;
+                case "not_ready", "not_mews_rail", "currency_mismatch" -> Reason.MERCHANT_NOT_READY;
+                case "not_found" -> Reason.BOOKING_NOT_FOUND;
+                default -> Reason.INVALID_INPUT;
+            };
+            throw new PlanCreationException(reason, e.getMessage());
+        }
+        if (!quote.available()) {
+            throw new PlanCreationException(Reason.STAY_UNAVAILABLE,
+                    "That room is no longer available for those dates.");
+        }
+        return quote;
     }
 
     /**
@@ -1010,7 +1058,10 @@ public class PlanCreationService {
             String customerPhone,
             String paymentMethodId,
             PlanFrequency frequency,
-            DemoCard demoCard
+            DemoCard demoCard,
+            // Mews rail only: the room and adults the stay is priced for.
+            String mewsResourceCategoryId,
+            Integer adultCount
     ) {}
 
     /**

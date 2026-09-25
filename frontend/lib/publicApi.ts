@@ -204,6 +204,10 @@ export type CheckoutRequest = {
   customerPhone?: string | null;
   paymentMethodId: string;
   frequency: PublicPlanFrequency;
+  // Mews rail: the room and adults the stay is priced for. The backend prices
+  // it again from Mews and ignores totalAmountCents.
+  mewsResourceCategoryId?: string | null;
+  adultCount?: number | null;
   // Optional card metadata used only by the backend's demo-mode persistence
   // path. The frontend's DemoCardSection sends these so the persisted card
   // row reflects what the customer typed.
@@ -232,6 +236,53 @@ export type CheckoutResponse = {
   firstChargeIntentId: string;
   firstChargeStatus: string;
 };
+
+export type StayRoom = { id: string; name: string; capacity: number };
+
+/**
+ * Mews' price for a stay at the property's Bliss rate. `available` true means
+ * `totalCents` is the tax-inclusive total a plan will be written against;
+ * otherwise `reason` is "choose_room" or "sold_out".
+ */
+export type StayQuote = {
+  rooms: StayRoom[];
+  categoryId: string | null;
+  adults: number;
+  maxAdults: number;
+  available: boolean;
+  totalCents: number | null;
+  currency: string | null;
+  reason: "choose_room" | "sold_out" | null;
+};
+
+export async function fetchStayQuote(
+  slug: string,
+  params: { checkin: string; checkout: string; categoryId?: string | null; room?: string | null; adults?: number | null },
+): Promise<{ ok: true; data: StayQuote } | { ok: false; message: string }> {
+  const qs = new URLSearchParams({ checkin: params.checkin, checkout: params.checkout });
+  if (params.categoryId) qs.set("categoryId", params.categoryId);
+  if (params.room) qs.set("room", params.room);
+  if (params.adults) qs.set("adults", String(params.adults));
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/api/v1/public/checkout/${encodeURIComponent(slug)}/quote?${qs}`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) {
+      let message = "We couldn't price your stay right now. Try again in a moment.";
+      try {
+        const body = (await res.json()) as { message?: string };
+        if (body.message) message = body.message;
+      } catch {
+        /* keep default */
+      }
+      return { ok: false, message };
+    }
+    return { ok: true, data: (await res.json()) as StayQuote };
+  } catch {
+    return { ok: false, message: "We couldn't price your stay right now. Try again in a moment." };
+  }
+}
 
 export async function submitCheckout(
   payload: CheckoutRequest,

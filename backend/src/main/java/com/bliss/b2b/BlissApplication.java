@@ -193,9 +193,15 @@ public class BlissApplication extends Application<BlissConfiguration> {
         com.bliss.b2b.service.PlanNotificationService planNotificationService =
                 new com.bliss.b2b.service.PlanNotificationService(
                         jdbi, emailService, config.getApp().getConsumerBaseUrl());
+        com.bliss.b2b.integration.pms.MewsAdapterFactory mewsAdapterFactory =
+                new com.bliss.b2b.integration.pms.MewsAdapterFactory(jdbi, tokenCipher, chargeCapCents);
+        // Prices Mews stays against the property's own Mews; the only source of a
+        // Mews plan's total.
+        com.bliss.b2b.service.MewsStayService mewsStayService =
+                new com.bliss.b2b.service.MewsStayService(jdbi, mewsAdapterFactory, clock);
         PlanCreationService planCreationService = new PlanCreationService(
                 jdbi, eligibilityService, stripePaymentsService, stripeConnectResolver,
-                emailService, planNotificationService, clock, config.getApp());
+                emailService, planNotificationService, mewsStayService, clock, config.getApp());
         CancellationService cancellationService = new CancellationService(
                 paymentPlanDao, paymentScheduleDao, bookingDao, planRulesService);
         PlanPortalService planPortalService = new PlanPortalService(
@@ -204,8 +210,6 @@ public class BlissApplication extends Application<BlissConfiguration> {
         // validates connections and resolves each property's charge credentials.
         com.bliss.b2b.persistence.MerchantMewsConnectionDao mewsConnectionDao =
                 jdbi.onDemand(com.bliss.b2b.persistence.MerchantMewsConnectionDao.class);
-        com.bliss.b2b.integration.pms.MewsAdapterFactory mewsAdapterFactory =
-                new com.bliss.b2b.integration.pms.MewsAdapterFactory(jdbi, tokenCipher, chargeCapCents);
         // Per-property Cloudbeds OAuth: connection store, OAuth client, and the
         // factory that resolves each property's tokens (transparent single-flight
         // refresh) and is the charge pass's Cloudbeds resolver.
@@ -354,7 +358,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new PublicMerchantsResource(
                 merchantDao, planRulesService, stripePaymentsService, stripeConnectResolver,
                 merchantFeeRateDao, clock));
-        environment.jersey().register(new PublicCheckoutResource(planCreationService));
+        environment.jersey().register(new PublicCheckoutResource(planCreationService, mewsStayService));
         environment.jersey().register(new PublicPlansPortalResource(
                 planPortalService, stripePaymentsService, stripeConnectResolver, mewsCheckoutService));
         environment.jersey().register(new PublicAccountResource(
