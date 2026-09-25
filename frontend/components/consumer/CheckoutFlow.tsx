@@ -34,7 +34,7 @@ import {
 import { Confirmation } from "./Confirmation";
 import { CheckoutSummaryCard } from "./CheckoutSummaryCard";
 import { DemoCardSection } from "./DemoCardSection";
-import { MewsCardSection } from "./MewsCardSection";
+import { MewsCardSection, splitGuestName } from "./MewsCardSection";
 
 export type CheckoutCart = {
   totalCents: number;
@@ -201,19 +201,22 @@ export function CheckoutFlow({
         merchant.rail === "mews" ? (
           <MewsCardSection
             emailInitial={cart.email ?? ""}
+            nameInitial={splitGuestName(cart.name)}
             onCancel={() => setStep("plan")}
             ctaLabel="Book now"
             disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, publicOption)}
             returnUrl={returnUrl}
             merchantName={merchant.merchant.businessName}
-            onCreatePlan={async (email) => {
+            onCreatePlan={async (email, name) => {
               const result = await submitCheckout({
                 merchantSlug: merchant.merchant.slug,
                 totalAmountCents: cart.totalCents,
                 appointmentDate: cart.checkin,
                 checkoutDate: cart.checkout,
                 description: cart.description,
-                customerName: cart.name ?? email.split("@")[0] ?? "",
+                customerName: `${name.firstName} ${name.lastName}`,
+                customerFirstName: name.firstName,
+                customerLastName: name.lastName,
                 customerEmail: email,
                 customerPhone: cart.phone,
                 paymentMethodId: "mews_placeholder",

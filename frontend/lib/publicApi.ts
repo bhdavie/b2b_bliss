@@ -196,6 +196,10 @@ export type CheckoutRequest = {
   checkoutDate?: string | null;
   description?: string | null;
   customerName: string;
+  // Explicit name parts. When present the backend uses them instead of
+  // splitting customerName; the Mews rail needs a real last name.
+  customerFirstName?: string | null;
+  customerLastName?: string | null;
   customerEmail: string;
   customerPhone?: string | null;
   paymentMethodId: string;

@@ -55,12 +55,26 @@ function loadMewsScript(): Promise<void> {
 
 type Phase = "form" | "loading" | "embed" | "processing";
 
+/** The guest's name as Mews needs it: both parts, since Mews rejects a profile with no last name. */
+export type MewsGuestName = { firstName: string; lastName: string };
+
+/** Best-effort split of a single "First Last" hint into the two fields. */
+export function splitGuestName(full: string | null | undefined): Partial<MewsGuestName> {
+  const trimmed = (full ?? "").trim();
+  if (!trimmed) return {};
+  const sp = trimmed.lastIndexOf(" ");
+  return sp < 0
+    ? { firstName: trimmed }
+    : { firstName: trimmed.slice(0, sp), lastName: trimmed.slice(sp + 1) };
+}
+
 export type MewsCreateResult =
   | { ok: true; bookingToken: string }
   | { ok: false; message: string };
 
 export function MewsCardSection({
   emailInitial,
+  nameInitial,
   onCancel,
   onCreatePlan,
   onConfirmed,
@@ -70,9 +84,10 @@ export function MewsCardSection({
   merchantName,
 }: {
   emailInitial: string;
+  nameInitial?: Partial<MewsGuestName>;
   onCancel: () => void;
   /** Parent creates the pending_card plan (with "mews_placeholder") and returns the token. */
-  onCreatePlan: (email: string) => Promise<MewsCreateResult>;
+  onCreatePlan: (email: string, name: MewsGuestName) => Promise<MewsCreateResult>;
   /** Called once the card is confirmed and the plan is activated. */
   onConfirmed: () => void;
   disclosure: string;
@@ -81,6 +96,8 @@ export function MewsCardSection({
   merchantName?: string;
 }) {
   const [email, setEmail] = useState(emailInitial);
+  const [firstName, setFirstName] = useState(nameInitial?.firstName ?? "");
+  const [lastName, setLastName] = useState(nameInitial?.lastName ?? "");
   const [phase, setPhase] = useState<Phase>("form");
   const [error, setError] = useState<string | null>(null);
   const tokenRef = useRef<string | null>(null);
@@ -94,9 +111,16 @@ export function MewsCardSection({
       setError("Email is required so we can send your plan details.");
       return;
     }
+    if (!firstName.trim() || !lastName.trim()) {
+      setError("Your first and last name are needed to reserve your stay.");
+      return;
+    }
     setPhase("loading");
 
-    const created = await onCreatePlan(email.trim());
+    const created = await onCreatePlan(email.trim(), {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+    });
     if (!created.ok) {
       setError(created.message);
       setPhase("form");
@@ -165,6 +189,30 @@ export function MewsCardSection({
 
       {phase === "form" ? (
         <form onSubmit={handleStart} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-[12px] text-brand-navy/60">First name</span>
+              <input
+                type="text"
+                required
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="mt-1.5 w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 text-[15px] placeholder:text-brand-navy/40 focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/40"
+                autoComplete="given-name"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[12px] text-brand-navy/60">Last name</span>
+              <input
+                type="text"
+                required
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="mt-1.5 w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 text-[15px] placeholder:text-brand-navy/40 focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/40"
+                autoComplete="family-name"
+              />
+            </label>
+          </div>
           <label className="block">
             <span className="text-[12px] text-brand-navy/60">Email</span>
             <input

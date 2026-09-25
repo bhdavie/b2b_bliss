@@ -26,7 +26,7 @@ import {
 import { TrustSignals } from "./TrustSignals";
 import { Confirmation } from "./Confirmation";
 import { DemoCardSection } from "./DemoCardSection";
-import { MewsCardSection } from "./MewsCardSection";
+import { MewsCardSection, splitGuestName } from "./MewsCardSection";
 
 type Step = "plan" | "card" | "confirmed";
 
@@ -126,14 +126,17 @@ export function HostedPlanFlow({
         booking.rail === "mews" ? (
           <MewsCardSection
             emailInitial={booking.service.customerEmailHint ?? ""}
+            nameInitial={splitGuestName(booking.service.customerNameHint)}
             onCancel={() => setStep("plan")}
             ctaLabel="Book now"
             disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, selectedOption)}
-            onCreatePlan={async (email) => {
+            onCreatePlan={async (email, name) => {
               const result = await createPlan({
                 merchantSlug: booking.merchant.slug,
                 bookingToken: extractTokenFromCurrentPath(),
                 customerEmail: email,
+                customerFirstName: name.firstName,
+                customerLastName: name.lastName,
                 paymentMethodId: "mews_placeholder",
                 frequency: selectedOption.frequency,
               });

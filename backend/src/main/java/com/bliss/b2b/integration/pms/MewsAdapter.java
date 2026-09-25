@@ -35,7 +35,12 @@ public class MewsAdapter implements PmsAdapter {
 
     private static final Logger log = LoggerFactory.getLogger(MewsAdapter.class);
 
-    private static final String CLIENT = "Bliss Payments";
+    /**
+     * Sent as {@code Client} on every call. Mews asks for "Name Version" and a
+     * name unique to the integration: certification reviews demo traffic by
+     * this string, so keep it in one place and bump the version on releases.
+     */
+    static final String CLIENT = "Bliss Payments 1.0.0";
 
     private static final String CONFIGURATION_GET = "/api/connector/v1/configuration/get";
     private static final String CUSTOMERS_GET_ALL = "/api/connector/v1/customers/getAll";

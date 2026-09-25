@@ -298,8 +298,14 @@ public class PlanCreationService {
             Booking booking = bookingDao.findByToken(token)
                     .orElseThrow(() -> new IllegalStateException("booking insert disappeared"));
 
+            // Explicit name parts win over splitting the single name field:
+            // "Mary Ann Smith" splits wrongly, and a one-word name has no last.
+            String firstName = trimToNull(input.customerFirstName()) != null
+                    ? input.customerFirstName() : splitFirst(input.customerName());
+            String lastName = trimToNull(input.customerLastName()) != null
+                    ? input.customerLastName() : splitLast(input.customerName());
             return acceptForBooking(handle, booking, merchant,
-                    input.customerEmail(), splitFirst(input.customerName()), splitLast(input.customerName()),
+                    input.customerEmail(), firstName, lastName,
                     input.customerPhone(), input.paymentMethodId(), input.frequency(), input.demoCard());
         });
         return finalize(outcome);
@@ -683,15 +689,14 @@ public class PlanCreationService {
      * {@code customer_cards} row satisfies the plan's NOT NULL
      * {@code customer_card_id}; card-confirm fills in its Mews id.
      *
-     * <p><b>DEMO OVERRIDE:</b> the plan is inserted {@code active} rather than
-     * {@code pending_card}, so the guest portal renders it as a normal plan with
-     * a schedule and a next payment instead of a card-pending stub. The
-     * placeholder card is accepted as-is and nothing is charged. Consequences
-     * while this is in place: {@code mews-card-confirm} rejects these plans with
-     * {@code plan_not_pending} (it requires {@code PENDING_CARD}), and the due
-     * charge sweep skips their installments because the placeholder has no
-     * {@code mews_credit_card_id}. Revert by restoring the
-     * {@code insertPendingMews} call and the {@code PENDING_CARD} return below.
+     * <p>The plan is inserted {@code pending_card}. Card-confirm is the only
+     * way to {@code active}: it verifies the card in Mews and takes the first
+     * installment. Until then the charge sweep ignores the plan, because it
+     * selects only active plans.
+     *
+     * <p>A last name is required up front: Mews rejects a customer profile
+     * without one, and failing here is cheaper than failing at card-request
+     * after the plan exists.
      */
     private Outcome acceptForBookingMews(
             Handle handle,
@@ -707,6 +712,10 @@ public class PlanCreationService {
         // at the top means the whole plan is priced at one rate even if a rate
         // row lands mid-transaction, and the DAO is hit once per plan rather
         // than once per installment.
+        if (trimToNull(customerLastName) == null) {
+            throw new PlanCreationException(Reason.INVALID_INPUT,
+                    "A last name is required to reserve with this property.");
+        }
         BigDecimal feeRate = resolveFeeRate(handle, merchant.id(), clock.instant());
         boolean connected = handle.attach(MerchantMewsConnectionDao.class)
                 .findByMerchant(merchant.id())
@@ -789,13 +798,10 @@ public class PlanCreationService {
         }
 
         long feeCents = feeFor(discountedTotal, feeRate);
-        // DEMO OVERRIDE: insert() writes status 'active'; insertPendingMews()
-        // wrote 'pending_card'. Same columns otherwise, and railFor(merchant) is
-        // 'mews' here, matching the rail the pending insert hardcoded.
-        planDao.insert(
+        planDao.insertPendingMews(
                 booking.id(), customer.id(), storedCard.id(),
                 discountedTotal, installmentCount, option.frequency().wire(),
-                startDate, endDate, depositAmount, feeCents, railFor(merchant));
+                startDate, endDate, depositAmount, feeCents);
         PaymentPlan plan = planDao.findLatestForBooking(booking.id())
                 .orElseThrow(() -> new IllegalStateException("plan insert disappeared"));
 
@@ -809,10 +815,9 @@ public class PlanCreationService {
         }
 
         List<PaymentScheduleEntry> schedule = scheduleDao.listForPlan(plan.id());
-        // No charge and no intent id: nothing was collected. DEMO OVERRIDE — the
-        // plan still reports active so the portal treats it as a live plan.
+        // No charge and no intent id: nothing is collected until card-confirm.
         return new Outcome(merchant, customer, booking, plan, schedule,
-                null, PaymentPlanStatus.ACTIVE.wire());
+                null, PaymentPlanStatus.PENDING_CARD.wire());
     }
 
     /**
@@ -999,6 +1004,8 @@ public class PlanCreationService {
             LocalDate checkoutDate,
             String description,
             String customerName,
+            String customerFirstName,
+            String customerLastName,
             String customerEmail,
             String customerPhone,
             String paymentMethodId,
