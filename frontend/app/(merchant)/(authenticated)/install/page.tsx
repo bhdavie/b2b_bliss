@@ -16,12 +16,16 @@ const OVERLAY_SCRIPT_SRC =
   "https://property.bliss-payments.com/mews-overlay.js";
 const OVERLAY_API_BASE =
   process.env.NEXT_PUBLIC_OVERLAY_API_BASE ?? "https://api.bliss-payments.com";
+// Where the overlay sends a guest who picks a plan. The consumer checkout host.
+const OVERLAY_CHECKOUT_BASE =
+  process.env.NEXT_PUBLIC_OVERLAY_CHECKOUT_BASE ?? "https://guest.bliss-payments.com";
 
 function mewsSnippet(slug: string): string {
   return [
     `<script src="${OVERLAY_SCRIPT_SRC}"`,
     `        data-bliss-merchant="${slug}"`,
-    `        data-bliss-api="${OVERLAY_API_BASE}"></script>`,
+    `        data-bliss-api="${OVERLAY_API_BASE}"`,
+    `        data-bliss-checkout="${OVERLAY_CHECKOUT_BASE}"></script>`,
   ].join("\n");
 }
 

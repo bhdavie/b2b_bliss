@@ -56,11 +56,14 @@ export function CheckoutFlow({
   returnUrl,
   feeRate,
   staySlot,
+  initialFrequency,
 }: {
   merchant: PublicMerchant;
   cart: CheckoutCart;
   /** Rendered under the property header, before the summary. The Mews rail puts its room and adults picker here. */
   staySlot?: React.ReactNode;
+  /** A frequency already chosen upstream (the booking engine overlay), used when this stay offers it. */
+  initialFrequency?: PlanFrequency | null;
   // Resolved server-side from the route's slug and threaded through, so every
   // figure on this page and its confirmation quotes the one rate.
   feeRate: number;
@@ -91,7 +94,9 @@ export function CheckoutFlow({
     [cart.totalCents, cart.checkin, cart.checkout],
   );
 
-  const defaultFreq: PlanFrequency = preview.options.find((o) => o.recommended)?.frequency
+  const defaultFreq: PlanFrequency =
+    preview.options.find((o) => o.frequency === initialFrequency)?.frequency
+    ?? preview.options.find((o) => o.recommended)?.frequency
     ?? preview.options[0]?.frequency
     ?? "monthly";
   const [selected, setSelected] = useState<PlanFrequency>(defaultFreq);

@@ -24,6 +24,7 @@ export function MewsStayCheckout({
   initialRoom,
   initialCategoryId,
   initialAdults,
+  initialFrequency,
   returnUrl,
   feeRate,
 }: {
@@ -32,6 +33,7 @@ export function MewsStayCheckout({
   initialRoom: string | null;
   initialCategoryId: string | null;
   initialAdults: number | null;
+  initialFrequency?: "biweekly" | "monthly" | null;
   returnUrl?: string | null;
   feeRate: number;
 }) {
@@ -174,6 +176,7 @@ export function MewsStayCheckout({
         returnUrl={returnUrl}
         feeRate={feeRate}
         staySlot={picker}
+        initialFrequency={initialFrequency}
       />
     </>
   );

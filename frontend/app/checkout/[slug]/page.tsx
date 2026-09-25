@@ -63,6 +63,7 @@ export default async function CheckoutPage(props: {
 
   if (isMews) {
     const adults = Number.parseInt(firstOf(raw.adults) ?? "", 10);
+    const frequency = firstOf(raw.frequency);
     return (
       <PageChrome>
         <MewsStayCheckout
@@ -71,6 +72,7 @@ export default async function CheckoutPage(props: {
           initialRoom={firstOf(raw.room) ?? null}
           initialCategoryId={firstOf(raw.category_id) ?? null}
           initialAdults={Number.isFinite(adults) && adults > 0 ? adults : null}
+          initialFrequency={frequency === "biweekly" || frequency === "monthly" ? frequency : null}
           returnUrl={returnUrl}
           feeRate={feeRate}
         />

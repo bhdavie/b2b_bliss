@@ -7,14 +7,22 @@
  *
  *   <script src="https://.../mews-overlay.js"
  *           data-bliss-merchant="j9l29fke"
- *           data-bliss-api="https://api.bliss-payments.com"></script>
+ *           data-bliss-api="https://api.bliss-payments.com"
+ *           data-bliss-checkout="https://guest.bliss-payments.com"></script>
  *
- * data-bliss-api is optional and defaults to DEFAULT_API_BASE below.
+ * data-bliss-api and data-bliss-checkout are optional and default to
+ * DEFAULT_API_BASE and DEFAULT_CHECKOUT_BASE below.
  *
  * On load it fetches that merchant's plan rules from the public API and
  * renders nothing until they arrive. It captures no card data and makes no
- * network call other than that one GET — everything else is read from the
+ * network call other than that one GET; everything else is read from the
  * page's own dataLayer.
+ *
+ * HANDOFF. When the guest confirms a plan, the overlay sends the top window to
+ * Bliss checkout ({checkout}/checkout/{slug}) with the dates, the room name,
+ * the rate, the plan frequency and a return link. Bliss prices the stay from
+ * the property's own Mews there and creates the Mews reservation itself; the
+ * total the overlay passes is a display hint only and is never charged.
  *
  * DEVELOPMENT: pasting into the console still works. With no script tag to
  * read, it looks for window.__blissOverlayConfig = { merchant, apiBase } and
@@ -123,7 +131,9 @@
 
   var MERCHANT_ATTR = "data-bliss-merchant";
   var API_ATTR = "data-bliss-api";
+  var CHECKOUT_ATTR = "data-bliss-checkout";
   var DEFAULT_API_BASE = "https://api.bliss-payments.com";
+  var DEFAULT_CHECKOUT_BASE = "https://guest.bliss-payments.com";
 
   // =========================================================================
   // BLISS FEE
@@ -454,12 +464,15 @@
     },
 
     /**
-     * Property identity hook. Display-only today: the overlay never calls Bliss,
-     * so nothing needs a merchant slug. dataLayer hotelId/hotelName do not map
-     * to a Bliss slug on their own. Set this when the recorded choice needs to
-     * be attributed to a merchant.
+     * The Bliss merchant this booking engine belongs to, copied from the
+     * install config at start. dataLayer hotelId/hotelName do not map to a
+     * Bliss slug on their own, so the script tag's data-bliss-merchant is the
+     * only source. The checkout handoff is built from it.
      */
     merchantSlug: null,
+
+    /** Bliss checkout origin, copied from the install config at start. */
+    checkoutBase: null,
 
     /**
      * Corner radii for the trigger line and the modal. Colour is not here: it
@@ -2088,7 +2101,7 @@
           text: reopened
             ? "You selected the " + planLabel(confirmedOpt.frequency) +
               " plan. Continue to checkout to finish."
-            : "Plan selected. Continue to checkout and pay with your card as usual.",
+            : "Plan selected. Taking you to secure checkout to finish your booking.",
         })
       );
       body.appendChild(
@@ -2275,7 +2288,7 @@
       })
     );
     body.appendChild(
-      h("div", { class: "note", text: "Choose your plan and finish checkout as usual." })
+      h("div", { class: "note", text: "Choose your plan, then finish your booking at secure checkout." })
     );
 
     mountModalCard(h, head, body);
@@ -2356,6 +2369,26 @@
     );
   }
 
+  /** item_name from the most recent ecommerce event that carries one. */
+  function lastItemName() {
+    var dl = dataLayerArray() || [];
+    for (var i = dl.length - 1; i >= 0; i--) {
+      var ev = dl[i];
+      var items = ev && ev.ecommerce && ev.ecommerce.items;
+      if (items && items[0] && items[0].item_name) return String(items[0].item_name);
+    }
+    return null;
+  }
+
+  /** Where the guest was, so checkout's back link returns them to the booking engine. */
+  function topHref() {
+    try {
+      return window.top.location.href;
+    } catch (e) {
+      return window.location.href;
+    }
+  }
+
   /** The option row's own wording, so the confirmation names what was clicked. */
   function planLabel(frequency) {
     return frequency === "biweekly" ? "Every 2 weeks" : "Monthly";
@@ -2392,24 +2425,13 @@
       hotelName: state.dl ? state.dl.hotelName : null,
       itemName: state.dl ? state.dl.itemName : null,
       itemVariant: state.dl ? state.dl.itemVariant : null,
+      // The room as Mews names it: add_to_cart's item, or failing that the
+      // latest item any ecommerce event named. Null until Mews names one.
+      roomName: (state.dl && state.dl.itemName) || lastItemName(),
+      returnUrl: topHref(),
       merchantSlug: CONFIG.merchantSlug,
       selectedAt: new Date().toISOString(),
     };
-    // Record only. No card capture, no network, no interference with checkout.
-    // Published on the UI frame (top) so it is where a console or a listener
-    // would look, regardless of which frame the badge was clicked in.
-    var rw = (state.frames && state.frames.ui && state.frames.ui.win) || window;
-    try {
-      rw.__blissPlanChoice = choice;
-    } catch (e) {
-      window.__blissPlanChoice = choice;
-    }
-    try {
-      var Ctor = rw.CustomEvent || window.CustomEvent;
-      rw.dispatchEvent(new Ctor("bliss:plan-selected", { detail: choice }));
-    } catch (e) {
-      /* ignore */
-    }
     console.log("[bliss] plan selected", choice);
     // Session-level, so the Details block can show State A after the rate-card
     // trigger that recorded this has been unmounted. Shares t.confirmed's
@@ -2420,6 +2442,48 @@
     renderAllTriggers();
     if (CONFIG.closeModalOnConfirm) closeModal();
     else renderModal();
+    handOffToCheckout(choice);
+  }
+
+  /**
+   * Sends the guest to Bliss checkout for this stay. Built from what the
+   * booking engine has told us: the dates, the room name when Mews has named
+   * it, and the rate. Bliss asks for whatever is missing (the room, and always
+   * the number of adults, which the dataLayer never carries).
+   */
+  function checkoutUrl(choice) {
+    var base = String(CONFIG.checkoutBase || DEFAULT_CHECKOUT_BASE).replace(/\/+$/, "");
+    var params = [];
+    function add(key, value) {
+      if (value != null && value !== "") params.push(key + "=" + encodeURIComponent(value));
+    }
+    add("checkin", choice.checkin);
+    add("checkout", choice.checkout);
+    add("room", choice.roomName);
+    add("rate_id", choice.rateId);
+    add("rate", choice.rateName);
+    add("frequency", choice.frequency);
+    // A display hint only. Bliss prices the stay from Mews and ignores this.
+    add("total", choice.amountCents != null ? Math.round(choice.amountCents) : null);
+    add("currency", choice.currency);
+    add("return_url", choice.returnUrl);
+    return base + "/checkout/" + encodeURIComponent(choice.merchantSlug) + "?" + params.join("&");
+  }
+
+  function handOffToCheckout(choice) {
+    if (!choice.merchantSlug || !choice.checkin || !choice.checkout) {
+      console.warn("[bliss] cannot hand off to checkout: missing merchant or dates", choice);
+      return;
+    }
+    var url = checkoutUrl(choice);
+    // The top window, so the whole booking page is replaced rather than one
+    // frame of it. This runs from the guest's click, so a cross-origin frame
+    // may still navigate top.
+    try {
+      window.top.location.assign(url);
+    } catch (e) {
+      window.location.assign(url);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -3063,6 +3127,7 @@
         source: "script tag",
         merchant: String(el.getAttribute(MERCHANT_ATTR) || "").trim(),
         apiBase: String(el.getAttribute(API_ATTR) || "").trim() || DEFAULT_API_BASE,
+        checkoutBase: String(el.getAttribute(CHECKOUT_ATTR) || "").trim() || DEFAULT_CHECKOUT_BASE,
       };
     }
     var g = null;
@@ -3076,9 +3141,10 @@
         source: "window.__blissOverlayConfig",
         merchant: String(g.merchant).trim(),
         apiBase: String(g.apiBase || "").trim() || DEFAULT_API_BASE,
+        checkoutBase: String(g.checkoutBase || "").trim() || DEFAULT_CHECKOUT_BASE,
       };
     }
-    return { source: null, merchant: "", apiBase: DEFAULT_API_BASE };
+    return { source: null, merchant: "", apiBase: DEFAULT_API_BASE, checkoutBase: DEFAULT_CHECKOUT_BASE };
   }
 
   /**
@@ -3172,6 +3238,8 @@
   }
 
   function start(install, url) {
+  CONFIG.merchantSlug = install.merchant;
+  CONFIG.checkoutBase = install.checkoutBase;
 
   refresh(); // resolves frames, hooks the data frame, decorates, observes
 
