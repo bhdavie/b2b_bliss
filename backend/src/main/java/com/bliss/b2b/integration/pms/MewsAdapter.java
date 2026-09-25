@@ -523,6 +523,7 @@ public class MewsAdapter implements PmsAdapter {
      * A reservation's current state (Optional, Confirmed, Started, Processed,
      * Canceled, Inquired, Requested), or empty if Mews does not return it.
      */
+    @Override
     public Optional<String> getReservationState(String reservationId) {
         Map<String, Object> body = auth();
         body.put("ReservationIds", List.of(reservationId));

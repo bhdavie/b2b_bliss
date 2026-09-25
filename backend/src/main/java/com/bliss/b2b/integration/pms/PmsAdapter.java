@@ -82,4 +82,13 @@ public interface PmsAdapter {
             String currency,
             String reservationRef,
             String notes);
+
+    /**
+     * The current state of the reservation a plan charges against, as the PMS
+     * names it, or empty if the PMS does not return it. Rails that do not create
+     * reservations do not support this.
+     */
+    default java.util.Optional<String> getReservationState(String reservationRef) {
+        throw new PmsNotSupportedException("this PMS rail does not read reservation state");
+    }
 }

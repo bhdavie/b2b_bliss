@@ -59,7 +59,7 @@ class InstallmentChargeServiceTest {
         assertThat(ledger.completedPlans).containsExactly(due.planId());
         assertThat(ledger.processing).isEmpty();
         assertThat(ledger.failed).isEmpty();
-        assertThat(result).isEqualTo(new PassResult(1, 1, 0, 0, 0, 0));
+        assertThat(result).isEqualTo(new PassResult(1, 1, 0, 0, 0, 0, 0));
     }
 
     @Test
@@ -77,7 +77,7 @@ class InstallmentChargeServiceTest {
         assertThat(ledger.completedPlans).isEmpty();
         // charged exactly once; the PROCESSING guard means no re-charge here.
         assertThat(adapter.chargeCalls).hasSize(1);
-        assertThat(result).isEqualTo(new PassResult(1, 0, 1, 0, 0, 0));
+        assertThat(result).isEqualTo(new PassResult(1, 0, 1, 0, 0, 0, 0));
     }
 
     @Test
@@ -92,7 +92,7 @@ class InstallmentChargeServiceTest {
         assertThat(ledger.failed).containsExactly(due.scheduleId());
         assertThat(ledger.paid).isEmpty();
         assertThat(ledger.processing).isEmpty();
-        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 1, 0, 0));
+        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 1, 0, 0, 0));
     }
 
     @Test
@@ -109,14 +109,14 @@ class InstallmentChargeServiceTest {
 
         assertThat(adapter.chargeCalls).isEmpty();
         assertThat(ledger.anyWrite()).isFalse();
-        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1));
+        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1, 0));
     }
 
     @Test
     void stripeRail_skipped_adapterAndLedgerUntouched() {
         DueInstallment due = new DueInstallment(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), 2, 12_000,
-                ScheduleKind.INSTALLMENT.wire(), "stripe", null, null);
+                ScheduleKind.INSTALLMENT.wire(), "stripe", null, null, null);
         RecordingLedger ledger = new RecordingLedger(due);
         FakePmsAdapter adapter = FakePmsAdapter.returning(
                 new PmsChargeResult("nope", PmsChargeStatus.CHARGED, "Charged", 12_000, CUR));
@@ -125,7 +125,7 @@ class InstallmentChargeServiceTest {
 
         assertThat(adapter.chargeCalls).isEmpty();
         assertThat(ledger.anyWrite()).isFalse();
-        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 1, 0));
+        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 1, 0, 0));
     }
 
     @Test
@@ -139,7 +139,7 @@ class InstallmentChargeServiceTest {
 
         assertThat(adapter.chargeCalls).isEmpty();
         assertThat(ledger.anyWrite()).isFalse();
-        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1));
+        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1, 0));
     }
 
     @Test
@@ -152,7 +152,99 @@ class InstallmentChargeServiceTest {
 
         // A transport error is not a decline: no status write at all.
         assertThat(ledger.anyWrite()).isFalse();
-        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1));
+        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1, 0));
+    }
+
+    // -- reservation state --------------------------------------------------
+
+    @Test
+    void mewsRail_confirmedReservation_chargesWithReservationId() {
+        DueInstallment due = mews("card_abc", ScheduleKind.INSTALLMENT, "res_1");
+        RecordingLedger ledger = new RecordingLedger(due);
+        FakePmsAdapter adapter = FakePmsAdapter.returning(
+                new PmsChargeResult("pay_1", PmsChargeStatus.CHARGED, "Charged", 12_000, CUR));
+
+        PassResult result = service(ledger, adapter).runDuePass(ASOF);
+
+        assertThat(adapter.stateReads).containsExactly("res_1");
+        assertThat(adapter.chargeCalls).extracting(ChargeCall::reservationRef).containsExactly("res_1");
+        assertThat(ledger.paid).containsExactly(due.scheduleId());
+        assertThat(result).isEqualTo(new PassResult(1, 1, 0, 0, 0, 0, 0));
+    }
+
+    @Test
+    void mewsRail_checkedInOrOut_stillCharges() {
+        for (String state : List.of("Started", "Processed")) {
+            DueInstallment due = mews("card_abc", ScheduleKind.INSTALLMENT, "res_1");
+            FakePmsAdapter adapter = FakePmsAdapter.returning(
+                    new PmsChargeResult("pay_1", PmsChargeStatus.CHARGED, "Charged", 12_000, CUR));
+            adapter.reservationState = Optional.of(state);
+
+            service(new RecordingLedger(due), adapter).runDuePass(ASOF);
+
+            assertThat(adapter.chargeCalls).as(state).hasSize(1);
+        }
+    }
+
+    @Test
+    void mewsRail_canceledReservation_heldNotCharged() {
+        DueInstallment due = mews("card_abc", ScheduleKind.INSTALLMENT, "res_1");
+        RecordingLedger ledger = new RecordingLedger(due);
+        FakePmsAdapter adapter = FakePmsAdapter.returning(
+                new PmsChargeResult("nope", PmsChargeStatus.CHARGED, "Charged", 12_000, CUR));
+        adapter.reservationState = Optional.of("Canceled");
+
+        PassResult result = service(ledger, adapter).runDuePass(ASOF);
+
+        assertThat(adapter.chargeCalls).isEmpty();
+        assertThat(ledger.heldReasons).containsExactly("mews reservation res_1 is canceled; not charged");
+        assertThat(ledger.paid).isEmpty();
+        assertThat(ledger.failed).isEmpty();
+        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 0, 1));
+    }
+
+    @Test
+    void mewsRail_unconfirmedOrMissingReservation_heldNotCharged() {
+        for (Optional<String> state : List.of(Optional.of("Optional"), Optional.<String>empty())) {
+            DueInstallment due = mews("card_abc", ScheduleKind.INSTALLMENT, "res_1");
+            RecordingLedger ledger = new RecordingLedger(due);
+            FakePmsAdapter adapter = FakePmsAdapter.returning(
+                    new PmsChargeResult("nope", PmsChargeStatus.CHARGED, "Charged", 12_000, CUR));
+            adapter.reservationState = state;
+
+            PassResult result = service(ledger, adapter).runDuePass(ASOF);
+
+            assertThat(adapter.chargeCalls).isEmpty();
+            assertThat(ledger.heldReasons).hasSize(1);
+            assertThat(result.held()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void mewsRail_reservationStateUnreadable_nothingChargedNothingWritten() {
+        DueInstallment due = mews("card_abc", ScheduleKind.INSTALLMENT, "res_1");
+        RecordingLedger ledger = new RecordingLedger(due);
+        FakePmsAdapter adapter = FakePmsAdapter.returning(
+                new PmsChargeResult("nope", PmsChargeStatus.CHARGED, "Charged", 12_000, CUR));
+        adapter.reservationState = null;
+
+        PassResult result = service(ledger, adapter).runDuePass(ASOF);
+
+        assertThat(adapter.chargeCalls).isEmpty();
+        assertThat(ledger.anyWrite()).isFalse();
+        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1, 0));
+    }
+
+    @Test
+    void mewsRail_planWithoutReservation_chargesAsBefore() {
+        DueInstallment due = mews("card_abc", ScheduleKind.INSTALLMENT, null);
+        FakePmsAdapter adapter = FakePmsAdapter.returning(
+                new PmsChargeResult("pay_1", PmsChargeStatus.CHARGED, "Charged", 12_000, CUR));
+
+        service(new RecordingLedger(due), adapter).runDuePass(ASOF);
+
+        assertThat(adapter.stateReads).isEmpty();
+        assertThat(adapter.chargeCalls).extracting(ChargeCall::reservationRef).containsExactly((String) null);
     }
 
     // -- pure mapping -------------------------------------------------------
@@ -182,9 +274,13 @@ class InstallmentChargeServiceTest {
     }
 
     private static DueInstallment mews(String cardId, ScheduleKind kind) {
+        return mews(cardId, kind, null);
+    }
+
+    private static DueInstallment mews(String cardId, ScheduleKind kind, String reservationId) {
         return new DueInstallment(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), 2, 12_000,
-                kind.wire(), "mews", "mews_cust_1", cardId);
+                kind.wire(), "mews", "mews_cust_1", cardId, reservationId);
     }
 
     /** Records every write so tests can assert exactly which path ran. */
@@ -194,6 +290,7 @@ class InstallmentChargeServiceTest {
         final List<UUID> processing = new ArrayList<>();
         final List<UUID> failed = new ArrayList<>();
         final List<UUID> completedPlans = new ArrayList<>();
+        final List<String> heldReasons = new ArrayList<>();
         String paidPaymentId;
 
         RecordingLedger(DueInstallment... rows) {
@@ -202,7 +299,7 @@ class InstallmentChargeServiceTest {
 
         boolean anyWrite() {
             return !paid.isEmpty() || !processing.isEmpty() || !failed.isEmpty()
-                    || !completedPlans.isEmpty();
+                    || !completedPlans.isEmpty() || !heldReasons.isEmpty();
         }
 
         @Override public List<DueInstallment> findDue(LocalDate asOf) {
@@ -222,6 +319,11 @@ class InstallmentChargeServiceTest {
             failed.add(scheduleId);
         }
 
+        @Override public boolean markHeld(UUID scheduleId, String reason, Instant now) {
+            heldReasons.add(reason);
+            return true;
+        }
+
         @Override public void completePlanIfDone(UUID planId, ScheduleKind justPaidKind) {
             if (justPaidKind == ScheduleKind.INSTALLMENT) {
                 completedPlans.add(planId);
@@ -234,6 +336,9 @@ class InstallmentChargeServiceTest {
         private final PmsChargeResult result;
         private final PmsAdapterException error;
         final List<ChargeCall> chargeCalls = new ArrayList<>();
+        /** What getReservationState answers; null makes it throw like an unreachable Mews. */
+        Optional<String> reservationState = Optional.of("Confirmed");
+        final List<String> stateReads = new ArrayList<>();
 
         private FakePmsAdapter(PmsChargeResult result, PmsAdapterException error) {
             this.result = result;
@@ -251,11 +356,19 @@ class InstallmentChargeServiceTest {
         @Override
         public PmsChargeResult chargeStoredCard(String pmsCustomerId, String pmsCardId,
                 long amountMinorUnits, String currency, String reservationRef, String notes) {
-            chargeCalls.add(new ChargeCall(pmsCustomerId, pmsCardId, amountMinorUnits, currency));
+            chargeCalls.add(new ChargeCall(pmsCustomerId, pmsCardId, amountMinorUnits, currency, reservationRef));
             if (error != null) {
                 throw error;
             }
             return result;
+        }
+
+        @Override public Optional<String> getReservationState(String reservationRef) {
+            stateReads.add(reservationRef);
+            if (reservationState == null) {
+                throw new PmsAdapterException("Mews HTTP 503");
+            }
+            return reservationState;
         }
 
         @Override public PmsPropertyConfiguration getPropertyConfiguration() {
@@ -276,5 +389,6 @@ class InstallmentChargeServiceTest {
         }
     }
 
-    private record ChargeCall(String customerId, String cardId, long amountMinor, String currency) {}
+    private record ChargeCall(String customerId, String cardId, long amountMinor, String currency,
+            String reservationRef) {}
 }

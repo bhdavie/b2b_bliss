@@ -35,7 +35,8 @@ public interface DueChargeDao {
                    ps.kind               AS kind,
                    pp.payment_rail       AS payment_rail,
                    c.mews_customer_id    AS mews_customer_id,
-                   cc.mews_credit_card_id AS mews_credit_card_id
+                   cc.mews_credit_card_id AS mews_credit_card_id,
+                   b.mews_reservation_id AS mews_reservation_id
             FROM payment_schedule ps
             JOIN payment_plans   pp ON pp.id = ps.payment_plan_id
             JOIN bookings         b ON b.id  = pp.booking_id
@@ -95,7 +96,10 @@ public interface DueChargeDao {
             @ColumnName("kind") String kind,
             @ColumnName("payment_rail") String paymentRail,
             @ColumnName("mews_customer_id") String mewsCustomerId,
-            @ColumnName("mews_credit_card_id") String mewsCreditCardId) {
+            @ColumnName("mews_credit_card_id") String mewsCreditCardId,
+            // The Mews reservation the installment is charged against. Null for
+            // plans made before Bliss created reservations.
+            @ColumnName("mews_reservation_id") String mewsReservationId) {
     }
 
     /**

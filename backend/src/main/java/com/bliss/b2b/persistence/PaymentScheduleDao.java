@@ -164,4 +164,17 @@ public interface PaymentScheduleDao {
               AND status IN ('scheduled', 'processing', 'failed', 'retrying')
             """)
     int cancelRemaining(@Bind("paymentPlanId") UUID paymentPlanId);
+
+    /**
+     * Notes why a due installment was not charged, without changing its status,
+     * so it stays due and is retried once the cause clears. Returns 0 when the
+     * note is unchanged, which the caller uses to log a hold once rather than
+     * every pass.
+     */
+    @SqlUpdate("""
+            UPDATE payment_schedule
+            SET last_error = :reason
+            WHERE id = :id AND last_error IS DISTINCT FROM :reason
+            """)
+    int noteHeld(@Bind("id") UUID id, @Bind("reason") String reason);
 }

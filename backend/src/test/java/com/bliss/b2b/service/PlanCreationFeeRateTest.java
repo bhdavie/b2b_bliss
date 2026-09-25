@@ -56,6 +56,9 @@ class PlanCreationFeeRateTest {
         @Override public List<PaymentScheduleEntry> listForPlan(UUID paymentPlanId) {
             throw unused();
         }
+        @Override public int noteHeld(UUID id, String reason) {
+            throw unused();
+        }
         @Override public List<PaymentScheduleEntry> listUnsettledForPlan(UUID paymentPlanId) {
             throw unused();
         }

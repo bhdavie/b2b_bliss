@@ -16,7 +16,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
@@ -42,6 +44,12 @@ public class InstallmentChargeService {
 
     static final String RAIL_STRIPE = "stripe";
     static final String RAIL_MEWS = "mews";
+    /**
+     * Mews reservation states an installment may be charged in: booked,
+     * checked in, or checked out (a retry can land after the stay).
+     */
+    static final Set<String> CHARGEABLE_RESERVATION_STATES =
+            Set.of("Confirmed", "Started", "Processed");
     static final String RAIL_CLOUDBEDS = "cloudbeds";
 
     private final Ledger ledger;
@@ -83,7 +91,7 @@ public class InstallmentChargeService {
      */
     public PassResult runDuePass(LocalDate asOf) {
         List<DueInstallment> due = ledger.findDue(asOf);
-        int charged = 0, processing = 0, failed = 0, skippedStripe = 0, errors = 0;
+        int charged = 0, processing = 0, failed = 0, skippedStripe = 0, errors = 0, held = 0;
 
         for (DueInstallment d : due) {
             String rail = d.paymentRail();
@@ -156,13 +164,38 @@ public class InstallmentChargeService {
             ChargeContext ctx = ctxMaybe.get();
 
             Instant now = Instant.now(clock);
+            // The stay must still be on in Mews. A reservation the hotel
+            // cancelled, or one that never left Optional, is not charged: the
+            // installment is held with a reason and stays due. If Mews cannot
+            // say, nothing is charged this pass.
+            String reservationId = d.mewsReservationId();
+            if (reservationId != null) {
+                Optional<String> state;
+                try {
+                    state = ctx.adapter().getReservationState(reservationId);
+                } catch (PmsAdapterException e) {
+                    log.warn("Could not read Mews reservation {} for schedule {}: {}; not charging",
+                            reservationId, d.scheduleId(), e.getMessage());
+                    errors++;
+                    continue;
+                }
+                if (state.isEmpty() || !CHARGEABLE_RESERVATION_STATES.contains(state.get())) {
+                    String reason = "mews reservation " + reservationId + " is "
+                            + state.map(s -> s.toLowerCase(Locale.ROOT)).orElse("missing") + "; not charged";
+                    if (ledger.markHeld(d.scheduleId(), reason, now)) {
+                        log.warn("Mews installment {} held: {}", d.scheduleId(), reason);
+                    }
+                    held++;
+                    continue;
+                }
+            }
             try {
                 PmsChargeResult result = ctx.adapter().chargeStoredCard(
                         d.mewsCustomerId(),
                         d.mewsCreditCardId(),
                         d.amountCents(),
                         ctx.currency(),
-                        null,
+                        reservationId,
                         "Bliss installment seq " + d.sequence());
                 PaymentScheduleStatus mapped = mapChargeStatus(result.status());
                 switch (mapped) {
@@ -202,7 +235,7 @@ public class InstallmentChargeService {
         }
 
         PassResult result = new PassResult(
-                due.size(), charged, processing, failed, skippedStripe, errors);
+                due.size(), charged, processing, failed, skippedStripe, errors, held);
         log.info("Installment charge pass asOf={} -> {}", asOf, result);
         return result;
     }
@@ -274,11 +307,18 @@ public class InstallmentChargeService {
         void markFailed(UUID scheduleId, String error, Instant now);
 
         void completePlanIfDone(UUID planId, ScheduleKind justPaidKind);
+
+        /**
+         * Records why a due installment was held rather than charged. Status is
+         * unchanged. Returns true when the reason is new, so the hold is logged
+         * once, not every pass.
+         */
+        boolean markHeld(UUID scheduleId, String reason, Instant now);
     }
 
     /** Tally of a single pass. */
     public record PassResult(
-            int due, int charged, int processing, int failed, int skippedStripe, int errors) {
+            int due, int charged, int processing, int failed, int skippedStripe, int errors, int held) {
     }
 
     /**
@@ -315,6 +355,11 @@ public class InstallmentChargeService {
         public void markFailed(UUID scheduleId, String error, Instant now) {
             jdbi.useHandle(h -> h.attach(PaymentScheduleDao.class)
                     .updateStatusWithError(scheduleId, PaymentScheduleStatus.FAILED.wire(), error, 1, now));
+        }
+
+        @Override
+        public boolean markHeld(UUID scheduleId, String reason, Instant now) {
+            return jdbi.withHandle(h -> h.attach(PaymentScheduleDao.class).noteHeld(scheduleId, reason)) == 1;
         }
 
         @Override
