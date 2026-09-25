@@ -29,6 +29,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -257,12 +258,17 @@ public class MewsCheckoutService {
         try {
             MewsStayService.StayTimes times = stayService.timesFor(ctx.merchant.slug(),
                     ctx.booking.appointmentDate(), ctx.booking.checkoutDate());
-            reservationId = adapter.addOptionalReservation(
+            // A previous attempt may have created the hold and lost the
+            // response. Reuse that hold instead of making a second one.
+            Optional<String> earlier = findEarlierHold(ctx, adapter, mewsCustomerId, times);
+            reservationId = earlier.isPresent() ? earlier.get() : adapter.addOptionalReservation(
                     ctx.connection.serviceId(), mewsCustomerId,
                     ctx.booking.mewsResourceCategoryId(), ctx.booking.mewsRateId(),
                     ctx.connection.adultAgeCategoryId(), ctx.booking.adultCount(),
                     times.startUtc(), times.endUtc(), Instant.now(clock).plus(HOLD_TTL),
                     ctx.booking.bookingToken(), "Bliss payment plan " + ctx.plan.id());
+            earlier.ifPresent(id -> log.info("Reusing Mews hold {} for plan {} (earlier response lost)",
+                    id, ctx.plan.id()));
         } catch (MewsStayService.MewsStayException e) {
             throw new MewsCheckoutException("mews_unreachable", e.getMessage());
         } catch (PmsAdapterException e) {
@@ -281,6 +287,19 @@ public class MewsCheckoutService {
         return jdbi.withHandle(h -> h.attach(BookingDao.class).findById(ctx.booking.id()))
                 .map(Booking::mewsReservationId)
                 .orElseThrow(() -> new MewsCheckoutException("not_found", "booking not found"));
+    }
+
+    /** An Optional hold already on the guest's account for this exact stay, if any. */
+    private Optional<String> findEarlierHold(Ctx ctx, MewsAdapter adapter, String mewsCustomerId,
+            MewsStayService.StayTimes times) {
+        try {
+            return adapter.findReservation(ctx.connection.serviceId(), mewsCustomerId,
+                    ctx.booking.mewsResourceCategoryId(), times.startUtc(), times.endUtc(), List.of("Optional"));
+        } catch (PmsAdapterException e) {
+            // Not knowing is not the same as "none": adding now could duplicate.
+            throw new MewsCheckoutException("mews_unreachable",
+                    "We couldn't reach the property's booking system. Nothing was charged. Try again.");
+        }
     }
 
     /**

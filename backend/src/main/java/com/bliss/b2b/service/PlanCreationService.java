@@ -239,6 +239,14 @@ public class PlanCreationService {
                         "booking is not open for plan acceptance (status=" + booking.status().wire() + ")");
             }
             Merchant merchant = handle.attach(MerchantDao.class).findById(booking.merchantId()).orElseThrow();
+            if (merchant.pmsType() == com.bliss.b2b.domain.PmsType.MEWS) {
+                // A dashboard link has no room or guest count, so no Mews
+                // reservation can be made from it. Links made before this rule
+                // land here.
+                throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
+                        "This property takes payment plans through its own booking page. "
+                                + "Book your stay there to choose a plan.");
+            }
             return acceptForBooking(handle, booking, merchant,
                     input.customerEmail(), input.customerFirstName(), input.customerLastName(),
                     null, input.paymentMethodId(), input.frequency(), input.demoCard());
@@ -846,6 +854,18 @@ public class PlanCreationService {
         }
 
         long feeCents = feeFor(discountedTotal, feeRate);
+        // Every installment lands on the Mews reservation's bill, which Mews
+        // prices at originalTotal. Anything else leaves the hotel's bill over-
+        // or under-paid: a Bliss fee above 0% overpays it, a plan discount
+        // underpays it. Not refused, since the property's settings decide both,
+        // but logged so a mismatch on a live property is seen.
+        long planChargeTotal = discountedTotal + feeCents;
+        if (planChargeTotal != originalTotal) {
+            log.warn("Mews plan for booking {} (merchant {}) charges {} but Mews prices the stay at {} "
+                    + "(fee {}, discount {}); the reservation bill will not balance",
+                    booking.id(), merchant.id(), planChargeTotal, originalTotal,
+                    feeCents, originalTotal - discountedTotal);
+        }
         planDao.insertPendingMews(
                 booking.id(), customer.id(), storedCard.id(),
                 discountedTotal, installmentCount, option.frequency().wire(),

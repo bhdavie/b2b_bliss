@@ -16,7 +16,8 @@ export default async function NewBookingPage() {
   const pmsConnected =
     onboarding?.steps.find((s) => s.key === "pms_connected")?.done ?? false;
 
-  if (!pmsConnected) {
+  // Mews properties don't create links here; /bookings explains why.
+  if (!pmsConnected || onboarding?.pmsType === "mews") {
     redirect("/bookings");
   }
 

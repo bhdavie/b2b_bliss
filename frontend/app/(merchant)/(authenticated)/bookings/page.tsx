@@ -17,6 +17,31 @@ export default async function BookingsPage() {
   const canCreate =
     onboarding?.steps.find((s) => s.key === "pms_connected")?.done ?? false;
   const bookings = list?.bookings ?? [];
+  // Mews properties take plans through their booking engine: the guest picks a
+  // room there and Bliss creates the Mews reservation. A dashboard link has no
+  // room to reserve, so the backend refuses it and the button is not offered.
+  const isMews = onboarding?.pmsType === "mews";
+
+  if (isMews) {
+    return (
+      <>
+        <Panel variant="filled" className="mb-3 px-5 py-5">
+          <div className="text-[15px] font-medium text-ink-900">
+            Your guests book through Mews
+          </div>
+          <p className="mt-2 max-w-[560px] text-[14px] text-ink-500">
+            Guests choose a payment plan in your Mews booking engine, and Bliss creates the
+            reservation in Mews for you. Payment plan links aren&apos;t created from the
+            dashboard for Mews properties. Plans your guests start show up below.
+          </p>
+          <Button href="/install" variant="ghost" className="mt-4 inline-flex">
+            Booking engine setup
+          </Button>
+        </Panel>
+        {bookings.length > 0 ? <BookingsTable bookings={bookings} action={null} /> : null}
+      </>
+    );
+  }
 
   return (
     <>

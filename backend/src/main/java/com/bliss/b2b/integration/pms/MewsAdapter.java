@@ -65,6 +65,7 @@ public class MewsAdapter implements PmsAdapter {
     private static final String RESERVATIONS_ADD = "/api/connector/v1/reservations/add";
     private static final String RESERVATIONS_CONFIRM = "/api/connector/v1/reservations/confirm";
     private static final String RESERVATIONS_CANCEL = "/api/connector/v1/reservations/cancel";
+    private static final String RESERVATIONS_GET_ALL = "/api/connector/v1/reservations/getAll/2023-06-06";
 
     /** Pages followed per catalogue list call; a small property never gets near it. */
     private static final int MAX_PAGES = 10;
@@ -494,6 +495,52 @@ public class MewsAdapter implements PmsAdapter {
         }
         log.info("Mews optional reservation {} held for {}", id, identifier);
         return id;
+    }
+
+    /**
+     * A reservation on this customer's account for exactly this service, room
+     * category and stay, in one of {@code states}. Used before creating a hold,
+     * so a hold whose creation response was lost is found and reused rather
+     * than duplicated. Mews has no idempotency key for reservations/add.
+     */
+    public Optional<String> findReservation(String serviceId, String customerId, String categoryId,
+            Instant startUtc, Instant endUtc, List<String> states) {
+        Map<String, Object> body = auth();
+        body.put("AccountIds", List.of(customerId));
+        body.put("ServiceIds", List.of(serviceId));
+        body.put("States", states);
+        for (JsonNode r : getAllPaged(RESERVATIONS_GET_ALL, body, "Reservations")) {
+            if (categoryId.equals(textOrNull(r, "RequestedResourceCategoryId"))
+                    && startUtc.equals(parseInstant(textOrNull(r, "StartUtc")))
+                    && endUtc.equals(parseInstant(textOrNull(r, "EndUtc")))) {
+                return Optional.ofNullable(textOrNull(r, "Id"));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * A reservation's current state (Optional, Confirmed, Started, Processed,
+     * Canceled, Inquired, Requested), or empty if Mews does not return it.
+     */
+    public Optional<String> getReservationState(String reservationId) {
+        Map<String, Object> body = auth();
+        body.put("ReservationIds", List.of(reservationId));
+        body.put("Limitation", Map.of("Count", 1));
+        for (JsonNode r : post(RESERVATIONS_GET_ALL, body).path("Reservations")) {
+            if (reservationId.equals(textOrNull(r, "Id"))) {
+                return Optional.ofNullable(textOrNull(r, "State"));
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Instant parseInstant(String iso) {
+        try {
+            return iso == null ? null : Instant.parse(iso);
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
+        }
     }
 
     /** Confirms an {@code Optional} reservation. With {@code sendEmail}, Mews sends its confirmation. */
