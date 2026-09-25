@@ -22,9 +22,24 @@ public record MewsConnection(
         String currency,
         Instant validatedAt,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        // Booking setup (V31). Null until the property picks its Bliss rate.
+        String serviceId,
+        String blissRateId,
+        String adultAgeCategoryId,
+        String timeZone
 ) {
     public boolean isValidated() {
         return validatedAt != null;
+    }
+
+    /** True once the property has chosen what Bliss books, so checkout can create reservations. */
+    public boolean isBookingSetupComplete() {
+        return notBlank(serviceId) && notBlank(blissRateId)
+                && notBlank(adultAgeCategoryId) && notBlank(timeZone);
+    }
+
+    private static boolean notBlank(String s) {
+        return s != null && !s.isBlank();
     }
 }

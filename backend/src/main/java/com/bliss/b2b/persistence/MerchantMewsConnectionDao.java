@@ -64,6 +64,27 @@ public interface MerchantMewsConnectionDao {
             @Bind("validatedAt") Instant validatedAt
     );
 
+    /**
+     * Stores what Bliss books for this property: the stay service, the Bliss
+     * rate, the adult age category and the enterprise time zone. Leaves the
+     * credentials and enterprise identity alone. Returns rows updated.
+     */
+    @SqlUpdate("""
+            UPDATE merchant_mews_connections
+            SET service_id = :serviceId,
+                bliss_rate_id = :blissRateId,
+                adult_age_category_id = :adultAgeCategoryId,
+                time_zone = :timeZone
+            WHERE merchant_id = :merchantId
+            """)
+    int updateBookingSetup(
+            @Bind("merchantId") UUID merchantId,
+            @Bind("serviceId") String serviceId,
+            @Bind("blissRateId") String blissRateId,
+            @Bind("adultAgeCategoryId") String adultAgeCategoryId,
+            @Bind("timeZone") String timeZone
+    );
+
     /** Removes a property's stored Mews connection. Returns rows deleted (0 or 1). */
     @SqlUpdate("DELETE FROM merchant_mews_connections WHERE merchant_id = :merchantId")
     int deleteByMerchant(@Bind("merchantId") UUID merchantId);

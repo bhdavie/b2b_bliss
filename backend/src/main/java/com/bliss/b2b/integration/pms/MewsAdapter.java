@@ -13,9 +13,13 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +54,13 @@ public class MewsAdapter implements PmsAdapter {
             "/api/connector/v1/paymentMethodRequests/add";
     private static final String CREDIT_CARDS_CHARGE = "/api/connector/v1/creditCards/charge";
     private static final String PAYMENTS_GET_ALL = "/api/connector/v1/payments/getAll";
+    private static final String SERVICES_GET_ALL = "/api/connector/v1/services/getAll";
+    private static final String RATES_GET_ALL = "/api/connector/v1/rates/getAll";
+    private static final String RESOURCE_CATEGORIES_GET_ALL = "/api/connector/v1/resourceCategories/getAll";
+    private static final String AGE_CATEGORIES_GET_ALL = "/api/connector/v1/ageCategories/getAll";
+
+    /** Pages followed per catalogue list call; a small property never gets near it. */
+    private static final int MAX_PAGES = 10;
 
     /** Cap on rows pulled per list call; a demo property holds far fewer. */
     private static final int PAGE_LIMIT = 100;
@@ -304,6 +315,133 @@ public class MewsAdapter implements PmsAdapter {
             }
         }
         return null;
+    }
+
+    // --- Catalogue (booking setup) ------------------------------------------
+
+    /** Every bookable (stay) service on the enterprise, active or not. */
+    public List<MewsCatalog.Service> getBookableServices() {
+        List<MewsCatalog.Service> out = new ArrayList<>();
+        for (JsonNode s : getAllPaged(SERVICES_GET_ALL, auth(), "Services")) {
+            JsonNode data = s.path("Data");
+            if (!"Bookable".equals(textOrNull(data, "Discriminator"))) {
+                continue;
+            }
+            JsonNode value = data.path("Value");
+            out.add(new MewsCatalog.Service(
+                    textOrNull(s, "Id"),
+                    textOrNull(s, "Name"),
+                    s.path("IsActive").asBoolean(false),
+                    parseDuration(textOrNull(value, "StartOffset")),
+                    parseDuration(textOrNull(value, "EndOffset"))));
+        }
+        return out;
+    }
+
+    /** Every rate on a service. */
+    public List<MewsCatalog.Rate> getRates(String serviceId) {
+        Map<String, Object> body = auth();
+        body.put("ServiceIds", List.of(serviceId));
+        List<MewsCatalog.Rate> out = new ArrayList<>();
+        for (JsonNode r : getAllPaged(RATES_GET_ALL, body, "Rates")) {
+            out.add(new MewsCatalog.Rate(
+                    textOrNull(r, "Id"),
+                    textOrNull(r, "Name"),
+                    textOrNull(r, "Type"),
+                    r.path("IsPublic").asBoolean(false),
+                    r.path("IsEnabled").asBoolean(false),
+                    r.path("IsActive").asBoolean(false)));
+        }
+        return out;
+    }
+
+    /** Every room category on a service, with its capacity. */
+    public List<MewsCatalog.ResourceCategory> getResourceCategories(String serviceId) {
+        Map<String, Object> body = auth();
+        body.put("ServiceIds", List.of(serviceId));
+        List<MewsCatalog.ResourceCategory> out = new ArrayList<>();
+        for (JsonNode c : getAllPaged(RESOURCE_CATEGORIES_GET_ALL, body, "ResourceCategories")) {
+            out.add(new MewsCatalog.ResourceCategory(
+                    textOrNull(c, "Id"),
+                    localized(c.path("Names")),
+                    c.path("IsActive").asBoolean(false),
+                    c.path("Capacity").asInt(0),
+                    c.path("ExtraCapacity").asInt(0)));
+        }
+        return out;
+    }
+
+    /** The service's active adult age category, which PersonCounts are counted in. */
+    public Optional<String> getAdultAgeCategoryId(String serviceId) {
+        Map<String, Object> body = auth();
+        body.put("ServiceIds", List.of(serviceId));
+        for (JsonNode a : getAllPaged(AGE_CATEGORIES_GET_ALL, body, "AgeCategories")) {
+            if ("Adult".equals(textOrNull(a, "Classification")) && a.path("IsActive").asBoolean(false)) {
+                return Optional.ofNullable(textOrNull(a, "Id"));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Follows Mews' cursor paging for a getAll call and returns every item in
+     * {@code arrayField}. Stops at {@link #MAX_PAGES} rather than looping on a
+     * cursor that never ends.
+     */
+    private List<JsonNode> getAllPaged(String path, Map<String, Object> baseBody, String arrayField) {
+        List<JsonNode> out = new ArrayList<>();
+        String cursor = null;
+        for (int page = 0; page < MAX_PAGES; page++) {
+            Map<String, Object> body = new LinkedHashMap<>(baseBody);
+            Map<String, Object> limitation = new LinkedHashMap<>();
+            limitation.put("Count", PAGE_LIMIT);
+            if (cursor != null) {
+                limitation.put("Cursor", cursor);
+            }
+            body.put("Limitation", limitation);
+            JsonNode root = post(path, body);
+            JsonNode items = root.path(arrayField);
+            int n = 0;
+            if (items.isArray()) {
+                for (JsonNode item : items) {
+                    out.add(item);
+                    n++;
+                }
+            }
+            cursor = textOrNull(root, "Cursor");
+            if (n < PAGE_LIMIT || cursor == null) {
+                break;
+            }
+        }
+        return out;
+    }
+
+    /** en-US, else en-GB, else any name Mews has. */
+    private static String localized(JsonNode names) {
+        for (String lang : List.of("en-US", "en-GB")) {
+            String v = textOrNull(names, lang);
+            if (v != null && !v.isBlank()) {
+                return v;
+            }
+        }
+        Iterator<JsonNode> it = names.elements();
+        return it.hasNext() ? it.next().asText() : null;
+    }
+
+    /** Mews offsets are ISO-8601 periods such as {@code P0M0DT15H0M0S}; months and days are always zero here. */
+    static Duration parseDuration(String iso) {
+        if (iso == null || iso.isBlank()) {
+            return null;
+        }
+        int t = iso.indexOf('T');
+        String time = t < 0 ? "PT0S" : "PT" + iso.substring(t + 1);
+        String datePart = t < 0 ? iso.substring(1) : iso.substring(1, t);
+        long days = 0;
+        Matcher m = Pattern.compile("(-?\\d+)D").matcher(datePart);
+        if (m.find()) {
+            days = Long.parseLong(m.group(1));
+        }
+        return Duration.parse(time).plusDays(days);
     }
 
     // --- Mews wire helpers -------------------------------------------------

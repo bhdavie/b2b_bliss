@@ -12,6 +12,7 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.Map;
@@ -74,6 +75,41 @@ public class PropertyOnboardingResource {
         }
     }
 
+    @GET
+    @Path("/pms/mews/setup")
+    public Response mewsSetupOptions(@Auth MerchantPrincipal principal,
+                                     @QueryParam("serviceId") String serviceId) {
+        try {
+            return Response.ok(service.mewsSetupOptions(principal.merchant(), serviceId)).build();
+        } catch (PropertyOnboardingException e) {
+            return setupError(e);
+        }
+    }
+
+    @POST
+    @Path("/pms/mews/setup")
+    public Response saveMewsSetup(@Auth MerchantPrincipal principal, MewsSetupRequest req) {
+        if (req == null) {
+            return badRequest("invalid_input", "body required");
+        }
+        try {
+            return Response.ok(service.saveMewsSetup(principal.merchant(), req.serviceId(), req.rateId()))
+                    .build();
+        } catch (PropertyOnboardingException e) {
+            return setupError(e);
+        }
+    }
+
+    /** Not connected is a state conflict; Mews being unreachable is upstream; the rest is bad input. */
+    private static Response setupError(PropertyOnboardingException e) {
+        int status = switch (e.code()) {
+            case "mews_not_connected" -> 409;
+            case "mews_unreachable" -> 502;
+            default -> 400;
+        };
+        return Response.status(status).entity(Map.of("error", e.code(), "message", e.getMessage())).build();
+    }
+
     @POST
     @Path("/pms/mews/disconnect")
     public Response disconnectMews(@Auth MerchantPrincipal principal) {
@@ -98,6 +134,11 @@ public class PropertyOnboardingResource {
     }
 
     public record SelectPmsRequest(@JsonProperty("pmsType") String pmsType) {
+    }
+
+    public record MewsSetupRequest(
+            @JsonProperty("serviceId") String serviceId,
+            @JsonProperty("rateId") String rateId) {
     }
 
     public record ConnectMewsRequest(

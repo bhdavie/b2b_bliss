@@ -21,7 +21,11 @@ public class MewsConnectionRowMapper implements RowMapper<MewsConnection> {
                 rs.getString("currency"),
                 toInstant(rs.getTimestamp("validated_at")),
                 toInstant(rs.getTimestamp("created_at")),
-                toInstant(rs.getTimestamp("updated_at"))
+                toInstant(rs.getTimestamp("updated_at")),
+                rs.getString("service_id"),
+                rs.getString("bliss_rate_id"),
+                rs.getString("adult_age_category_id"),
+                rs.getString("time_zone")
         );
     }
 

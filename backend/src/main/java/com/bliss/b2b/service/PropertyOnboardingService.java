@@ -8,6 +8,7 @@ import com.bliss.b2b.domain.CloudbedsConnection;
 import com.bliss.b2b.domain.StripeConnection;
 import com.bliss.b2b.integration.pms.MewsAdapter;
 import com.bliss.b2b.integration.pms.MewsAdapterFactory;
+import com.bliss.b2b.integration.pms.MewsCatalog;
 import com.bliss.b2b.integration.pms.MewsPlatform;
 import com.bliss.b2b.integration.pms.PmsAdapterException;
 import com.bliss.b2b.integration.pms.PmsPropertyConfiguration;
@@ -64,7 +65,8 @@ public class PropertyOnboardingService {
             mews = new MewsInfo(
                     conn != null && conn.isValidated(),
                     conn == null ? null : conn.enterpriseName(),
-                    conn == null ? null : conn.currency());
+                    conn == null ? null : conn.currency(),
+                    conn != null && conn.isBookingSetupComplete());
         }
         StripeInfo stripe = null;
         if (merchant.pmsType() == PmsType.STRIPE) {
@@ -221,6 +223,97 @@ public class PropertyOnboardingService {
     }
 
     /**
+     * What the property can choose from for its booking setup: its active stay
+     * services and, for the chosen one, the rates Bliss could book. The service
+     * shown is {@code serviceId} when given, else the stored one, else the only
+     * active one. Reads Mews live; nothing is stored.
+     */
+    public MewsSetupOptions mewsSetupOptions(Merchant merchant, String serviceId) {
+        MewsConnection conn = validatedConnection(merchant);
+        MewsAdapter adapter = mewsFactory.adapterForConnection(conn);
+        try {
+            List<MewsCatalog.Service> services = adapter.getBookableServices().stream()
+                    .filter(MewsCatalog.Service::active)
+                    .toList();
+            String selected = firstNonBlank(serviceId, conn.serviceId());
+            if (selected == null && services.size() == 1) {
+                selected = services.get(0).id();
+            }
+            List<MewsCatalog.Rate> rates = selected == null ? List.of()
+                    : adapter.getRates(selected).stream().filter(MewsCatalog.Rate::bookable).toList();
+            return new MewsSetupOptions(services, selected, rates, conn.blissRateId());
+        } catch (PmsAdapterException e) {
+            throw new PropertyOnboardingException("mews_unreachable",
+                    "Could not read your Mews setup. " + e.getMessage());
+        }
+    }
+
+    /**
+     * Stores what Bliss books: the stay service and the Bliss rate, plus the
+     * adult age category and enterprise time zone read from Mews. Both ids are
+     * checked against the property's live catalogue, so a stale or mistyped id
+     * cannot be saved.
+     *
+     * <p>A public rate is accepted with a warning rather than refused. The
+     * setup Bliss asks hotels for is a private rate with no payment policy, but
+     * the shared Mews demo properties only have public ones to test with.
+     */
+    public MewsSetupResult saveMewsSetup(Merchant merchant, String serviceId, String rateId) {
+        if (serviceId == null || serviceId.isBlank() || rateId == null || rateId.isBlank()) {
+            throw new PropertyOnboardingException("invalid_input", "Choose a service and a rate.");
+        }
+        MewsConnection conn = validatedConnection(merchant);
+        MewsAdapter adapter = mewsFactory.adapterForConnection(conn);
+        try {
+            boolean serviceOk = adapter.getBookableServices().stream()
+                    .anyMatch(s -> s.active() && s.id().equals(serviceId));
+            if (!serviceOk) {
+                throw new PropertyOnboardingException("unknown_service",
+                        "That service is not an active stay service in your Mews.");
+            }
+            MewsCatalog.Rate rate = adapter.getRates(serviceId).stream()
+                    .filter(r -> r.id().equals(rateId))
+                    .findFirst()
+                    .orElseThrow(() -> new PropertyOnboardingException("unknown_rate",
+                            "That rate is not on the chosen service."));
+            if (!rate.bookable()) {
+                throw new PropertyOnboardingException("rate_not_bookable",
+                        "That rate is disabled, inactive or tied to an availability block in Mews.");
+            }
+            String adult = adapter.getAdultAgeCategoryId(serviceId).orElseThrow(() ->
+                    new PropertyOnboardingException("no_adult_category",
+                            "The service has no active adult age category in Mews."));
+            String timeZone = adapter.getPropertyConfiguration().timeZoneIdentifier();
+            if (timeZone == null || timeZone.isBlank()) {
+                throw new PropertyOnboardingException("no_time_zone",
+                        "Mews did not report a time zone for your property.");
+            }
+            connectionDao.updateBookingSetup(merchant.id(), serviceId, rateId, adult, timeZone);
+            List<String> warnings = rate.isPublic() ? List.of("rate_is_public") : List.of();
+            log.info("Property {} Mews booking setup: service {} rate {} ({}){}",
+                    merchant.id(), serviceId, rateId, rate.name(),
+                    warnings.isEmpty() ? "" : " warnings=" + warnings);
+            return new MewsSetupResult(serviceId, rateId, rate.name(), timeZone, warnings);
+        } catch (PmsAdapterException e) {
+            throw new PropertyOnboardingException("mews_unreachable",
+                    "Could not read your Mews setup. " + e.getMessage());
+        }
+    }
+
+    private MewsConnection validatedConnection(Merchant merchant) {
+        return connectionDao.findByMerchant(merchant.id())
+                .filter(MewsConnection::isValidated)
+                .orElseThrow(() -> new PropertyOnboardingException(
+                        "mews_not_connected", "Connect Mews first."));
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        if (a != null && !a.isBlank()) return a;
+        if (b != null && !b.isBlank()) return b;
+        return null;
+    }
+
+    /**
      * Advances PMS_CONNECTED -> POLICY_SET when a property saves its plan rules.
      * No-op if the property has not connected a PMS yet or is already further
      * along.
@@ -299,7 +392,20 @@ public class PropertyOnboardingService {
     public record CloudbedsInfo(boolean connected, String propertyName, String currency) {
     }
 
-    public record MewsInfo(boolean connected, String enterpriseName, String currency) {
+    public record MewsInfo(
+            boolean connected, String enterpriseName, String currency, boolean bookingSetupComplete) {
+    }
+
+    public record MewsSetupOptions(
+            List<MewsCatalog.Service> services,
+            String selectedServiceId,
+            List<MewsCatalog.Rate> rates,
+            String selectedRateId) {
+    }
+
+    /** {@code warnings} holds codes such as {@code rate_is_public}; empty when the setup is as Bliss asks. */
+    public record MewsSetupResult(
+            String serviceId, String rateId, String rateName, String timeZone, List<String> warnings) {
     }
 
     public record StripeInfo(boolean connected, String connectStatus, String stripeAccountId) {

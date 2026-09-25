@@ -47,6 +47,12 @@ class MewsAdapterFactoryTest {
             }
 
             @Override
+            public int updateBookingSetup(UUID merchantId, String serviceId, String blissRateId,
+                    String adultAgeCategoryId, String timeZone) {
+                return 0;
+            }
+
+            @Override
             public int deleteByMerchant(UUID merchantId) {
                 return 0;
             }
@@ -67,7 +73,7 @@ class MewsAdapterFactoryTest {
         return new MewsConnection(MERCHANT, "https://api.mews.com",
                 CIPHER.encrypt(Field.MEWS_CLIENT_TOKEN, MERCHANT, "ct"),
                 CIPHER.encrypt(Field.MEWS_ACCESS_TOKEN, MERCHANT, "at"),
-                "ent", "Cranberry", currency, now, now, now);
+                "ent", "Cranberry", currency, now, now, now, null, null, null, null);
     }
 
     private static MerchantMewsConnectionDao daoReturning(MewsConnection conn) {
@@ -81,6 +87,12 @@ class MewsAdapterFactoryTest {
             public void upsertValidated(UUID merchantId, String platformUrl, String encryptedClientToken,
                     String encryptedAccessToken, String enterpriseId, String enterpriseName,
                     String currency, Instant validatedAt) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public int updateBookingSetup(UUID merchantId, String serviceId, String blissRateId,
+                    String adultAgeCategoryId, String timeZone) {
                 throw new UnsupportedOperationException();
             }
 

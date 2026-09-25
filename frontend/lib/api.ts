@@ -437,6 +437,8 @@ export type OnboardingMews = {
   connected: boolean;
   enterpriseName: string | null;
   currency: string | null;
+  /** True once the property has chosen the stay service and Bliss rate. */
+  bookingSetupComplete: boolean;
 };
 
 export type OnboardingCloudbeds = {
@@ -525,6 +527,64 @@ export async function activateOnboarding(): Promise<OnboardingStatus> {
     { method: "POST", credentials: "include" },
   );
   return unwrap<OnboardingStatus>(res);
+}
+
+export type MewsService = { id: string; name: string; active: boolean };
+export type MewsRate = {
+  id: string;
+  name: string;
+  type: string | null;
+  isPublic: boolean;
+  enabled: boolean;
+  active: boolean;
+};
+export type MewsSetupOptions = {
+  services: MewsService[];
+  selectedServiceId: string | null;
+  rates: MewsRate[];
+  selectedRateId: string | null;
+};
+export type MewsSetupResult = {
+  serviceId: string;
+  rateId: string;
+  rateName: string;
+  timeZone: string;
+  warnings: string[];
+};
+
+async function mewsSetupError(res: Response): Promise<Error> {
+  try {
+    const body = (await res.json()) as { message?: string; error?: string };
+    return new Error(body.message ?? body.error ?? `Request failed (${res.status}).`);
+  } catch {
+    return new Error(`Request failed (${res.status}).`);
+  }
+}
+
+/** The property's stay services and, for the chosen one, its bookable rates. Read live from Mews. */
+export async function fetchMewsSetupOptions(serviceId?: string): Promise<MewsSetupOptions> {
+  const qs = serviceId ? `?serviceId=${encodeURIComponent(serviceId)}` : "";
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/merchants/me/onboarding/pms/mews/setup${qs}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  if (!res.ok) throw await mewsSetupError(res);
+  return (await res.json()) as MewsSetupOptions;
+}
+
+/** Stores the stay service and Bliss rate. Validated against Mews on the server. */
+export async function saveMewsSetup(serviceId: string, rateId: string): Promise<MewsSetupResult> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/merchants/me/onboarding/pms/mews/setup`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ serviceId, rateId }),
+    },
+  );
+  if (!res.ok) throw await mewsSetupError(res);
+  return (await res.json()) as MewsSetupResult;
 }
 
 /** Clears the stored Mews connection and reverts onboarding to pms_selected. */
