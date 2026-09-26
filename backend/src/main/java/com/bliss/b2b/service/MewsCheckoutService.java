@@ -179,7 +179,8 @@ public class MewsCheckoutService {
             // so the guest can try another card.
             releaseHold(ctx, adapter, reservationId, "Card declined at Bliss checkout");
             throw new MewsCheckoutException("charge_declined",
-                    "The card was declined (state=" + result.rawState() + ").");
+                    "Your card was declined (" + result.rawState() + "). Nothing was charged. "
+                            + "Try another card.");
         }
 
         // 3. Confirm. This is when Mews sends the guest its confirmation email.
