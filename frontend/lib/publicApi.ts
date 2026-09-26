@@ -103,6 +103,8 @@ export type PublicBooking = {
     description: string | null;
     totalAmountCents: number;
     appointmentDate: string;
+    /** Multi-night stays: the check-out date. Absent for single-date bookings. */
+    checkoutDate?: string | null;
     cancellationPolicy: string | null;
     customerNameHint: string | null;
     customerEmailHint: string | null;

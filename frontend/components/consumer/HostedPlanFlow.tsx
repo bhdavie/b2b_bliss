@@ -144,7 +144,10 @@ export function HostedPlanFlow({
               setConfirmed(result.data);
               return { ok: true, bookingToken: result.data.bookingToken };
             }}
-            onConfirmed={() => setStep("confirmed")}
+            onConfirmed={(chargeStatus) => {
+              setConfirmed((c) => (c ? { ...c, firstChargeStatus: chargeStatus } : c));
+              setStep("confirmed");
+            }}
           />
         ) : stripePromise ? (
           <Elements stripe={stripePromise}>

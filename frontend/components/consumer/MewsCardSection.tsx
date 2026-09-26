@@ -89,7 +89,8 @@ export function MewsCardSection({
   /** Parent creates the pending_card plan (with "mews_placeholder") and returns the token. */
   onCreatePlan: (email: string, name: MewsGuestName) => Promise<MewsCreateResult>;
   /** Called once the card is confirmed and the plan is activated. */
-  onConfirmed: () => void;
+  /** Called with the first charge's status ("paid" or "processing") once the plan is active. */
+  onConfirmed: (chargeStatus: string) => void;
   disclosure: string;
   ctaLabel: string;
   returnUrl?: string | null;
@@ -172,7 +173,7 @@ export function MewsCardSection({
     setPhase("processing");
     const confirm = await confirmMewsCard(token, paymentMethodId);
     if (confirm.ok) {
-      onConfirmed();
+      onConfirmed(confirm.data.status);
       return;
     }
     // Confirm failed (e.g. declined). The plan is still pending; keep the embed

@@ -243,7 +243,12 @@ export function CheckoutFlow({
               setConfirmed(result.data);
               return { ok: true, bookingToken: result.data.bookingToken };
             }}
-            onConfirmed={() => setStep("confirmed")}
+            onConfirmed={(chargeStatus) => {
+              // The plan was created pending_card; card-confirm is what charged
+              // payment 1, so the confirmation reports that result.
+              setConfirmed((c) => (c ? { ...c, firstChargeStatus: chargeStatus } : c));
+              setStep("confirmed");
+            }}
           />
         ) : stripePromise ? (
           <Elements stripe={stripePromise}>
@@ -421,6 +426,7 @@ function syntheticBookingFromCart(
       description: null,
       totalAmountCents: cart.totalCents,
       appointmentDate: cart.checkin,
+      checkoutDate: cart.checkout,
       cancellationPolicy: null,
       customerNameHint: cart.name,
       customerEmailHint: cart.email,

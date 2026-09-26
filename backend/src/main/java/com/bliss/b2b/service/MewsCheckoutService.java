@@ -211,15 +211,8 @@ public class MewsCheckoutService {
         }
 
         // 3. Confirm. This is when Mews sends the guest its confirmation email.
-        // The money is taken, so a failure here must not undo the plan: the
-        // hold stays Optional, and it is logged for the property to confirm.
-        try {
-            adapter.confirmReservation(reservationId, true);
-        } catch (PmsAdapterException e) {
-            log.error("Mews reservation {} for plan {} was charged but could not be confirmed: {}. "
-                    + "Confirm it in Mews before {}.", reservationId, ctx.plan.id(), e.getMessage(),
-                    Instant.now(clock).plus(HOLD_TTL));
-        }
+        // The money is taken, so a failure here must not undo the plan.
+        confirmAfterCharge(ctx, adapter, reservationId);
 
         // Accepted (Charged, or in-flight Pending/Verifying/Unknown). Persist the
         // card ids, record the first schedule row, and activate the plan.
@@ -262,6 +255,75 @@ public class MewsCheckoutService {
     }
 
     // --- helpers -----------------------------------------------------------
+
+    /** Attempts at reservations/confirm after a successful first charge. */
+    static final int CONFIRM_ATTEMPTS = 3;
+    /** Pause before the second attempt; doubles for each one after. */
+    static final Duration CONFIRM_BACKOFF = Duration.ofSeconds(1);
+
+    /**
+     * Confirms the hold the first installment was just charged against.
+     *
+     * <p>Retried because the confirm can fail transiently straight after the
+     * charge: on the demo enterprise Mews answered 403
+     * "ReservationIdDuplicityErrorMessage" to a confirm sent immediately after
+     * charging the reservation, and the same confirm succeeded moments later.
+     * After a failed attempt the reservation is read back, since Mews may have
+     * confirmed it despite the error. If every attempt fails the plan stays
+     * active (the guest has paid) and the failure is logged for the property,
+     * which has until the hold's release time to confirm it by hand.
+     */
+    private void confirmAfterCharge(Ctx ctx, MewsAdapter adapter, String reservationId) {
+        if (!confirmWithRetry(adapter, reservationId, ctx.plan.id(), MewsCheckoutService::sleep)) {
+            log.error("Mews reservation {} for plan {} was charged but could not be confirmed after {} attempts. "
+                    + "Confirm it in Mews before {}.", reservationId, ctx.plan.id(), CONFIRM_ATTEMPTS,
+                    Instant.now(clock).plus(HOLD_TTL));
+        }
+    }
+
+    /**
+     * Up to {@link #CONFIRM_ATTEMPTS} confirms, reading the reservation back
+     * after each failure. True once Mews has it confirmed.
+     */
+    static boolean confirmWithRetry(MewsAdapter adapter, String reservationId, Object planId,
+            java.util.function.Consumer<Duration> sleeper) {
+        Duration pause = CONFIRM_BACKOFF;
+        for (int attempt = 1; attempt <= CONFIRM_ATTEMPTS; attempt++) {
+            try {
+                adapter.confirmReservation(reservationId, true);
+                return true;
+            } catch (PmsAdapterException e) {
+                log.warn("Mews confirm attempt {}/{} for reservation {} (plan {}) failed: {}",
+                        attempt, CONFIRM_ATTEMPTS, reservationId, planId, e.getMessage());
+            }
+            if (isConfirmed(adapter, reservationId)) {
+                return true;
+            }
+            if (attempt < CONFIRM_ATTEMPTS) {
+                sleeper.accept(pause);
+                pause = pause.multipliedBy(2);
+            }
+        }
+        return false;
+    }
+
+    private static boolean isConfirmed(MewsAdapter adapter, String reservationId) {
+        try {
+            return adapter.getReservationState(reservationId)
+                    .map(s -> !"Optional".equals(s) && !"Canceled".equals(s))
+                    .orElse(false);
+        } catch (PmsAdapterException e) {
+            return false;
+        }
+    }
+
+    private static void sleep(Duration d) {
+        try {
+            Thread.sleep(d.toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 
     /** A Mews plan can only be confirmed for a booking that says what to reserve. */
     private static void requireStay(Ctx ctx) {

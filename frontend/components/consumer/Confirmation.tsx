@@ -37,6 +37,14 @@ export function Confirmation({
       ? Math.round((savings / plan.originalTotalAmountCents) * 100)
       : 0;
   const processingFeeCents = feeForAtRate(plan.totalAmountCents, feeRate);
+  const hostName = booking.merchant.businessName?.trim();
+  const checkout = booking.service.checkoutDate;
+  // Payment 1 is always taken at checkout: the deposit when there is one,
+  // otherwise the first installment. Its row reads "Today" whatever due date
+  // the schedule carries (a weekend booking's is rolled to Monday).
+  const chargedAtCheckoutSequence = plan.schedule.length > 0
+    ? Math.min(...plan.schedule.map((e) => e.sequence))
+    : null;
   const displayedTotalCents = plan.totalAmountCents + processingFeeCents;
 
   return (
@@ -49,7 +57,7 @@ export function Confirmation({
           You&apos;re booked
         </h1>
         <p className="mt-1 text-[14px] text-ink-muted">
-          Your plan with {booking.merchant.businessName} is set.
+          {hostName ? <>Your plan with {hostName} is set.</> : "Your plan is set."}
         </p>
       </div>
 
@@ -59,6 +67,9 @@ export function Confirmation({
         </div>
         <div className="mt-0.5 text-[12px] text-ink-muted">
           {formatScheduleDateLong(booking.service.appointmentDate)}
+          {checkout && checkout !== booking.service.appointmentDate ? (
+            <> to {formatScheduleDateLong(checkout)}</>
+          ) : null}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-y-2 text-[12px]">
           {hasDiscount && plan.originalTotalAmountCents != null ? (
@@ -125,7 +136,9 @@ export function Confirmation({
                   </span>
                 ) : null}
                 <span>
-                  {entry.kind === "deposit" ? "Today" : formatScheduleDateShort(entry.dueDate)}
+                  {entry.kind === "deposit" || entry.sequence === chargedAtCheckoutSequence
+                    ? "Today"
+                    : formatScheduleDateShort(entry.dueDate)}
                 </span>
               </span>
               <span className="tabular-nums text-ink">
