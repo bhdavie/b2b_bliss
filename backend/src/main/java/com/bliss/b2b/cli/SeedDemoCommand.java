@@ -61,27 +61,33 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
     /** Marbrook Grand, the Cloudbeds-rail demo property. */
     private static final UUID MARBROOK_GRAND_ID = UUID.fromString("6d3ae2b1-0000-4000-8000-000000000002");
 
-    // Public Mews demo credentials for the shared "API Hotel (Net Pricing)"
-    // demo enterprise: USD, America/New_York. docs.mews.com publishes both
+    // Public Mews demo credentials for the shared "API Hotel Gross Pricing"
+    // demo enterprise (GBP, Europe/Budapest). docs.mews.com publishes both
     // tokens and states the demo environment is completely public and must
-    // never hold real data, so they are safe to seed. Chosen over the Gross
-    // pricing UK demo because that one prices in GBP, which Marbrook's USD
-    // connection would refuse as a currency mismatch.
+    // never hold real data, so they are safe to seed.
+    //
+    // Gross UK rather than the Net Pricing demo because only Gross UK's Mews
+    // Payments gateway charges stored cards online; on Net Pricing every
+    // online charge fails, so Marbrook's checkout could never complete. The
+    // cost is GBP: the connection is GBP so Mews quotes are accepted, while
+    // the frontend still formats amounts with "$".
     private static final String MEWS_DEMO_CLIENT_TOKEN =
             "E0D439EE522F44368DC78E1BFB03710C-D24FB11DBE31D4621C4817E028D9E1D";
     private static final String MEWS_DEMO_ACCESS_TOKEN =
-            "4D6C7ABE0E6A4681B0AFB16900AE5D86-DF50CBC89E1D4FF5859DDF021649ED5";
-    private static final String MEWS_DEMO_ENTERPRISE_ID = "c65ea6e9-2340-42f4-9136-ab3a00b6da22";
-    private static final String MEWS_DEMO_ENTERPRISE_NAME = "API Hotel (Net Pricing) DO NOT CHANGE NAME";
-    /** The Gross pricing UK demo enterprise earlier seeds pointed at. */
-    private static final String OLD_GROSS_UK_ENTERPRISE_ID = "851df8c8-90f2-4c4a-8e01-a4fc46b25178";
-    // Booking setup on the Net Pricing demo: "Macrotech Service" (check-in 15:00,
-    // check-out 12:00) and its public "Fully Flexible" rate. The demo has no
-    // private rate to use; a real property books a private one.
-    private static final String MEWS_DEMO_SERVICE_ID = "0738dd52-f2d9-4e6e-969d-b44500d86ae9";
-    private static final String MEWS_DEMO_RATE_ID = "1072fa42-fb72-41c9-b606-b44500d86afd";
-    private static final String MEWS_DEMO_ADULT_AGE_CATEGORY_ID = "c269deb1-9f1d-44bc-9857-b44500d86af9";
-    private static final String MEWS_DEMO_TIME_ZONE = "America/New_York";
+            "C66EF7B239D24632943D115EDE9CB810-EA00F8FD8294692C940F6B5A8F9453D";
+    private static final String MEWS_DEMO_ENTERPRISE_ID = "851df8c8-90f2-4c4a-8e01-a4fc46b25178";
+    private static final String MEWS_DEMO_ENTERPRISE_NAME = "API Hotel Gross Pricing (DO NOT CHANGE THE NAME)";
+    private static final String MEWS_DEMO_CURRENCY = "GBP";
+    /** The Net Pricing demo enterprise an earlier version of this seed pointed at. */
+    private static final String NET_PRICING_ENTERPRISE_ID = "c65ea6e9-2340-42f4-9136-ab3a00b6da22";
+    // Booking setup on Gross UK: the "API HOTEL" service (check-in 15:00,
+    // check-out 12:00, Budapest time) and its private "Siestify Pricing" rate,
+    // the rate a real property's Bliss rate is modelled on. Charges on it
+    // settle through the demo gateway (tested with Visa 4111 1111 1111 1111).
+    private static final String MEWS_DEMO_SERVICE_ID = "66867ec0-62dc-4937-b04b-b37100ab60c1";
+    private static final String MEWS_DEMO_RATE_ID = "221075f6-4d9c-408d-ba70-b37100ab60e7";
+    private static final String MEWS_DEMO_ADULT_AGE_CATEGORY_ID = "344e58ae-2755-460a-b736-b37100ab60e2";
+    private static final String MEWS_DEMO_TIME_ZONE = "Europe/Budapest";
 
 
     public SeedDemoCommand() {
@@ -159,7 +165,7 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
                     service_id, bliss_rate_id, adult_age_category_id, time_zone
                 ) VALUES (
                     :merchantId, 'https://api.mews-demo.com', :clientToken, :accessToken,
-                    :enterpriseId, :enterpriseName, 'USD', now(),
+                    :enterpriseId, :enterpriseName, :currency, now(),
                     :serviceId, :rateId, :adultId, :timeZone
                 )
                 ON CONFLICT (merchant_id) DO NOTHING
@@ -167,6 +173,7 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
                 .bind("merchantId", MARBROOK_HOUSE_ID)
                 .bind("clientToken", clientToken)
                 .bind("accessToken", accessToken)
+                .bind("currency", MEWS_DEMO_CURRENCY)
                 .bind("enterpriseId", MEWS_DEMO_ENTERPRISE_ID)
                 .bind("enterpriseName", MEWS_DEMO_ENTERPRISE_NAME)
                 .bind("serviceId", MEWS_DEMO_SERVICE_ID)
@@ -175,25 +182,28 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
                 .bind("timeZone", MEWS_DEMO_TIME_ZONE)
                 .execute();
 
-        // Databases seeded before the move still point Marbrook House at the
-        // Gross pricing UK enterprise with no booking setup. Repoint them.
-        // Scoped to that enterprise id, so a connection someone set up by hand
-        // is left alone. Idempotent: once moved, nothing matches. Mews customer
-        // and card ids from the old enterprise do not carry over, so demo plans
-        // started there will not charge on the new one.
+        // Bring older seeds in line: a connection on the Net Pricing demo, or an
+        // original Gross UK one with no booking setup or the old USD label.
+        // Scoped to those two enterprise ids, so a connection someone set up by
+        // hand elsewhere is left alone. Idempotent: once in line, nothing
+        // matches. Mews customer and card ids from another enterprise do not
+        // carry over, so demo plans started there will not charge here.
         int moved = handle.createUpdate("""
                 UPDATE merchant_mews_connections
                 SET client_token = :clientToken,
                     access_token = :accessToken,
                     enterprise_id = :enterpriseId,
                     enterprise_name = :enterpriseName,
-                    currency = 'USD',
+                    currency = :currency,
                     validated_at = now(),
                     service_id = :serviceId,
                     bliss_rate_id = :rateId,
                     adult_age_category_id = :adultId,
                     time_zone = :timeZone
-                WHERE merchant_id = :merchantId AND enterprise_id = :oldEnterpriseId
+                WHERE merchant_id = :merchantId
+                  AND (enterprise_id = :netPricingEnterpriseId
+                       OR (enterprise_id = :enterpriseId
+                           AND (service_id IS NULL OR currency IS DISTINCT FROM :currency)))
                 """)
                 .bind("merchantId", MARBROOK_HOUSE_ID)
                 .bind("clientToken", clientToken)
@@ -204,10 +214,11 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
                 .bind("rateId", MEWS_DEMO_RATE_ID)
                 .bind("adultId", MEWS_DEMO_ADULT_AGE_CATEGORY_ID)
                 .bind("timeZone", MEWS_DEMO_TIME_ZONE)
-                .bind("oldEnterpriseId", OLD_GROSS_UK_ENTERPRISE_ID)
+                .bind("currency", MEWS_DEMO_CURRENCY)
+                .bind("netPricingEnterpriseId", NET_PRICING_ENTERPRISE_ID)
                 .execute();
         if (moved > 0) {
-            log.info("Moved Marbrook House's Mews connection to the Net Pricing demo enterprise");
+            log.info("Pointed Marbrook House's Mews connection at the Gross pricing UK demo enterprise (GBP)");
         }
 
         // Synthetic Cloudbeds tokens: no Cloudbeds object backs these. Expiry is

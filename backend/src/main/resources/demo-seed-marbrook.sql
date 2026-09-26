@@ -309,28 +309,12 @@ UPDATE merchants
         OR status != 'active');
 
 -- Marbrook House Mews connection -------------------------------------------
--- Inserted by SeedDemoCommand after this script, not here: the tokens are
--- sealed with the application's key (V30), which SQL cannot reach, and the
--- table's CHECK rejects a plaintext insert. The currency correction below
--- still lives here because it touches no token.
-
--- The seed owns the currency, the enterprise does not.
---
--- The shared demo enterprise reports GBP, but every amount in this system is a
--- Bliss-side dollar figure (plan totals come from the checkout request or
--- the retired demo sync's placeholder, never from a Mews reservation) and
--- the frontend renders USD unconditionally. Nothing converts between
--- currencies: MewsAdapter.chargeStoredCard sends Currency and GrossValue as
--- independent fields, so this string only LABELS an amount that is already
--- fixed. GBP here was mislabelling dollars as pounds, not holding a different
--- sum of money.
---
--- ON CONFLICT DO NOTHING above cannot correct a row that already exists, so
--- this is a targeted UPDATE. Idempotent: a no-op once the value is USD.
-UPDATE merchant_mews_connections
-   SET currency = 'USD'
- WHERE merchant_id = '9b54a488-b308-4a6d-91cc-38983ff982ac'
-   AND currency IS DISTINCT FROM 'USD';
+-- Inserted and kept current by SeedDemoCommand after this script, not here:
+-- the tokens are sealed with the application's key (V30), which SQL cannot
+-- reach, and the table's CHECK rejects a plaintext insert. That includes the
+-- currency, which is GBP to match the Gross pricing UK demo enterprise's
+-- prices; this script used to force USD, which the booking flow would now
+-- refuse as a currency mismatch.
 
 -- Marbrook Grand (Cloudbeds rail) -------------------------------------------
 -- stripe_connect_account_id is UNIQUE, so each property needs its own synthetic
