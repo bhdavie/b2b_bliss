@@ -274,11 +274,15 @@ public class MewsCheckoutService {
      * which has until the hold's release time to confirm it by hand.
      */
     private void confirmAfterCharge(Ctx ctx, MewsAdapter adapter, String reservationId) {
-        if (!confirmWithRetry(adapter, reservationId, ctx.plan.id(), MewsCheckoutService::sleep)) {
-            log.error("Mews reservation {} for plan {} was charged but could not be confirmed after {} attempts. "
-                    + "Confirm it in Mews before {}.", reservationId, ctx.plan.id(), CONFIRM_ATTEMPTS,
-                    Instant.now(clock).plus(HOLD_TTL));
+        if (confirmWithRetry(adapter, reservationId, ctx.plan.id(), MewsCheckoutService::sleep)) {
+            jdbi.useHandle(h -> h.attach(BookingDao.class).markMewsConfirmed(ctx.booking.id(), Instant.now(clock)));
+            return;
         }
+        // The reconciliation pass keeps trying (MewsConfirmSweep); this is
+        // the first alert, not the last word.
+        log.error("Mews reservation {} for plan {} was charged but could not be confirmed after {} attempts. "
+                + "The background pass will keep retrying; the hold is released {}.",
+                reservationId, ctx.plan.id(), CONFIRM_ATTEMPTS, Instant.now(clock).plus(HOLD_TTL));
     }
 
     /**

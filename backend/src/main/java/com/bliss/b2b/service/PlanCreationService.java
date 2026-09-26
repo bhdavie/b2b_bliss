@@ -164,10 +164,9 @@ public class PlanCreationService {
             PlanOption option) {
         int seq = 1;
         if (hasDeposit) {
-            // The deposit fires immediately on plan creation, but we can't
-            // collect on a weekend — roll it forward to the next business day
-            // for every frequency (booked Sun -> deposit Mon).
-            LocalDate depositDate = PlanEligibilityService.rollForwardToWeekday(today);
+            // The deposit is payment 1: checkout charges it on plan creation,
+            // so it is dated today, weekend or not. Only later payments roll.
+            LocalDate depositDate = today;
             scheduleDao.insert(planId, seq, depositDate, depositAmount + feeCents,
                     PaymentScheduleStatus.SCHEDULED.wire(), ScheduleKind.DEPOSIT.wire());
             seq++;

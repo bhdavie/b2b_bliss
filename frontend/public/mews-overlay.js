@@ -831,7 +831,11 @@
       dueDates = [];
       var startMultiplier = hasDeposit ? 1 : 0;
       for (var i = 0; i < n; i++) {
-        dueDates.push(formatDate(rollForwardToWeekday(addDays(today, (startMultiplier + i) * intervalDays))));
+        var due = addDays(today, (startMultiplier + i) * intervalDays);
+        // Payment 1 without a deposit is charged at checkout, so it stays today
+        // even on a weekend. Mirrors PlanEligibilityService.
+        var isPaymentOne = !hasDeposit && i === 0;
+        dueDates.push(formatDate(isPaymentOne ? due : rollForwardToWeekday(due)));
       }
     }
 
@@ -853,13 +857,13 @@
     };
   }
 
-  // Payment 1 is the immediate charge on the booking date (no anchor logic) but
-  // rolled forward off weekends, included only when there is no separate
-  // deposit. Installments collect on a fixed monthly anchor.
+  // Payment 1 is the immediate charge on the booking date (no anchor logic, no
+  // weekend roll: checkout takes it there and then), included only when there
+  // is no separate deposit. Installments collect on a fixed monthly anchor.
   function monthlyDueDates(today, cutoff, hasDeposit) {
     var dates = [];
     if (!hasDeposit) {
-      dates.push(formatDate(rollForwardToWeekday(today)));
+      dates.push(formatDate(today));
     }
     var anchorDay = monthlyAnchorDay(today.getDate());
     var cursor = new Date(today.getFullYear(), today.getMonth(), anchorDay);

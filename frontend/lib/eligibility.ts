@@ -237,7 +237,11 @@ function buildInstallments(
     dueDates = [];
     const startMultiplier = hasDeposit ? 1 : 0;
     for (let i = 0; i < n; i++) {
-      dueDates.push(formatDate(rollForwardToWeekday(addDays(today, (startMultiplier + i) * intervalDays))));
+      const due = addDays(today, (startMultiplier + i) * intervalDays);
+      // Payment 1 without a deposit is charged at checkout, so it stays today
+      // even on a weekend. Mirrors PlanEligibilityService.
+      const isPaymentOne = !hasDeposit && i === 0;
+      dueDates.push(formatDate(isPaymentOne ? due : rollForwardToWeekday(due)));
     }
   }
 
@@ -259,8 +263,8 @@ function buildInstallments(
 }
 
 // Mirrors PlanEligibilityService.monthlyDueDates. Payment 1 is the immediate
-// charge on the booking date (no anchor logic) but rolled forward off weekends
-// like every charge, included only when there is no separate deposit.
+// charge on the booking date (no anchor logic, no weekend roll: checkout takes
+// it there and then), included only when there is no separate deposit.
 // Installments collect on a fixed monthly anchor (the 2nd or the 16th, chosen by
 // booking day); payment 2 is the first anchor occurrence at least
 // MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS days after the booking, and payments
@@ -269,7 +273,7 @@ function buildInstallments(
 function monthlyDueDates(today: Date, cutoff: Date, hasDeposit: boolean): string[] {
   const dates: string[] = [];
   if (!hasDeposit) {
-    dates.push(formatDate(rollForwardToWeekday(today)));
+    dates.push(formatDate(today));
   }
   const anchorDay = monthlyAnchorDay(today.getDate());
   let cursor = new Date(today.getFullYear(), today.getMonth(), anchorDay);

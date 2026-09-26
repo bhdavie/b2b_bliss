@@ -1,10 +1,13 @@
 package com.bliss.b2b.persistence;
 
 import com.bliss.b2b.domain.Booking;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jdbi.v3.core.mapper.reflect.ColumnName;
+import org.jdbi.v3.sqlobject.config.RegisterConstructorMapper;
 import org.jdbi.v3.sqlobject.config.RegisterRowMapper;
 import org.jdbi.v3.sqlobject.customizer.Bind;
 import org.jdbi.v3.sqlobject.statement.SqlQuery;
@@ -136,7 +139,10 @@ public interface BookingDao {
     /** Forgets a released hold, only if it is still the one recorded. */
     @SqlUpdate("""
             UPDATE bookings
-            SET mews_reservation_id = NULL
+            SET mews_reservation_id = NULL,
+                mews_confirmed_at = NULL,
+                mews_confirm_attempts = 0,
+                mews_confirm_error = NULL
             WHERE id = :id AND mews_reservation_id = :reservationId
             """)
     int clearMewsReservationId(@Bind("id") UUID id, @Bind("reservationId") String reservationId);
@@ -144,4 +150,54 @@ public interface BookingDao {
     /** Marks a booking canceled once its stay has been cancelled. */
     @SqlUpdate("UPDATE bookings SET status = 'canceled' WHERE id = :id")
     int markCanceled(@Bind("id") UUID id);
+
+    /** Records that Mews has the booking's reservation confirmed. Idempotent. */
+    @SqlUpdate("""
+            UPDATE bookings
+            SET mews_confirmed_at = COALESCE(mews_confirmed_at, :at),
+                mews_confirm_error = NULL
+            WHERE id = :id
+            """)
+    int markMewsConfirmed(@Bind("id") UUID id, @Bind("at") Instant at);
+
+    /** Counts a failed background confirm and keeps its reason. Returns the new attempt count. */
+    @SqlQuery("""
+            UPDATE bookings
+            SET mews_confirm_attempts = mews_confirm_attempts + 1,
+                mews_confirm_error = :error
+            WHERE id = :id
+            RETURNING mews_confirm_attempts
+            """)
+    int recordMewsConfirmFailure(@Bind("id") UUID id, @Bind("error") String error);
+
+    /**
+     * Bookings whose first payment has been taken but whose Mews reservation
+     * is not recorded as confirmed, and that have not been found cancelled in
+     * Mews. The reconciliation pass works through these until Mews confirms.
+     */
+    @SqlQuery("""
+            SELECT b.id                    AS booking_id,
+                   b.merchant_id           AS merchant_id,
+                   b.mews_reservation_id   AS reservation_id,
+                   b.mews_confirm_attempts AS attempts
+            FROM bookings b
+            WHERE b.mews_reservation_id IS NOT NULL
+              AND b.mews_confirmed_at IS NULL
+              AND b.status <> 'canceled'
+              AND b.mews_confirm_error IS DISTINCT FROM 'canceled in mews'
+              AND EXISTS (
+                  SELECT 1 FROM payment_plans pp
+                  WHERE pp.booking_id = b.id
+                    AND pp.status NOT IN ('pending_card', 'canceled'))
+            ORDER BY b.merchant_id
+            """)
+    @RegisterConstructorMapper(UnconfirmedMewsStay.class)
+    List<UnconfirmedMewsStay> findUnconfirmedMewsStays();
+
+    record UnconfirmedMewsStay(
+            @ColumnName("booking_id") UUID bookingId,
+            @ColumnName("merchant_id") UUID merchantId,
+            @ColumnName("reservation_id") String reservationId,
+            @ColumnName("attempts") int attempts) {
+    }
 }

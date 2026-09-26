@@ -189,9 +189,9 @@ public class PlanEligibilityService {
         List<LocalDate> dueDates;
         if (frequency == PlanFrequency.MONTHLY) {
             // Monthly: payment 1 is the immediate charge on the booking date,
-            // rolled forward off weekends to the next business day. Payments
+            // taken at checkout and so dated today even on a weekend. Payments
             // 2..N collect on a fixed monthly anchor (the 2nd or 16th, chosen by
-            // booking date), each resolved through the same weekend roll-forward.
+            // booking date), each resolved through the weekend roll-forward.
             // See monthlyDueDates for the anchor-selection / spacing rule.
             dueDates = monthlyDueDates(today, appointmentDate.minusDays(effectiveBuffer), hasDeposit);
             if (dueDates.isEmpty()) return null;
@@ -216,9 +216,11 @@ public class PlanEligibilityService {
             for (int i = 0; i < n; i++) {
                 dueDates.add(today.plusDays((long) (startMultiplier + i) * frequency.days()));
             }
-            // Weekday-only rule (biweekly): roll every charge — including the
-            // immediate payment 1 — off the weekend forward to Monday.
-            for (int i = 0; i < dueDates.size(); i++) {
+            // Weekday-only rule (biweekly): roll every scheduled charge off the
+            // weekend forward to Monday. Payment 1 without a deposit is exempt:
+            // checkout charges it immediately, so its date is today whatever
+            // the day. (With a deposit, index 0 is already a later installment.)
+            for (int i = hasDeposit ? 0 : 1; i < dueDates.size(); i++) {
                 dueDates.set(i, rollForwardToWeekday(dueDates.get(i)));
             }
         }
@@ -238,7 +240,9 @@ public class PlanEligibilityService {
      * Rolls a payment date off the weekend. Saturday and Sunday both move
      * FORWARD to the following Monday; weekdays are returned unchanged. Never
      * rolls backward, so an adjusted date is never earlier than computed. Used
-     * for every payment in a schedule, including the immediate first charge.
+     * for every scheduled payment; payment 1 (the deposit, or the first
+     * installment when there is none) is exempt because checkout charges it
+     * immediately.
      */
     public static LocalDate rollForwardToWeekday(LocalDate date) {
         DayOfWeek dow = date.getDayOfWeek();
@@ -248,14 +252,14 @@ public class PlanEligibilityService {
     }
 
     private static List<LocalDate> monthlyDueDates(LocalDate today, LocalDate cutoff, boolean hasDeposit) {
-        // Payment 1 is the immediate charge on the booking date — no anchor
-        // logic, but it still rolls forward off weekends (we can't collect on a
-        // Sat/Sun), so a Sunday booking collects Monday. Included here only when
-        // there is no separate deposit; when a deposit is configured it fires
-        // today via the deposit row, so dueDates holds installments only.
+        // Payment 1 is the immediate charge on the booking date: no anchor
+        // logic and no weekend roll, because checkout takes it there and then.
+        // Included here only when there is no separate deposit; when a deposit
+        // is configured it fires today via the deposit row, so dueDates holds
+        // installments only.
         List<LocalDate> dates = new ArrayList<>();
         if (!hasDeposit) {
-            dates.add(rollForwardToWeekday(today));
+            dates.add(today);
         }
         // Installments collect on a fixed monthly anchor (the 2nd or the 16th),
         // chosen by the booking day. Payment 2 is the first anchor occurrence at

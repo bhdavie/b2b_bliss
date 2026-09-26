@@ -14,6 +14,34 @@ class PlanEligibilityServiceTest {
 
     private final PlanEligibilityService service = new PlanEligibilityService();
 
+    // -- Weekend booking: payment 1 is charged at checkout, so it is never rolled --
+
+    private static final LocalDate SATURDAY = LocalDate.of(2026, 9, 26);
+
+    @Test
+    void weekendBooking_biweeklyPaymentOneIsTodayLaterPaymentsRoll() {
+        EligibilityResult result = service.evaluate(
+                SATURDAY, SATURDAY.plusDays(59), null, PRICE_CENTS, MerchantPlanRules.DEFAULTS);
+
+        PlanOption biw = byFrequency(result.options(), PlanFrequency.BIWEEKLY);
+        assertThat(biw.dueDates().get(0)).isEqualTo(SATURDAY);
+        // +14 days is Saturday Oct 10, rolled to Monday Oct 12; the cadence stays
+        // anchored to the booking date, so +28 (Sat Oct 24) rolls to Oct 26.
+        assertThat(biw.dueDates().get(1)).isEqualTo(LocalDate.of(2026, 10, 12));
+        assertThat(biw.dueDates().get(2)).isEqualTo(LocalDate.of(2026, 10, 26));
+    }
+
+    @Test
+    void weekendBooking_monthlyPaymentOneIsToday() {
+        EligibilityResult result = service.evaluate(
+                SATURDAY, SATURDAY.plusDays(59), null, PRICE_CENTS, MerchantPlanRules.DEFAULTS);
+
+        PlanOption monthly = byFrequency(result.options(), PlanFrequency.MONTHLY);
+        assertThat(monthly.dueDates().get(0)).isEqualTo(SATURDAY);
+        assertThat(monthly.dueDates().subList(1, monthly.dueDates().size()))
+                .allSatisfy(d -> assertThat(d.getDayOfWeek().getValue()).isLessThanOrEqualTo(5));
+    }
+
     // -- Default rules: 6w minimum, both frequencies allowed, no amount caps, no deposit --
 
     @Test

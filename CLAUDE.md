@@ -197,7 +197,7 @@ Bi-weekly means every 14 days, relative to the booking date.
 
 **Monthly means calendar monthly, not every 30 days.** This doc previously said every 30 days, which was wrong and has been corrected here to match the shipped code. Monthly installments collect on a fixed calendar anchor, the 2nd or the 16th of the month, chosen by the booking's day of month: bookings on day 1-10 or 26-end anchor to the 2nd, bookings on day 11-25 anchor to the 16th. Payday alignment is the point of the anchors, and it is what keeps off-session decline rates down, so it outranks a tidier relative-interval ladder.
 
-The first monthly installment is the first anchor occurrence at least 14 days after the booking date (`MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS`); an anchor falling inside that window is skipped to the next month so it isn't a charge landing on top of the deposit. Every payment date rolls forward off weekends to the following Monday.
+The first monthly installment is the first anchor occurrence at least 14 days after the booking date (`MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS`); an anchor falling inside that window is skipped to the next month so it isn't a charge landing on top of the deposit. Every payment date rolls forward off weekends to the following Monday, except payment 1 (the deposit, or the first installment when there is none): checkout charges it immediately, so it is dated the booking date even on a weekend.
 
 First payment fires when the plan is created. The number of payments is calculated as the maximum that fits before the appointment date, with the final payment scheduled at least 3 days before the appointment to allow for retry on failure.
 

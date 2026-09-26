@@ -411,6 +411,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
         com.bliss.b2b.service.MewsReconciliationService mewsReconciliationService =
                 new com.bliss.b2b.service.MewsReconciliationService(
                         jdbi, mewsAdapterFactory, installmentLedger, planNotificationService, clock);
+        com.bliss.b2b.service.MewsConfirmSweep mewsConfirmSweep =
+                new com.bliss.b2b.service.MewsConfirmSweep(jdbi, mewsAdapterFactory::resolveMewsAdapter, clock);
         // Both Mews passes share one single-thread executor, so they never run
         // concurrently; the initial delays offset them (charge at +60s, reconcile
         // at +90s) so they also never fire in the same instant.
@@ -428,6 +430,14 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 mewsReconciliationService.runReconcilePass();
             } catch (RuntimeException e) {
                 log.warn("Mews reconciliation pass failed: {}", e.getMessage());
+            }
+            // Confirm any Mews reservation left Optional after its first charge,
+            // before Mews releases the hold. Separate so a failed reconcile does
+            // not skip it.
+            try {
+                mewsConfirmSweep.run();
+            } catch (RuntimeException e) {
+                log.warn("Mews confirm sweep failed: {}", e.getMessage());
             }
         }, 90, 60, java.util.concurrent.TimeUnit.SECONDS);
 
