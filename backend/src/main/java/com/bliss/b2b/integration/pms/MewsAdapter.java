@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -258,11 +257,15 @@ public class MewsAdapter implements PmsAdapter {
             body.put("Notes", notes);
         }
 
-        // Mews reports a card the gateway refuses as HTTP 403 "Transaction was
-        // declined (Refused)", not as a Failed payment. That is a decline, and
-        // is returned as one so callers apply their decline handling (release
-        // the checkout hold, count a retry). Any other non-2xx still throws:
-        // it says nothing about the card, so nothing is recorded against it.
+        // Mews reports a charge the gateway will not take as HTTP 403, not as a
+        // Failed payment: "Transaction was declined (Refused)." for a refusal,
+        // "Credit card payment failed." when the gateway cannot process it at
+        // all. Every 403 from this call is treated as a decline and returned
+        // as one, so callers apply their decline handling (release the
+        // checkout hold, count a retry). Mews's own wording is kept in
+        // rawState for logs and schedule notes, never shown to a guest.
+        // Other non-2xx responses (5xx, timeouts) still throw: they say
+        // nothing about the card, so nothing is recorded against it.
         JsonNode charge;
         try {
             charge = post(CREDIT_CARDS_CHARGE, body);
@@ -271,7 +274,8 @@ public class MewsAdapter implements PmsAdapter {
                 throw e;
             }
             String reason = declineReason(e.pmsMessage());
-            log.info("Mews card {} declined by the gateway ({})", pmsCardId, reason);
+            log.warn("Mews charge of {} {} on card {} (reservation {}) refused: {}",
+                    toGrossValue(chargeAmount), currency, pmsCardId, reservationRef, e.getMessage());
             return new PmsChargeResult(null, PmsChargeStatus.FAILED, reason, amountMinorUnits, currency);
         }
         String paymentId = textOrNull(charge, "PaymentId");
@@ -324,22 +328,26 @@ public class MewsAdapter implements PmsAdapter {
         return out;
     }
 
-    /** A gateway refusal: HTTP 403 whose Mews message says the transaction was declined. */
+    /** Any HTTP 403 from creditCards/charge: the gateway would not take the charge. */
     static boolean isDecline(PmsAdapterException e) {
-        return e.httpStatus() == 403 && e.pmsMessage() != null
-                && e.pmsMessage().toLowerCase(Locale.ROOT).contains("declined");
+        return e.httpStatus() == 403;
     }
 
-    /** "Transaction was declined (Refused)." -> "Refused"; anything else -> "Declined". */
+    /**
+     * A short reason for logs and schedule notes: the gateway's refusal code
+     * when Mews gives one ("Transaction was declined (Refused)." -> "Refused"),
+     * otherwise Mews's message, otherwise "Declined".
+     */
     static String declineReason(String pmsMessage) {
-        if (pmsMessage != null) {
-            int open = pmsMessage.indexOf('(');
-            int close = pmsMessage.indexOf(')', open + 1);
-            if (open >= 0 && close > open + 1) {
-                return pmsMessage.substring(open + 1, close).trim();
-            }
+        if (pmsMessage == null || pmsMessage.isBlank()) {
+            return "Declined";
         }
-        return "Declined";
+        int open = pmsMessage.indexOf('(');
+        int close = pmsMessage.indexOf(')', open + 1);
+        if (open >= 0 && close > open + 1) {
+            return pmsMessage.substring(open + 1, close).trim();
+        }
+        return pmsMessage.trim();
     }
 
     /** The {@code Message} field of a Mews error body, or null if it has none. */

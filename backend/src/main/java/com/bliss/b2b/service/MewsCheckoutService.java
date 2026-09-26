@@ -70,6 +70,15 @@ public class MewsCheckoutService {
      */
     private static final Duration HOLD_TTL = Duration.ofHours(24);
 
+    // What a guest sees when a charge does not go through. Mews's own wording
+    // is logged, never shown: it can be internal ("Credit card payment
+    // failed.", HTTP codes, request ids) and means nothing to a guest.
+    static final String GUEST_CARD_DECLINED = "Your card couldn't be charged. Please try another card.";
+    static final String GUEST_CHARGE_UNAVAILABLE =
+            "Your card couldn't be charged right now. Please try again in a moment.";
+    static final String GUEST_SYSTEM_UNAVAILABLE =
+            "We couldn't reach the property's booking system. Please try again in a moment.";
+
     private final Jdbi jdbi;
     private final MewsAdapterFactory mewsFactory;
     private final MewsStayService stayService;
@@ -100,11 +109,23 @@ public class MewsCheckoutService {
         requireStay(ctx);
 
         MewsAdapter adapter = mewsFactory.adapterForConnection(ctx.connection);
-        PmsCustomer mewsCustomer = adapter.findOrCreateCustomer(new PmsCustomerRef(
-                ctx.customer.email(), ctx.customer.firstName(), ctx.customer.lastName()));
+        PmsCustomer mewsCustomer;
+        try {
+            mewsCustomer = adapter.findOrCreateCustomer(new PmsCustomerRef(
+                    ctx.customer.email(), ctx.customer.firstName(), ctx.customer.lastName()));
+        } catch (PmsAdapterException e) {
+            log.warn("Mews customer lookup failed for plan {}: {}", ctx.plan.id(), e.getMessage());
+            throw new MewsCheckoutException("mews_unreachable", GUEST_SYSTEM_UNAVAILABLE);
+        }
         Instant expiration = Instant.now(clock).plus(REQUEST_TTL);
-        PmsCardCollectionRequest request = adapter.createCardCollectionRequest(
-                mewsCustomer.id(), expiration, "Save a card for your booking");
+        PmsCardCollectionRequest request;
+        try {
+            request = adapter.createCardCollectionRequest(
+                    mewsCustomer.id(), expiration, "Save a card for your booking");
+        } catch (PmsAdapterException e) {
+            log.warn("Mews card request failed for plan {}: {}", ctx.plan.id(), e.getMessage());
+            throw new MewsCheckoutException("mews_unreachable", GUEST_SYSTEM_UNAVAILABLE);
+        }
 
         jdbi.useHandle(h -> {
             h.attach(CustomerDao.class).setMewsCustomerId(ctx.customer.id(), mewsCustomer.id());
@@ -146,7 +167,13 @@ public class MewsCheckoutService {
 
         // Server-side verification: the card must actually exist in Mews for this
         // customer. The client's id is only used to disambiguate, never trusted.
-        List<PmsStoredCard> cards = adapter.getStoredCards(mewsCustomerId);
+        List<PmsStoredCard> cards;
+        try {
+            cards = adapter.getStoredCards(mewsCustomerId);
+        } catch (PmsAdapterException e) {
+            log.warn("Mews card lookup failed for plan {}: {}", ctx.plan.id(), e.getMessage());
+            throw new MewsCheckoutException("mews_unreachable", GUEST_SYSTEM_UNAVAILABLE);
+        }
         PmsStoredCard matched = matchCard(cards, clientPaymentMethodId);
         if (matched == null) {
             throw new MewsCheckoutException("card_not_found",
@@ -168,19 +195,19 @@ public class MewsCheckoutService {
         } catch (PmsAdapterException e) {
             // Transport / gateway error: the charge may or may not have landed,
             // so the hold stays and the plan stays pending. A retry reuses both.
-            log.info("Mews first charge errored for plan {}: {}", ctx.plan.id(), e.getMessage());
-            throw new MewsCheckoutException("charge_failed",
-                    "Could not charge the card. " + e.getMessage());
+            log.warn("Mews first charge errored for plan {} (reservation {}): {}",
+                    ctx.plan.id(), reservationId, e.getMessage());
+            throw new MewsCheckoutException("charge_failed", GUEST_CHARGE_UNAVAILABLE);
         }
 
         PmsChargeStatus status = result.status();
         if (status == PmsChargeStatus.FAILED || status == PmsChargeStatus.CANCELED) {
             // Hard decline: release the hold quietly and leave the plan pending,
             // so the guest can try another card.
+            log.warn("Mews first charge declined for plan {} (reservation {}): {}",
+                    ctx.plan.id(), reservationId, result.rawState());
             releaseHold(ctx, adapter, reservationId, "Card declined at Bliss checkout");
-            throw new MewsCheckoutException("charge_declined",
-                    "Your card was declined (" + result.rawState() + "). Nothing was charged. "
-                            + "Try another card.");
+            throw new MewsCheckoutException("charge_declined", GUEST_CARD_DECLINED);
         }
 
         // 3. Confirm. This is when Mews sends the guest its confirmation email.

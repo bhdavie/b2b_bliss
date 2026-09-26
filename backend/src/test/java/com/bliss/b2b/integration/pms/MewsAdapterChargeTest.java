@@ -32,9 +32,10 @@ import javax.net.ssl.SSLSession;
 import org.junit.jupiter.api.Test;
 
 /**
- * creditCards/charge outcomes as Mews actually returns them. A gateway refusal
- * comes back as HTTP 403 "Transaction was declined (Refused)" rather than a
- * Failed payment, and must still read as a decline.
+ * creditCards/charge outcomes as Mews actually returns them. A charge the
+ * gateway will not take comes back as HTTP 403 rather than a Failed payment,
+ * with wording that varies ("Transaction was declined (Refused).", "Credit
+ * card payment failed."). Every 403 must read as a decline.
  */
 class MewsAdapterChargeTest {
 
@@ -53,24 +54,26 @@ class MewsAdapterChargeTest {
     }
 
     @Test
-    void declineWithoutAReasonStillDeclines() {
-        FakeHttp http = new FakeHttp().then(403, "{\"Message\":\"Transaction was declined.\"}");
+    void paymentFailedIsADecline() {
+        // What the shared demo gateway returns for every online charge.
+        FakeHttp http = new FakeHttp().then(403, "{\"Message\":\"Credit card payment failed.\",\"RequestId\":\"r2\"}");
 
-        PmsChargeResult result = adapter(http).chargeStoredCard("cust", "card", 100, "USD", null, null);
+        PmsChargeResult result = adapter(http).chargeStoredCard("cust", "card", 100, "USD", "res_1", null);
 
         assertThat(result.status()).isEqualTo(PmsChargeStatus.FAILED);
-        assertThat(result.rawState()).isEqualTo("Declined");
+        assertThat(result.rawState()).isEqualTo("Credit card payment failed.");
     }
 
     @Test
-    void otherForbiddenResponsesStillThrow() {
-        // A missing permission says nothing about the card; it must not be
-        // recorded as a decline against the guest.
+    void anyForbiddenResponseIsADecline() {
         FakeHttp http = new FakeHttp().then(403, "{\"Message\":\"Access token is not permitted to use this operation.\"}");
+        assertThat(adapter(http).chargeStoredCard("cust", "card", 100, "USD", null, null).status())
+                .isEqualTo(PmsChargeStatus.FAILED);
 
-        assertThatThrownBy(() -> adapter(http).chargeStoredCard("cust", "card", 100, "USD", null, null))
-                .isInstanceOf(PmsAdapterException.class)
-                .satisfies(e -> assertThat(((PmsAdapterException) e).httpStatus()).isEqualTo(403));
+        FakeHttp noBody = new FakeHttp().then(403, "");
+        PmsChargeResult result = adapter(noBody).chargeStoredCard("cust", "card", 100, "USD", null, null);
+        assertThat(result.status()).isEqualTo(PmsChargeStatus.FAILED);
+        assertThat(result.rawState()).isEqualTo("Declined");
     }
 
     @Test
@@ -98,7 +101,8 @@ class MewsAdapterChargeTest {
     @Test
     void declineReasonParsing() {
         assertThat(MewsAdapter.declineReason("Transaction was declined (Refused).")).isEqualTo("Refused");
-        assertThat(MewsAdapter.declineReason("Transaction was declined ().")).isEqualTo("Declined");
+        assertThat(MewsAdapter.declineReason("Credit card payment failed.")).isEqualTo("Credit card payment failed.");
+        assertThat(MewsAdapter.declineReason("  ")).isEqualTo("Declined");
         assertThat(MewsAdapter.declineReason(null)).isEqualTo("Declined");
     }
 

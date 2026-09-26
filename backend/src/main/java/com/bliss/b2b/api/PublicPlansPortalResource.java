@@ -224,7 +224,21 @@ public class PublicPlansPortalResource {
         };
         log.info("Mews checkout rejected code={} message={}", e.code(), e.getMessage());
         return Response.status(status).entity(Map.of(
-                "error", e.code(), "message", e.getMessage())).build();
+                "error", e.code(), "message", guestMessage(e))).build();
+    }
+
+    /**
+     * Codes whose message was written for the guest. Every other code carries
+     * internal detail (plan states, ids, configuration gaps) and is shown as a
+     * plain line instead; the detail is in the log line above.
+     */
+    private static final java.util.Set<String> GUEST_WORDED_CODES = java.util.Set.of(
+            "charge_declined", "charge_failed", "mews_unreachable", "stay_unavailable", "stay_not_set");
+
+    private static String guestMessage(MewsCheckoutException e) {
+        return GUEST_WORDED_CODES.contains(e.code())
+                ? e.getMessage()
+                : "Something went wrong with your booking. Please start again from the property's booking page.";
     }
 
     private static DemoCard toDemoCard(ReplaceCardRequest req) {

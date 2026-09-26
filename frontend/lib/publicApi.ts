@@ -398,7 +398,7 @@ export async function requestMewsCard(
         error: (body as { error?: string }).error ?? "unknown_error",
         message:
           (body as { message?: string }).message ??
-          `Could not start card entry (${res.status})`,
+          "We couldn't open the secure card form. Please try again.",
       },
     };
   }
@@ -436,7 +436,7 @@ export async function confirmMewsCard(
         error: (body as { error?: string }).error ?? "unknown_error",
         message:
           (body as { message?: string }).message ??
-          `Could not confirm your card (${res.status})`,
+          "Your card couldn't be charged. Please try another card.",
       },
     };
   }
