@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
+  fetchPlanPortal,
   formatDollarsCompact,
   formatScheduleDateLong,
   formatScheduleDateShort,
@@ -22,7 +24,10 @@ export function Confirmation({
   // processing_fee_cents and adding it is a backend change.
   feeRate: number;
 }) {
-  const firstPaymentStatus = plan.firstChargeStatus.toLowerCase();
+  const firstPaymentStatus = useFirstPaymentStatus(
+    plan.bookingToken,
+    plan.firstChargeStatus.toLowerCase(),
+  );
   const firstSucceeded =
     firstPaymentStatus === "succeeded" || firstPaymentStatus === "paid";
   const hasDiscount =
@@ -112,7 +117,13 @@ export function Confirmation({
             {plan.depositAmountCents > 0 ? "Deposit charge" : "First payment"}
           </div>
           <div className="text-right text-ink">
-            {firstSucceeded ? "Charged today" : "Processing"}
+            {firstSucceeded
+              ? "Charged today"
+              : firstPaymentStatus === "failed"
+                ? "Couldn't be charged"
+                : firstPaymentStatus === "slow"
+                  ? "Charged today, confirming with your bank"
+                  : "Processing"}
           </div>
         </div>
       </section>
@@ -190,4 +201,56 @@ function CheckIcon() {
       <path d="M5 12l5 5L20 7" />
     </svg>
   );
+}
+
+// A first charge can be accepted but still settling when the page appears (the
+// Mews demo gateway reports Pending, then settles 20 to 30 seconds later). While
+// it reads as processing, re-check the plan every few seconds for about a
+// minute. "slow" means it was still unsettled when the checks ran out, which
+// reads as reassurance rather than a bare "Processing".
+const RECHECK_EVERY_MS = 3000;
+const RECHECK_TIMES = 20;
+const SETTLING = new Set(["processing", "pending", "pending_card"]);
+
+function useFirstPaymentStatus(bookingToken: string, initial: string): string {
+  const [status, setStatus] = useState(initial);
+
+  useEffect(() => {
+    if (!SETTLING.has(initial)) return;
+    let cancelled = false;
+    let checks = 0;
+    const timer = window.setInterval(async () => {
+      checks += 1;
+      try {
+        const portal = await fetchPlanPortal(bookingToken);
+        const rows = portal?.schedule ?? [];
+        const first = rows.length
+          ? rows.reduce((a, b) => (b.sequence < a.sequence ? b : a))
+          : null;
+        if (cancelled) return;
+        if (first?.status === "paid") {
+          setStatus("paid");
+          window.clearInterval(timer);
+          return;
+        }
+        if (first?.status === "failed") {
+          setStatus("failed");
+          window.clearInterval(timer);
+          return;
+        }
+      } catch {
+        // A failed check is not an answer; try again next tick.
+      }
+      if (checks >= RECHECK_TIMES && !cancelled) {
+        setStatus("slow");
+        window.clearInterval(timer);
+      }
+    }, RECHECK_EVERY_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [bookingToken, initial]);
+
+  return status;
 }
