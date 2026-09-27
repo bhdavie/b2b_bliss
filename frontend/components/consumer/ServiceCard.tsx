@@ -56,12 +56,14 @@ export function ServiceCard({
           </div>
         </div>
       ) : null}
-      <div className="mt-1 flex items-baseline justify-between">
-        <div className="text-[12px] text-ink-500">Processing fee</div>
-        <div className="text-[12px] text-ink-500 tabular-nums">
-          +{formatDollarsCompact(processingFeeCents)}
+      {processingFeeCents > 0 ? (
+        <div className="mt-1 flex items-baseline justify-between">
+          <div className="text-[12px] text-ink-500">Processing fee</div>
+          <div className="text-[12px] text-ink-500 tabular-nums">
+            +{formatDollarsCompact(processingFeeCents)}
+          </div>
         </div>
-      </div>
+      ) : null}
       <div className="mt-3 flex items-baseline justify-between">
         <div className="text-[12px] text-ink-500">Total</div>
         <div className="text-[24px] font-semibold leading-none text-ink-900">

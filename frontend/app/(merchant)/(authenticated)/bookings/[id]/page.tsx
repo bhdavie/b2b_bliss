@@ -107,7 +107,9 @@ function PlanDetail({
       <Card title="Plan summary">
         <div className="space-y-2.5">
           <Line label="Subtotal" value={formatDollars(portal.plan.totalAmountCents)} />
-          <Line label="Processing fee" value={`+${formatDollars(portal.processingFeeCents)}`} />
+          {portal.processingFeeCents > 0 ? (
+            <Line label="Processing fee" value={`+${formatDollars(portal.processingFeeCents)}`} />
+          ) : null}
         </div>
         <div className="mt-[18px] flex items-baseline justify-between border-t border-sand-300 pt-[18px]">
           <span className="text-[14px] text-ink-900">Total</span>

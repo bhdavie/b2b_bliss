@@ -91,10 +91,14 @@ export function Confirmation({
               </div>
             </>
           ) : null}
-          <div className="text-[11px] text-ink-muted">Processing fee</div>
-          <div className="text-right text-[11px] text-ink-muted tabular-nums">
-            +{formatDollarsCompact(processingFeeCents)}
-          </div>
+          {processingFeeCents > 0 ? (
+            <>
+              <div className="text-[11px] text-ink-muted">Processing fee</div>
+              <div className="text-right text-[11px] text-ink-muted tabular-nums">
+                +{formatDollarsCompact(processingFeeCents)}
+              </div>
+            </>
+          ) : null}
           <div className="text-[15px] font-bold text-ink">Total</div>
           <div className="text-right text-[15px] font-bold text-ink tabular-nums">
             {formatDollarsCompact(displayedTotalCents)}

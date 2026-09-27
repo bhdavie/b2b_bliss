@@ -36,6 +36,7 @@ export function PlanPortal({
   }
 
   const totalDue = portal.plan.totalAmountCents + portal.processingFeeCents;
+  const hasFee = portal.processingFeeCents > 0;
   // Fill share for the progress bar, from the same two values the old balance
   // band printed. Clamped so a rounding drift or an overpayment cannot push the
   // fill past its track.
@@ -299,19 +300,23 @@ export function PlanPortal({
                   <SummaryLine
                     label={`Plan discount (${savingsPercent}%)`}
                     value={`−${formatDollars(savings)}`}
+                    last={!hasFee}
                   />
                 </>
               ) : (
                 <SummaryLine
                   label="Subtotal"
                   value={formatDollars(portal.plan.totalAmountCents)}
+                  last={!hasFee}
                 />
               )}
-              <SummaryLine
-                label="Processing fee"
-                value={formatDollars(portal.processingFeeCents)}
-                last
-              />
+              {hasFee ? (
+                <SummaryLine
+                  label="Processing fee"
+                  value={formatDollars(portal.processingFeeCents)}
+                  last
+                />
+              ) : null}
               <div className="h-px bg-sand-300" />
               <div className="flex items-baseline justify-between pt-[18px]">
                 <div className="text-[14px] text-ink-900">Total</div>

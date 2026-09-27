@@ -74,12 +74,14 @@ export function CheckoutSummaryCard({
           </div>
         </div>
       ) : null}
-      <div className="mt-1 flex items-baseline justify-between">
-        <div className="text-[12px] text-ink-muted">Processing fee</div>
-        <div className="text-[12px] text-ink-muted tabular-nums">
-          +{formatDollarsCompact(processingFeeCents)}
+      {processingFeeCents > 0 ? (
+        <div className="mt-1 flex items-baseline justify-between">
+          <div className="text-[12px] text-ink-muted">Processing fee</div>
+          <div className="text-[12px] text-ink-muted tabular-nums">
+            +{formatDollarsCompact(processingFeeCents)}
+          </div>
         </div>
-      </div>
+      ) : null}
       <div className="mt-3 flex items-baseline justify-between">
         <div className="text-[12px] text-ink-muted">Total</div>
         <div className="text-[24px] font-medium leading-none text-ink">
