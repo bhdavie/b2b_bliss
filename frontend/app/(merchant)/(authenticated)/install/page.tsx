@@ -1,4 +1,5 @@
 import { InstallSnippet } from "@/components/merchant/InstallSnippet";
+import { MewsBookingSetup } from "@/components/merchant/MewsBookingSetup";
 import { Panel, SectionHeading } from "@/components/ui/primitives";
 import { fetchMerchantSession } from "@/lib/auth";
 
@@ -77,6 +78,12 @@ export default async function InstallPage() {
 
       {pms === "mews" ? (
         <>
+          {/* The Bliss rates live here as well as in onboarding: a property
+              that has finished onboarding cannot get back to that step, and
+              the rates (and their display deposits) change after go-live. */}
+          <Panel variant="filled" className="mb-3 p-5">
+            <MewsBookingSetup />
+          </Panel>
           <Panel variant="filled" className="p-5">
             <SectionHeading className="mb-4">
               Add Bliss through Google Tag Manager

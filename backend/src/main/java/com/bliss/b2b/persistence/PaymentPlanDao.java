@@ -253,8 +253,12 @@ public interface PaymentPlanDao {
             LEFT JOIN LATERAL (
                 SELECT pp.status AS plan_status,
                        pp.num_payments AS num_payments,
+                       -- Installments only: num_payments does not count a
+                       -- deposit row, so counting it here called a plan with
+                       -- a deposit "payments complete" one payment early.
                        (SELECT count(*) FROM payment_schedule ps
-                          WHERE ps.payment_plan_id = pp.id AND ps.status = 'paid') AS paid_count,
+                          WHERE ps.payment_plan_id = pp.id AND ps.status = 'paid'
+                            AND ps.kind = 'installment') AS paid_count,
                        (SELECT count(*) FROM payment_schedule ps
                           WHERE ps.payment_plan_id = pp.id
                             AND ps.status <> 'paid' AND ps.due_date < :today) AS overdue_count

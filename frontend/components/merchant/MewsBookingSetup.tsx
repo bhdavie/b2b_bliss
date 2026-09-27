@@ -165,8 +165,8 @@ export function MewsBookingSetup() {
         <p className="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-base text-emerald-800">
           Saved.{" "}
           {[
-            saved.monthlyRateName ? `Monthly plans book ${saved.monthlyRateName}.` : null,
-            saved.biweeklyRateName ? `Every 2 weeks plans book ${saved.biweeklyRateName}.` : null,
+            saved.monthlyRateName ? `Monthly plans book ${saved.monthlyRateName.trim()}.` : null,
+            saved.biweeklyRateName ? `Every 2 weeks plans book ${saved.biweeklyRateName.trim()}.` : null,
           ]
             .filter(Boolean)
             .join(" ")}
@@ -225,7 +225,7 @@ function RateSelect({
           <Label htmlFor={`${id}Deposit`}>Upfront charge shown to guests (%)</Label>
           <input
             id={`${id}Deposit`}
-            className="input mt-1.5 max-w-[160px]"
+            className="input mt-1.5 block max-w-[160px]"
             inputMode="decimal"
             placeholder="e.g. 20"
             value={deposit}

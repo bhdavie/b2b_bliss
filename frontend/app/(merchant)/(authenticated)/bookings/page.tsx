@@ -30,9 +30,10 @@ export default async function BookingsPage() {
             Your guests book through Mews
           </div>
           <p className="mt-2 max-w-[560px] text-[14px] text-ink-500">
-            Guests choose a payment plan in your Mews booking engine, and Bliss creates the
-            reservation in Mews for you. Payment plan links aren&apos;t created from the
-            dashboard for Mews properties. Plans your guests start show up below.
+            Guests choose a payment plan in your Mews booking engine and book one of your Bliss
+            rates there. Mews takes the card and the first payment; Bliss collects the rest and
+            the plan shows up below within a few minutes. Payment plan links aren&apos;t created
+            from the dashboard for Mews properties.
           </p>
           <Button href="/install" variant="ghost" className="mt-4 inline-flex">
             Booking engine setup
