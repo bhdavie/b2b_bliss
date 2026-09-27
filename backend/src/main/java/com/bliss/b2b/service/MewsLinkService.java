@@ -171,10 +171,13 @@ public class MewsLinkService {
             }
         }
         for (LinkRow link : pending) {
-            switch (attemptLink(conn, adapter, zone, link, current.get(link.reservationId()))) {
-                case LINKED -> linkedCount++;
-                case FLAGGED -> flagged++;
-                default -> { }
+            Attempt a = attemptLink(conn, adapter, zone, link, current.get(link.reservationId()));
+            if (a == Attempt.LINKED) linkedCount++;
+            if (a == Attempt.FLAGGED) flagged++;
+            if (a == Attempt.RATE_LIMITED) {
+                // Every further call would be refused too. The rest wait for the next pass.
+                log.warn("Mews rate-limited the link pass for merchant {}; resuming next pass", merchantId);
+                break;
             }
         }
         return new PassResult(seen, linkedCount, flagged, 0);
@@ -209,7 +212,7 @@ public class MewsLinkService {
 
     // --- Linking ------------------------------------------------------------------
 
-    enum Attempt { LINKED, FLAGGED, WAITING, DROPPED }
+    enum Attempt { LINKED, FLAGGED, WAITING, DROPPED, RATE_LIMITED }
 
     private Attempt attemptLink(MewsConnection conn, MewsAdapter adapter, ZoneId zone, LinkRow link,
             MewsReservation r) {
@@ -334,7 +337,8 @@ public class MewsLinkService {
                 };
             }
         } catch (PmsAdapterException e) {
-            return waiting(link, "Mews: " + e.getMessage());
+            waiting(link, "Mews: " + e.getMessage());
+            return e.httpStatus() == 429 ? Attempt.RATE_LIMITED : Attempt.WAITING;
         }
     }
 
