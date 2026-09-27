@@ -28,9 +28,15 @@ type FormState = {
 export function PlanRulesCard({
   initial,
   saveButtonClassName = "btn-primary-merchant",
+  hideDeposit = false,
 }: {
   initial: PlanRules;
   saveButtonClassName?: string;
+  /**
+   * Mews properties: the deposit is whatever the Bliss rate charges in Mews
+   * at booking, so the plan-rules deposit has no effect and is not shown.
+   */
+  hideDeposit?: boolean;
 }) {
   const [form, setForm] = useState<FormState>(toForm(initial));
   const [saving, setSaving] = useState(false);
@@ -247,89 +253,91 @@ export function PlanRulesCard({
         </div>
       </Row>
 
-      <Row
-        label="Deposit at booking"
-        hint="Charge an upfront amount when a customer accepts a plan. The remaining balance divides into installments."
-      >
-        <div className="space-y-3">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <span
-              role="switch"
-              aria-checked={form.depositRequired}
-              tabIndex={0}
-              onClick={() => update("depositRequired", !form.depositRequired)}
-              onKeyDown={(e) => {
-                if (e.key === " " || e.key === "Enter") {
-                  e.preventDefault();
-                  update("depositRequired", !form.depositRequired);
-                }
-              }}
-              className={`relative inline-flex h-5 w-9 flex-none rounded-full transition-colors ${
-                form.depositRequired ? "bg-brand-violet" : "bg-sand-300"
-              }`}
-            >
+      {hideDeposit ? null : (
+        <Row
+          label="Deposit at booking"
+          hint="Charge an upfront amount when a customer accepts a plan. The remaining balance divides into installments."
+        >
+          <div className="space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer">
               <span
-                className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                  form.depositRequired ? "translate-x-4" : ""
+                role="switch"
+                aria-checked={form.depositRequired}
+                tabIndex={0}
+                onClick={() => update("depositRequired", !form.depositRequired)}
+                onKeyDown={(e) => {
+                  if (e.key === " " || e.key === "Enter") {
+                    e.preventDefault();
+                    update("depositRequired", !form.depositRequired);
+                  }
+                }}
+                className={`relative inline-flex h-5 w-9 flex-none rounded-full transition-colors ${
+                  form.depositRequired ? "bg-brand-violet" : "bg-sand-300"
                 }`}
-              />
-            </span>
-            <span className="text-[13px] text-ink-900">
-              Require a deposit at booking
-            </span>
-          </label>
-
-          {form.depositRequired ? (
-            <div className="space-y-3 rounded-md bg-sand-50 p-3">
-              <div className="grid grid-cols-2 gap-2 max-w-md">
-                {(
-                  [
-                    { value: "percentage", label: "Percentage" },
-                    { value: "fixed", label: "Fixed amount" },
-                  ] satisfies { value: DepositType; label: string }[]
-                ).map((opt) => (
-                  <PillToggle
-                    key={opt.value}
-                    label={opt.label}
-                    selected={form.depositType === opt.value}
-                    onSelect={() => update("depositType", opt.value)}
-                  />
-                ))}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {form.depositType === "percentage" ? (
-                  <PercentInput
-                    label="Deposit percent"
-                    value={form.depositPercent}
-                    onChange={(v) => update("depositPercent", v)}
-                    placeholder="25"
-                  />
-                ) : (
-                  <DollarInput
-                    label="Deposit amount"
-                    value={form.depositDollars}
-                    onChange={(v) => update("depositDollars", v)}
-                    placeholder="200"
-                  />
-                )}
-                <DollarInput
-                  label="Max deposit (optional)"
-                  value={form.depositMaxDollars}
-                  onChange={(v) => update("depositMaxDollars", v)}
-                  placeholder="No cap"
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                    form.depositRequired ? "translate-x-4" : ""
+                  }`}
                 />
-              </div>
+              </span>
+              <span className="text-[13px] text-ink-900">
+                Require a deposit at booking
+              </span>
+            </label>
 
-              <p className="text-[11px] text-ink-500 leading-[1.4]">
-                {form.depositType === "percentage"
-                  ? "A percentage of the booking total is charged at signup. The optional cap protects against runaway deposits on big-ticket bookings."
-                  : "A fixed dollar amount is charged at signup. If the booking total is smaller than the deposit, the plan flow rejects so you don't accidentally charge above the booking price."}
-              </p>
-            </div>
-          ) : null}
-        </div>
-      </Row>
+            {form.depositRequired ? (
+              <div className="space-y-3 rounded-md bg-sand-50 p-3">
+                <div className="grid grid-cols-2 gap-2 max-w-md">
+                  {(
+                    [
+                      { value: "percentage", label: "Percentage" },
+                      { value: "fixed", label: "Fixed amount" },
+                    ] satisfies { value: DepositType; label: string }[]
+                  ).map((opt) => (
+                    <PillToggle
+                      key={opt.value}
+                      label={opt.label}
+                      selected={form.depositType === opt.value}
+                      onSelect={() => update("depositType", opt.value)}
+                    />
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {form.depositType === "percentage" ? (
+                    <PercentInput
+                      label="Deposit percent"
+                      value={form.depositPercent}
+                      onChange={(v) => update("depositPercent", v)}
+                      placeholder="25"
+                    />
+                  ) : (
+                    <DollarInput
+                      label="Deposit amount"
+                      value={form.depositDollars}
+                      onChange={(v) => update("depositDollars", v)}
+                      placeholder="200"
+                    />
+                  )}
+                  <DollarInput
+                    label="Max deposit (optional)"
+                    value={form.depositMaxDollars}
+                    onChange={(v) => update("depositMaxDollars", v)}
+                    placeholder="No cap"
+                  />
+                </div>
+
+                <p className="text-[11px] text-ink-500 leading-[1.4]">
+                  {form.depositType === "percentage"
+                    ? "A percentage of the booking total is charged at signup. The optional cap protects against runaway deposits on big-ticket bookings."
+                    : "A fixed dollar amount is charged at signup. If the booking total is smaller than the deposit, the plan flow rejects so you don't accidentally charge above the booking price."}
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </Row>
+      )}
 
       <Row
         label="Discount for plan customers (%)"

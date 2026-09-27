@@ -35,7 +35,14 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
-export function PaymentSettingsTabs({ planRules }: { planRules: PlanRules }) {
+export function PaymentSettingsTabs({
+  planRules,
+  isMews = false,
+}: {
+  planRules: PlanRules;
+  /** Hides plan-rule settings that do not apply to a Mews property. */
+  isMews?: boolean;
+}) {
   const [tab, setTab] = useState<TabKey>("rules");
 
   return (
@@ -77,7 +84,7 @@ export function PaymentSettingsTabs({ planRules }: { planRules: PlanRules }) {
       </div>
 
       <div className="pt-4">
-        {tab === "rules" ? <PlanRulesCard initial={planRules} /> : null}
+        {tab === "rules" ? <PlanRulesCard initial={planRules} hideDeposit={isMews} /> : null}
         {tab === "blackout" ? <BlackoutDatesCard initial={planRules} /> : null}
         {tab === "cancellation" ? (
           <PoliciesCard initial={planRules} section="cancellation" />

@@ -70,7 +70,10 @@ export default async function OnboardingPlanRulesPage() {
           Eligibility &amp; plans
         </SectionHeading>
         <Panel variant="filled" className="p-5">
-          <PlanRulesCard initial={planRules ?? DEFAULT_PLAN_RULES} />
+          <PlanRulesCard
+            initial={planRules ?? DEFAULT_PLAN_RULES}
+            hideDeposit={session.pmsType === "mews"}
+          />
         </Panel>
 
         <SectionHeading className="mb-5 mt-14">

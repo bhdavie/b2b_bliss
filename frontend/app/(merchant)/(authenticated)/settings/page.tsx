@@ -15,7 +15,10 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex flex-col">
-      <PaymentSettingsTabs planRules={planRules ?? DEFAULT_PLAN_RULES} />
+      <PaymentSettingsTabs
+        planRules={planRules ?? DEFAULT_PLAN_RULES}
+        isMews={session.pmsType === "mews"}
+      />
     </div>
   );
 }
