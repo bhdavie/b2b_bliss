@@ -14,9 +14,9 @@ export function PageChrome({ children }: { children: ReactNode }) {
 
 function Header() {
   return (
-    <header className="sticky top-0 z-10 border-b border-brand-neutral bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+    <header className="sticky top-0 z-10 border-b border-sand-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
       <div className="mx-auto flex max-w-[480px] items-center justify-between px-5 py-3">
-        <BlissWordmark className="text-[20px] leading-none tracking-[-0.5px] text-brand-navy" />
+        <BlissWordmark className="text-[20px] leading-none tracking-[-0.5px] text-brand-violet" />
         <div className="flex items-center gap-1.5 text-[11px] text-ink-muted">
           <LockIcon />
           <span>Secure checkout</span>

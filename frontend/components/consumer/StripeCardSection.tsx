@@ -5,6 +5,7 @@ import type { StripeCardElementOptions } from "@stripe/stripe-js";
 import { useState } from "react";
 
 import { STRIPE_ELEMENT_COLORS } from "@/lib/stripeElementColors";
+import { SectionLabel } from "./SectionLabel";
 
 // Styles mirror the brand token system so the Stripe iframe blends in
 // with the rest of the hosted page. The colours come from the palette in
@@ -101,20 +102,20 @@ export function StripeCardSection({
     <form onSubmit={handleSubmit} className="mt-6 space-y-4">
       <SectionLabel>Payment method</SectionLabel>
       <label className="block">
-        <span className="text-[12px] text-brand-navy/60">Email</span>
+        <span className="text-[12px] text-ink-500">Email</span>
         <input
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1.5 w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 text-[15px] placeholder:text-brand-navy/40 focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/40"
+          className="input mt-1.5"
           placeholder="you@example.com"
           autoComplete="email"
         />
       </label>
       <label className="block">
-        <span className="text-[12px] text-brand-navy/60">Card</span>
-        <div className="mt-1.5 rounded-none border border-brand-neutral bg-white px-3 py-3.5 focus-within:border-brand-purple focus-within:ring-2 focus-within:ring-brand-lavender/40">
+        <span className="text-[12px] text-ink-500">Card</span>
+        <div className="input mt-1.5 focus-within:border-brand-violet focus-within:shadow-focus-ring">
           <CardElement
             options={CARD_OPTIONS}
             onChange={(event) => {
@@ -126,22 +127,22 @@ export function StripeCardSection({
       </label>
 
       {error ? (
-        <div className="text-[12px] text-red-600" role="alert">
+        <div className="text-[12px] text-danger" role="alert">
           {error}
         </div>
       ) : null}
 
-      <p className="text-[11px] leading-relaxed text-brand-navy/60">{disclosure}</p>
+      <p className="text-[11px] leading-relaxed text-ink-500">{disclosure}</p>
 
       <div className="flex flex-col gap-2 pt-1">
         <button
           type="submit"
           disabled={disabled}
-          className="w-full rounded-none bg-[#D6C8FB] px-6 py-3.5 text-[15px] font-medium text-white transition hover:bg-brand-lavender-hover disabled:opacity-60"
+          className="btn-primary w-full"
         >
           {submitting || busy ? "Setting up plan..." : ctaLabel}
         </button>
-        <div className="flex items-center justify-center gap-3 text-[12px] text-brand-navy/60">
+        <div className="flex items-center justify-center gap-3 text-[12px] text-ink-500">
           <button
             type="button"
             onClick={onCancel}
@@ -166,7 +167,7 @@ export function StripeCardSection({
 
 export function StripeNotConfiguredCard() {
   return (
-    <section className="mt-6 rounded-none border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-900">
+    <section className="mt-6 rounded-card border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-900">
       <div className="font-medium">Stripe is not configured</div>
       <p className="mt-1 text-[12px] leading-relaxed text-amber-800">
         The property has not finished wiring payments yet. Reach out to them
@@ -176,10 +177,3 @@ export function StripeNotConfiguredCard() {
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-brand-navy/60">
-      {children}
-    </div>
-  );
-}

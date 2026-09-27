@@ -44,7 +44,7 @@ export function CheckoutSummaryCard({
   const displayedTotalCents = baseTotalCents + processingFeeCents;
 
   return (
-    <section className="mt-5 rounded-md bg-brand-cream/60 p-4">
+    <section className="mt-5 rounded-card bg-sand-100 p-4">
       <div className="text-[14px] font-medium text-ink">
         {cart.description ?? "Your booking"}
       </div>
@@ -56,7 +56,7 @@ export function CheckoutSummaryCard({
       {cart.name ? (
         <div className="mt-2 text-[12px] text-ink-muted">For {cart.name}</div>
       ) : null}
-      <div className="mt-5 flex items-baseline justify-between border-t border-ink/10 pt-3">
+      <div className="mt-5 flex items-baseline justify-between border-t border-sand-200 pt-3">
         <div className="text-[12px] text-ink-muted">Subtotal</div>
         <div
           className={`text-[12px] text-ink-muted tabular-nums${hasDiscount ? " line-through" : ""}`}
@@ -74,12 +74,14 @@ export function CheckoutSummaryCard({
           </div>
         </div>
       ) : null}
-      <div className="mt-1 flex items-baseline justify-between">
-        <div className="text-[12px] text-ink-muted">Processing fee</div>
-        <div className="text-[12px] text-ink-muted tabular-nums">
-          +{formatDollarsCompact(processingFeeCents)}
+      {processingFeeCents > 0 ? (
+        <div className="mt-1 flex items-baseline justify-between">
+          <div className="text-[12px] text-ink-muted">Processing fee</div>
+          <div className="text-[12px] text-ink-muted tabular-nums">
+            +{formatDollarsCompact(processingFeeCents)}
+          </div>
         </div>
-      </div>
+      ) : null}
       <div className="mt-3 flex items-baseline justify-between">
         <div className="text-[12px] text-ink-muted">Total</div>
         <div className="text-[24px] font-medium leading-none text-ink">

@@ -13,13 +13,26 @@ import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 @RegisterRowMapper(MerchantRowMapper.class)
 public interface MerchantDao {
 
-    @SqlQuery("SELECT * FROM merchants WHERE id = :id")
+    // findById and findBySlug also bring in the Mews enterprise name, which
+    // Merchant.guestFacingName falls back to. LEFT JOIN, one row per merchant
+    // (merchant_mews_connections is keyed by merchant_id).
+    @SqlQuery("""
+            SELECT m.*, mc.enterprise_name AS mews_enterprise_name
+            FROM merchants m
+            LEFT JOIN merchant_mews_connections mc ON mc.merchant_id = m.id
+            WHERE m.id = :id
+            """)
     Optional<Merchant> findById(@Bind("id") UUID id);
 
     @SqlQuery("SELECT * FROM merchants WHERE email = :email")
     Optional<Merchant> findByEmail(@Bind("email") String email);
 
-    @SqlQuery("SELECT * FROM merchants WHERE slug = :slug")
+    @SqlQuery("""
+            SELECT m.*, mc.enterprise_name AS mews_enterprise_name
+            FROM merchants m
+            LEFT JOIN merchant_mews_connections mc ON mc.merchant_id = m.id
+            WHERE m.slug = :slug
+            """)
     Optional<Merchant> findBySlug(@Bind("slug") String slug);
 
     @SqlUpdate("""

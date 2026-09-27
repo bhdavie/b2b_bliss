@@ -39,9 +39,15 @@
     @apply bg-brand-violet-deep;
   }
 
+  /* Disabled reads as inactive, not as a paler purple: the neutral inactive
+     fill with a white label, and no hover change (this rule sits after :hover
+     at the same specificity, so it wins). aria-disabled covers link-buttons,
+     which cannot carry the native attribute. */
   .btn-primary:disabled,
-  .btn-primary-merchant:disabled {
-    @apply opacity-60 cursor-not-allowed;
+  .btn-primary-merchant:disabled,
+  .btn-primary[aria-disabled="true"],
+  .btn-primary-merchant[aria-disabled="true"] {
+    @apply cursor-not-allowed bg-sand-500 text-white;
   }
 
   .btn-ghost {
@@ -52,8 +58,9 @@
     @apply bg-sand-50;
   }
 
-  .btn-ghost:disabled {
-    @apply opacity-60 cursor-not-allowed;
+  .btn-ghost:disabled,
+  .btn-ghost[aria-disabled="true"] {
+    @apply cursor-not-allowed border-sand-200 bg-transparent text-ink-400;
   }
 
   /* rounded-xl is Tailwind's stock 0.75rem, which is 12px at our 16px root —
@@ -64,6 +71,10 @@
      Tailwind config (shadow-focus-ring) built from brand.violet. */
   .input {
     @apply w-full rounded-xl border-2 border-sand-200 bg-white px-[17px] py-[15px] text-base placeholder:text-ink-400 focus:border-brand-violet focus:outline-none focus:shadow-focus-ring;
+  }
+
+  .input:disabled {
+    @apply cursor-not-allowed bg-sand-100 text-ink-400;
   }
 
   .label {

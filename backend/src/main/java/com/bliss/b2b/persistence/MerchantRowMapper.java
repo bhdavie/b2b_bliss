@@ -33,8 +33,21 @@ public class MerchantRowMapper implements RowMapper<Merchant> {
                 OnboardingState.fromWire(rs.getString("onboarding_state")),
                 toInstant(rs.getTimestamp("email_verified_at")),
                 toInstant(rs.getTimestamp("created_at")),
-                toInstant(rs.getTimestamp("updated_at"))
+                toInstant(rs.getTimestamp("updated_at")),
+                rs.getString("logo_url"),
+                optionalString(rs, "mews_enterprise_name")
         );
+    }
+
+    /** A column only some queries select; absent reads as null. */
+    private static String optionalString(ResultSet rs, String column) throws SQLException {
+        java.sql.ResultSetMetaData md = rs.getMetaData();
+        for (int i = 1; i <= md.getColumnCount(); i++) {
+            if (column.equalsIgnoreCase(md.getColumnLabel(i))) {
+                return rs.getString(i);
+            }
+        }
+        return null;
     }
 
     private static java.time.Instant toInstant(Timestamp ts) {

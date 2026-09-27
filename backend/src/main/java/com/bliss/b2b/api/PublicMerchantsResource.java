@@ -72,10 +72,10 @@ public class PublicMerchantsResource {
         return Response.ok(new PublicMerchantView(
                 new PublicMerchantView.MerchantContext(
                         merchant.slug(),
-                        merchant.businessName(),
+                        merchant.guestFacingName(),
                         merchant.businessType(),
                         null,
-                        null,
+                        merchant.logoUrl(),
                         merchant.email()),
                 new PublicMerchantView.Policies(
                         rules.refundPolicy().wire(),

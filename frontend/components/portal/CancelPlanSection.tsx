@@ -86,7 +86,7 @@ export function CancelPlanSection({
           toward a future stay at this property, following its cancellation policy. You&apos;ll see
           the amount once your stay is cancelled.
         </p>
-        {error ? <p className="text-[13px] text-red-600">{error}</p> : null}
+        {error ? <p className="text-[13px] text-danger">{error}</p> : null}
         {confirming ? (
           <div className="flex gap-2">
             <Button type="button" onClick={confirmMewsCancel} disabled={busy} variant="primary">
@@ -188,7 +188,7 @@ export function CancelPlanSection({
         Cancelling stops every remaining installment. This figure is what you
         are due back. We will sort the refund out for you.
       </p>
-      {error ? <p className="text-[13px] text-red-600">{error}</p> : null}
+      {error ? <p className="text-[13px] text-danger">{error}</p> : null}
       <div className="flex gap-2">
         <Button
           type="button"

@@ -1,5 +1,6 @@
 import { CheckoutFlow, type CheckoutCart } from "@/components/consumer/CheckoutFlow";
 import { InactiveLink } from "@/components/consumer/InactiveLink";
+import { hostName } from "@/components/consumer/MerchantBlock";
 import { PageChrome } from "@/components/consumer/PageChrome";
 import { fetchPublicMerchant } from "@/lib/publicApi";
 import { fetchFeeRate } from "@/lib/blissFee";
@@ -39,7 +40,7 @@ export default async function CheckoutPage(props: {
       <PageChrome>
         <InactiveLink
           title="Book this stay on the property's booking page"
-          body={`${merchant.merchant.businessName} takes payment plans through its own booking page. Choose a Bliss rate there to pay over time.`}
+          body={`${capitalize(hostName(merchant.merchant))} takes payment plans through its own booking page. Choose a Bliss rate there to pay over time.`}
         />
       </PageChrome>
     );
@@ -126,4 +127,9 @@ function firstOf(v: string | string[] | undefined): string | undefined {
   if (v == null) return undefined;
   if (Array.isArray(v)) return v[0];
   return v;
+}
+
+/** "the property" opens a sentence here. */
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }

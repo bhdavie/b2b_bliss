@@ -75,10 +75,10 @@ public record PublicPlanPortalView(
         static MerchantView from(Merchant m) {
             return new MerchantView(
                     m.slug(),
-                    m.businessName(),
+                    m.guestFacingName(),
                     m.businessType(),
                     null, // brandColorPrimary — not on the domain record yet
-                    null, // logoUrl — not on the domain record yet
+                    m.logoUrl(),
                     m.email());
         }
     }

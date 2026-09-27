@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SectionLabel } from "./SectionLabel";
 
 /**
  * Demo stand-in for {@link StripeCardSection}. Renders the same visual
@@ -63,7 +64,7 @@ export function DemoCardSection({
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1.5 w-full rounded-md border border-brand-neutral bg-white px-3 py-2.5 text-[15px] placeholder:text-ink-muted focus:border-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-lavender/60"
+          className="input mt-1.5"
           placeholder="you@example.com"
           autoComplete="email"
         />
@@ -74,7 +75,7 @@ export function DemoCardSection({
           type="text"
           value={cardNumber}
           onChange={(e) => setCardNumber(e.target.value)}
-          className="mt-1.5 w-full rounded-md border border-brand-neutral bg-white px-3 py-3.5 text-[15px] tabular-nums placeholder:text-ink-muted focus:border-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-lavender/60"
+          className="input mt-1.5 tabular-nums"
           inputMode="numeric"
           autoComplete="cc-number"
         />
@@ -86,7 +87,7 @@ export function DemoCardSection({
             type="text"
             value={expiry}
             onChange={(e) => setExpiry(e.target.value)}
-            className="mt-1.5 w-full rounded-md border border-brand-neutral bg-white px-3 py-3.5 text-[15px] tabular-nums placeholder:text-ink-muted focus:border-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-lavender/60"
+            className="input mt-1.5 tabular-nums"
             autoComplete="cc-exp"
           />
         </label>
@@ -96,7 +97,7 @@ export function DemoCardSection({
             type="text"
             value={cvc}
             onChange={(e) => setCvc(e.target.value)}
-            className="mt-1.5 w-full rounded-md border border-brand-neutral bg-white px-3 py-3.5 text-[15px] tabular-nums placeholder:text-ink-muted focus:border-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-lavender/60"
+            className="input mt-1.5 tabular-nums"
             inputMode="numeric"
             autoComplete="cc-csc"
           />
@@ -107,7 +108,7 @@ export function DemoCardSection({
             type="text"
             value={zip}
             onChange={(e) => setZip(e.target.value)}
-            className="mt-1.5 w-full rounded-md border border-brand-neutral bg-white px-3 py-3.5 text-[15px] tabular-nums placeholder:text-ink-muted focus:border-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-lavender/60"
+            className="input mt-1.5 tabular-nums"
             inputMode="numeric"
             autoComplete="postal-code"
           />
@@ -120,7 +121,7 @@ export function DemoCardSection({
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-md bg-brand-purple px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-purple-dark disabled:opacity-60"
+          className="btn-primary w-full"
         >
           {busy ? "Setting up plan..." : ctaLabel}
         </button>
@@ -147,13 +148,6 @@ export function DemoCardSection({
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-ink-muted">
-      {children}
-    </div>
-  );
-}
 
 function inferBrand(digits: string): string {
   if (digits.length === 0) return "visa";

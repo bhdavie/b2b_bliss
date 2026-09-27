@@ -6,6 +6,7 @@ import {
   type PublicPlanFrequency,
   type PublicPlanOption,
 } from "@/lib/publicApi";
+import { SectionLabel } from "./SectionLabel";
 
 export function PlanPicker({
   options,
@@ -62,15 +63,17 @@ function PlanCard({
       type="button"
       onClick={onSelect}
       aria-pressed={visuallySelected}
-      className={`relative w-full rounded-none px-4 py-3.5 text-left transition-colors ${
+      // Selected: amethyst outline (border plus a 1px ring, so the card does
+      // not grow a pixel against its neighbours) on the wash.
+      className={`relative w-full rounded-card border px-4 py-3.5 text-left transition-colors ${
         visuallySelected
-          ? "border-2 border-[#D6C8FB] bg-brand-lavender/20"
-          : "border-[0.5px] border-brand-neutral bg-white hover:border-brand-dusty"
+          ? "border-brand-violet bg-brand-violet-tint ring-1 ring-brand-violet"
+          : "border-sand-200 bg-white hover:bg-sand-hover"
       }`}
     >
       {option.recommended ? (
         <span
-          className="absolute -top-[9px] left-[14px] rounded-none bg-brand-lavender px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.3px] text-white"
+          className="absolute -top-[10px] left-[14px] rounded-full border border-brand-violet/30 bg-white px-2 py-0.5 text-[11px] font-medium text-brand-violet-deep"
           aria-label="Recommended option"
         >
           Recommended
@@ -80,12 +83,12 @@ function PlanCard({
         <div>
           <div
             className={`text-[14px] font-medium ${
-              visuallySelected ? "text-brand-purple" : "text-brand-navy"
+              visuallySelected ? "text-brand-violet-deep" : "text-ink-900"
             }`}
           >
             {option.frequency === "biweekly" ? "Every 2 weeks" : "Monthly"}
           </div>
-          <div className="mt-0.5 text-[12px] text-brand-navy/60">
+          <div className="mt-0.5 text-[12px] text-ink-500">
             {option.numPayments} payments through{" "}
             {formatScheduleDateShort(finalDate)}
           </div>
@@ -93,22 +96,14 @@ function PlanCard({
         <div className="flex-none text-right">
           <div
             className={`text-[16px] font-semibold tabular-nums ${
-              visuallySelected ? "text-brand-purple" : "text-brand-navy"
+              visuallySelected ? "text-brand-violet-deep" : "text-ink-900"
             }`}
           >
             {formatDollarsCompact(perPaymentCents)}
           </div>
-          <div className="text-[11px] text-brand-navy/60">/payment</div>
+          <div className="text-[11px] text-ink-500">/payment</div>
         </div>
       </div>
     </button>
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-brand-navy/60">
-      {children}
-    </div>
   );
 }

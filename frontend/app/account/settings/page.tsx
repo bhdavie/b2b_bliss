@@ -76,7 +76,7 @@ export default async function AccountSettingsPage() {
 function Field({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="flex items-baseline justify-between gap-8 border-b border-sand-200 py-4">
-      <div className="text-[12px] uppercase tracking-[0.08em] text-ink-500">{label}</div>
+      <div className="text-[13px] font-medium text-ink-500">{label}</div>
       {value ? (
         <div className="text-right text-[14px] tracking-[-0.01em] text-ink-900">
           {value}

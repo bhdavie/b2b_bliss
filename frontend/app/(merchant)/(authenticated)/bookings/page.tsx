@@ -71,7 +71,7 @@ export default async function BookingsPage() {
               href="/bookings/new"
               variant="primary"
               aria-disabled={!canCreate}
-              className={canCreate ? "flex-none" : "flex-none pointer-events-none opacity-50"}
+              className={canCreate ? "flex-none" : "flex-none pointer-events-none"}
               title={canCreate ? undefined : "Finish setup before creating bookings"}
             >
               New booking

@@ -41,7 +41,7 @@ export function DiscountBreakdown({
   }
 
   return (
-    <section className="mt-6 overflow-hidden rounded-md border border-emerald-200 bg-emerald-50">
+    <section className="mt-6 overflow-hidden rounded-card border border-emerald-200 bg-emerald-50">
       <div className="flex items-center gap-2 px-4 py-3 text-[13px] font-medium text-emerald-800">
         <SavingsIcon />
         Save {formatDollarsCompact(savings)} ({percent}%) with this plan

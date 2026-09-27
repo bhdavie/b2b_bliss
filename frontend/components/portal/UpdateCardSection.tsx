@@ -192,7 +192,7 @@ export function UpdateCardSection({
                     </label>
                   </div>
                   {error ? (
-                    <div role="alert" className="text-[13px] text-red-700">
+                    <div role="alert" className="text-[13px] text-danger">
                       {error}
                     </div>
                   ) : null}

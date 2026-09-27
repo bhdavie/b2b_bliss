@@ -23,8 +23,29 @@ public record Merchant(
         OnboardingState onboardingState,
         Instant emailVerifiedAt,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        // Shown to guests on checkout and in the plan portal when set.
+        String logoUrl,
+        // The connected Mews enterprise's name. Only the id/slug lookups
+        // (MerchantDao.findById, findBySlug) join it in; elsewhere it is null.
+        String mewsEnterpriseName
 ) {
+    /**
+     * The name a guest sees: the property's own business name, or for a Mews
+     * property that has not filled in its profile yet, the name of its Mews
+     * enterprise. Null when neither is known, and guest pages fall back to
+     * neutral wording rather than inventing a name.
+     */
+    public String guestFacingName() {
+        if (businessName != null && !businessName.isBlank()) {
+            return businessName.trim();
+        }
+        if (pmsType == PmsType.MEWS && mewsEnterpriseName != null && !mewsEnterpriseName.isBlank()) {
+            return mewsEnterpriseName.trim();
+        }
+        return null;
+    }
+
     /**
      * Setup is complete once the property reaches {@link OnboardingState#ACTIVE}.
      * (Previously derived from business profile fields; onboarding state is now
