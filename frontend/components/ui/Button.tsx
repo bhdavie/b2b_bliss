@@ -12,18 +12,16 @@ import { cn } from "./cn";
  * It adds no styling of its own: every visual property, including the hover and
  * disabled states, still comes from the global class.
  *
- * `disabled` is the native attribute, passed straight through. Both primaries
- * already carry a `:disabled` rule (`opacity-60 cursor-not-allowed`), so the
- * state needs no prop and no extra class.
+ * `disabled` is the native attribute, passed straight through. Every variant
+ * carries a `:disabled` rule in globals.css: the primaries take the neutral
+ * inactive fill (sand-500, white label), the ghost a hairline border and muted
+ * label. The state needs no prop and no extra class.
  *
  * Deliberately absent: no `loading` prop and no spinner, because the codebase
  * expresses loading purely as a label swap plus `disabled` today, and no
  * `danger` variant, because no destructive button style exists. Adding either
  * would invent a visual state.
  *
- * Known inconsistency, mirrored rather than fixed: `.btn-ghost` has no
- * `:disabled` rule, so a disabled ghost button renders at full opacity with a
- * normal cursor. That matches today's behaviour exactly.
  *
  * With `href`, it renders a next/link `Link` instead, carrying the identical
  * class string. That exists because several primary actions in the app are
