@@ -55,10 +55,10 @@ export function Confirmation({
   return (
     <div>
       <div className="mt-6 flex flex-col items-center text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-lavender text-white">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-violet-tint text-brand-violet-deep">
           <CheckIcon />
         </div>
-        <h1 className="mt-4 text-[24px] font-medium leading-tight text-ink">
+        <h1 className="mt-4 font-display text-[32px] font-normal leading-tight tracking-[-0.01em] text-ink-900">
           You&apos;re booked
         </h1>
         <p className="mt-1 text-[14px] text-ink-muted">
@@ -66,7 +66,7 @@ export function Confirmation({
         </p>
       </div>
 
-      <section className="mt-6 rounded-md bg-brand-cream/60 p-4">
+      <section className="mt-6 rounded-card bg-sand-100 p-4">
         <div className="text-[14px] font-medium text-ink">
           {booking.service.name}
         </div>
@@ -129,20 +129,20 @@ export function Confirmation({
       </section>
 
       <section className="mt-6">
-        <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-ink-muted">
+        <div className="text-[13px] font-medium text-ink-500">
           Schedule
         </div>
-        <ol className="mt-2.5 divide-y divide-brand-neutral rounded-md border border-brand-neutral bg-white">
+        <ol className="mt-2.5 divide-y divide-sand-200 rounded-card border border-sand-200 bg-white">
           {plan.schedule.map((entry) => (
             <li
               key={entry.sequence}
               className={`flex items-center justify-between px-3 py-2.5 text-[13px] ${
-                entry.kind === "deposit" ? "bg-brand-cream/60" : ""
+                entry.kind === "deposit" ? "bg-sand-100" : ""
               }`}
             >
               <span className="flex items-center gap-2 text-ink-muted">
                 {entry.kind === "deposit" ? (
-                  <span className="rounded-full bg-brand-lavender px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white">
+                  <span className="rounded-full bg-brand-violet-tint px-2 py-0.5 text-[11px] font-medium text-brand-violet-deep">
                     Deposit
                   </span>
                 ) : null}
@@ -164,14 +164,14 @@ export function Confirmation({
         <button
           type="button"
           onClick={() => window.print()}
-          className="w-full rounded-md bg-brand-navy px-4 py-3 text-[14px] font-medium text-white transition-colors hover:bg-brand-navy-dark"
+          className="btn-ghost w-full"
         >
           Save schedule as PDF
         </button>
         {plan.bookingToken ? (
           <Link
             href={`/plan/${plan.bookingToken}`}
-            className="text-center text-[12px] font-medium text-brand-purple underline-offset-2 hover:underline"
+            className="text-center text-[13px] font-medium text-brand-violet underline-offset-2 hover:text-brand-violet-deep hover:underline"
           >
             Manage your plan
           </Link>

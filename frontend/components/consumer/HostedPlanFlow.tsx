@@ -77,7 +77,7 @@ export function HostedPlanFlow({
   });
 
   return (
-    <div className="font-sans">
+    <div>
       <MerchantBlock merchant={booking.merchant} />
       <ServiceCard
         service={booking.service}
@@ -114,7 +114,7 @@ export function HostedPlanFlow({
           <button
             type="button"
             onClick={() => setStep("card")}
-            className="mt-6 w-full rounded-none bg-[#D6C8FB] px-6 py-3.5 text-[15px] font-medium text-white transition hover:bg-brand-lavender-hover disabled:opacity-60"
+            className="btn-primary mt-6 w-full"
           >
             Book now
           </button>
@@ -162,7 +162,7 @@ export function HostedPlanFlow({
               }}
             />
             {topError ? (
-              <div className="mt-3 text-[12px] text-red-600" role="alert">
+              <div className="mt-3 text-[12px] text-danger" role="alert">
                 {topError}
               </div>
             ) : null}
