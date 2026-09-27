@@ -73,7 +73,8 @@ class MewsAdapterFactoryTest {
         return new MewsConnection(MERCHANT, "https://api.mews.com",
                 CIPHER.encrypt(Field.MEWS_CLIENT_TOKEN, MERCHANT, "ct"),
                 CIPHER.encrypt(Field.MEWS_ACCESS_TOKEN, MERCHANT, "at"),
-                "ent", "Cranberry", currency, now, now, now, null, null, null, null);
+                "ent", "Cranberry", currency, now, now, now, null, null, null, null,
+                null, null, null);
     }
 
     private static MerchantMewsConnectionDao daoReturning(MewsConnection conn) {

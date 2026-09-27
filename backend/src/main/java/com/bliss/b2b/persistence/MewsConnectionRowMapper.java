@@ -25,7 +25,10 @@ public class MewsConnectionRowMapper implements RowMapper<MewsConnection> {
                 rs.getString("service_id"),
                 rs.getString("bliss_rate_id"),
                 rs.getString("adult_age_category_id"),
-                rs.getString("time_zone")
+                rs.getString("time_zone"),
+                rs.getString("bliss_monthly_rate_id"),
+                rs.getString("bliss_biweekly_rate_id"),
+                toInstant(rs.getTimestamp("linked_through_utc"))
         );
     }
 

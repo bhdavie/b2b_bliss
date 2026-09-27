@@ -66,6 +66,7 @@ public class MewsAdapter implements PmsAdapter {
     private static final String RESERVATIONS_CONFIRM = "/api/connector/v1/reservations/confirm";
     private static final String RESERVATIONS_CANCEL = "/api/connector/v1/reservations/cancel";
     private static final String RESERVATIONS_GET_ALL = "/api/connector/v1/reservations/getAll/2023-06-06";
+    private static final String ORDER_ITEMS_GET_ALL = "/api/connector/v1/orderItems/getAll";
 
     /** Pages followed per catalogue list call; a small property never gets near it. */
     private static final int MAX_PAGES = 10;
@@ -616,6 +617,167 @@ public class MewsAdapter implements PmsAdapter {
         body.put("Notes", notes);
         post(RESERVATIONS_CANCEL, body);
         log.info("Mews reservation {} canceled (email={})", reservationId, sendEmail);
+    }
+
+    // --- Booking-engine reservations (linking) -----------------------------
+
+    /**
+     * Every reservation on {@code serviceId} that Mews updated in
+     * [{@code fromUtc}, {@code toUtc}). The poller's one read: new bookings,
+     * cancellations and date changes all move {@code UpdatedUtc}. Keep the
+     * window within Mews' limit for this filter; the caller polls every few
+     * minutes, so it is always far inside it.
+     */
+    public List<MewsReservation> getReservationsUpdated(String serviceId, Instant fromUtc, Instant toUtc) {
+        Map<String, Object> body = auth();
+        body.put("ServiceIds", List.of(serviceId));
+        body.put("UpdatedUtc", Map.of("StartUtc", fromUtc.toString(), "EndUtc", toUtc.toString()));
+        List<MewsReservation> out = new ArrayList<>();
+        for (JsonNode r : getAllPaged(RESERVATIONS_GET_ALL, body, "Reservations")) {
+            out.add(toReservation(r));
+        }
+        return out;
+    }
+
+    /** One reservation by id, or empty if Mews does not return it. */
+    public Optional<MewsReservation> getReservation(String reservationId) {
+        Map<String, Object> body = auth();
+        body.put("ReservationIds", List.of(reservationId));
+        body.put("Limitation", Map.of("Count", 1));
+        for (JsonNode r : post(RESERVATIONS_GET_ALL, body).path("Reservations")) {
+            if (reservationId.equals(textOrNull(r, "Id"))) {
+                return Optional.of(toReservation(r));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The card payments Mews took against {@code reservationId}. This is how
+     * Bliss learns which card the guest saved: a booking-engine reservation
+     * carries no {@code CreditCardId}, but the upfront charge the Bliss rate
+     * takes is a {@code CreditCardPayment} naming both the reservation and the
+     * card. Every state is returned (Pending, Charged, Failed, ...), so the
+     * caller can tell "not charged yet" from "never will be".
+     */
+    public List<MewsCardPayment> getReservationCardPayments(String reservationId) {
+        Map<String, Object> body = auth();
+        body.put("ReservationIds", List.of(reservationId));
+        List<MewsCardPayment> out = new ArrayList<>();
+        for (JsonNode p : getAllPaged(PAYMENTS_GET_ALL, body, "Payments")) {
+            if (!reservationId.equals(textOrNull(p, "ReservationId"))
+                    || !"CreditCardPayment".equals(textOrNull(p, "Type"))) {
+                continue;
+            }
+            JsonNode amount = p.path("Amount");
+            JsonNode gross = amount.path("GrossValue");
+            if (!gross.isNumber()) {
+                throw new PmsAdapterException("Mews payment " + textOrNull(p, "Id") + " has no amount");
+            }
+            out.add(new MewsCardPayment(
+                    textOrNull(p, "Id"),
+                    textOrNull(p, "State"),
+                    // Mews books a payment as a negative bill entry; Bliss wants what was paid.
+                    toMinorUnits(gross.decimalValue().abs()),
+                    textOrNull(amount, "Currency"),
+                    textOrNull(p.path("Data").path("CreditCard"), "CreditCardId"),
+                    parseInstant(textOrNull(p, "CreatedUtc"))));
+        }
+        return out;
+    }
+
+    /**
+     * What the guest owes for the reservation: the sum of its live order items
+     * (nights, plus any products added to it). Canceled items are left out.
+     * Fails if the items are in more than one currency.
+     */
+    public StayPrice getReservationTotal(String reservationId) {
+        Map<String, Object> body = auth();
+        body.put("ServiceOrderIds", List.of(reservationId));
+        BigDecimal sum = BigDecimal.ZERO;
+        String currency = null;
+        int items = 0;
+        for (JsonNode item : getAllPaged(ORDER_ITEMS_GET_ALL, body, "OrderItems")) {
+            if (textOrNull(item, "CanceledUtc") != null) {
+                continue;
+            }
+            JsonNode amount = item.path("Amount");
+            String c = textOrNull(amount, "Currency");
+            JsonNode gross = amount.path("GrossValue");
+            if (c == null || !gross.isNumber()) {
+                throw new PmsAdapterException("Mews order item " + textOrNull(item, "Id") + " has no amount");
+            }
+            if (currency != null && !currency.equals(c)) {
+                throw new PmsAdapterException("Reservation " + reservationId + " is priced in "
+                        + currency + " and " + c);
+            }
+            currency = c;
+            sum = sum.add(gross.decimalValue());
+            items++;
+        }
+        if (items == 0) {
+            throw new PmsAdapterException("Reservation " + reservationId + " has no order items");
+        }
+        return new StayPrice(toMinorUnits(sum), currency);
+    }
+
+    /** A Mews customer by id, or empty. */
+    public Optional<PmsCustomer> getCustomer(String customerId) {
+        Map<String, Object> body = auth();
+        body.put("CustomerIds", List.of(customerId));
+        body.put("Extent", Map.of("Customers", true));
+        body.put("Limitation", Map.of("Count", 1));
+        for (JsonNode c : post(CUSTOMERS_GET_ALL, body).path("Customers")) {
+            if (customerId.equals(textOrNull(c, "Id"))) {
+                return Optional.of(toCustomer(c));
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static MewsReservation toReservation(JsonNode r) {
+        return new MewsReservation(
+                textOrNull(r, "Id"),
+                textOrNull(r, "Number"),
+                textOrNull(r, "State"),
+                textOrNull(r, "ServiceId"),
+                textOrNull(r, "RateId"),
+                textOrNull(r, "AccountId"),
+                textOrNull(r, "RequestedResourceCategoryId"),
+                textOrNull(r, "Origin"),
+                parseInstant(textOrNull(r, "ScheduledStartUtc")),
+                parseInstant(textOrNull(r, "ScheduledEndUtc")),
+                parseInstant(textOrNull(r, "CreatedUtc")),
+                parseInstant(textOrNull(r, "UpdatedUtc")));
+    }
+
+    /**
+     * The fields of a Mews reservation Bliss reads. Start and end are the
+     * scheduled stay, which is what a date change moves.
+     */
+    public record MewsReservation(
+            String id,
+            String number,
+            String state,
+            String serviceId,
+            String rateId,
+            String accountId,
+            String categoryId,
+            String origin,
+            Instant startUtc,
+            Instant endUtc,
+            Instant createdUtc,
+            Instant updatedUtc) {
+    }
+
+    /** A card payment Mews recorded against a reservation. {@code amountMinorUnits} is positive. */
+    public record MewsCardPayment(
+            String id,
+            String state,
+            long amountMinorUnits,
+            String currency,
+            String creditCardId,
+            Instant createdUtc) {
     }
 
     /** A stay total in integer minor units, with its currency. */

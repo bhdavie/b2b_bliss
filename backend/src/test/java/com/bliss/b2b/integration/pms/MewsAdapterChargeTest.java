@@ -116,7 +116,7 @@ class MewsAdapterChargeTest {
     }
 
     /** Plays back canned responses in order and records each request body. */
-    private static final class FakeHttp extends HttpClient {
+    static final class FakeHttp extends HttpClient {
         private final Deque<Object[]> responses = new ArrayDeque<>();
         final List<String> requests = new ArrayList<>();
 

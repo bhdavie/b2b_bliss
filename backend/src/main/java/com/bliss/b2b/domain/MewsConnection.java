@@ -27,7 +27,13 @@ public record MewsConnection(
         String serviceId,
         String blissRateId,
         String adultAgeCategoryId,
-        String timeZone
+        String timeZone,
+        // Bliss rates, one per payment schedule (V34). A reservation on one of
+        // these is a Bliss plan on that schedule. Either may be null.
+        String blissMonthlyRateId,
+        String blissBiweeklyRateId,
+        // Polling high-water mark: reservations updated up to here were seen.
+        Instant linkedThroughUtc
 ) {
     public boolean isValidated() {
         return validatedAt != null;
@@ -37,6 +43,23 @@ public record MewsConnection(
     public boolean isBookingSetupComplete() {
         return notBlank(serviceId) && notBlank(blissRateId)
                 && notBlank(adultAgeCategoryId) && notBlank(timeZone);
+    }
+
+    /** True once Bliss can find and link booking-engine reservations for this property. */
+    public boolean isLinkingReady() {
+        return isValidated() && notBlank(serviceId)
+                && (notBlank(blissMonthlyRateId) || notBlank(blissBiweeklyRateId));
+    }
+
+    /**
+     * The payment schedule a reservation on {@code rateId} was booked for, or
+     * null when the rate is not one of this property's Bliss rates.
+     */
+    public com.bliss.b2b.payments.PlanFrequency frequencyForRate(String rateId) {
+        if (rateId == null) return null;
+        if (rateId.equals(blissMonthlyRateId)) return com.bliss.b2b.payments.PlanFrequency.MONTHLY;
+        if (rateId.equals(blissBiweeklyRateId)) return com.bliss.b2b.payments.PlanFrequency.BIWEEKLY;
+        return null;
     }
 
     private static boolean notBlank(String s) {
