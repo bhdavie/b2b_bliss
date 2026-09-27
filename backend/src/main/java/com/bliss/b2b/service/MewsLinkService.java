@@ -150,7 +150,7 @@ public class MewsLinkService {
                 flagged += checkLinked(merchantId, r, linked.get(), zone);
             } else if (conn.frequencyForRate(r.rateId()) != null) {
                 seen++;
-                jdbi.useExtension(MewsLinkingDao.class, d -> d.insertPendingLink(merchantId, r.id()));
+                jdbi.useExtension(MewsLinkingDao.class, d -> d.insertPendingLink(merchantId, r.id(), now));
             }
         }
         jdbi.useExtension(MewsLinkingDao.class, d -> d.advanceLinkedThrough(merchantId, now));

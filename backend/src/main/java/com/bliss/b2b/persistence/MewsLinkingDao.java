@@ -66,13 +66,18 @@ public interface MewsLinkingDao {
 
     // --- Link rows ------------------------------------------------------------
 
-    /** Records a Bliss-rate reservation as seen. No-op if it already has a row. */
+    /**
+     * Records a Bliss-rate reservation as seen, at {@code seenAt} on the app's
+     * clock (the upfront-charge grace is measured on the same clock). No-op if
+     * it already has a row.
+     */
     @SqlUpdate("""
-            INSERT INTO mews_reservation_links (merchant_id, reservation_id)
-            VALUES (:merchantId, :reservationId)
+            INSERT INTO mews_reservation_links (merchant_id, reservation_id, first_seen_at)
+            VALUES (:merchantId, :reservationId, :seenAt)
             ON CONFLICT (merchant_id, reservation_id) DO NOTHING
             """)
-    int insertPendingLink(@Bind("merchantId") UUID merchantId, @Bind("reservationId") String reservationId);
+    int insertPendingLink(@Bind("merchantId") UUID merchantId, @Bind("reservationId") String reservationId,
+            @Bind("seenAt") Instant seenAt);
 
     @SqlQuery("""
             SELECT id, merchant_id, reservation_id, status, booking_id, attempts, last_error, first_seen_at
@@ -191,7 +196,7 @@ public interface MewsLinkingDao {
      */
     @SqlUpdate("""
             INSERT INTO mews_flags (merchant_id, reservation_id, booking_id, kind, detail)
-            VALUES (:merchantId, :reservationId, :bookingId, :kind, :detail)
+            VALUES (:merchantId, :reservationId, CAST(:bookingId AS uuid), :kind, :detail)
             ON CONFLICT (merchant_id, reservation_id, kind) DO NOTHING
             """)
     int insertFlag(
