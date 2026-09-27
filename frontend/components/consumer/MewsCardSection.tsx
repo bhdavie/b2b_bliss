@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { confirmMewsCard, requestMewsCard } from "@/lib/publicApi";
+import { SectionLabel } from "./SectionLabel";
 
 // Mews-rail card capture. Flow (mews inverts the Stripe order):
 //   1. collect email, then the parent creates the pending_card plan
@@ -192,50 +193,50 @@ export function MewsCardSection({
         <form onSubmit={handleStart} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="text-[12px] text-brand-navy/60">First name</span>
+              <span className="text-[12px] text-ink-500">First name</span>
               <input
                 type="text"
                 required
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                className="mt-1.5 w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 text-[15px] placeholder:text-brand-navy/40 focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/40"
+                className="input mt-1.5"
                 autoComplete="given-name"
               />
             </label>
             <label className="block">
-              <span className="text-[12px] text-brand-navy/60">Last name</span>
+              <span className="text-[12px] text-ink-500">Last name</span>
               <input
                 type="text"
                 required
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                className="mt-1.5 w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 text-[15px] placeholder:text-brand-navy/40 focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/40"
+                className="input mt-1.5"
                 autoComplete="family-name"
               />
             </label>
           </div>
           <label className="block">
-            <span className="text-[12px] text-brand-navy/60">Email</span>
+            <span className="text-[12px] text-ink-500">Email</span>
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 text-[15px] placeholder:text-brand-navy/40 focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/40"
+              className="input mt-1.5"
               placeholder="you@example.com"
               autoComplete="email"
             />
           </label>
           {error ? (
-            <div className="text-[12px] text-red-600" role="alert">
+            <div className="text-[12px] text-danger" role="alert">
               {error}
             </div>
           ) : null}
-          <p className="text-[11px] leading-relaxed text-brand-navy/60">{disclosure}</p>
+          <p className="text-[11px] leading-relaxed text-ink-500">{disclosure}</p>
           <div className="flex flex-col gap-2 pt-1">
             <button
               type="submit"
-              className="w-full rounded-none bg-[#D6C8FB] px-6 py-3.5 text-[15px] font-medium text-white transition hover:bg-brand-lavender-hover disabled:opacity-60"
+              className="btn-primary w-full"
             >
               {ctaLabel}
             </button>
@@ -248,20 +249,20 @@ export function MewsCardSection({
         <>
           <div
             id={CONTAINER_ID}
-            className="min-h-[180px] rounded-none border border-brand-neutral bg-white px-3 py-3.5"
+            className="min-h-[180px] rounded-card border border-sand-200 bg-white px-3 py-3.5"
           />
           {phase === "loading" ? (
-            <p className="text-[12px] text-brand-navy/60">Loading the secure card form...</p>
+            <p className="text-[12px] text-ink-500">Loading the secure card form...</p>
           ) : null}
           {phase === "processing" ? (
-            <p className="text-[12px] text-brand-navy/60">Confirming your card...</p>
+            <p className="text-[12px] text-ink-500">Confirming your card...</p>
           ) : null}
           {error ? (
-            <div className="text-[12px] text-red-600" role="alert">
+            <div className="text-[12px] text-danger" role="alert">
               {error}
             </div>
           ) : null}
-          <p className="text-[11px] leading-relaxed text-brand-navy/60">{disclosure}</p>
+          <p className="text-[11px] leading-relaxed text-ink-500">{disclosure}</p>
           <BackRow onCancel={onCancel} disabled={busy} returnUrl={returnUrl} merchantName={merchantName} />
         </>
       ) : null}
@@ -281,8 +282,8 @@ function BackRow({
   merchantName?: string;
 }) {
   return (
-    <div className="flex items-center justify-center gap-3 text-[12px] text-brand-navy/60">
-      <button type="button" onClick={onCancel} disabled={disabled} className="text-brand-navy/60 hover:text-brand-purple hover:underline disabled:opacity-60">
+    <div className="flex items-center justify-center gap-3 text-[12px] text-ink-500">
+      <button type="button" onClick={onCancel} disabled={disabled} className="text-ink-500 hover:text-brand-violet hover:underline disabled:opacity-60">
         Back to plan options
       </button>
       {returnUrl && merchantName ? (
@@ -297,10 +298,3 @@ function BackRow({
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-brand-navy/60">
-      {children}
-    </div>
-  );
-}

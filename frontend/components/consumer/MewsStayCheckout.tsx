@@ -82,7 +82,7 @@ export function MewsStayCheckout({
     return (
       <>
         <MerchantBlock merchant={merchant.merchant} />
-        <p className="mt-6 text-[14px] text-brand-navy/70">
+        <p className="mt-6 text-[14px] text-ink-500">
           This link is missing a check-out date. Go back to {merchant.merchant.businessName} and
           choose your dates again.
         </p>
@@ -96,12 +96,12 @@ export function MewsStayCheckout({
 
   const picker = (
     <div className="mt-6 space-y-3">
-      <div className="text-[12px] text-brand-navy/60">Your stay</div>
+      <div className="text-[12px] text-ink-500">Your stay</div>
       <div className="grid grid-cols-[1fr_auto] gap-3">
         <label className="block">
-          <span className="text-[12px] text-brand-navy/60">Room</span>
+          <span className="text-[12px] text-ink-500">Room</span>
           <select
-            className="mt-1.5 w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 text-[15px] focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/40"
+            className="input mt-1.5"
             value={categoryId ?? ""}
             disabled={loading && !quote}
             onChange={(e) => {
@@ -119,9 +119,9 @@ export function MewsStayCheckout({
           </select>
         </label>
         <label className="block">
-          <span className="text-[12px] text-brand-navy/60">Adults</span>
+          <span className="text-[12px] text-ink-500">Adults</span>
           <select
-            className="mt-1.5 w-full rounded-none border border-brand-neutral bg-white px-3 py-2.5 text-[15px] focus:border-brand-purple focus:outline-none focus:ring-2 focus:ring-brand-lavender/40"
+            className="input mt-1.5"
             value={adults ?? ""}
             disabled={!chosenRoom}
             onChange={(e) => setAdults(Number(e.target.value))}
@@ -135,17 +135,17 @@ export function MewsStayCheckout({
         </label>
       </div>
       {error ? (
-        <p className="text-[13px] text-red-600" role="alert">
+        <p className="text-[13px] text-danger" role="alert">
           {error}
         </p>
       ) : null}
       {quote?.reason === "sold_out" ? (
-        <p className="text-[13px] text-brand-navy/70" role="status">
+        <p className="text-[13px] text-ink-500" role="status">
           {chosenRoom?.name ?? "That room"} is booked for these dates. Try another room, or contact{" "}
           {merchant.merchant.businessName}.
         </p>
       ) : null}
-      {loading ? <p className="text-[13px] text-brand-navy/50">Checking your dates</p> : null}
+      {loading ? <p className="text-[13px] text-ink-500">Checking your dates</p> : null}
     </div>
   );
 

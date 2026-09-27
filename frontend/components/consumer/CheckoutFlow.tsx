@@ -194,7 +194,7 @@ export function CheckoutFlow({
           <button
             type="button"
             onClick={() => setStep("card")}
-            className="mt-6 w-full rounded-md bg-brand-purple px-4 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-purple-dark disabled:opacity-60"
+            className="btn-primary mt-6 w-full"
           >
             Book now
           </button>
@@ -265,7 +265,7 @@ export function CheckoutFlow({
               merchantName={merchant.merchant.businessName}
             />
             {topError ? (
-              <div className="mt-3 text-[12px] text-red-600" role="alert">{topError}</div>
+              <div className="mt-3 text-[12px] text-danger" role="alert">{topError}</div>
             ) : null}
           </Elements>
         ) : (

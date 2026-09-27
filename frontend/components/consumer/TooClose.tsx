@@ -16,8 +16,8 @@ export function TooClose({
   const merchantName = booking.merchant.businessName;
 
   return (
-    <section className="mt-8 rounded-md border border-brand-neutral bg-white p-6 text-center">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-lavender text-white">
+    <section className="mt-8 rounded-md border border-sand-200 bg-white p-6 text-center">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-violet-tint text-brand-violet-deep">
         <CalendarAlertIcon />
       </div>
       <h2 className="mt-4 text-[16px] font-medium text-ink">{headline}</h2>
@@ -28,7 +28,7 @@ export function TooClose({
         <div className="mt-5 flex flex-col items-center gap-3">
           <a
             href={returnUrl}
-            className="inline-flex w-full max-w-xs items-center justify-center rounded-md bg-brand-navy px-4 py-2.5 text-[13px] font-medium text-white no-underline hover:bg-brand-navy-dark"
+            className="btn-primary w-full max-w-xs no-underline"
           >
             Return to {merchantName}
           </a>
@@ -44,7 +44,7 @@ export function TooClose({
       ) : mailto ? (
         <a
           href={mailto}
-          className="mt-5 inline-flex items-center justify-center rounded-md bg-brand-navy px-4 py-2.5 text-[13px] font-medium text-white no-underline hover:bg-brand-navy-dark"
+          className="btn-ghost mt-5 no-underline"
         >
           Email {merchantName}
         </a>

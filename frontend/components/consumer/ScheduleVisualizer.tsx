@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SectionLabel } from "./SectionLabel";
 import {
   formatDollarsCompact,
   formatScheduleDateLong,
@@ -57,10 +58,10 @@ export function ScheduleVisualizer({
           <div
             key={`${r.label}-${i}`}
             role="listitem"
-            className="flex items-center justify-between rounded-none bg-brand-lavender/20 px-3 py-2 text-sm"
+            className="flex items-center justify-between rounded-card bg-sand-100 px-3 py-2 text-sm"
           >
-            <span className="text-brand-navy/80">{r.label}</span>
-            <span className="font-medium tabular-nums text-brand-navy">
+            <span className="text-ink-500">{r.label}</span>
+            <span className="font-medium tabular-nums text-ink-900">
               {formatDollarsCompact(r.amount)}
             </span>
           </div>
@@ -71,19 +72,11 @@ export function ScheduleVisualizer({
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="mt-2 text-xs font-medium text-brand-purple hover:underline"
+          className="mt-2 text-xs font-medium text-brand-violet hover:text-brand-violet-deep hover:underline"
         >
           {expanded ? "Hide schedule" : `See all ${rows.length} payments`}
         </button>
       ) : null}
     </section>
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-brand-navy/60">
-      {children}
-    </div>
   );
 }

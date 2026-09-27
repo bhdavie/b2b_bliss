@@ -1,7 +1,7 @@
 export function TrustSignals() {
   return (
     <section
-      className="mt-5 flex items-center justify-center gap-[14px] text-[11px] text-brand-navy/60"
+      className="mt-5 flex items-center justify-center gap-[14px] text-[11px] text-ink-500"
       aria-label="Plan terms"
     >
       <Signal icon={<LockIcon />} label="No interest" />
