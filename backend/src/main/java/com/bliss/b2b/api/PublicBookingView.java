@@ -146,10 +146,10 @@ public record PublicBookingView(
         return new PublicBookingView(
                 new MerchantContext(
                         merchant.slug(),
-                        merchant.businessName(),
+                        merchant.guestFacingName(),
                         merchant.businessType(),
                         null,
-                        null,
+                        merchant.logoUrl(),
                         merchant.email()),
                 new Service(
                         booking.serviceName(),

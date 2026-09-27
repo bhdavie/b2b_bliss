@@ -7,7 +7,7 @@ import {
   type StayQuote,
 } from "@/lib/publicApi";
 import { CheckoutFlow, type CheckoutCart } from "./CheckoutFlow";
-import { MerchantBlock } from "./MerchantBlock";
+import { MerchantBlock, hostName } from "./MerchantBlock";
 
 // Mews rail checkout. The stay is priced by the property's own Mews, for the
 // room and number of adults the guest confirms here, and that quote is the
@@ -83,7 +83,7 @@ export function MewsStayCheckout({
       <>
         <MerchantBlock merchant={merchant.merchant} />
         <p className="mt-6 text-[14px] text-ink-500">
-          This link is missing a check-out date. Go back to {merchant.merchant.businessName} and
+          This link is missing a check-out date. Go back to {hostName(merchant.merchant)} and
           choose your dates again.
         </p>
       </>
@@ -142,7 +142,7 @@ export function MewsStayCheckout({
       {quote?.reason === "sold_out" ? (
         <p className="text-[13px] text-ink-500" role="status">
           {chosenRoom?.name ?? "That room"} is booked for these dates. Try another room, or contact{" "}
-          {merchant.merchant.businessName}.
+          {hostName(merchant.merchant)}.
         </p>
       ) : null}
       {loading ? <p className="text-[13px] text-ink-500">Checking your dates</p> : null}

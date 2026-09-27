@@ -1,4 +1,5 @@
 import type { PublicBooking } from "@/lib/publicApi";
+import { hostName } from "./MerchantBlock";
 
 export function TooClose({
   booking,
@@ -13,7 +14,7 @@ export function TooClose({
       )}`
     : null;
   const { headline, body } = copyFor(booking);
-  const merchantName = booking.merchant.businessName;
+  const merchantName = hostName(booking.merchant);
 
   return (
     <section className="mt-8 rounded-md border border-sand-200 bg-white p-6 text-center">

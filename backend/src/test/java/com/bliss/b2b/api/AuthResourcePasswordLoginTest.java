@@ -215,7 +215,7 @@ class AuthResourcePasswordLoginTest {
                 UUID.randomUUID(), "marbrook", email, "Marbrook House", null, null,
                 null, null, null, null, null, "US", null, "not_started",
                 MerchantStatus.ACTIVE, PmsType.NONE, OnboardingState.ACTIVE,
-                Instant.EPOCH, Instant.EPOCH, Instant.EPOCH);
+                Instant.EPOCH, Instant.EPOCH, Instant.EPOCH, null, null);
     }
 
     private static AdminUserDao adminUserDao(Set<String> admins) {

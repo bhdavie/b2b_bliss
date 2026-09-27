@@ -21,7 +21,7 @@ import {
   type PreviewResult,
 } from "@/lib/eligibility";
 import { DepositCallout } from "./DepositCallout";
-import { MerchantBlock } from "./MerchantBlock";
+import { MerchantBlock, hostName } from "./MerchantBlock";
 import { PlanPicker } from "./PlanPicker";
 import { PolicyDisclosure } from "./PolicyDisclosure";
 import { ScheduleVisualizer } from "./ScheduleVisualizer";
@@ -204,7 +204,7 @@ export function CheckoutFlow({
                 href={returnUrl}
                 className="text-[12px] text-ink-muted hover:underline"
               >
-                Return to {merchant.merchant.businessName}
+                Return to {hostName(merchant.merchant)}
               </a>
             </div>
           ) : null}
@@ -221,7 +221,7 @@ export function CheckoutFlow({
             ctaLabel="Book now"
             disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, publicOption)}
             returnUrl={returnUrl}
-            merchantName={merchant.merchant.businessName}
+            merchantName={hostName(merchant.merchant)}
             onCreatePlan={async (email, name) => {
               const result = await submitCheckout({
                 merchantSlug: merchant.merchant.slug,
@@ -262,7 +262,7 @@ export function CheckoutFlow({
                 await handleSubmit(card);
               }}
               returnUrl={returnUrl}
-              merchantName={merchant.merchant.businessName}
+              merchantName={hostName(merchant.merchant)}
             />
             {topError ? (
               <div className="mt-3 text-[12px] text-danger" role="alert">{topError}</div>
@@ -277,7 +277,7 @@ export function CheckoutFlow({
             disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, publicOption)}
             onDemoSubmit={handleDemoSubmit}
             returnUrl={returnUrl}
-            merchantName={merchant.merchant.businessName}
+            merchantName={hostName(merchant.merchant)}
           />
         )
       ) : null}
