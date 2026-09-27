@@ -639,6 +639,20 @@ public class MewsAdapter implements PmsAdapter {
         return out;
     }
 
+    /** The reservations with these ids that Mews returns. Missing ids are simply absent. */
+    public List<MewsReservation> getReservations(List<String> reservationIds) {
+        if (reservationIds == null || reservationIds.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Object> body = auth();
+        body.put("ReservationIds", List.copyOf(reservationIds));
+        List<MewsReservation> out = new ArrayList<>();
+        for (JsonNode r : getAllPaged(RESERVATIONS_GET_ALL, body, "Reservations")) {
+            out.add(toReservation(r));
+        }
+        return out;
+    }
+
     /** One reservation by id, or empty if Mews does not return it. */
     public Optional<MewsReservation> getReservation(String reservationId) {
         Map<String, Object> body = auth();

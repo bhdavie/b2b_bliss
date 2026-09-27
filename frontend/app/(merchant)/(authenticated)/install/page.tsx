@@ -16,21 +16,26 @@ const OVERLAY_SCRIPT_SRC =
   "https://property.bliss-payments.com/mews-overlay.js";
 const OVERLAY_API_BASE =
   process.env.NEXT_PUBLIC_OVERLAY_API_BASE ?? "https://api.bliss-payments.com";
-// Where the overlay sends a guest who picks a plan. The consumer checkout host.
-const OVERLAY_CHECKOUT_BASE =
-  process.env.NEXT_PUBLIC_OVERLAY_CHECKOUT_BASE ?? "https://guest.bliss-payments.com";
 
+// For a Google Tag Manager Custom HTML tag. The config goes in a global set
+// by its own inline script, not in data attributes on the loader: GTM
+// re-creates the script elements it injects, and the overlay should not
+// depend on how faithfully it copies attributes across.
 function mewsSnippet(slug: string): string {
   return [
-    `<script src="${OVERLAY_SCRIPT_SRC}"`,
-    `        data-bliss-merchant="${slug}"`,
-    `        data-bliss-api="${OVERLAY_API_BASE}"`,
-    `        data-bliss-checkout="${OVERLAY_CHECKOUT_BASE}"></script>`,
+    `<script>`,
+    `  window.__blissOverlayConfig = {`,
+    `    merchant: "${slug}",`,
+    `    apiBase: "${OVERLAY_API_BASE}"`,
+    `  };`,
+    `</script>`,
+    `<script src="${OVERLAY_SCRIPT_SRC}"></script>`,
   ].join("\n");
 }
 
 const GTM_STEPS = [
-  "In Google Tag Manager, open your container and go to Tags, then New.",
+  "In Mews, make sure your booking engine loads your Google Tag Manager container.",
+  "In Google Tag Manager, open that container and go to Tags, then New.",
   "Under Tag Configuration choose Custom HTML.",
   "Paste the snippet below into the HTML field.",
   "Under Triggering choose All Pages.",
@@ -78,8 +83,8 @@ export default async function InstallPage() {
             </SectionHeading>
             <p className="mb-3 max-w-[760px] text-[14px] leading-[1.4] text-ink-500">
               This snippet carries your property&apos;s own identifier, so it
-              picks up your plan rules automatically. If you change your plan
-              settings later, the snippet does not need updating.
+              picks up your plan rules and your Bliss rates automatically. If
+              you change either later, the snippet does not need updating.
             </p>
             {GTM_STEPS.map((step, i) => {
               const isLast = i === GTM_STEPS.length - 1;

@@ -72,6 +72,8 @@ public class MewsLinkService {
      * confirmed reservation normally has one by the first pass that sees it.
      */
     static final Duration UPFRONT_CHARGE_GRACE = Duration.ofMinutes(30);
+    /** Pending reservations read per reservations/getAll call. */
+    static final int PENDING_BATCH = 100;
 
     /** Reservation states that mean the guest has booked. */
     static final Set<String> BOOKED_STATES = Set.of("Confirmed", "Started", "Processed");
@@ -154,8 +156,22 @@ public class MewsLinkService {
         jdbi.useExtension(MewsLinkingDao.class, d -> d.advanceLinkedThrough(merchantId, now));
 
         int linkedCount = 0;
-        for (LinkRow link : jdbi.withExtension(MewsLinkingDao.class, d -> d.findPendingLinks(merchantId))) {
-            switch (attemptLink(conn, adapter, zone, link)) {
+        List<LinkRow> pending = jdbi.withExtension(MewsLinkingDao.class, d -> d.findPendingLinks(merchantId));
+        if (pending.isEmpty()) {
+            return new PassResult(seen, 0, flagged, 0);
+        }
+        // One read for every pending reservation, not one each: the Connector
+        // API rate-limits per token, and a busy property can have several.
+        java.util.Map<String, MewsReservation> current = new java.util.HashMap<>();
+        for (int i = 0; i < pending.size(); i += PENDING_BATCH) {
+            List<String> ids = pending.subList(i, Math.min(i + PENDING_BATCH, pending.size())).stream()
+                    .map(LinkRow::reservationId).toList();
+            for (MewsReservation r : adapter.getReservations(ids)) {
+                current.put(r.id(), r);
+            }
+        }
+        for (LinkRow link : pending) {
+            switch (attemptLink(conn, adapter, zone, link, current.get(link.reservationId()))) {
                 case LINKED -> linkedCount++;
                 case FLAGGED -> flagged++;
                 default -> { }
@@ -195,11 +211,11 @@ public class MewsLinkService {
 
     enum Attempt { LINKED, FLAGGED, WAITING, DROPPED }
 
-    private Attempt attemptLink(MewsConnection conn, MewsAdapter adapter, ZoneId zone, LinkRow link) {
+    private Attempt attemptLink(MewsConnection conn, MewsAdapter adapter, ZoneId zone, LinkRow link,
+            MewsReservation r) {
         UUID merchantId = conn.merchantId();
         Instant now = clock.instant();
         try {
-            MewsReservation r = adapter.getReservation(link.reservationId()).orElse(null);
             if (r == null) {
                 return waiting(link, "Mews did not return the reservation");
             }

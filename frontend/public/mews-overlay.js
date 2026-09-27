@@ -7,22 +7,25 @@
  *
  *   <script src="https://.../mews-overlay.js"
  *           data-bliss-merchant="j9l29fke"
- *           data-bliss-api="https://api.bliss-payments.com"
- *           data-bliss-checkout="https://guest.bliss-payments.com"></script>
+ *           data-bliss-api="https://api.bliss-payments.com"></script>
  *
- * data-bliss-api and data-bliss-checkout are optional and default to
- * DEFAULT_API_BASE and DEFAULT_CHECKOUT_BASE below.
+ * data-bliss-api is optional and defaults to DEFAULT_API_BASE below. In a
+ * Google Tag Manager Custom HTML tag, set window.__blissOverlayConfig first
+ * instead (see the Install page); it does not depend on GTM keeping the
+ * script tag's attributes.
  *
  * On load it fetches that merchant's plan rules from the public API and
  * renders nothing until they arrive. It captures no card data and makes no
  * network call other than that one GET; everything else is read from the
  * page's own dataLayer.
  *
- * HANDOFF. When the guest confirms a plan, the overlay sends the top window to
- * Bliss checkout ({checkout}/checkout/{slug}) with the dates, the room name,
- * the rate, the plan frequency and a return link. Bliss prices the stay from
- * the property's own Mews there and creates the Mews reservation itself; the
- * total the overlay passes is a display hint only and is never charged.
+ * BOOKING. The pop-up only chooses the plan. Each payment schedule has its own
+ * Bliss rate in the property's Mews (Booking setup in the Bliss dashboard; the
+ * ids arrive with the plan rules). Pills appear on those rate cards only, and
+ * confirming a plan presses that schedule's rate button, so the guest books
+ * the rate and pays in the Mews booking engine as normal. Mews takes the card
+ * and the rate's upfront charge; Bliss finds the reservation from its side and
+ * builds the plan for the rest. Nothing the overlay computes is ever charged.
  *
  * DEVELOPMENT: pasting into the console still works. With no script tag to
  * read, it looks for window.__blissOverlayConfig = { merchant, apiBase } and
@@ -131,9 +134,7 @@
 
   var MERCHANT_ATTR = "data-bliss-merchant";
   var API_ATTR = "data-bliss-api";
-  var CHECKOUT_ATTR = "data-bliss-checkout";
   var DEFAULT_API_BASE = "https://api.bliss-payments.com";
-  var DEFAULT_CHECKOUT_BASE = "https://guest.bliss-payments.com";
 
   // =========================================================================
   // BLISS FEE
@@ -472,7 +473,8 @@
     merchantSlug: null,
 
     /** Bliss checkout origin, copied from the install config at start. */
-    checkoutBase: null,
+    /** Bliss rate id per payment schedule ({monthly, biweekly}), from the plan rules. */
+    blissRates: {},
 
     /**
      * Corner radii for the trigger line and the modal. Colour is not here: it
@@ -1745,30 +1747,6 @@
     return "from " + money(opt.perPaymentAmountCents, cur(t)) + unit;
   }
 
-  /**
-   * State B's figure on the Details step: the tax- and fee-inclusive per-night
-   * amount. Uses the biweekly count, falling back to the highest-count
-   * eligible option, so "starting at" stays truthful.
-   *
-   * Returns null when the Total or the nights count could not be read, which
-   * suppresses the block rather than quoting a figure off a partial basis.
-   */
-  function detailsLine(t) {
-    var preview = t.preview;
-    if (!preview || !preview.eligible || !preview.options.length) return null;
-    var spread = optionByFrequency(preview, "biweekly");
-    if (!spread) {
-      spread = preview.options[0];
-      for (var i = 1; i < preview.options.length; i++) {
-        if (preview.options[i].numPayments > spread.numPayments) spread = preview.options[i];
-      }
-    }
-    var nights = state.dl ? state.dl.nights : null;
-    var perNight = summaryPerNightCents(t.detailsTotalCents, nights, spread.numPayments);
-    if (perNight == null) return null;
-    return "Pay installments over time starting at " + money(perNight, cur(t)) + "/night";
-  }
-
   // -------------------------------------------------------------------------
   // TRIGGER
   // -------------------------------------------------------------------------
@@ -1848,35 +1826,21 @@
           }),
         ]);
       } else {
-        // STATE B — nothing selected. No "Pre-tax" on the supporting line:
-        // unlike the rate-card figure this one includes tax.
-        var dLine = detailsLine(t);
-        if (!dLine) {
-          t.hostEl.style.display = "none";
-          return;
-        }
-        // A button, not a div: the whole block opens the modal, same as a
-        // rate-card trigger, and a button is keyboard reachable for free.
-        block = h(
-          "button",
-          {
-            class: "trig details",
-            type: "button",
-            "aria-haspopup": "dialog",
-            onClick: function (ev) {
-              ev.preventDefault();
-              ev.stopPropagation();
-              openModal(t.id);
-            },
-          },
-          [
-            h("span", { class: "amt", text: dLine }),
-            h("span", { class: "sub", text: "No credit check" }),
-          ]
-        );
+        // STATE B — nothing selected. Not offered here: a plan is booked by
+        // choosing a Bliss rate, which happens on the Rates step, so a teaser
+        // at Details would lead nowhere.
+        t.hostEl.style.display = "none";
+        return;
       }
       t.hostEl.style.display = "block";
       root.appendChild(block);
+      return;
+    }
+
+    // Pills belong on the Bliss rates only: every other rate is booked and
+    // paid in Mews as the property set it up.
+    if (t.kind === "rate-card" && !frequencyForRate(t.rateId)) {
+      t.hostEl.style.display = "none";
       return;
     }
 
@@ -2019,9 +1983,11 @@
     // it is what distinguishes the state right after clicking Select this plan
     // from reopening a modal whose plan was already chosen. A fresh open always
     // starts false, so a reopen lands on the reopened state.
+    var own = t.kind === "rate-card" ? frequencyForRate(t.rateId) : null;
     state.modal = {
       triggerId: triggerId,
-      selected: defaultSelected(t.preview),
+      // A Bliss rate card opens on its own schedule.
+      selected: own && optionByFrequency(t.preview, own) ? own : defaultSelected(t.preview),
       justConfirmed: false,
     };
     ensureModalHost();
@@ -2444,50 +2410,86 @@
     state.planChoice = t.confirmed;
     if (state.modal) state.modal.justConfirmed = true;
     renderAllTriggers();
-    if (CONFIG.closeModalOnConfirm) closeModal();
+    // Close first: the booking engine moves on to its next step, and the
+    // modal must not sit over it.
+    if (bookBlissRate(option.frequency, t) || CONFIG.closeModalOnConfirm) closeModal();
     else renderModal();
-    handOffToCheckout(choice);
+  }
+
+  /** The schedule a rate stands for, or null when it is not a Bliss rate. */
+  function frequencyForRate(rateId) {
+    if (!rateId) return null;
+    var r = CONFIG.blissRates || {};
+    if (r.monthly === rateId) return "monthly";
+    if (r.biweekly === rateId) return "biweekly";
+    return null;
   }
 
   /**
-   * Sends the guest to Bliss checkout for this stay. Built from what the
-   * booking engine has told us: the dates, the room name when Mews has named
-   * it, and the rate. Bliss asks for whatever is missing (the room, and always
-   * the number of adults, which the dataLayer never carries).
+   * Only the schedules the property has a Bliss rate for. A cadence with no
+   * rate cannot be booked, so it is never offered.
    */
-  function checkoutUrl(choice) {
-    var base = String(CONFIG.checkoutBase || DEFAULT_CHECKOUT_BASE).replace(/\/+$/, "");
-    var params = [];
-    function add(key, value) {
-      if (value != null && value !== "") params.push(key + "=" + encodeURIComponent(value));
+  function restrictToBlissRates(preview) {
+    if (!preview || !preview.options) return preview;
+    var kept = [];
+    for (var i = 0; i < preview.options.length; i++) {
+      if ((CONFIG.blissRates || {})[preview.options[i].frequency]) kept.push(preview.options[i]);
     }
-    add("checkin", choice.checkin);
-    add("checkout", choice.checkout);
-    add("room", choice.roomName);
-    add("rate_id", choice.rateId);
-    add("rate", choice.rateName);
-    add("frequency", choice.frequency);
-    // A display hint only. Bliss prices the stay from Mews and ignores this.
-    add("total", choice.amountCents != null ? Math.round(choice.amountCents) : null);
-    add("currency", choice.currency);
-    add("return_url", choice.returnUrl);
-    return base + "/checkout/" + encodeURIComponent(choice.merchantSlug) + "?" + params.join("&");
+    if (kept.length === preview.options.length) return preview;
+    var out = {};
+    for (var k in preview) out[k] = preview[k];
+    out.options = kept;
+    if (!kept.length) {
+      out.eligible = false;
+      out.reason = "no_bliss_rate";
+    }
+    return out;
   }
 
-  function handOffToCheckout(choice) {
-    if (!choice.merchantSlug || !choice.checkin || !choice.checkout) {
-      console.warn("[bliss] cannot hand off to checkout: missing merchant or dates", choice);
-      return;
+  /**
+   * Books the plan the guest chose: presses the booking button on that
+   * schedule's Bliss rate card, so the guest continues in the Mews booking
+   * engine exactly as if they had pressed it themselves. The card must be on
+   * screen (the Rates step); anywhere else the choice is only recorded.
+   */
+  function bookBlissRate(frequency, from) {
+    var rateId = (CONFIG.blissRates || {})[frequency];
+    if (!rateId) {
+      console.warn("[bliss] no Bliss rate for " + frequency + "; nothing to book");
+      return false;
     }
-    var url = checkoutUrl(choice);
-    // The top window, so the whole booking page is replaced rather than one
-    // frame of it. This runs from the guest's click, so a cross-origin frame
-    // may still navigate top.
-    try {
-      window.top.location.assign(url);
-    } catch (e) {
-      window.location.assign(url);
+    for (var i = 0; i < state.triggers.length; i++) {
+      var t = state.triggers[i];
+      if (t.kind !== "rate-card" || t.rateId !== rateId || !t.cardEl || !t.cardEl.isConnected) continue;
+      var cta = rateCardButton(t.cardEl);
+      if (!cta) break;
+      // The tick belongs on the rate the guest is booking, which is not the
+      // card they opened the pop-up from when they switched schedule.
+      if (from && from !== t) {
+        t.confirmed = from.confirmed;
+        from.confirmed = null;
+        renderAllTriggers();
+      }
+      cta.click();
+      return true;
     }
+    console.warn("[bliss] the " + frequency + " Bliss rate card is not on screen; plan recorded only");
+    return false;
+  }
+
+  /** The rate card's own booking button: the configured CTA, else its last interactive element. */
+  function rateCardButton(card) {
+    var p = (CONFIG.rateCards && CONFIG.rateCards.placement) || {};
+    if (p.ctaSelector) {
+      try {
+        var el = card.querySelector(p.ctaSelector);
+        if (el) return el;
+      } catch (e) {
+        /* fall through */
+      }
+    }
+    var interactive = card.querySelectorAll('button, [role="button"], a[href]');
+    return interactive.length ? interactive[interactive.length - 1] : null;
   }
 
   // -------------------------------------------------------------------------
@@ -2836,7 +2838,7 @@
   function recompute() {
     state.triggers.forEach(function (t) {
       applyAmount(t);
-      t.preview = computeFor(t.amountCents);
+      t.preview = restrictToBlissRates(computeFor(t.amountCents));
       if (t.kind === "rate-card") t.label = t.rateName || cardLabel(t.cardEl) || t.label;
       if (t.kind === "details") {
         // State A/B is driven by the session-level choice, not by this
@@ -3131,7 +3133,6 @@
         source: "script tag",
         merchant: String(el.getAttribute(MERCHANT_ATTR) || "").trim(),
         apiBase: String(el.getAttribute(API_ATTR) || "").trim() || DEFAULT_API_BASE,
-        checkoutBase: String(el.getAttribute(CHECKOUT_ATTR) || "").trim() || DEFAULT_CHECKOUT_BASE,
       };
     }
     var g = null;
@@ -3145,10 +3146,9 @@
         source: "window.__blissOverlayConfig",
         merchant: String(g.merchant).trim(),
         apiBase: String(g.apiBase || "").trim() || DEFAULT_API_BASE,
-        checkoutBase: String(g.checkoutBase || "").trim() || DEFAULT_CHECKOUT_BASE,
       };
     }
-    return { source: null, merchant: "", apiBase: DEFAULT_API_BASE, checkoutBase: DEFAULT_CHECKOUT_BASE };
+    return { source: null, merchant: "", apiBase: DEFAULT_API_BASE };
   }
 
   /**
@@ -3184,6 +3184,16 @@
       paymentDueCustomMonths: p.paymentDueCustomMonths == null ? null : p.paymentDueCustomMonths,
       discountBasisPoints: p.discountBasisPoints,
     };
+  }
+
+  /** {monthly, biweekly} rate ids from the payload, or null when neither is set. */
+  function blissRatesFromPayload(p) {
+    var raw = p && p.mewsBlissRates;
+    if (!raw || typeof raw !== "object") return null;
+    var out = {};
+    if (raw.monthly) out.monthly = String(raw.monthly);
+    if (raw.biweekly) out.biweekly = String(raw.biweekly);
+    return out.monthly || out.biweekly ? out : null;
   }
 
   function boot() {
@@ -3230,7 +3240,16 @@
           bail("plan rules payload was missing required fields. Nothing rendered.");
           return;
         }
+        var blissRates = blissRatesFromPayload(payload);
+        if (!blissRates) {
+          bail(
+            "merchant " + install.merchant + " has no Bliss rates in its booking setup, so there " +
+              "is no rate to send a guest to. Nothing rendered."
+          );
+          return;
+        }
         CONFIG.rules = rules;
+        CONFIG.blissRates = blissRates;
         start(install, url);
       })
       .catch(function (e) {
@@ -3243,7 +3262,6 @@
 
   function start(install, url) {
   CONFIG.merchantSlug = install.merchant;
-  CONFIG.checkoutBase = install.checkoutBase;
 
   refresh(); // resolves frames, hooks the data frame, decorates, observes
 
