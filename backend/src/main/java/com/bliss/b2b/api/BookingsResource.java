@@ -74,10 +74,12 @@ public class BookingsResource {
     @POST
     public Response create(@Auth MerchantPrincipal principal, CreateBookingRequest req) {
         Merchant merchant = principal.merchant();
-        // A Mews property's guests book through its Mews booking engine, which
-        // hands them to Bliss checkout with the room and dates. A dashboard link
-        // carries neither, so Bliss could not create the Mews reservation.
-        if (merchant.pmsType() == com.bliss.b2b.domain.PmsType.MEWS) {
+        // A Mews property's guests book a Bliss rate in its Mews booking engine,
+        // and Bliss builds the plan from that reservation. A dashboard link has
+        // no reservation behind it, so it is refused, except for the listed
+        // demo properties (BLISS_DEMO_MEWS_SLUGS), which book on the demo path.
+        if (merchant.pmsType() == com.bliss.b2b.domain.PmsType.MEWS
+                && !appConfig.isDemoMewsProperty(merchant.slug())) {
             return Response.status(409).entity(Map.of(
                     "error", "mews_uses_booking_engine",
                     "message", "Guests book Mews properties through your booking engine, "

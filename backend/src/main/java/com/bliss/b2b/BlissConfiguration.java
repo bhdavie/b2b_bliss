@@ -170,6 +170,17 @@ public class BlissConfiguration extends Configuration {
          * app or the checkout host.
          */
         private String marketingBaseUrl = "http://localhost:3000";
+        /**
+         * Mews properties that are demos, by slug, comma separated
+         * ({@code BLISS_DEMO_MEWS_SLUGS}). Real Mews properties take plans only
+         * from their booking engine; these may also take dashboard bookings,
+         * which always go through the demo payment path (no Stripe, no Mews
+         * charge). It is how the hosted /inn/marbrook demo books. Blank (the
+         * default) lists none. An explicit list rather than {@code is_demo},
+         * so the demo reset can never reach these and a real property that
+         * signs up while demo login is on is not let through.
+         */
+        private String demoMewsSlugs = "";
 
         @JsonProperty public String getMerchantBaseUrl() { return merchantBaseUrl; }
         @JsonProperty public void setMerchantBaseUrl(String merchantBaseUrl) { this.merchantBaseUrl = merchantBaseUrl; }
@@ -177,6 +188,20 @@ public class BlissConfiguration extends Configuration {
         @JsonProperty public void setConsumerBaseUrl(String consumerBaseUrl) { this.consumerBaseUrl = consumerBaseUrl; }
         @JsonProperty public String getMarketingBaseUrl() { return marketingBaseUrl; }
         @JsonProperty public void setMarketingBaseUrl(String marketingBaseUrl) { this.marketingBaseUrl = marketingBaseUrl; }
+        @JsonProperty public String getDemoMewsSlugs() { return demoMewsSlugs; }
+        // Null (an unset env var) reads as none, as setDemoLoginEmails does.
+        @JsonProperty public void setDemoMewsSlugs(String demoMewsSlugs) {
+            this.demoMewsSlugs = demoMewsSlugs == null ? "" : demoMewsSlugs;
+        }
+
+        /** True when {@code slug} is a Mews demo property allowed dashboard bookings. */
+        public boolean isDemoMewsProperty(String slug) {
+            if (slug == null || slug.isBlank()) return false;
+            for (String s : demoMewsSlugs.split(",")) {
+                if (s.trim().equals(slug)) return true;
+            }
+            return false;
+        }
     }
 
     public static class CookieConfig {

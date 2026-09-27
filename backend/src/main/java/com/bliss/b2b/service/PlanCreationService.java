@@ -236,10 +236,11 @@ public class PlanCreationService {
                         "booking is not open for plan acceptance (status=" + booking.status().wire() + ")");
             }
             Merchant merchant = handle.attach(MerchantDao.class).findById(booking.merchantId()).orElseThrow();
-            if (merchant.pmsType() == com.bliss.b2b.domain.PmsType.MEWS) {
-                // A dashboard link has no room or guest count, so no Mews
-                // reservation can be made from it. Links made before this rule
-                // land here.
+            if (merchant.pmsType() == com.bliss.b2b.domain.PmsType.MEWS
+                    && !appConfig.isDemoMewsProperty(merchant.slug())) {
+                // A dashboard link has no Mews reservation behind it. Links made
+                // before this rule land here. Listed demo properties pass and
+                // take the demo payment path below.
                 throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
                         "This property takes payment plans through its own booking page. "
                                 + "Book your stay there to choose a plan.");
@@ -363,6 +364,13 @@ public class PlanCreationService {
         // guest's booking-engine reservation (createFromMewsReservation), and
         // both entry points refuse a Mews property before reaching this.
         if (merchant.pmsType() == PmsType.MEWS) {
+            if (appConfig.isDemoMewsProperty(merchant.slug())) {
+                // A listed demo property: synthetic card and payment ids, no
+                // Stripe and no Mews call, even where Stripe is configured.
+                return acceptForBookingDemo(handle, booking, merchant,
+                        customerEmail, customerFirstName, customerLastName,
+                        customerPhone, paymentMethodId, requestedFrequency, demoCard);
+            }
             throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
                     "Mews plans are created from the property's booking engine");
         }

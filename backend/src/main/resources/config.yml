@@ -75,6 +75,11 @@ app:
   # Marketing site origin. Referral links (/hotels?ref=CODE) are built against
   # this, so it must be the public site, not the app or checkout host.
   marketingBaseUrl: ${BLISS_MARKETING_BASE_URL:-http://localhost:3000}
+  # Mews demo properties (slugs, comma separated) that may take dashboard
+  # bookings through the demo payment path, e.g. j9l29fke for the hosted
+  # /inn/marbrook demo. Blank: none, and every Mews property books only
+  # through its own booking engine.
+  demoMewsSlugs: ${BLISS_DEMO_MEWS_SLUGS:-}
 
 database:
   # DATABASE_URL, when the platform sets it, overrides all three of these at
