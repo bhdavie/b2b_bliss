@@ -47,7 +47,7 @@ function statusPill(plan: AccountPlanCard): { label: string; tone: PillTone } {
   if (plan.complete) return STATUS_PILL.completed!;
   return (
     STATUS_PILL[plan.status] ?? {
-      label: plan.status.replace(/_/g, " "),
+      label: (s => s.charAt(0).toUpperCase() + s.slice(1))(plan.status.replace(/_/g, " ")),
       tone: "neutral",
     }
   );
@@ -129,7 +129,7 @@ export function PlanRow({
 
         {showNextPayment ? (
           <div className="flex flex-col gap-1">
-            <div className="text-[12px] uppercase tracking-[0.08em] text-ink-500">
+            <div className="text-[13px] font-medium text-ink-500">
               Next payment
             </div>
             {hasNext ? (
@@ -199,7 +199,7 @@ function Pill({
         : "bg-sand-100 text-ink-500";
   return (
     <span
-      className={`flex-none whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-medium uppercase tracking-[0.06em] ${cls}`}
+      className={`flex-none whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-medium ${cls}`}
     >
       {children}
     </span>

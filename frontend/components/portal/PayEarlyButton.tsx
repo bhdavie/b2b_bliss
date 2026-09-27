@@ -62,7 +62,7 @@ export function PayEarlyButton({
           Make a payment
         </button>
         {error ? (
-          <div role="alert" className="text-[13px] text-red-700">
+          <div role="alert" className="text-[13px] text-danger">
             {error}
           </div>
         ) : null}
@@ -102,7 +102,7 @@ export function PayEarlyButton({
         </button>
       </div>
       {error ? (
-        <div role="alert" className="text-[13px] text-red-700">
+        <div role="alert" className="text-[13px] text-danger">
           {error}
         </div>
       ) : null}

@@ -99,7 +99,7 @@ export function PlanPortal({
               Back to your plans
             </Link>
           ) : null}
-          <RecordTitle className="mb-2">
+          <RecordTitle className="mb-2 font-display !font-normal tracking-[-0.01em]">
             {portal.merchant.businessName}
           </RecordTitle>
           <p className="text-[14px] text-ink-500">
@@ -122,13 +122,13 @@ export function PlanPortal({
           </div>
           <div className="flex items-start justify-between gap-3">
             <div className="flex flex-col gap-[7px]">
-              <div className="text-[12px] uppercase tracking-[0.08em] text-ink-500">Paid to date</div>
+              <div className="text-[13px] font-medium text-ink-500">Paid to date</div>
               <div className="text-[14px] text-ink-900">
                 {formatDollars(portal.paidCents)}
               </div>
             </div>
             <div className="flex flex-col items-end gap-[7px]">
-              <div className="text-[12px] uppercase tracking-[0.08em] text-ink-500">Remaining</div>
+              <div className="text-[13px] font-medium text-ink-500">Remaining</div>
               <div className="text-[14px] text-ink-900">
                 {formatDollars(portal.remainingCents)}
               </div>
@@ -141,7 +141,7 @@ export function PlanPortal({
           else here; it was an unfilled panel and took the page ground. */}
       {portal.plan.refundedAt ? (
         <div className="mb-3 flex items-center gap-3 rounded-card border border-sand-200 bg-white p-5">
-          <span className="rounded-full bg-brand-violet-tint px-[15px] py-[7px] text-[13px] font-medium uppercase tracking-[0.06em] text-brand-violet">
+          <span className="rounded-full bg-brand-violet-tint px-[15px] py-[7px] text-[13px] font-medium text-brand-violet-deep">
             Refunded
           </span>
           <span className="text-[14px] text-ink-500">
@@ -156,7 +156,7 @@ export function PlanPortal({
           the masthead's height jump between two quite different layouts. */}
       {planComplete ? (
         <Panel variant="filled" className="mb-3 gap-3 p-5">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-lavender text-brand-violet-deep">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-violet-tint text-brand-violet-deep">
             <CheckIcon />
           </div>
           <div className="text-[42px] font-medium leading-[1.08] tracking-[-0.03em] text-ink-900">
@@ -187,10 +187,10 @@ export function PlanPortal({
             value={formatScheduleDateLong(portal.booking.appointmentDate)}
           />
           <div className="flex flex-col gap-[7px]">
-            <div className="text-[12px] uppercase tracking-[0.08em] text-ink-500">Plan status</div>
+            <div className="text-[13px] font-medium text-ink-500">Plan status</div>
             <div className="flex">
-              <span className="rounded-full bg-brand-violet-tint px-[15px] py-[7px] text-[13px] font-medium uppercase tracking-[0.06em] text-brand-violet">
-                {displayStatus.replace(/_/g, " ")}
+              <span className="rounded-full bg-brand-violet-tint px-[15px] py-[7px] text-[13px] font-medium text-brand-violet-deep">
+                {sentenceCase(displayStatus.replace(/_/g, " "))}
               </span>
             </div>
           </div>
@@ -361,7 +361,7 @@ export function PlanPortal({
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-[7px]">
-      <div className="text-[12px] uppercase tracking-[0.08em] text-ink-500">{label}</div>
+      <div className="text-[13px] font-medium text-ink-500">{label}</div>
       <div className="text-[14px] tracking-[-0.01em] text-ink-900">
         {value}
       </div>
@@ -537,7 +537,7 @@ function ScheduleTimeline({ schedule }: { schedule: ScheduleEntry[] }) {
               {isLast ? null : (
                 <div
                   className={`min-h-4 w-[1.5px] flex-1 ${
-                    state === "paid" ? "bg-brand-lavender" : "bg-sand-300"
+                    state === "paid" ? "bg-brand-violet" : "bg-sand-300"
                   }`}
                 />
               )}
@@ -607,4 +607,9 @@ function CheckIcon() {
       <path d="M5 12l5 5L20 7" />
     </svg>
   );
+}
+
+/** "payment failed in retry" -> "Payment failed in retry": the guest flow uses sentence case. */
+function sentenceCase(s: string): string {
+  return s.length === 0 ? s : s[0]!.toUpperCase() + s.slice(1);
 }
