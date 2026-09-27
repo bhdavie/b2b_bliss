@@ -157,13 +157,16 @@ public class PublicMerchantsResource {
         Merchant merchant = maybe.get();
         MerchantPlanRules rules = rulesService.forMerchant(merchant.id());
         Map<String, String> blissRates = new java.util.LinkedHashMap<>();
+        Map<String, Integer> depositBps = new java.util.LinkedHashMap<>();
         if (merchant.pmsType() == com.bliss.b2b.domain.PmsType.MEWS && mewsConnectionDao != null) {
             mewsConnectionDao.findByMerchant(merchant.id()).ifPresent(c -> {
                 if (c.blissMonthlyRateId() != null) blissRates.put("monthly", c.blissMonthlyRateId());
                 if (c.blissBiweeklyRateId() != null) blissRates.put("biweekly", c.blissBiweeklyRateId());
+                if (c.blissMonthlyDepositBps() != null) depositBps.put("monthly", c.blissMonthlyDepositBps());
+                if (c.blissBiweeklyDepositBps() != null) depositBps.put("biweekly", c.blissBiweeklyDepositBps());
             });
         }
-        return Response.ok(PublicPlanRulesView.from(rules, merchant.pmsType(), blissRates)).build();
+        return Response.ok(PublicPlanRulesView.from(rules, merchant.pmsType(), blissRates, depositBps)).build();
     }
 
     /**

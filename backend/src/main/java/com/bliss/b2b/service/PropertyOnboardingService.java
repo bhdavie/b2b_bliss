@@ -246,7 +246,8 @@ public class PropertyOnboardingService {
             List<MewsCatalog.Rate> rates = selected == null ? List.of()
                     : adapter.getRates(selected).stream().filter(MewsCatalog.Rate::bookable).toList();
             return new MewsSetupOptions(services, selected, rates,
-                    conn.blissMonthlyRateId(), conn.blissBiweeklyRateId());
+                    conn.blissMonthlyRateId(), conn.blissBiweeklyRateId(),
+                    conn.blissMonthlyDepositBps(), conn.blissBiweeklyDepositBps());
         } catch (PmsAdapterException e) {
             throw new PropertyOnboardingException("mews_unreachable",
                     "Could not read your Mews setup. " + e.getMessage());
@@ -269,13 +270,19 @@ public class PropertyOnboardingService {
      * before the property set Bliss up are never turned into plans.
      */
     public MewsSetupResult saveMewsSetup(Merchant merchant, String serviceId,
-            String monthlyRateId, String biweeklyRateId) {
+            String monthlyRateId, String biweeklyRateId,
+            Integer monthlyDepositBps, Integer biweeklyDepositBps) {
         String monthly = blankToNull(monthlyRateId);
         String biweekly = blankToNull(biweeklyRateId);
         if (serviceId == null || serviceId.isBlank() || (monthly == null && biweekly == null)) {
             throw new PropertyOnboardingException("invalid_input",
                     "Choose a service and a Bliss rate for at least one payment schedule.");
         }
+        checkDepositBps(monthlyDepositBps, "monthly");
+        checkDepositBps(biweeklyDepositBps, "every 2 weeks");
+        // A deposit shown for a schedule with no rate would never be shown.
+        Integer monthlyBps = monthly == null ? null : monthlyDepositBps;
+        Integer biweeklyBps = biweekly == null ? null : biweeklyDepositBps;
         if (monthly != null && monthly.equals(biweekly)) {
             throw new PropertyOnboardingException("same_rate",
                     "Each payment schedule needs its own rate, so Bliss can tell which one the guest chose.");
@@ -298,15 +305,28 @@ public class PropertyOnboardingService {
                 throw new PropertyOnboardingException("no_time_zone",
                         "Mews did not report a time zone for your property.");
             }
-            linkingDao.updateBlissRates(merchant.id(), serviceId, monthly, biweekly, timeZone, clock.instant());
+            linkingDao.updateBlissRates(merchant.id(), serviceId, monthly, biweekly,
+                    monthlyBps, biweeklyBps, timeZone, clock.instant());
             log.info("Property {} Bliss rates on service {}: monthly {} ({}), biweekly {} ({}){}",
                     merchant.id(), serviceId, monthly, monthlyName, biweekly, biweeklyName,
                     warnings.isEmpty() ? "" : " warnings=" + warnings);
-            return new MewsSetupResult(serviceId, monthly, monthlyName, biweekly, biweeklyName,
-                    timeZone, warnings);
+            return new MewsSetupResult(serviceId, monthly, monthlyName, monthlyBps,
+                    biweekly, biweeklyName, biweeklyBps, timeZone, warnings);
         } catch (PmsAdapterException e) {
             throw new PropertyOnboardingException("mews_unreachable",
                     "Could not read your Mews setup. " + e.getMessage());
+        }
+    }
+
+    /**
+     * A display deposit, in basis points, must be a whole number from 0 to
+     * 10000 (0% to 100%). Null means unset. It is only what the pop-up shows;
+     * the rate's payment policy in Mews decides what is charged.
+     */
+    private static void checkDepositBps(Integer bps, String schedule) {
+        if (bps != null && (bps < 0 || bps > 10000)) {
+            throw new PropertyOnboardingException("invalid_deposit",
+                    "The " + schedule + " deposit must be between 0% and 100%.");
         }
     }
 
@@ -432,14 +452,16 @@ public class PropertyOnboardingService {
             String selectedServiceId,
             List<MewsCatalog.Rate> rates,
             String selectedMonthlyRateId,
-            String selectedBiweeklyRateId) {
+            String selectedBiweeklyRateId,
+            Integer monthlyDepositBps,
+            Integer biweeklyDepositBps) {
     }
 
     /** {@code warnings} holds codes such as {@code monthly_rate_is_private}; empty when the setup is as Bliss asks. */
     public record MewsSetupResult(
             String serviceId,
-            String monthlyRateId, String monthlyRateName,
-            String biweeklyRateId, String biweeklyRateName,
+            String monthlyRateId, String monthlyRateName, Integer monthlyDepositBps,
+            String biweeklyRateId, String biweeklyRateName, Integer biweeklyDepositBps,
             String timeZone, List<String> warnings) {
     }
 

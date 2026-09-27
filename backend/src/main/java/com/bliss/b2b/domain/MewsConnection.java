@@ -34,7 +34,11 @@ public record MewsConnection(
         String blissMonthlyRateId,
         String blissBiweeklyRateId,
         // Polling high-water mark: reservations updated up to here were seen.
-        Instant linkedThroughUtc
+        Instant linkedThroughUtc,
+        // What the pop-up shows each Bliss rate charging upfront, in basis
+        // points (V35). Display only; linking uses the actual Mews charge.
+        Integer blissMonthlyDepositBps,
+        Integer blissBiweeklyDepositBps
 ) {
     public boolean isValidated() {
         return validatedAt != null;
@@ -55,6 +59,15 @@ public record MewsConnection(
         if (rateId.equals(blissMonthlyRateId)) return com.bliss.b2b.payments.PlanFrequency.MONTHLY;
         if (rateId.equals(blissBiweeklyRateId)) return com.bliss.b2b.payments.PlanFrequency.BIWEEKLY;
         return null;
+    }
+
+    /** The display deposit for a schedule's Bliss rate, in basis points, or null when unset. */
+    public Integer displayDepositBpsFor(com.bliss.b2b.payments.PlanFrequency frequency) {
+        if (frequency == null) return null;
+        return switch (frequency) {
+            case MONTHLY -> blissMonthlyDepositBps;
+            case BIWEEKLY -> blissBiweeklyDepositBps;
+        };
     }
 
     private static boolean notBlank(String s) {

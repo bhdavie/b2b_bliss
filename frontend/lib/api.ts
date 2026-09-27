@@ -544,13 +544,18 @@ export type MewsSetupOptions = {
   rates: MewsRate[];
   selectedMonthlyRateId: string | null;
   selectedBiweeklyRateId: string | null;
+  /** Display-only deposit per Bliss rate, in basis points (2000 = 20%). */
+  monthlyDepositBps: number | null;
+  biweeklyDepositBps: number | null;
 };
 export type MewsSetupResult = {
   serviceId: string;
   monthlyRateId: string | null;
   monthlyRateName: string | null;
+  monthlyDepositBps: number | null;
   biweeklyRateId: string | null;
   biweeklyRateName: string | null;
+  biweeklyDepositBps: number | null;
   timeZone: string;
   warnings: string[];
 };
@@ -580,6 +585,8 @@ export async function saveMewsSetup(
   serviceId: string,
   monthlyRateId: string | null,
   biweeklyRateId: string | null,
+  monthlyDepositBps: number | null,
+  biweeklyDepositBps: number | null,
 ): Promise<MewsSetupResult> {
   const res = await fetch(
     `${API_BASE_URL}/api/v1/merchants/me/onboarding/pms/mews/setup`,
@@ -587,7 +594,13 @@ export async function saveMewsSetup(
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ serviceId, monthlyRateId, biweeklyRateId }),
+      body: JSON.stringify({
+        serviceId,
+        monthlyRateId,
+        biweeklyRateId,
+        monthlyDepositBps,
+        biweeklyDepositBps,
+      }),
     },
   );
   if (!res.ok) throw await mewsSetupError(res);

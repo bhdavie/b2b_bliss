@@ -55,14 +55,21 @@ public record PublicPlanRulesView(
          * a plan on these rates and nothing else, and sends a guest who picks a
          * schedule to that schedule's rate. Empty when none are set up.
          */
-        java.util.Map<String, String> mewsBlissRates
+        java.util.Map<String, String> mewsBlissRates,
+        /**
+         * Mews only: the deposit the pop-up shows for each Bliss rate, in basis
+         * points ({@code monthly}, {@code biweekly}). Display only: the plan is
+         * built on what Mews actually charges. Absent when not set.
+         */
+        java.util.Map<String, Integer> mewsBlissDepositBps
 ) {
     public static PublicPlanRulesView from(MerchantPlanRules rules, PmsType pmsType) {
-        return from(rules, pmsType, java.util.Map.of());
+        return from(rules, pmsType, java.util.Map.of(), java.util.Map.of());
     }
 
     public static PublicPlanRulesView from(MerchantPlanRules rules, PmsType pmsType,
-            java.util.Map<String, String> mewsBlissRates) {
+            java.util.Map<String, String> mewsBlissRates,
+            java.util.Map<String, Integer> mewsBlissDepositBps) {
         return new PublicPlanRulesView(
                 rules.minLeadTimeWeeks(),
                 rules.maxLeadTimeWeeks(),
@@ -79,6 +86,7 @@ public record PublicPlanRulesView(
                 rules.discountBasisPoints(),
                 rules.blackoutDates().stream().map(LocalDate::toString).toList(),
                 pmsType == null ? null : pmsType.wire(),
-                mewsBlissRates);
+                mewsBlissRates,
+                mewsBlissDepositBps);
     }
 }

@@ -282,6 +282,7 @@ public class MewsLinkService {
                         "Mews prices the stay in " + total.currency() + " but Bliss is set up for "
                                 + currency + ". No plan was created.");
             }
+            warnIfDepositDiffers(conn, frequency, r.id(), total.totalMinorUnits(), deposit);
             PmsCustomer guest = adapter.getCustomer(r.accountId()).orElse(null);
             if (guest == null || guest.email() == null || guest.email().isBlank()) {
                 return flagLink(link, r, FLAG_LINK_FAILED,
@@ -340,6 +341,35 @@ public class MewsLinkService {
             waiting(link, "Mews: " + e.getMessage());
             return e.httpStatus() == 429 ? Attempt.RATE_LIMITED : Attempt.WAITING;
         }
+    }
+
+    /**
+     * The pop-up quotes the deposit from the display percentage in booking
+     * setup; the plan is built on what Mews actually charged. A difference
+     * means the guest was shown different figures from the ones they will pay,
+     * almost always because the rate's payment policy in Mews and the display
+     * percentage disagree. Logged, not flagged: the plan is still right.
+     * One minor unit of tolerance covers the two sides rounding differently.
+     */
+    void warnIfDepositDiffers(MewsConnection conn, PlanFrequency frequency, String reservationId,
+            long totalCents, long depositCents) {
+        Integer bps = conn.displayDepositBpsFor(frequency);
+        if (bps == null) {
+            return;
+        }
+        long expected = displayDepositCents(totalCents, bps);
+        if (Math.abs(expected - depositCents) > 1) {
+            log.warn("Mews reservation {} (merchant {}): upfront charge {} differs from the {} display "
+                    + "deposit of {}% ({} on {}); the plan uses the actual charge",
+                    reservationId, conn.merchantId(), depositCents, frequency.wire(),
+                    java.math.BigDecimal.valueOf(bps, 2).stripTrailingZeros().toPlainString(),
+                    expected, totalCents);
+        }
+    }
+
+    /** {@code totalCents} x {@code bps} / 10000, rounded half up, in integer arithmetic. */
+    static long displayDepositCents(long totalCents, int bps) {
+        return (totalCents * bps + 5_000) / 10_000;
     }
 
     private Attempt waiting(LinkRow link, String why) {

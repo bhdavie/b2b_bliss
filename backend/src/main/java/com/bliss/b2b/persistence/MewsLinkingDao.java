@@ -20,7 +20,8 @@ public interface MewsLinkingDao {
     // --- Connection -----------------------------------------------------------
 
     /**
-     * Stores the property's Bliss rates. Either may be null (one schedule only).
+     * Stores the property's Bliss rates and the deposit the pop-up shows for
+     * each (basis points, display only). Either rate may be null (one schedule only).
      * Sets the polling mark to {@code linkFromUtc} only when none is set, so
      * re-saving the setup never re-reads history or skips ahead.
      */
@@ -29,6 +30,8 @@ public interface MewsLinkingDao {
             SET service_id = :serviceId,
                 bliss_monthly_rate_id = :monthlyRateId,
                 bliss_biweekly_rate_id = :biweeklyRateId,
+                bliss_monthly_deposit_bps = :monthlyDepositBps,
+                bliss_biweekly_deposit_bps = :biweeklyDepositBps,
                 time_zone = :timeZone,
                 linked_through_utc = COALESCE(linked_through_utc, :linkFromUtc)
             WHERE merchant_id = :merchantId
@@ -38,6 +41,8 @@ public interface MewsLinkingDao {
             @Bind("serviceId") String serviceId,
             @Bind("monthlyRateId") String monthlyRateId,
             @Bind("biweeklyRateId") String biweeklyRateId,
+            @Bind("monthlyDepositBps") Integer monthlyDepositBps,
+            @Bind("biweeklyDepositBps") Integer biweeklyDepositBps,
             @Bind("timeZone") String timeZone,
             @Bind("linkFromUtc") Instant linkFromUtc);
 

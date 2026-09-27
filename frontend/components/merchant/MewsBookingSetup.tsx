@@ -22,6 +22,9 @@ export function MewsBookingSetup() {
   const [serviceId, setServiceId] = useState("");
   const [monthlyRateId, setMonthlyRateId] = useState("");
   const [biweeklyRateId, setBiweeklyRateId] = useState("");
+  // Display-only deposit percentages, as typed ("20", "12.5").
+  const [monthlyDeposit, setMonthlyDeposit] = useState("");
+  const [biweeklyDeposit, setBiweeklyDeposit] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +40,8 @@ export function MewsBookingSetup() {
       setServiceId(next.selectedServiceId ?? "");
       setMonthlyRateId(known(next.selectedMonthlyRateId));
       setBiweeklyRateId(known(next.selectedBiweeklyRateId));
+      setMonthlyDeposit(bpsToPercent(next.monthlyDepositBps));
+      setBiweeklyDeposit(bpsToPercent(next.biweeklyDepositBps));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not read your Mews setup.");
     } finally {
@@ -53,7 +58,15 @@ export function MewsBookingSetup() {
     setSaving(true);
     setError(null);
     try {
-      setSaved(await saveMewsSetup(serviceId, monthlyRateId || null, biweeklyRateId || null));
+      setSaved(
+        await saveMewsSetup(
+          serviceId,
+          monthlyRateId || null,
+          biweeklyRateId || null,
+          percentToBps(monthlyDeposit),
+          percentToBps(biweeklyDeposit),
+        ),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save your booking setup.");
     } finally {
@@ -62,7 +75,11 @@ export function MewsBookingSetup() {
   }
 
   const sameRate = monthlyRateId !== "" && monthlyRateId === biweeklyRateId;
-  const canSave = !loading && !saving && serviceId !== "" && (monthlyRateId || biweeklyRateId) && !sameRate;
+  const badDeposit =
+    (monthlyDeposit.trim() !== "" && percentToBps(monthlyDeposit) == null) ||
+    (biweeklyDeposit.trim() !== "" && percentToBps(biweeklyDeposit) == null);
+  const canSave =
+    !loading && !saving && serviceId !== "" && (monthlyRateId || biweeklyRateId) && !sameRate && !badDeposit;
 
   return (
     <form onSubmit={handleSave} className="w-full text-left">
@@ -107,6 +124,11 @@ export function MewsBookingSetup() {
             setMonthlyRateId(v);
             setSaved(null);
           }}
+          deposit={monthlyDeposit}
+          onDepositChange={(v) => {
+            setMonthlyDeposit(v);
+            setSaved(null);
+          }}
         />
         <RateSelect
           id="mewsBiweeklyRate"
@@ -118,7 +140,17 @@ export function MewsBookingSetup() {
             setBiweeklyRateId(v);
             setSaved(null);
           }}
+          deposit={biweeklyDeposit}
+          onDepositChange={(v) => {
+            setBiweeklyDeposit(v);
+            setSaved(null);
+          }}
         />
+        {badDeposit ? (
+          <p className="text-base text-danger">
+            Enter each deposit as a percentage from 0 to 100, with up to two decimal places.
+          </p>
+        ) : null}
         {sameRate ? (
           <p className="text-base text-danger">
             Each schedule needs its own rate, so Bliss can tell which plan the guest chose.
@@ -157,6 +189,8 @@ function RateSelect({
   rates,
   disabled,
   onChange,
+  deposit,
+  onDepositChange,
 }: {
   id: string;
   label: string;
@@ -164,6 +198,8 @@ function RateSelect({
   rates: MewsRate[];
   disabled: boolean;
   onChange: (value: string) => void;
+  deposit: string;
+  onDepositChange: (value: string) => void;
 }) {
   const chosen = rates.find((r) => r.id === value);
   return (
@@ -184,6 +220,24 @@ function RateSelect({
           </option>
         ))}
       </select>
+      {value ? (
+        <div className="mt-3">
+          <Label htmlFor={`${id}Deposit`}>Upfront charge shown to guests (%)</Label>
+          <input
+            id={`${id}Deposit`}
+            className="input mt-1.5 max-w-[160px]"
+            inputMode="decimal"
+            placeholder="e.g. 20"
+            value={deposit}
+            disabled={disabled}
+            onChange={(e) => onDepositChange(e.target.value)}
+          />
+          <p className="mt-1.5 text-[13px] text-ink-500">
+            Match the percentage this rate&apos;s payment policy charges in Mews. It is only what the
+            Bliss pop-up shows; plans always use what Mews actually charged.
+          </p>
+        </div>
+      ) : null}
       {chosen && !chosen.isPublic ? (
         <p className="mt-2 text-base text-amber-700">
           This rate is private, so your booking engine only shows it to guests with its voucher
@@ -192,4 +246,25 @@ function RateSelect({
       ) : null}
     </div>
   );
+}
+
+/**
+ * "20" or "12.5" to basis points (2000, 1250), without floating point. Null for
+ * an empty field or anything that is not 0 to 100 with at most two decimals.
+ */
+function percentToBps(input: string): number | null {
+  const m = /^(\d{1,3})(?:\.(\d{1,2}))?$/.exec(input.trim());
+  if (!m) return null;
+  const whole = Number(m[1]);
+  const frac = Number((m[2] ?? "").padEnd(2, "0"));
+  const bps = whole * 100 + frac;
+  return bps <= 10000 ? bps : null;
+}
+
+function bpsToPercent(bps: number | null): string {
+  if (bps == null) return "";
+  const whole = Math.floor(bps / 100);
+  const frac = bps % 100;
+  if (frac === 0) return String(whole);
+  return `${whole}.${String(frac).padStart(2, "0").replace(/0$/, "")}`;
 }

@@ -94,7 +94,8 @@ public class PropertyOnboardingResource {
         }
         try {
             return Response.ok(service.saveMewsSetup(principal.merchant(), req.serviceId(),
-                    req.monthlyRateId(), req.biweeklyRateId())).build();
+                    req.monthlyRateId(), req.biweeklyRateId(),
+                    req.monthlyDepositBps(), req.biweeklyDepositBps())).build();
         } catch (PropertyOnboardingException e) {
             return setupError(e);
         }
@@ -139,7 +140,9 @@ public class PropertyOnboardingResource {
     public record MewsSetupRequest(
             @JsonProperty("serviceId") String serviceId,
             @JsonProperty("monthlyRateId") String monthlyRateId,
-            @JsonProperty("biweeklyRateId") String biweeklyRateId) {
+            @JsonProperty("biweeklyRateId") String biweeklyRateId,
+            @JsonProperty("monthlyDepositBps") Integer monthlyDepositBps,
+            @JsonProperty("biweeklyDepositBps") Integer biweeklyDepositBps) {
     }
 
     public record ConnectMewsRequest(

@@ -475,6 +475,8 @@
     /** Bliss checkout origin, copied from the install config at start. */
     /** Bliss rate id per payment schedule ({monthly, biweekly}), from the plan rules. */
     blissRates: {},
+    /** Display deposit per schedule's Bliss rate, basis points, from the plan rules. */
+    blissDepositBps: {},
 
     /**
      * Corner radii for the trigger line and the modal. Colour is not here: it
@@ -779,7 +781,11 @@
     var raw =
       rules.depositType === "percentage"
         ? Math.floor((totalCents * rules.depositValue) / 100)
-        : rules.depositValue;
+        : rules.depositType === "basis_points"
+          ? // Overlay-only: a Bliss rate's display deposit (see blissPreview).
+            // Not in eligibility.ts, which never sees these rules.
+            Math.round((totalCents * rules.depositValue) / 10000)
+          : rules.depositValue;
     if (rules.depositMaxCents != null) raw = Math.min(raw, rules.depositMaxCents);
     return Math.max(0, Math.min(raw, totalCents));
   }
@@ -1684,7 +1690,59 @@
     if (!state.dl || state.dl.checkin == null || amountCents == null) {
       return ineligible("invalid_input", 0, 0, amount, amount);
     }
-    return previewEligibility(startOfToday(), state.dl.checkin, amount, CONFIG.rules);
+    return blissPreview(startOfToday(), state.dl.checkin, amount);
+  }
+
+  /**
+   * The plan preview for a Mews stay, one schedule per Bliss rate.
+   *
+   * Each schedule is booked on its own rate, and each rate's payment policy
+   * in Mews charges its own upfront percentage, so each is previewed with its
+   * own deposit: the display percentage from booking setup
+   * (CONFIG.blissDepositBps). Nothing here is charged; the plan is built on
+   * what Mews actually takes. No plan discount either, because the Bliss rate's
+   * price in Mews is the price the plan is built on. A schedule with no Bliss
+   * rate, or one the plan rules do not offer, is left out.
+   */
+  function blissPreview(today, checkin, amount) {
+    var base = CONFIG.rules;
+    var rates = CONFIG.blissRates || {};
+    var depositBps = CONFIG.blissDepositBps || {};
+    var recommended = resolveRecommended(base);
+    var merged = null;
+    var firstIneligible = null;
+    var options = [];
+    var order = ["biweekly", "monthly"];
+    for (var i = 0; i < order.length; i++) {
+      var f = order[i];
+      if (!rates[f] || !(base.allowedFrequencies === "both" || base.allowedFrequencies === f)) continue;
+      var bps = depositBps[f] || 0;
+      var rulesF = {};
+      for (var k in base) rulesF[k] = base[k];
+      rulesF.allowedFrequencies = f;
+      rulesF.discountBasisPoints = 0;
+      rulesF.depositRequired = bps > 0;
+      rulesF.depositType = bps > 0 ? "basis_points" : null;
+      rulesF.depositValue = bps > 0 ? bps : null;
+      rulesF.depositMaxCents = null;
+      var p = previewEligibility(today, checkin, amount, rulesF);
+      if (!p.eligible) {
+        if (!firstIneligible) firstIneligible = p;
+        continue;
+      }
+      var opt = p.options[0];
+      opt.depositAmountCents = p.depositAmountCents;
+      opt.recommended = recommended === f;
+      options.push(opt);
+      if (!merged) merged = p;
+    }
+    if (!options.length) {
+      return firstIneligible || ineligible("no_bliss_rate", 0, 0, amount, amount);
+    }
+    var out = {};
+    for (var key in merged) out[key] = merged[key];
+    out.options = options;
+    return out;
   }
 
   function defaultSelected(preview) {
@@ -2105,11 +2163,15 @@
       return;
     }
 
-    if (preview.depositAmountCents > 0) {
+    // Each Bliss rate charges its own upfront amount, so the line follows the
+    // selected schedule rather than the preview as a whole.
+    var selOpt = optionByFrequency(preview, state.modal.selected);
+    var upfront = selOpt && selOpt.depositAmountCents != null ? selOpt.depositAmountCents : preview.depositAmountCents;
+    if (upfront > 0) {
       body.appendChild(
         h("div", {
           class: "ctx",
-          text: money(preview.depositAmountCents, currency) + " today, then the balance on the schedule below.",
+          text: money(upfront, currency) + " today, then the balance on the schedule below.",
         })
       );
     }
@@ -2378,7 +2440,8 @@
       perPaymentAmountCents: option.perPaymentAmountCents,
       finalPaymentAmountCents: option.finalPaymentAmountCents,
       dueDates: option.dueDates.slice(),
-      depositAmountCents: t.preview ? t.preview.depositAmountCents : 0,
+      depositAmountCents:
+        option.depositAmountCents != null ? option.depositAmountCents : t.preview ? t.preview.depositAmountCents : 0,
       amountCents: t.amountCents,
       // The per-night basis the trigger teased, kept so a recorded choice can
       // be reconciled against what the guest was shown before clicking.
@@ -2423,27 +2486,6 @@
     if (r.monthly === rateId) return "monthly";
     if (r.biweekly === rateId) return "biweekly";
     return null;
-  }
-
-  /**
-   * Only the schedules the property has a Bliss rate for. A cadence with no
-   * rate cannot be booked, so it is never offered.
-   */
-  function restrictToBlissRates(preview) {
-    if (!preview || !preview.options) return preview;
-    var kept = [];
-    for (var i = 0; i < preview.options.length; i++) {
-      if ((CONFIG.blissRates || {})[preview.options[i].frequency]) kept.push(preview.options[i]);
-    }
-    if (kept.length === preview.options.length) return preview;
-    var out = {};
-    for (var k in preview) out[k] = preview[k];
-    out.options = kept;
-    if (!kept.length) {
-      out.eligible = false;
-      out.reason = "no_bliss_rate";
-    }
-    return out;
   }
 
   /**
@@ -2838,7 +2880,7 @@
   function recompute() {
     state.triggers.forEach(function (t) {
       applyAmount(t);
-      t.preview = restrictToBlissRates(computeFor(t.amountCents));
+      t.preview = computeFor(t.amountCents);
       if (t.kind === "rate-card") t.label = t.rateName || cardLabel(t.cardEl) || t.label;
       if (t.kind === "details") {
         // State A/B is driven by the session-level choice, not by this
@@ -3196,6 +3238,17 @@
     return out.monthly || out.biweekly ? out : null;
   }
 
+  /** {monthly, biweekly} display deposits in basis points; missing or invalid ones are 0. */
+  function blissDepositBpsFromPayload(p) {
+    var raw = (p && p.mewsBlissDepositBps) || {};
+    var out = {};
+    ["monthly", "biweekly"].forEach(function (f) {
+      var v = Number(raw[f]);
+      out[f] = isFinite(v) && v >= 0 && v <= 10000 ? Math.round(v) : 0;
+    });
+    return out;
+  }
+
   function boot() {
     var install = readInstallConfig();
     if (!install.merchant) {
@@ -3250,6 +3303,7 @@
         }
         CONFIG.rules = rules;
         CONFIG.blissRates = blissRates;
+        CONFIG.blissDepositBps = blissDepositBpsFromPayload(payload);
         start(install, url);
       })
       .catch(function (e) {
