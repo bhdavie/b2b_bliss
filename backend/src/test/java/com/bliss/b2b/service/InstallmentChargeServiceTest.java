@@ -6,7 +6,6 @@ import com.bliss.b2b.domain.PaymentScheduleStatus;
 import com.bliss.b2b.domain.ScheduleKind;
 import com.bliss.b2b.integration.pms.PmsAdapter;
 import com.bliss.b2b.integration.pms.PmsAdapterException;
-import com.bliss.b2b.integration.pms.PmsCardCollectionRequest;
 import com.bliss.b2b.integration.pms.PmsChargeResult;
 import com.bliss.b2b.integration.pms.PmsChargeStatus;
 import com.bliss.b2b.integration.pms.PmsCustomer;
@@ -380,11 +379,6 @@ class InstallmentChargeServiceTest {
         }
 
         @Override public List<PmsStoredCard> getStoredCards(String pmsCustomerId) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override public PmsCardCollectionRequest createCardCollectionRequest(
-                String pmsCustomerId, Instant expiration, String description) {
             throw new UnsupportedOperationException();
         }
     }

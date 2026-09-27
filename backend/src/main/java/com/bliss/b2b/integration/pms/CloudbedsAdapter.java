@@ -30,9 +30,8 @@ import org.slf4j.LoggerFactory;
  * <p><b>Skeleton.</b> The charge path ({@link #chargeStoredCard} via postCharge)
  * and property identification ({@link #getPropertyConfiguration} via getHotels)
  * are shaped for the documented API; exact field names are best-effort per the
- * docs diagnostic and flagged where uncertain. Card capture
- * ({@link #createCardCollectionRequest}) throws {@link PmsNotSupportedException}
- * because Cloudbeds tokenizes cards through its client SDK / vault, not a
+ * docs diagnostic and flagged where uncertain. There is no card capture here:
+ * Cloudbeds tokenizes cards through its client SDK / vault, not a
  * server-issued hosted request — that is the guest-checkout seam, built later.
  *
  * <p>Amounts: Cloudbeds uses decimal major units (e.g. {@code 100.50}) plus a
@@ -132,16 +131,6 @@ public class CloudbedsAdapter implements PmsAdapter {
         // guest-checkout seam vaults a card and records its token directly.
         log.debug("Cloudbeds getStoredCards not wired (cards are reservation-scoped); returning empty");
         return new ArrayList<>();
-    }
-
-    @Override
-    public PmsCardCollectionRequest createCardCollectionRequest(
-            String pmsCustomerId, Instant expiration, String description) {
-        // No server-issued hosted card-entry request. Cloudbeds tokenizes cards
-        // via its client SDK / vault endpoint; the guest checkout seam wires that.
-        throw new PmsNotSupportedException(
-                "Cloudbeds has no server-issued hosted card-collection request. Card entry must go "
-                        + "through the Cloudbeds client SDK / vault tokenizer (guest checkout seam, not built).");
     }
 
     @Override

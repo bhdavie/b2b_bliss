@@ -48,9 +48,6 @@ public interface CustomerDao {
             @Bind("mewsCustomerId") String mewsCustomerId
     );
 
-    @SqlQuery("SELECT mews_customer_id FROM customers WHERE id = :id")
-    Optional<String> findMewsCustomerId(@Bind("id") UUID id);
-
     @SqlUpdate("""
             UPDATE customers SET last_login_at = :at WHERE id = :id
             """)

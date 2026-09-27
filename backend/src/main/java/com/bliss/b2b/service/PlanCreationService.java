@@ -193,7 +193,6 @@ public class PlanCreationService {
         }
     }
 
-    private final MewsStayService mewsStayService;
     private final Jdbi jdbi;
     private final PlanEligibilityService eligibilityService;
     private final StripePaymentsService stripeService;
@@ -211,11 +210,9 @@ public class PlanCreationService {
             StripeConnectResolver stripeConnectResolver,
             EmailService emailService,
             PlanNotificationService notificationService,
-            MewsStayService mewsStayService,
             Clock clock,
             AppConfig appConfig
     ) {
-        this.mewsStayService = mewsStayService;
         this.jdbi = jdbi;
         this.eligibilityService = eligibilityService;
         this.stripeService = stripeService;
@@ -279,13 +276,16 @@ public class PlanCreationService {
                     "checkoutDate must be on or after appointmentDate");
         }
 
-        // A Mews stay is priced by Mews, now, outside the transaction (it is a
-        // network call). The browser's total is ignored for it entirely.
+        // A Mews property's guests book and pay in its own Mews booking engine;
+        // Bliss builds the plan from the reservation (MewsLinkService).
         Merchant preMerchant = jdbi.withExtension(MerchantDao.class, d -> d.findBySlug(input.merchantSlug()))
                 .orElseThrow(() -> new PlanCreationException(Reason.BOOKING_NOT_FOUND, "merchant not found"));
-        MewsStayService.StayQuote stay = preMerchant.pmsType() == com.bliss.b2b.domain.PmsType.MEWS
-                ? priceMewsStay(input) : null;
-        long totalAmountCents = stay != null ? stay.totalCents() : input.totalAmountCents();
+        if (preMerchant.pmsType() == com.bliss.b2b.domain.PmsType.MEWS) {
+            throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
+                    "This property takes payment plans through its own booking page. "
+                            + "Book your stay there to choose a plan.");
+        }
+        long totalAmountCents = input.totalAmountCents();
         if (totalAmountCents <= 0) {
             throw new PlanCreationException(Reason.INVALID_INPUT, "totalAmountCents must be positive");
         }
@@ -314,11 +314,6 @@ public class PlanCreationService {
                     trimToNull(input.customerEmail()),
                     trimToNull(input.customerPhone()),
                     BookingSource.CUSTOMER_INITIATED.wire());
-            if (stay != null) {
-                Booking inserted = bookingDao.findByToken(token)
-                        .orElseThrow(() -> new IllegalStateException("booking insert disappeared"));
-                bookingDao.setMewsStay(inserted.id(), stay.categoryId(), stay.rateId(), stay.adults());
-            }
             Booking booking = bookingDao.findByToken(token)
                     .orElseThrow(() -> new IllegalStateException("booking insert disappeared"));
 
@@ -333,38 +328,6 @@ public class PlanCreationService {
                     input.customerPhone(), input.paymentMethodId(), input.frequency(), input.demoCard());
         });
         return finalize(outcome);
-    }
-
-    /**
-     * Fresh Mews price for the room and adults the guest chose. A sold-out room
-     * or an unreachable Mews stops plan creation before anything is written.
-     */
-    private MewsStayService.StayQuote priceMewsStay(CustomerCheckoutInput input) {
-        if (input.mewsResourceCategoryId() == null || input.mewsResourceCategoryId().isBlank()
-                || input.adultCount() == null) {
-            throw new PlanCreationException(Reason.INVALID_INPUT, "Choose a room and the number of adults.");
-        }
-        if (input.checkoutDate() == null) {
-            throw new PlanCreationException(Reason.INVALID_INPUT, "A check-out date is required.");
-        }
-        MewsStayService.StayQuote quote;
-        try {
-            quote = mewsStayService.quoteFresh(input.merchantSlug(), input.appointmentDate(),
-                    input.checkoutDate(), input.mewsResourceCategoryId(), input.adultCount());
-        } catch (MewsStayService.MewsStayException e) {
-            Reason reason = switch (e.code()) {
-                case "mews_unreachable" -> Reason.PMS_UNAVAILABLE;
-                case "not_ready", "not_mews_rail", "currency_mismatch" -> Reason.MERCHANT_NOT_READY;
-                case "not_found" -> Reason.BOOKING_NOT_FOUND;
-                default -> Reason.INVALID_INPUT;
-            };
-            throw new PlanCreationException(reason, e.getMessage());
-        }
-        if (!quote.available()) {
-            throw new PlanCreationException(Reason.STAY_UNAVAILABLE,
-                    "That room is no longer available for those dates.");
-        }
-        return quote;
     }
 
     /**
@@ -396,13 +359,12 @@ public class PlanCreationService {
         // row lands mid-transaction, and the DAO is hit once per plan rather
         // than once per installment.
         BigDecimal feeRate = resolveFeeRate(handle, merchant.id(), clock.instant());
-        // Rail fork. A Mews-rail property creates a pending-card plan (no Stripe,
-        // no demo), whose card is captured out-of-band via the Mews checkout
-        // endpoints. It never reaches the Stripe demo branch below.
+        // Rail fork. Mews plans are never accepted here: they are built from the
+        // guest's booking-engine reservation (createFromMewsReservation), and
+        // both entry points refuse a Mews property before reaching this.
         if (merchant.pmsType() == PmsType.MEWS) {
-            return acceptForBookingMews(handle, booking, merchant,
-                    customerEmail, customerFirstName, customerLastName, requestedFrequency,
-                    demoCard);
+            throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
+                    "Mews plans are created from the property's booking engine");
         }
         if (merchant.pmsType() == PmsType.CLOUDBEDS) {
             // Third rail recognized. End-to-end plan acceptance needs a vaulted
@@ -737,158 +699,6 @@ public class PlanCreationService {
     }
 
     /**
-     * Mews-rail counterpart of {@link #acceptForBooking}: creates the plan and
-     * schedule. No Stripe calls, no first charge, no real card — the card is
-     * normally captured out-of-band by the Mews checkout endpoints, which then
-     * charge the first installment and flip the plan to {@code active}. The
-     * property must have a validated Mews connection. A placeholder
-     * {@code customer_cards} row satisfies the plan's NOT NULL
-     * {@code customer_card_id}; card-confirm fills in its Mews id.
-     *
-     * <p>The plan is inserted {@code pending_card}. Card-confirm is the only
-     * way to {@code active}: it verifies the card in Mews and takes the first
-     * installment. Until then the charge sweep ignores the plan, because it
-     * selects only active plans.
-     *
-     * <p>A last name is required up front: Mews rejects a customer profile
-     * without one, and failing here is cheaper than failing at card-request
-     * after the plan exists.
-     */
-    private Outcome acceptForBookingMews(
-            Handle handle,
-            Booking booking,
-            Merchant merchant,
-            String customerEmail,
-            String customerFirstName,
-            String customerLastName,
-            PlanFrequency requestedFrequency,
-            DemoCard demoCard
-    ) {
-        // Resolved once, here, and threaded down to the fee calculation. Doing it
-        // at the top means the whole plan is priced at one rate even if a rate
-        // row lands mid-transaction, and the DAO is hit once per plan rather
-        // than once per installment.
-        if (trimToNull(customerLastName) == null) {
-            throw new PlanCreationException(Reason.INVALID_INPUT,
-                    "A last name is required to reserve with this property.");
-        }
-        BigDecimal feeRate = resolveFeeRate(handle, merchant.id(), clock.instant());
-        boolean connected = handle.attach(MerchantMewsConnectionDao.class)
-                .findByMerchant(merchant.id())
-                .filter(MewsConnection::isValidated)
-                .isPresent();
-        if (!connected) {
-            throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
-                    "property has not connected Mews");
-        }
-
-        MerchantPlanRules rules = handle.attach(MerchantPlanRulesDao.class)
-                .findByMerchantId(merchant.id())
-                .orElse(MerchantPlanRules.DEFAULTS);
-
-        LocalDate today = LocalDate.now(clock);
-        long evaluateInput = booking.originalTotalAmountCents() != null
-                ? booking.originalTotalAmountCents()
-                : booking.totalAmountCents();
-        EligibilityResult eligibility = eligibilityService.evaluate(
-                today, booking.appointmentDate(), booking.checkoutDate(), evaluateInput, rules);
-        if (!eligibility.eligible()) {
-            throw new PlanCreationException(Reason.ELIGIBILITY_FAILED,
-                    "booking does not satisfy this property's plan rules (" + eligibility.reason() + ")");
-        }
-        PlanOption option = eligibility.options().stream()
-                .filter(o -> o.frequency() == requestedFrequency)
-                .findFirst()
-                .orElseThrow(() -> new PlanCreationException(
-                        Reason.ELIGIBILITY_FAILED,
-                        requestedFrequency.wire() + " is not an eligible frequency for this booking"));
-
-        CustomerDao customerDao = handle.attach(CustomerDao.class);
-        CustomerCardDao cardDao = handle.attach(CustomerCardDao.class);
-        PaymentPlanDao planDao = handle.attach(PaymentPlanDao.class);
-        PaymentScheduleDao scheduleDao = handle.attach(PaymentScheduleDao.class);
-        BookingDao bookingDao = handle.attach(BookingDao.class);
-
-        String email = customerEmail.trim().toLowerCase();
-        Customer customer = customerDao.findByEmail(email).orElseGet(() -> {
-            customerDao.insert(email, trimToNull(customerFirstName), trimToNull(customerLastName));
-            return customerDao.findByEmail(email).orElseThrow();
-        });
-        customerDao.updateName(customer.id(), trimToNull(customerFirstName), trimToNull(customerLastName));
-        customer = customerDao.findById(customer.id()).orElseThrow();
-
-        // Placeholder card. stripe_payment_method_id is NOT NULL UNIQUE, so a
-        // synthetic value stands in until card-confirm writes mews_credit_card_id
-        // and the real masked metadata onto this same row.
-        //
-        // The masked metadata comes from the demo card fields the client already
-        // posts, resolved exactly as the demo branch resolves them, so the portal
-        // shows the digits the guest typed rather than 0000 / 01 / 2099. Absent
-        // fields fall back to the same 4242 / 12 / 2030 / visa the demo branch
-        // uses. Card-confirm still overwrites all of this with the real Mews
-        // masked values.
-        String placeholderLastFour = demoCard != null && demoCard.lastFour() != null
-                ? demoCard.lastFour() : "4242";
-        int placeholderExpMonth = demoCard != null && demoCard.expMonth() != null
-                ? demoCard.expMonth() : 12;
-        int placeholderExpYear = demoCard != null && demoCard.expYear() != null
-                ? demoCard.expYear() : 2030;
-        String placeholderBrand = demoCard != null && demoCard.brand() != null
-                ? demoCard.brand() : "visa";
-        String placeholderPm = "mews_pending_" + UUID.randomUUID();
-        cardDao.insert(customer.id(), placeholderPm, placeholderLastFour,
-                placeholderExpMonth, placeholderExpYear, placeholderBrand, true);
-        CustomerCard storedCard = cardDao.findByPaymentMethodId(placeholderPm).orElseThrow();
-
-        long depositAmount = eligibility.depositAmountCents();
-        boolean hasDeposit = depositAmount > 0;
-        int installmentCount = option.numPayments();
-        LocalDate startDate = hasDeposit ? today : option.dueDates().get(0);
-        LocalDate endDate = option.dueDates().get(installmentCount - 1);
-
-        long discountedTotal = eligibility.discountedTotalAmountCents();
-        long originalTotal = eligibility.originalTotalAmountCents();
-        if (discountedTotal != originalTotal) {
-            bookingDao.applyPlanDiscount(booking.id(), discountedTotal, originalTotal);
-            booking = bookingDao.findById(booking.id()).orElseThrow();
-        }
-
-        long feeCents = feeFor(discountedTotal, feeRate);
-        // Every installment lands on the Mews reservation's bill, which Mews
-        // prices at originalTotal. Anything else leaves the hotel's bill over-
-        // or under-paid: a Bliss fee above 0% overpays it, a plan discount
-        // underpays it. Not refused, since the property's settings decide both,
-        // but logged so a mismatch on a live property is seen.
-        long planChargeTotal = discountedTotal + feeCents;
-        if (planChargeTotal != originalTotal) {
-            log.warn("Mews plan for booking {} (merchant {}) charges {} but Mews prices the stay at {} "
-                    + "(fee {}, discount {}); the reservation bill will not balance",
-                    booking.id(), merchant.id(), planChargeTotal, originalTotal,
-                    feeCents, originalTotal - discountedTotal);
-        }
-        planDao.insertPendingMews(
-                booking.id(), customer.id(), storedCard.id(),
-                discountedTotal, installmentCount, option.frequency().wire(),
-                startDate, endDate, depositAmount, feeCents);
-        PaymentPlan plan = planDao.findLatestForBooking(booking.id())
-                .orElseThrow(() -> new IllegalStateException("plan insert disappeared"));
-
-        buildSchedule(scheduleDao, plan.id(), today, hasDeposit, depositAmount,
-                feeCents, discountedTotal, installmentCount, option);
-
-        int markedAccepted = bookingDao.markAccepted(booking.id(), customer.id());
-        if (markedAccepted != 1) {
-            throw new PlanCreationException(Reason.BOOKING_NOT_OPEN,
-                    "booking was just accepted by another session");
-        }
-
-        List<PaymentScheduleEntry> schedule = scheduleDao.listForPlan(plan.id());
-        // No charge and no intent id: nothing is collected until card-confirm.
-        return new Outcome(merchant, customer, booking, plan, schedule,
-                null, PaymentPlanStatus.PENDING_CARD.wire());
-    }
-
-    /**
      * Builds the plan for a reservation the guest made in the property's Mews
      * booking engine, on one of its Bliss rates.
      *
@@ -1085,9 +895,8 @@ public class PlanCreationService {
             sendNotifications(outcome);
             // Guest lifecycle emails (idempotent, fire-and-forget).
             notificationService.onPlanActivated(outcome.plan().id());
-            // The receipt fires only when the first row is genuinely PAID, which
-            // is the same test MewsCheckoutService applies before its own
-            // onInstallmentPaid. It used to fire on plan status alone, under the
+            // The receipt fires only when the first row is genuinely PAID (on the
+            // Mews rail, the upfront charge Mews took at booking). It used to fire on plan status alone, under the
             // comment "plan is active here, so the first schedule row has already
             // been charged/paid". That stopped being true when the Mews rail
             // began inserting an active plan without collecting anything: guests
@@ -1251,10 +1060,7 @@ public class PlanCreationService {
             String customerPhone,
             String paymentMethodId,
             PlanFrequency frequency,
-            DemoCard demoCard,
-            // Mews rail only: the room and adults the stay is priced for.
-            String mewsResourceCategoryId,
-            Integer adultCount
+            DemoCard demoCard
     ) {}
 
     /**

@@ -23,7 +23,8 @@ public record MewsConnection(
         Instant validatedAt,
         Instant createdAt,
         Instant updatedAt,
-        // Booking setup (V31). Null until the property picks its Bliss rate.
+        // V31, from when Bliss created reservations itself. No longer read;
+        // the columns stay.
         String serviceId,
         String blissRateId,
         String adultAgeCategoryId,
@@ -37,12 +38,6 @@ public record MewsConnection(
 ) {
     public boolean isValidated() {
         return validatedAt != null;
-    }
-
-    /** True once the property has chosen what Bliss books, so checkout can create reservations. */
-    public boolean isBookingSetupComplete() {
-        return notBlank(serviceId) && notBlank(blissRateId)
-                && notBlank(adultAgeCategoryId) && notBlank(timeZone);
     }
 
     /** True once Bliss can find and link booking-engine reservations for this property. */

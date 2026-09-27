@@ -2,10 +2,6 @@ package com.bliss.b2b.api;
 
 import com.bliss.b2b.integration.StripeConnectResolver;
 import com.bliss.b2b.integration.StripePaymentsService;
-import com.bliss.b2b.service.MewsCheckoutService;
-import com.bliss.b2b.service.MewsCheckoutService.CardConfirmResult;
-import com.bliss.b2b.service.MewsCheckoutService.CardRequestResult;
-import com.bliss.b2b.service.MewsCheckoutService.MewsCheckoutException;
 import com.bliss.b2b.service.PlanCreationService.DemoCard;
 import com.bliss.b2b.service.PlanPortalService;
 import com.bliss.b2b.service.PlanPortalService.PayResult;
@@ -42,17 +38,14 @@ public class PublicPlansPortalResource {
     private final PlanPortalService portalService;
     private final StripePaymentsService stripeService;
     private final StripeConnectResolver stripeConnectResolver;
-    private final MewsCheckoutService mewsCheckoutService;
 
     public PublicPlansPortalResource(
             PlanPortalService portalService,
             StripePaymentsService stripeService,
-            StripeConnectResolver stripeConnectResolver,
-            MewsCheckoutService mewsCheckoutService) {
+            StripeConnectResolver stripeConnectResolver) {
         this.portalService = portalService;
         this.stripeService = stripeService;
         this.stripeConnectResolver = stripeConnectResolver;
-        this.mewsCheckoutService = mewsCheckoutService;
     }
 
     @GET
@@ -167,80 +160,6 @@ public class PublicPlansPortalResource {
         }
     }
 
-    /**
-     * Mews rail: open a card collection request for the plan. Returns the
-     * requestId + dataBaseUrl the client's Mews Payments Checkout embed needs.
-     */
-    @POST
-    @Path("/{token}/mews-card-request")
-    public Response mewsCardRequest(@PathParam("token") String token) {
-        try {
-            CardRequestResult result = mewsCheckoutService.cardRequest(token);
-            return Response.ok(Map.of(
-                    "requestId", result.requestId(),
-                    "dataBaseUrl", result.dataBaseUrl(),
-                    "mewsCustomerId", result.mewsCustomerId())).build();
-        } catch (MewsCheckoutException e) {
-            return mapMewsError(e);
-        } catch (RuntimeException e) {
-            log.error("Unexpected error in mews-card-request for token={}", token, e);
-            return Response.status(500).entity(Map.of("error", "internal_error")).build();
-        }
-    }
-
-    /**
-     * Mews rail: called after the embed's onSuccess. Server-verifies the vaulted
-     * card, charges the first installment, and activates the plan.
-     */
-    @POST
-    @Path("/{token}/mews-card-confirm")
-    public Response mewsCardConfirm(@PathParam("token") String token, MewsConfirmRequest req) {
-        try {
-            String pmId = req == null ? null : req.paymentMethodId();
-            CardConfirmResult result = mewsCheckoutService.cardConfirm(token, pmId);
-            return Response.ok(Map.of(
-                    "status", result.status(),
-                    "paymentId", result.paymentId(),
-                    "rawState", result.rawState())).build();
-        } catch (MewsCheckoutException e) {
-            return mapMewsError(e);
-        } catch (RuntimeException e) {
-            log.error("Unexpected error in mews-card-confirm for token={}", token, e);
-            return Response.status(500).entity(Map.of("error", "internal_error")).build();
-        }
-    }
-
-    private static Response mapMewsError(MewsCheckoutException e) {
-        int status = switch (e.code()) {
-            case "not_found" -> 404;
-            case "plan_not_pending", "not_mews_rail", "mews_not_connected", "card_request_first",
-                    "mews_currency_missing", "mews_platform_unknown", "stay_not_set",
-                    "stay_unavailable" -> 409;
-            case "mews_unreachable" -> 502;
-            case "card_not_found" -> 400;
-            case "charge_declined" -> 402;
-            case "charge_failed" -> 502;
-            default -> 400;
-        };
-        log.info("Mews checkout rejected code={} message={}", e.code(), e.getMessage());
-        return Response.status(status).entity(Map.of(
-                "error", e.code(), "message", guestMessage(e))).build();
-    }
-
-    /**
-     * Codes whose message was written for the guest. Every other code carries
-     * internal detail (plan states, ids, configuration gaps) and is shown as a
-     * plain line instead; the detail is in the log line above.
-     */
-    private static final java.util.Set<String> GUEST_WORDED_CODES = java.util.Set.of(
-            "charge_declined", "charge_failed", "mews_unreachable", "stay_unavailable", "stay_not_set");
-
-    private static String guestMessage(MewsCheckoutException e) {
-        return GUEST_WORDED_CODES.contains(e.code())
-                ? e.getMessage()
-                : "Something went wrong with your booking. Please start again from the property's booking page.";
-    }
-
     private static DemoCard toDemoCard(ReplaceCardRequest req) {
         if (req.demoCardLastFour() == null && req.demoCardExpMonth() == null
                 && req.demoCardExpYear() == null && req.demoCardBrand() == null) {
@@ -278,9 +197,5 @@ public class PublicPlansPortalResource {
             @JsonProperty("demoCardExpMonth") Integer demoCardExpMonth,
             @JsonProperty("demoCardExpYear") Integer demoCardExpYear,
             @JsonProperty("demoCardBrand") String demoCardBrand
-    ) {}
-
-    public record MewsConfirmRequest(
-            @JsonProperty("paymentMethodId") String paymentMethodId
     ) {}
 }

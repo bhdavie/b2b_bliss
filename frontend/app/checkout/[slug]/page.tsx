@@ -1,5 +1,4 @@
 import { CheckoutFlow, type CheckoutCart } from "@/components/consumer/CheckoutFlow";
-import { MewsStayCheckout } from "@/components/consumer/MewsStayCheckout";
 import { InactiveLink } from "@/components/consumer/InactiveLink";
 import { PageChrome } from "@/components/consumer/PageChrome";
 import { fetchPublicMerchant } from "@/lib/publicApi";
@@ -32,10 +31,21 @@ export default async function CheckoutPage(props: {
     );
   }
 
-  // A Mews property prices the stay from Mews, so the link's total is only a
-  // hint there and may be missing. Everywhere else it is the booking amount.
-  const isMews = merchant.rail === "mews";
-  const parsed = parseCart(raw, isMews);
+  // A Mews property's guests book and pay in its own Mews booking engine, and
+  // Bliss builds the plan from that reservation. There is nothing to check out
+  // here, so an old link lands on a pointer back to the property instead.
+  if (merchant.rail === "mews") {
+    return (
+      <PageChrome>
+        <InactiveLink
+          title="Book this stay on the property's booking page"
+          body={`${merchant.merchant.businessName} takes payment plans through its own booking page. Choose a Bliss rate there to pay over time.`}
+        />
+      </PageChrome>
+    );
+  }
+
+  const parsed = parseCart(raw);
   if (parsed.kind === "missing") {
     return (
       <PageChrome>
@@ -61,25 +71,6 @@ export default async function CheckoutPage(props: {
 
   const returnUrl = firstOf(raw.return_url) ?? null;
 
-  if (isMews) {
-    const adults = Number.parseInt(firstOf(raw.adults) ?? "", 10);
-    const frequency = firstOf(raw.frequency);
-    return (
-      <PageChrome>
-        <MewsStayCheckout
-          merchant={merchant}
-          cart={parsed.cart}
-          initialRoom={firstOf(raw.room) ?? null}
-          initialCategoryId={firstOf(raw.category_id) ?? null}
-          initialAdults={Number.isFinite(adults) && adults > 0 ? adults : null}
-          initialFrequency={frequency === "biweekly" || frequency === "monthly" ? frequency : null}
-          returnUrl={returnUrl}
-          feeRate={feeRate}
-        />
-      </PageChrome>
-    );
-  }
-
   return (
     <PageChrome>
       <CheckoutFlow
@@ -97,17 +88,16 @@ type Parsed =
   | { kind: "missing"; missing: string[] }
   | { kind: "invalid"; reason: string };
 
-function parseCart(p: SearchParams, totalOptional: boolean): Parsed {
+function parseCart(p: SearchParams): Parsed {
   const total = firstOf(p.total);
   const checkin = firstOf(p.checkin);
   const missing: string[] = [];
-  if (!total && !totalOptional) missing.push("total");
+  if (!total) missing.push("total");
   if (!checkin) missing.push("checkin");
   if (missing.length > 0) return { kind: "missing", missing };
 
-  // Mews: 0 until the stay is quoted; the quote replaces it.
-  const totalCents = total ? Number.parseInt(total, 10) : 0;
-  if (!totalOptional && (!Number.isFinite(totalCents) || totalCents <= 0)) {
+  const totalCents = Number.parseInt(total!, 10);
+  if (!Number.isFinite(totalCents) || totalCents <= 0) {
     return { kind: "invalid", reason: "total must be a positive integer (cents)" };
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(checkin!)) {

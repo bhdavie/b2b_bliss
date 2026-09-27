@@ -50,20 +50,11 @@ public class MewsAdapter implements PmsAdapter {
 
     private static final String CONFIGURATION_GET = "/api/connector/v1/configuration/get";
     private static final String CUSTOMERS_GET_ALL = "/api/connector/v1/customers/getAll";
-    private static final String CUSTOMERS_ADD = "/api/connector/v1/customers/add";
     private static final String CREDIT_CARDS_GET_ALL = "/api/connector/v1/creditCards/getAll";
-    private static final String PAYMENT_METHOD_REQUESTS_ADD =
-            "/api/connector/v1/paymentMethodRequests/add";
     private static final String CREDIT_CARDS_CHARGE = "/api/connector/v1/creditCards/charge";
     private static final String PAYMENTS_GET_ALL = "/api/connector/v1/payments/getAll";
     private static final String SERVICES_GET_ALL = "/api/connector/v1/services/getAll";
     private static final String RATES_GET_ALL = "/api/connector/v1/rates/getAll";
-    private static final String RESOURCE_CATEGORIES_GET_ALL = "/api/connector/v1/resourceCategories/getAll";
-    private static final String AGE_CATEGORIES_GET_ALL = "/api/connector/v1/ageCategories/getAll";
-    private static final String SERVICES_GET_AVAILABILITY = "/api/connector/v1/services/getAvailability/2024-01-22";
-    private static final String RESERVATIONS_PRICE = "/api/connector/v1/reservations/price";
-    private static final String RESERVATIONS_ADD = "/api/connector/v1/reservations/add";
-    private static final String RESERVATIONS_CONFIRM = "/api/connector/v1/reservations/confirm";
     private static final String RESERVATIONS_CANCEL = "/api/connector/v1/reservations/cancel";
     private static final String RESERVATIONS_GET_ALL = "/api/connector/v1/reservations/getAll/2023-06-06";
     private static final String ORDER_ITEMS_GET_ALL = "/api/connector/v1/orderItems/getAll";
@@ -127,6 +118,7 @@ public class MewsAdapter implements PmsAdapter {
 
     @Override
     public PmsCustomer findOrCreateCustomer(PmsCustomerRef ref) {
+        // Search only: the name is kept for the PmsAdapter contract.
         if (ref == null || ref.email() == null || ref.email().isBlank()) {
             throw new PmsAdapterException("findOrCreateCustomer requires an email to search on");
         }
@@ -146,24 +138,10 @@ public class MewsAdapter implements PmsAdapter {
             }
         }
 
-        if (ref.lastName() == null || ref.lastName().isBlank()) {
-            throw new PmsAdapterException(
-                    "Mews requires LastName to create a customer; none supplied for " + ref.email());
-        }
-        Map<String, Object> addBody = auth();
-        addBody.put("LastName", ref.lastName());
-        if (ref.firstName() != null && !ref.firstName().isBlank()) {
-            addBody.put("FirstName", ref.firstName());
-        }
-        addBody.put("Email", ref.email());
-        addBody.put("OverwriteExisting", false);
-
-        // customers/add returns the Customer at the top level; tolerate a
-        // "Customer" wrapper too in case a demo API version nests it.
-        JsonNode addResponse = post(CUSTOMERS_ADD, addBody);
-        JsonNode created = addResponse.has("Customer") ? addResponse.path("Customer") : addResponse;
-        log.info("Created Mews customer for {} -> {}", ref.email(), textOrNull(created, "Id"));
-        return toCustomer(created);
+        // Bliss no longer creates Mews customers: the guest's profile is made
+        // by the booking engine. Search only.
+        throw new PmsNotSupportedException(
+                "No Mews customer with email " + ref.email() + "; Bliss does not create Mews customers");
     }
 
     @Override
@@ -183,38 +161,6 @@ public class MewsAdapter implements PmsAdapter {
             }
         }
         return out;
-    }
-
-    @Override
-    public PmsCardCollectionRequest createCardCollectionRequest(
-            String pmsCustomerId, Instant expiration, String description) {
-        if (pmsCustomerId == null || pmsCustomerId.isBlank()) {
-            throw new PmsAdapterException("createCardCollectionRequest requires a customer id");
-        }
-        if (expiration == null) {
-            throw new PmsAdapterException("createCardCollectionRequest requires an expiration");
-        }
-        if (description == null || description.isBlank()) {
-            throw new PmsAdapterException("createCardCollectionRequest requires a description");
-        }
-
-        Map<String, Object> body = auth();
-        body.put("AccountId", pmsCustomerId);
-        body.put("ExpirationUtc", expiration.toString());
-        body.put("Description", description);
-        // Collect a payment card only, and suppress Mews' own guest emails: the
-        // request is fulfilled through Payments Checkout, not an emailed link.
-        body.put("PaymentMethods", List.of("PaymentCard"));
-        body.put("EmailsToSend", List.of());
-
-        JsonNode response = post(PAYMENT_METHOD_REQUESTS_ADD, body);
-        String requestId = textOrNull(response, "PaymentMethodRequestId");
-        if (requestId == null || requestId.isBlank()) {
-            throw new PmsAdapterException(
-                    "Mews did not return a PaymentMethodRequestId for customer " + pmsCustomerId);
-        }
-        log.info("Created Mews payment method request {} for customer {}", requestId, pmsCustomerId);
-        return new PmsCardCollectionRequest(requestId, expiration, description);
     }
 
     @Override
@@ -416,159 +362,9 @@ public class MewsAdapter implements PmsAdapter {
         return out;
     }
 
-    /** Every room category on a service, with its capacity. */
-    public List<MewsCatalog.ResourceCategory> getResourceCategories(String serviceId) {
-        Map<String, Object> body = auth();
-        body.put("ServiceIds", List.of(serviceId));
-        List<MewsCatalog.ResourceCategory> out = new ArrayList<>();
-        for (JsonNode c : getAllPaged(RESOURCE_CATEGORIES_GET_ALL, body, "ResourceCategories")) {
-            out.add(new MewsCatalog.ResourceCategory(
-                    textOrNull(c, "Id"),
-                    localized(c.path("Names")),
-                    c.path("IsActive").asBoolean(false),
-                    c.path("Capacity").asInt(0),
-                    c.path("ExtraCapacity").asInt(0)));
-        }
-        return out;
-    }
-
-    /** The service's active adult age category, which PersonCounts are counted in. */
-    public Optional<String> getAdultAgeCategoryId(String serviceId) {
-        Map<String, Object> body = auth();
-        body.put("ServiceIds", List.of(serviceId));
-        for (JsonNode a : getAllPaged(AGE_CATEGORIES_GET_ALL, body, "AgeCategories")) {
-            if ("Adult".equals(textOrNull(a, "Classification")) && a.path("IsActive").asBoolean(false)) {
-                return Optional.ofNullable(textOrNull(a, "Id"));
-            }
-        }
-        return Optional.empty();
-    }
-
     // --- Availability and pricing -------------------------------------------
 
-    /**
-     * Free rooms per category for each night from {@code firstNightUtc} to
-     * {@code lastNightUtc} inclusive, as usable rooms minus occupied ones.
-     * Both instants must be local midnight of a night, in UTC, which is the
-     * time-unit boundary Mews requires. "Usable" already leaves out rooms that
-     * are out of order.
-     */
-    public Map<String, int[]> getFreeRoomsPerNight(String serviceId, Instant firstNightUtc, Instant lastNightUtc) {
-        Map<String, Object> body = auth();
-        body.put("ServiceId", serviceId);
-        body.put("FirstTimeUnitStartUtc", firstNightUtc.toString());
-        body.put("LastTimeUnitStartUtc", lastNightUtc.toString());
-        body.put("Metrics", List.of("UsableResources", "Occupied"));
-        JsonNode root = post(SERVICES_GET_AVAILABILITY, body);
-        Map<String, int[]> out = new LinkedHashMap<>();
-        for (JsonNode c : root.path("ResourceCategoryAvailabilities")) {
-            JsonNode usable = c.path("Metrics").path("UsableResources");
-            JsonNode occupied = c.path("Metrics").path("Occupied");
-            int[] free = new int[usable.size()];
-            for (int i = 0; i < free.length; i++) {
-                free[i] = usable.path(i).asInt(0) - occupied.path(i).asInt(0);
-            }
-            out.put(textOrNull(c, "ResourceCategoryId"), free);
-        }
-        return out;
-    }
-
-    /**
-     * The tax-inclusive total Mews would charge for one stay, from
-     * reservations/price. This, not anything the browser sends, is what a
-     * Bliss plan is written against.
-     */
-    public StayPrice priceStay(String serviceId, String categoryId, String rateId,
-            String adultAgeCategoryId, int adults, Instant startUtc, Instant endUtc) {
-        Map<String, Object> reservation = new LinkedHashMap<>();
-        reservation.put("Identifier", "quote");
-        reservation.put("StartUtc", startUtc.toString());
-        reservation.put("EndUtc", endUtc.toString());
-        reservation.put("RequestedCategoryId", categoryId);
-        reservation.put("RateId", rateId);
-        reservation.put("PersonCounts", List.of(Map.of("AgeCategoryId", adultAgeCategoryId, "Count", adults)));
-        Map<String, Object> body = auth();
-        body.put("ServiceId", serviceId);
-        body.put("Reservations", List.of(reservation));
-
-        JsonNode prices = post(RESERVATIONS_PRICE, body).path("ReservationPrices");
-        JsonNode total = prices.path(0).path("TotalAmount");
-        String currency = textOrNull(total, "Currency");
-        JsonNode gross = total.path("GrossValue");
-        if (currency == null || !gross.isNumber()) {
-            throw new PmsAdapterException("Mews returned no price for the stay");
-        }
-        return new StayPrice(toMinorUnits(gross.decimalValue()), currency);
-    }
-
     // --- Reservations -------------------------------------------------------
-
-    /**
-     * Creates the stay as an {@code Optional} reservation: the room is held,
-     * but Mews sends nothing to the guest yet. {@link #confirmReservation}
-     * turns it into a booking once the first installment is taken.
-     *
-     * <p>{@code CheckRateApplicability} is off because the Bliss rate is
-     * private, and Mews would otherwise refuse it without a voucher code.
-     * Overbooking is still checked, so a room sold since the quote is refused
-     * here rather than double-booked. No {@code CreditCardId} is passed: with
-     * a card attached, Mews charges it under the rate's payment policy.
-     *
-     * @param releasedUtc when Mews may release the hold if it is never confirmed
-     * @return the new reservation id
-     */
-    public String addOptionalReservation(String serviceId, String customerId, String categoryId,
-            String rateId, String adultAgeCategoryId, int adults, Instant startUtc, Instant endUtc,
-            Instant releasedUtc, String identifier, String notes) {
-        Map<String, Object> reservation = new LinkedHashMap<>();
-        reservation.put("Identifier", identifier);
-        reservation.put("State", "Optional");
-        reservation.put("StartUtc", startUtc.toString());
-        reservation.put("EndUtc", endUtc.toString());
-        reservation.put("ReleasedUtc", releasedUtc.toString());
-        reservation.put("CustomerId", customerId);
-        reservation.put("RequestedCategoryId", categoryId);
-        reservation.put("RateId", rateId);
-        reservation.put("PersonCounts", List.of(Map.of("AgeCategoryId", adultAgeCategoryId, "Count", adults)));
-        if (notes != null && !notes.isBlank()) {
-            reservation.put("Notes", notes);
-        }
-        Map<String, Object> body = auth();
-        body.put("ServiceId", serviceId);
-        body.put("SendConfirmationEmail", false);
-        body.put("CheckRateApplicability", false);
-        body.put("CheckOverbooking", true);
-        body.put("Reservations", List.of(reservation));
-
-        String id = textOrNull(post(RESERVATIONS_ADD, body).path("Reservations").path(0).path("Reservation"), "Id");
-        if (id == null || id.isBlank()) {
-            throw new PmsAdapterException("Mews created no reservation for " + identifier);
-        }
-        log.info("Mews optional reservation {} held for {}", id, identifier);
-        return id;
-    }
-
-    /**
-     * A reservation on this customer's account for exactly this service, room
-     * category and stay, in one of {@code states}. Used before creating a hold,
-     * so a hold whose creation response was lost is found and reused rather
-     * than duplicated. Mews has no idempotency key for reservations/add.
-     */
-    public Optional<String> findReservation(String serviceId, String customerId, String categoryId,
-            Instant startUtc, Instant endUtc, List<String> states) {
-        Map<String, Object> body = auth();
-        body.put("AccountIds", List.of(customerId));
-        body.put("ServiceIds", List.of(serviceId));
-        body.put("States", states);
-        for (JsonNode r : getAllPaged(RESERVATIONS_GET_ALL, body, "Reservations")) {
-            if (categoryId.equals(textOrNull(r, "RequestedResourceCategoryId"))
-                    && startUtc.equals(parseInstant(textOrNull(r, "StartUtc")))
-                    && endUtc.equals(parseInstant(textOrNull(r, "EndUtc")))) {
-                return Optional.ofNullable(textOrNull(r, "Id"));
-            }
-        }
-        return Optional.empty();
-    }
 
     /**
      * A reservation's current state (Optional, Confirmed, Started, Processed,
@@ -593,15 +389,6 @@ public class MewsAdapter implements PmsAdapter {
         } catch (java.time.format.DateTimeParseException e) {
             return null;
         }
-    }
-
-    /** Confirms an {@code Optional} reservation. With {@code sendEmail}, Mews sends its confirmation. */
-    public void confirmReservation(String reservationId, boolean sendEmail) {
-        Map<String, Object> body = auth();
-        body.put("ReservationIds", List.of(reservationId));
-        body.put("SendConfirmationEmail", sendEmail);
-        post(RESERVATIONS_CONFIRM, body);
-        log.info("Mews reservation {} confirmed (email={})", reservationId, sendEmail);
     }
 
     /**
@@ -651,19 +438,6 @@ public class MewsAdapter implements PmsAdapter {
             out.add(toReservation(r));
         }
         return out;
-    }
-
-    /** One reservation by id, or empty if Mews does not return it. */
-    public Optional<MewsReservation> getReservation(String reservationId) {
-        Map<String, Object> body = auth();
-        body.put("ReservationIds", List.of(reservationId));
-        body.put("Limitation", Map.of("Count", 1));
-        for (JsonNode r : post(RESERVATIONS_GET_ALL, body).path("Reservations")) {
-            if (reservationId.equals(textOrNull(r, "Id"))) {
-                return Optional.of(toReservation(r));
-            }
-        }
-        return Optional.empty();
     }
 
     /**

@@ -154,17 +154,6 @@ public interface PaymentPlanDao {
             @Bind("processingFeeCents") long processingFeeCents
     );
 
-    /** Stores the pending Mews payment-method request id so confirm can validate it. */
-    @SqlUpdate("""
-            UPDATE payment_plans
-            SET pending_mews_request_id = :requestId
-            WHERE id = :id
-            """)
-    int setPendingMewsRequestId(@Bind("id") UUID id, @Bind("requestId") String requestId);
-
-    @SqlQuery("SELECT pending_mews_request_id FROM payment_plans WHERE id = :id")
-    Optional<String> findPendingMewsRequestId(@Bind("id") UUID id);
-
     /**
      * All plans tied to the given customer email, joined with the booking
      * and merchant rows the /account index needs to render cards. Joined

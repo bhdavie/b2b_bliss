@@ -45,19 +45,6 @@ public interface PmsAdapter {
     List<PmsStoredCard> getStoredCards(String pmsCustomerId);
 
     /**
-     * Creates a card-collection request against the given PMS customer. The
-     * returned {@link PmsCardCollectionRequest#requestId()} is handed to the PMS
-     * hosted card-entry surface (Mews Payments Checkout) so the customer can
-     * enter a card, which the PMS then vaults for later off-session charging.
-     *
-     * @param pmsCustomerId the PMS-native customer id (Mews {@code AccountId})
-     * @param expiration    when the request itself expires (not the card expiry)
-     * @param description   customer-visible reason for the request
-     */
-    PmsCardCollectionRequest createCardCollectionRequest(
-            String pmsCustomerId, Instant expiration, String description);
-
-    /**
      * Charges an already-vaulted card off-session and reports the resulting
      * settlement state.
      *

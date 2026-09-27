@@ -1,8 +1,6 @@
 package com.bliss.b2b.api;
 
 import com.bliss.b2b.payments.PlanFrequency;
-import com.bliss.b2b.service.MewsStayService;
-import com.bliss.b2b.service.MewsStayService.MewsStayException;
 import com.bliss.b2b.service.PlanCreationException;
 import com.bliss.b2b.service.PlanCreationException.Reason;
 import com.bliss.b2b.service.PlanCreationService;
@@ -46,42 +44,9 @@ public class PublicCheckoutResource {
     private static final Logger log = LoggerFactory.getLogger(PublicCheckoutResource.class);
 
     private final PlanCreationService planCreationService;
-    private final MewsStayService mewsStayService;
 
-    public PublicCheckoutResource(PlanCreationService planCreationService, MewsStayService mewsStayService) {
+    public PublicCheckoutResource(PlanCreationService planCreationService) {
         this.planCreationService = planCreationService;
-        this.mewsStayService = mewsStayService;
-    }
-
-    /**
-     * Mews rail: the room list, whether the chosen room is free for every night,
-     * and Mews' price for the property's Bliss rate. The checkout page builds
-     * its plan preview from this total, never from the URL's. Plan creation
-     * prices again, fresh, and that is the figure the plan is written against.
-     *
-     * <p>{@code categoryId} wins over {@code room}, the booking engine's room
-     * label; with neither matching, the response lists rooms to choose from.
-     */
-    @GET
-    @Path("/{slug}/quote")
-    public Response quote(@PathParam("slug") String slug,
-                          @QueryParam("checkin") String checkin,
-                          @QueryParam("checkout") String checkout,
-                          @QueryParam("categoryId") String categoryId,
-                          @QueryParam("room") String room,
-                          @QueryParam("adults") Integer adults) {
-        try {
-            return Response.ok(mewsStayService.quote(
-                    slug, parseDate(checkin), parseDate(checkout), categoryId, room, adults)).build();
-        } catch (MewsStayException e) {
-            int status = switch (e.code()) {
-                case "not_found" -> 404;
-                case "not_mews_rail", "not_ready", "currency_mismatch" -> 409;
-                case "mews_unreachable" -> 502;
-                default -> 400;
-            };
-            return Response.status(status).entity(Map.of("error", e.code(), "message", e.getMessage())).build();
-        }
     }
 
     @POST
@@ -126,9 +91,7 @@ public class PublicCheckoutResource {
                             req.customerPhone(),
                             req.paymentMethodId(),
                             frequency,
-                            toDemoCard(req),
-                            req.mewsResourceCategoryId(),
-                            req.adultCount()));
+                            toDemoCard(req)));
             return Response.status(201).entity(toView(result)).build();
         } catch (PlanCreationException e) {
             return mapError(e);
@@ -214,9 +177,7 @@ public class PublicCheckoutResource {
             @JsonProperty("demoCardLastFour") String demoCardLastFour,
             @JsonProperty("demoCardExpMonth") Integer demoCardExpMonth,
             @JsonProperty("demoCardExpYear") Integer demoCardExpYear,
-            @JsonProperty("demoCardBrand") String demoCardBrand,
-            @JsonProperty("mewsResourceCategoryId") String mewsResourceCategoryId,
-            @JsonProperty("adultCount") Integer adultCount
+            @JsonProperty("demoCardBrand") String demoCardBrand
     ) {}
 
     public record CheckoutResponse(

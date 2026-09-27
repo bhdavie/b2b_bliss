@@ -6,10 +6,8 @@ package com.bliss.b2b.integration.pms;
  * signals a deliberate, not-built-yet gap so callers can surface a clear message
  * rather than treat it as a retryable error.
  *
- * <p>Used by {@link CloudbedsAdapter#createCardCollectionRequest}: Cloudbeds has
- * no server-issued hosted card-entry request equivalent to Mews Payments
- * Checkout (card tokenization happens through the Cloudbeds client SDK / vault),
- * so that seam is not built here.
+ * <p>Used for reservation-state reads on rails that have none, and by the Mews
+ * customer lookup, which only searches: Bliss does not create Mews customers.
  */
 public class PmsNotSupportedException extends PmsAdapterException {
 

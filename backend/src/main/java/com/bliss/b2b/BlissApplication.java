@@ -197,11 +197,9 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 new com.bliss.b2b.integration.pms.MewsAdapterFactory(jdbi, tokenCipher, chargeCapCents);
         // Prices Mews stays against the property's own Mews; the only source of a
         // Mews plan's total.
-        com.bliss.b2b.service.MewsStayService mewsStayService =
-                new com.bliss.b2b.service.MewsStayService(jdbi, mewsAdapterFactory, clock);
         PlanCreationService planCreationService = new PlanCreationService(
                 jdbi, eligibilityService, stripePaymentsService, stripeConnectResolver,
-                emailService, planNotificationService, mewsStayService, clock, config.getApp());
+                emailService, planNotificationService, clock, config.getApp());
         // Mews stays: cancelled in Mews first, then credited rather than refunded.
         CancellationService cancellationService = new CancellationService(
                 paymentPlanDao, paymentScheduleDao, bookingDao, planRulesService,
@@ -229,10 +227,6 @@ public class BlissApplication extends Application<BlissConfiguration> {
         PropertyOnboardingService onboardingService = new PropertyOnboardingService(
                 merchantDao, mewsConnectionDao, stripeConnectionDao, cloudbedsConnectionDao,
                 mewsAdapterFactory, jdbi.onDemand(com.bliss.b2b.persistence.MewsLinkingDao.class), clock);
-        // Mews guest card-capture seam (per-property credentials via the factory).
-        com.bliss.b2b.service.MewsCheckoutService mewsCheckoutService =
-                new com.bliss.b2b.service.MewsCheckoutService(
-                        jdbi, mewsAdapterFactory, mewsStayService, planNotificationService, clock);
         JwtService jwtService = new JwtService(config.getJwt(), sessionTtl);
         CustomerAuthService customerAuthService = new CustomerAuthService(
                 customerDao, jwtService, clock);
@@ -363,9 +357,9 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new PublicMerchantsResource(
                 merchantDao, planRulesService, stripePaymentsService, stripeConnectResolver,
                 merchantFeeRateDao, mewsConnectionDao, clock));
-        environment.jersey().register(new PublicCheckoutResource(planCreationService, mewsStayService));
+        environment.jersey().register(new PublicCheckoutResource(planCreationService));
         environment.jersey().register(new PublicPlansPortalResource(
-                planPortalService, stripePaymentsService, stripeConnectResolver, mewsCheckoutService));
+                planPortalService, stripePaymentsService, stripeConnectResolver));
         environment.jersey().register(new PublicAccountResource(
                 customerAuthService, magicLinkService, demoLoginEnabled,
                 paymentPlanDao, customerDao, clock, cookieOptions,
@@ -411,8 +405,6 @@ public class BlissApplication extends Application<BlissConfiguration> {
         com.bliss.b2b.service.MewsReconciliationService mewsReconciliationService =
                 new com.bliss.b2b.service.MewsReconciliationService(
                         jdbi, mewsAdapterFactory, installmentLedger, planNotificationService, clock);
-        com.bliss.b2b.service.MewsConfirmSweep mewsConfirmSweep =
-                new com.bliss.b2b.service.MewsConfirmSweep(jdbi, mewsAdapterFactory::resolveMewsAdapter, clock);
         // Both Mews passes share one single-thread executor, so they never run
         // concurrently; the initial delays offset them (charge at +60s, reconcile
         // at +90s) so they also never fire in the same instant.
@@ -430,14 +422,6 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 mewsReconciliationService.runReconcilePass();
             } catch (RuntimeException e) {
                 log.warn("Mews reconciliation pass failed: {}", e.getMessage());
-            }
-            // Confirm any Mews reservation left Optional after its first charge,
-            // before Mews releases the hold. Separate so a failed reconcile does
-            // not skip it.
-            try {
-                mewsConfirmSweep.run();
-            } catch (RuntimeException e) {
-                log.warn("Mews confirm sweep failed: {}", e.getMessage());
             }
         }, 90, 60, java.util.concurrent.TimeUnit.SECONDS);
         // Booking-engine linking: finds reservations on each property's Bliss
