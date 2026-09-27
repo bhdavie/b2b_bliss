@@ -166,7 +166,9 @@ public class PublicMerchantsResource {
                 if (c.blissBiweeklyDepositBps() != null) depositBps.put("biweekly", c.blissBiweeklyDepositBps());
             });
         }
-        return Response.ok(PublicPlanRulesView.from(rules, merchant.pmsType(), blissRates, depositBps)).build();
+        return Response.ok(PublicPlanRulesView.from(rules, merchant.pmsType(), blissRates, depositBps,
+                feeRateDao.effectiveRateFor(merchant.id(), clock.instant())
+                        .orElse(PlanCreationService.FALLBACK_FEE_RATE_PUBLIC))).build();
     }
 
     /**

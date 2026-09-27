@@ -61,15 +61,23 @@ public record PublicPlanRulesView(
          * points ({@code monthly}, {@code biweekly}). Display only: the plan is
          * built on what Mews actually charges. Absent when not set.
          */
-        java.util.Map<String, Integer> mewsBlissDepositBps
+        java.util.Map<String, Integer> mewsBlissDepositBps,
+        /**
+         * The property's Bliss processing-fee rate as of now, in hundred-
+         * thousandths (5000 = 5%): the rate column is NUMERIC(6,5), so this is
+         * exact. The pop-up adds the fee to its preview exactly as a plan does
+         * (total x rate, half up). Null when the caller did not resolve it.
+         */
+        Integer feeRateHundredThousandths
 ) {
     public static PublicPlanRulesView from(MerchantPlanRules rules, PmsType pmsType) {
-        return from(rules, pmsType, java.util.Map.of(), java.util.Map.of());
+        return from(rules, pmsType, java.util.Map.of(), java.util.Map.of(), null);
     }
 
     public static PublicPlanRulesView from(MerchantPlanRules rules, PmsType pmsType,
             java.util.Map<String, String> mewsBlissRates,
-            java.util.Map<String, Integer> mewsBlissDepositBps) {
+            java.util.Map<String, Integer> mewsBlissDepositBps,
+            java.math.BigDecimal feeRate) {
         return new PublicPlanRulesView(
                 rules.minLeadTimeWeeks(),
                 rules.maxLeadTimeWeeks(),
@@ -87,6 +95,7 @@ public record PublicPlanRulesView(
                 rules.blackoutDates().stream().map(LocalDate::toString).toList(),
                 pmsType == null ? null : pmsType.wire(),
                 mewsBlissRates,
-                mewsBlissDepositBps);
+                mewsBlissDepositBps,
+                feeRate == null ? null : feeRate.movePointRight(5).intValueExact());
     }
 }

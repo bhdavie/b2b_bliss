@@ -139,21 +139,19 @@
   // =========================================================================
   // BLISS FEE
   //
-  // Platform fee applied to the tax-inclusive Total when the Summary-step
-  // figure is computed. Single source of truth for this file — change it here
-  // and nowhere else.
-  //
-  // 5%, matching every fee source in the repo:
-  //   backend   PlanCreationService.BLISS_FEE_RATE          = 0.05
-  //   frontend  frontend/lib/blissFee.ts BLISS_FEE_RATE     = 0.05
-  //   seed      demo-seed-marbrook.sql processing_fee_cents = 14700 against a
-  //             294000 plan total, i.e. exactly 0.05
-  //
-  // Applied ON TOP of the total: the guest pays the fee and the hotel is paid
-  // net, matching PlanCreationService.feeFor + buildSchedule, which add it to
-  // the schedule the guest is charged rather than deducting it from the total.
+  // The property's own processing-fee rate, from the plan rules
+  // (feeRateHundredThousandths: 5000 = 5%, exact because the rate is stored
+  // NUMERIC(6,5)). Added ON TOP of the stay, exactly as a plan adds it
+  // (PlanCreationService.feeFor: total x rate, rounded half up): the guest
+  // pays the fee and the hotel's Mews bill is the stay alone.
   // =========================================================================
-  var BLISS_FEE_RATE = 0.05;
+  function blissFeeCents(totalCents) {
+    var r = CONFIG.feeRateHundredThousandths || 0;
+    if (!(totalCents > 0) || !(r > 0)) return 0;
+    // Integer half-up: both inputs are non-negative whole numbers, and
+    // total x r stays far inside the exact-integer range of a double.
+    return Math.floor((totalCents * r + 50000) / 100000);
+  }
 
   // =========================================================================
   // PALETTE
@@ -477,6 +475,8 @@
     blissRates: {},
     /** Display deposit per schedule's Bliss rate, basis points, from the plan rules. */
     blissDepositBps: {},
+    /** The property's Bliss fee rate x 100000, from the plan rules. 0 until they load. */
+    feeRateHundredThousandths: 0,
 
     /**
      * Corner radii for the trigger line and the modal. Colour is not here: it
@@ -636,30 +636,6 @@
     return parseMoneyTextToCents(el.textContent);
   }
 
-  /**
-   * The Summary-step per-night figure:
-   *
-   *   Z = Total x (1 + BLISS_FEE_RATE) / nights / biweekly payment count
-   *
-   * Tax-INCLUSIVE, unlike the rate-card figure, because it derives from the
-   * summary card's Total rather than a rate card's pre-tax nightly price. That
-   * difference is why the Summary supporting line says only "No credit check"
-   * while the rate-card one says "Pre-tax · No credit check".
-   *
-   * The pre-tax subtotal on the rate line is deliberately not an input: it has
-   * no role in this formula.
-   *
-   * Returns null rather than guessing when either input is unusable, so a
-   * failed read suppresses the figure instead of rendering a wrong one.
-   */
-  function summaryPerNightCents(totalCents, nights, numPayments) {
-    if (totalCents == null || !isFinite(totalCents) || totalCents <= 0) return null;
-    if (nights == null || nights <= 0) return null;
-    if (!numPayments || numPayments <= 0) return null;
-    var withFee = Math.round(totalCents * (1 + BLISS_FEE_RATE));
-    return Math.round(withFee / nights / numPayments);
-  }
-
   var SYMBOL_CURRENCY = { "$": "USD", "£": "GBP", "€": "EUR", "¥": "JPY", "₹": "INR" };
 
   /**
@@ -712,7 +688,9 @@
     if (deposit > 0 && deposit >= discountedTotal) {
       return ineligible("deposit_too_high", days, deposit, totalAmountCents, discountedTotal);
     }
-    var installmentTotal = discountedTotal - deposit;
+    // Overlay-only: blissPreview passes the Bliss fee here, because a plan
+    // adds it to the installments while the deposit is a share of the stay.
+    var installmentTotal = discountedTotal - deposit + (rules.extraInstallmentCents || 0);
     var hasDeposit = deposit > 0;
 
     var allowedFrequencies =
@@ -1701,8 +1679,9 @@
    * own deposit: the display percentage from booking setup
    * (CONFIG.blissDepositBps). Nothing here is charged; the plan is built on
    * what Mews actually takes. No plan discount either, because the Bliss rate's
-   * price in Mews is the price the plan is built on. A schedule with no Bliss
-   * rate, or one the plan rules do not offer, is left out.
+   * price in Mews is the price the plan is built on. The Bliss fee (the
+   * property's own rate) rides the installments, as it does on the plan. A
+   * schedule with no Bliss rate, or one the plan rules do not offer, is left out.
    */
   function blissPreview(today, checkin, amount) {
     var base = CONFIG.rules;
@@ -1725,6 +1704,7 @@
       rulesF.depositType = bps > 0 ? "basis_points" : null;
       rulesF.depositValue = bps > 0 ? bps : null;
       rulesF.depositMaxCents = null;
+      rulesF.extraInstallmentCents = blissFeeCents(amount);
       var p = previewEligibility(today, checkin, amount, rulesF);
       if (!p.eligible) {
         if (!firstIneligible) firstIneligible = p;
@@ -2845,13 +2825,12 @@
     if (t.kind === "details") {
       t.detailsTotalCents = scrapeDetailsTotalCents();
       // STEP-AWARE BASIS. On Details the modal is written against the
-      // tax-inclusive Total plus the Bliss fee — the same basis the block's own
-      // $Z teaser uses, so the two agree by construction. Falls back to
-      // ecommerce.value only if the Total could not be read.
+      // tax-inclusive Total; blissPreview adds the Bliss fee, as on every step.
+      // Falls back to ecommerce.value only if the Total could not be read.
       t.amountCents =
         t.detailsTotalCents == null
           ? CONFIG.deriveAmountCents(state.dl)
-          : Math.round(t.detailsTotalCents * (1 + BLISS_FEE_RATE));
+          : t.detailsTotalCents;
       t.nightlyAmountCents = null;
       t.scrapedNightlyCents = null;
       t.currency = null;
@@ -3304,6 +3283,8 @@
         CONFIG.rules = rules;
         CONFIG.blissRates = blissRates;
         CONFIG.blissDepositBps = blissDepositBpsFromPayload(payload);
+        var fr = Number(payload.feeRateHundredThousandths);
+        CONFIG.feeRateHundredThousandths = isFinite(fr) && fr >= 0 ? Math.round(fr) : 0;
         start(install, url);
       })
       .catch(function (e) {
