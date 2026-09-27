@@ -542,12 +542,15 @@ export type MewsSetupOptions = {
   services: MewsService[];
   selectedServiceId: string | null;
   rates: MewsRate[];
-  selectedRateId: string | null;
+  selectedMonthlyRateId: string | null;
+  selectedBiweeklyRateId: string | null;
 };
 export type MewsSetupResult = {
   serviceId: string;
-  rateId: string;
-  rateName: string;
+  monthlyRateId: string | null;
+  monthlyRateName: string | null;
+  biweeklyRateId: string | null;
+  biweeklyRateName: string | null;
   timeZone: string;
   warnings: string[];
 };
@@ -572,15 +575,19 @@ export async function fetchMewsSetupOptions(serviceId?: string): Promise<MewsSet
   return (await res.json()) as MewsSetupOptions;
 }
 
-/** Stores the stay service and Bliss rate. Validated against Mews on the server. */
-export async function saveMewsSetup(serviceId: string, rateId: string): Promise<MewsSetupResult> {
+/** Stores the stay service and the Bliss rate for each schedule. Validated against Mews on the server. */
+export async function saveMewsSetup(
+  serviceId: string,
+  monthlyRateId: string | null,
+  biweeklyRateId: string | null,
+): Promise<MewsSetupResult> {
   const res = await fetch(
     `${API_BASE_URL}/api/v1/merchants/me/onboarding/pms/mews/setup`,
     {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ serviceId, rateId }),
+      body: JSON.stringify({ serviceId, monthlyRateId, biweeklyRateId }),
     },
   );
   if (!res.ok) throw await mewsSetupError(res);

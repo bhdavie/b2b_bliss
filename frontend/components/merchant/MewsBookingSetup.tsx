@@ -4,21 +4,24 @@ import { useEffect, useState } from "react";
 import {
   fetchMewsSetupOptions,
   saveMewsSetup,
+  type MewsRate,
   type MewsSetupOptions,
   type MewsSetupResult,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Label } from "@/components/ui/Label";
 
-// Which Mews service and rate Bliss books for this property. Bliss creates the
-// reservation itself, on a rate the hotel keeps private and free of any Mews
-// payment policy, so Mews never charges on top of the plan. The lists are read
-// live from the property's Mews; the server checks the choice again on save.
+// Which Mews rates are the Bliss rates, one per payment schedule. A guest who
+// picks a plan in the Bliss pop-up books that schedule's rate in the Mews
+// booking engine; Mews takes the card and the rate's upfront charge, and Bliss
+// builds the plan for the rest from the reservation. The lists are read live
+// from the property's Mews; the server checks the choice again on save.
 
 export function MewsBookingSetup() {
   const [options, setOptions] = useState<MewsSetupOptions | null>(null);
   const [serviceId, setServiceId] = useState("");
-  const [rateId, setRateId] = useState("");
+  const [monthlyRateId, setMonthlyRateId] = useState("");
+  const [biweeklyRateId, setBiweeklyRateId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,9 +32,11 @@ export function MewsBookingSetup() {
     setError(null);
     try {
       const next = await fetchMewsSetupOptions(forService);
+      const known = (id: string | null) => (id && next.rates.some((r) => r.id === id) ? id : "");
       setOptions(next);
       setServiceId(next.selectedServiceId ?? "");
-      setRateId(next.rates.some((r) => r.id === next.selectedRateId) ? next.selectedRateId ?? "" : "");
+      setMonthlyRateId(known(next.selectedMonthlyRateId));
+      setBiweeklyRateId(known(next.selectedBiweeklyRateId));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not read your Mews setup.");
     } finally {
@@ -48,7 +53,7 @@ export function MewsBookingSetup() {
     setSaving(true);
     setError(null);
     try {
-      setSaved(await saveMewsSetup(serviceId, rateId));
+      setSaved(await saveMewsSetup(serviceId, monthlyRateId || null, biweeklyRateId || null));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save your booking setup.");
     } finally {
@@ -56,14 +61,16 @@ export function MewsBookingSetup() {
     }
   }
 
-  const chosenRate = options?.rates.find((r) => r.id === rateId);
+  const sameRate = monthlyRateId !== "" && monthlyRateId === biweeklyRateId;
+  const canSave = !loading && !saving && serviceId !== "" && (monthlyRateId || biweeklyRateId) && !sameRate;
 
   return (
     <form onSubmit={handleSave} className="w-full text-left">
       <h3 className="text-lg font-medium text-ink-900">Booking setup</h3>
       <p className="mt-1.5 text-base leading-[1.5] text-ink-500">
-        Choose the stay service and the rate Bliss books. Use a private rate with no payment policy
-        in Mews, so Mews never charges on top of the plan.
+        Choose the Mews rate guests book for each payment schedule. Give each Bliss rate a payment
+        policy in Mews that charges a percentage on confirmation. That charge is the guest&apos;s
+        first payment, and Bliss collects the rest.
       </p>
 
       <div className="mt-5 space-y-4">
@@ -76,7 +83,8 @@ export function MewsBookingSetup() {
             disabled={loading || saving}
             onChange={(e) => {
               setServiceId(e.target.value);
-              setRateId("");
+              setMonthlyRateId("");
+              setBiweeklyRateId("");
               setSaved(null);
               void load(e.target.value || undefined);
             }}
@@ -89,53 +97,99 @@ export function MewsBookingSetup() {
             ))}
           </select>
         </div>
-        <div>
-          <Label htmlFor="mewsRate">Bliss rate</Label>
-          <select
-            id="mewsRate"
-            className="input mt-1.5"
-            value={rateId}
-            disabled={loading || saving || !serviceId}
-            onChange={(e) => {
-              setRateId(e.target.value);
-              setSaved(null);
-            }}
-          >
-            <option value="">Choose a rate</option>
-            {options?.rates.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-                {r.isPublic ? " (public)" : ""}
-              </option>
-            ))}
-          </select>
-          {chosenRate?.isPublic ? (
-            <p className="mt-2 text-base text-amber-700">
-              This rate is public. Guests can book it in your booking engine too, and any payment
-              policy on it will charge them in Mews. A private rate is recommended.
-            </p>
-          ) : null}
-        </div>
+        <RateSelect
+          id="mewsMonthlyRate"
+          label="Monthly plan rate"
+          value={monthlyRateId}
+          rates={options?.rates ?? []}
+          disabled={loading || saving || !serviceId}
+          onChange={(v) => {
+            setMonthlyRateId(v);
+            setSaved(null);
+          }}
+        />
+        <RateSelect
+          id="mewsBiweeklyRate"
+          label="Every 2 weeks plan rate"
+          value={biweeklyRateId}
+          rates={options?.rates ?? []}
+          disabled={loading || saving || !serviceId}
+          onChange={(v) => {
+            setBiweeklyRateId(v);
+            setSaved(null);
+          }}
+        />
+        {sameRate ? (
+          <p className="text-base text-danger">
+            Each schedule needs its own rate, so Bliss can tell which plan the guest chose.
+          </p>
+        ) : null}
       </div>
 
       {error ? (
-        <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-base text-red-700">{error}</p>
+        <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-base text-danger">{error}</p>
       ) : null}
       {saved ? (
         <p className="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-base text-emerald-800">
-          Saved. Bliss will book {saved.rateName}.
+          Saved.{" "}
+          {[
+            saved.monthlyRateName ? `Monthly plans book ${saved.monthlyRateName}.` : null,
+            saved.biweeklyRateName ? `Every 2 weeks plans book ${saved.biweeklyRateName}.` : null,
+          ]
+            .filter(Boolean)
+            .join(" ")}
         </p>
       ) : null}
 
       <div className="mt-6">
-        <Button
-          type="submit"
-          variant="merchant"
-          disabled={loading || saving || !serviceId || !rateId}
-        >
+        <Button type="submit" variant="merchant" disabled={!canSave}>
           {saving ? "Saving" : "Save booking setup"}
         </Button>
       </div>
     </form>
+  );
+}
+
+function RateSelect({
+  id,
+  label,
+  value,
+  rates,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  rates: MewsRate[];
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  const chosen = rates.find((r) => r.id === value);
+  return (
+    <div>
+      <Label htmlFor={id}>{label}</Label>
+      <select
+        id={id}
+        className="input mt-1.5"
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">Not offered</option>
+        {rates.map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.name}
+            {r.isPublic ? "" : " (private)"}
+          </option>
+        ))}
+      </select>
+      {chosen && !chosen.isPublic ? (
+        <p className="mt-2 text-base text-amber-700">
+          This rate is private, so your booking engine only shows it to guests with its voucher
+          code. Bliss rates are usually public.
+        </p>
+      ) : null}
+    </div>
   );
 }

@@ -87,6 +87,14 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
     private static final String MEWS_DEMO_SERVICE_ID = "66867ec0-62dc-4937-b04b-b37100ab60c1";
     private static final String MEWS_DEMO_RATE_ID = "221075f6-4d9c-408d-ba70-b37100ab60e7";
     private static final String MEWS_DEMO_ADULT_AGE_CATEGORY_ID = "344e58ae-2755-460a-b736-b37100ab60e2";
+    // Bliss rates on Gross UK. The shared hotel is not ours to configure, so
+    // two existing bookable rates on "API HOTEL" are designated rather than
+    // created: "Fully Flexible" (the private rate above, whose charges settle)
+    // stands for monthly plans and "DGET" (public) for every-2-weeks plans.
+    // Neither carries a Bliss-style payment policy in Mews, so demo bookings
+    // on them get their upfront charge from the test script, not from Mews.
+    private static final String MEWS_DEMO_MONTHLY_RATE_ID = MEWS_DEMO_RATE_ID;
+    private static final String MEWS_DEMO_BIWEEKLY_RATE_ID = "b98d890f-eddd-4afa-9d56-b48a009957f7";
     private static final String MEWS_DEMO_TIME_ZONE = "Europe/Budapest";
 
 
@@ -219,6 +227,28 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
                 .execute();
         if (moved > 0) {
             log.info("Pointed Marbrook House's Mews connection at the Gross pricing UK demo enterprise (GBP)");
+        }
+
+        // Designate the Bliss rates once. Linking starts from the moment they
+        // are set, so older demo reservations on these rates never become plans.
+        int designated = handle.createUpdate("""
+                UPDATE merchant_mews_connections
+                SET bliss_monthly_rate_id = :monthly,
+                    bliss_biweekly_rate_id = :biweekly,
+                    linked_through_utc = COALESCE(linked_through_utc, now())
+                WHERE merchant_id = :merchantId
+                  AND enterprise_id = :enterpriseId
+                  AND bliss_monthly_rate_id IS NULL
+                  AND bliss_biweekly_rate_id IS NULL
+                """)
+                .bind("merchantId", MARBROOK_HOUSE_ID)
+                .bind("enterpriseId", MEWS_DEMO_ENTERPRISE_ID)
+                .bind("monthly", MEWS_DEMO_MONTHLY_RATE_ID)
+                .bind("biweekly", MEWS_DEMO_BIWEEKLY_RATE_ID)
+                .execute();
+        if (designated > 0) {
+            log.info("Designated Marbrook House's Bliss rates on Gross UK (monthly {}, biweekly {})",
+                    MEWS_DEMO_MONTHLY_RATE_ID, MEWS_DEMO_BIWEEKLY_RATE_ID);
         }
 
         // Synthetic Cloudbeds tokens: no Cloudbeds object backs these. Expiry is

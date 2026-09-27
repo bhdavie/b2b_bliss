@@ -48,9 +48,21 @@ public record PublicPlanRulesView(
          * payload alongside the lead-time and amount limits.
          */
         List<String> blackoutDates,
-        String pmsType
+        String pmsType,
+        /**
+         * Mews only: the property's Bliss rate for each payment schedule
+         * ({@code monthly}, {@code biweekly}), as rate ids. The overlay offers
+         * a plan on these rates and nothing else, and sends a guest who picks a
+         * schedule to that schedule's rate. Empty when none are set up.
+         */
+        java.util.Map<String, String> mewsBlissRates
 ) {
     public static PublicPlanRulesView from(MerchantPlanRules rules, PmsType pmsType) {
+        return from(rules, pmsType, java.util.Map.of());
+    }
+
+    public static PublicPlanRulesView from(MerchantPlanRules rules, PmsType pmsType,
+            java.util.Map<String, String> mewsBlissRates) {
         return new PublicPlanRulesView(
                 rules.minLeadTimeWeeks(),
                 rules.maxLeadTimeWeeks(),
@@ -66,6 +78,7 @@ public record PublicPlanRulesView(
                 rules.paymentDueCustomMonths(),
                 rules.discountBasisPoints(),
                 rules.blackoutDates().stream().map(LocalDate::toString).toList(),
-                pmsType == null ? null : pmsType.wire());
+                pmsType == null ? null : pmsType.wire(),
+                mewsBlissRates);
     }
 }

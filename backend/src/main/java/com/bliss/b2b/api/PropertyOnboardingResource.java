@@ -93,8 +93,8 @@ public class PropertyOnboardingResource {
             return badRequest("invalid_input", "body required");
         }
         try {
-            return Response.ok(service.saveMewsSetup(principal.merchant(), req.serviceId(), req.rateId()))
-                    .build();
+            return Response.ok(service.saveMewsSetup(principal.merchant(), req.serviceId(),
+                    req.monthlyRateId(), req.biweeklyRateId())).build();
         } catch (PropertyOnboardingException e) {
             return setupError(e);
         }
@@ -138,7 +138,8 @@ public class PropertyOnboardingResource {
 
     public record MewsSetupRequest(
             @JsonProperty("serviceId") String serviceId,
-            @JsonProperty("rateId") String rateId) {
+            @JsonProperty("monthlyRateId") String monthlyRateId,
+            @JsonProperty("biweeklyRateId") String biweeklyRateId) {
     }
 
     public record ConnectMewsRequest(

@@ -228,7 +228,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
                         chargeCapCents, clock);
         PropertyOnboardingService onboardingService = new PropertyOnboardingService(
                 merchantDao, mewsConnectionDao, stripeConnectionDao, cloudbedsConnectionDao,
-                mewsAdapterFactory, clock);
+                mewsAdapterFactory, jdbi.onDemand(com.bliss.b2b.persistence.MewsLinkingDao.class), clock);
         // Mews guest card-capture seam (per-property credentials via the factory).
         com.bliss.b2b.service.MewsCheckoutService mewsCheckoutService =
                 new com.bliss.b2b.service.MewsCheckoutService(
@@ -362,7 +362,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new PublicPlansResource(planCreationService));
         environment.jersey().register(new PublicMerchantsResource(
                 merchantDao, planRulesService, stripePaymentsService, stripeConnectResolver,
-                merchantFeeRateDao, clock));
+                merchantFeeRateDao, mewsConnectionDao, clock));
         environment.jersey().register(new PublicCheckoutResource(planCreationService, mewsStayService));
         environment.jersey().register(new PublicPlansPortalResource(
                 planPortalService, stripePaymentsService, stripeConnectResolver, mewsCheckoutService));

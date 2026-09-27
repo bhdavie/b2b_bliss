@@ -37,6 +37,7 @@ public class PublicMerchantsResource {
     private final StripePaymentsService stripeService;
     private final StripeConnectResolver stripeConnectResolver;
     private final MerchantFeeRateDao feeRateDao;
+    private final com.bliss.b2b.persistence.MerchantMewsConnectionDao mewsConnectionDao;
     private final Clock clock;
 
     public PublicMerchantsResource(
@@ -45,8 +46,10 @@ public class PublicMerchantsResource {
             StripePaymentsService stripeService,
             StripeConnectResolver stripeConnectResolver,
             MerchantFeeRateDao feeRateDao,
+            com.bliss.b2b.persistence.MerchantMewsConnectionDao mewsConnectionDao,
             Clock clock
     ) {
+        this.mewsConnectionDao = mewsConnectionDao;
         this.merchantDao = merchantDao;
         this.rulesService = rulesService;
         this.stripeService = stripeService;
@@ -153,7 +156,14 @@ public class PublicMerchantsResource {
         if (maybe.isEmpty()) return notFound();
         Merchant merchant = maybe.get();
         MerchantPlanRules rules = rulesService.forMerchant(merchant.id());
-        return Response.ok(PublicPlanRulesView.from(rules, merchant.pmsType())).build();
+        Map<String, String> blissRates = new java.util.LinkedHashMap<>();
+        if (merchant.pmsType() == com.bliss.b2b.domain.PmsType.MEWS && mewsConnectionDao != null) {
+            mewsConnectionDao.findByMerchant(merchant.id()).ifPresent(c -> {
+                if (c.blissMonthlyRateId() != null) blissRates.put("monthly", c.blissMonthlyRateId());
+                if (c.blissBiweeklyRateId() != null) blissRates.put("biweekly", c.blissBiweeklyRateId());
+            });
+        }
+        return Response.ok(PublicPlanRulesView.from(rules, merchant.pmsType(), blissRates)).build();
     }
 
     /**

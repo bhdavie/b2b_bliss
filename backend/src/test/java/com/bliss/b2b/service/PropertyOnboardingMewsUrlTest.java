@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class PropertyOnboardingMewsUrlTest {
 
     private final PropertyOnboardingService service =
-            new PropertyOnboardingService(null, null, null, null, null, Clock.systemUTC());
+            new PropertyOnboardingService(null, null, null, null, null, null, Clock.systemUTC());
 
     @Test
     void blankPlatformUrlIsRejectedNotDefaultedToDemo() {
