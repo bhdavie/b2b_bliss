@@ -153,6 +153,33 @@ public final class EmailTemplates {
     }
 
     /**
+     * To the hotel when Bliss finds something on a Bliss-rate reservation that
+     * it will not decide on its own: dates changed or the stay cancelled in
+     * Mews, no upfront charge to take the card from, or a stay that does not
+     * qualify for a plan. Sent once per reservation and kind.
+     */
+    public static EmailMessage merchantMewsFlag(
+            Merchant merchant,
+            String reservationNumber,
+            String headline,
+            String detail
+    ) {
+        String body = """
+                %s
+
+                Mews reservation: %s
+
+                %s
+
+                Bliss has not changed anything in Mews or on the guest's plan.
+                Please review the reservation and reply to this email if you
+                need Bliss to adjust the plan.
+                """.formatted(headline, reservationNumber, detail);
+        return new EmailMessage(merchant.email(),
+                "Action needed on a Bliss booking: reservation " + reservationNumber, body);
+    }
+
+    /**
      * To the hotel when a guest cancels a Mews stay booked through Bliss. The
      * guest gets no cash refund; the amount is credit toward a future stay,
      * which the hotel applies by hand because Mews has nowhere to hold it.

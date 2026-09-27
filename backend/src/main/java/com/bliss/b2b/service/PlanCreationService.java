@@ -30,6 +30,7 @@ import com.bliss.b2b.persistence.CustomerDao;
 import com.bliss.b2b.persistence.MerchantDao;
 import com.bliss.b2b.persistence.MerchantFeeRateDao;
 import com.bliss.b2b.persistence.MerchantMewsConnectionDao;
+import com.bliss.b2b.persistence.MewsLinkingDao;
 import com.bliss.b2b.persistence.MerchantPlanRulesDao;
 import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentScheduleDao;
@@ -885,6 +886,179 @@ public class PlanCreationService {
         // No charge and no intent id: nothing is collected until card-confirm.
         return new Outcome(merchant, customer, booking, plan, schedule,
                 null, PaymentPlanStatus.PENDING_CARD.wire());
+    }
+
+    /**
+     * Builds the plan for a reservation the guest made in the property's Mews
+     * booking engine, on one of its Bliss rates.
+     *
+     * <p>Mews already holds the booking, the card and the upfront charge. Bliss
+     * does not re-price or re-book anything: the total is what Mews bills for
+     * the reservation, the deposit is whatever the rate charged at booking, and
+     * the plan is the remainder (plus the Bliss fee) on the schedule the rate
+     * stands for. The deposit is written as payment 1, already paid, under the
+     * Mews payment id that took it. Nothing is charged here.
+     *
+     * <p>Plan rules still gate it (lead time, amount limits, blackout dates,
+     * allowed schedules), but a plan discount is not applied: the Bliss rate's
+     * own price in Mews is the price, and discounting it here would leave the
+     * reservation's bill underpaid.
+     *
+     * <p>Runs in one transaction with the link row: if the row is no longer
+     * pending (another pass linked it), everything rolls back.
+     *
+     * @throws PlanCreationException ELIGIBILITY_FAILED when the stay does not
+     *         qualify for a plan on that schedule; the caller flags it
+     */
+    public PlanCreationResult createFromMewsReservation(MewsLinkedStay stay) {
+        if (stay.depositCents() <= 0) {
+            throw new PlanCreationException(Reason.INVALID_INPUT, "no upfront charge to use as the deposit");
+        }
+        if (trimToNull(stay.customerEmail()) == null) {
+            throw new PlanCreationException(Reason.INVALID_INPUT, "the guest has no email in Mews");
+        }
+        Outcome outcome = jdbi.inTransaction(handle -> {
+            Merchant merchant = handle.attach(MerchantDao.class).findById(stay.merchantId())
+                    .orElseThrow(() -> new PlanCreationException(Reason.BOOKING_NOT_FOUND, "merchant not found"));
+            MerchantPlanRules rules = handle.attach(MerchantPlanRulesDao.class)
+                    .findByMerchantId(merchant.id())
+                    .orElse(MerchantPlanRules.DEFAULTS);
+            BigDecimal feeRate = resolveFeeRate(handle, merchant.id(), clock.instant());
+
+            LocalDate today = LocalDate.now(clock);
+            EligibilityResult eligibility = eligibilityService.evaluate(
+                    today, stay.checkin(), stay.checkout(), stay.totalCents(), rules);
+            if (!eligibility.eligible()) {
+                throw new PlanCreationException(Reason.ELIGIBILITY_FAILED, eligibility.reason());
+            }
+            if (!rules.allowedFrequencies().includes(stay.frequency())) {
+                throw new PlanCreationException(Reason.ELIGIBILITY_FAILED,
+                        stay.frequency().wire() + "_not_offered");
+            }
+            long feeCents = feeFor(stay.totalCents(), feeRate);
+            long remainder = stay.totalCents() + feeCents - stay.depositCents();
+            if (remainder <= 0) {
+                throw new PlanCreationException(Reason.ELIGIBILITY_FAILED, "paid_in_full_at_booking");
+            }
+            PlanOption option = eligibilityService.installmentPlanFor(
+                    today, stay.checkin(), remainder, stay.frequency(), rules.paymentDueOffsetDays(), true);
+            if (option == null) {
+                throw new PlanCreationException(Reason.ELIGIBILITY_FAILED, "no_plan_fits");
+            }
+            if (feeCents > 0) {
+                log.warn("Mews plan for reservation {} (merchant {}) adds a {} Bliss fee on top of the "
+                        + "Mews bill of {}; the reservation bill will be overpaid by the fee",
+                        stay.reservationId(), merchant.id(), feeCents, stay.totalCents());
+            }
+
+            BookingDao bookingDao = handle.attach(BookingDao.class);
+            String token = mintBookingToken(bookingDao);
+            String guestName = joinName(stay.customerFirstName(), stay.customerLastName());
+            bookingDao.insert(
+                    merchant.id(), token, stay.serviceName(), stay.serviceDescription(),
+                    stay.totalCents(), stay.checkin(), stay.checkout(),
+                    null, guestName, stay.customerEmail().trim().toLowerCase(), null,
+                    BookingSource.MEWS_IMPORT.wire());
+            Booking booking = bookingDao.findByToken(token)
+                    .orElseThrow(() -> new IllegalStateException("booking insert disappeared"));
+            MewsLinkingDao linkingDao = handle.attach(MewsLinkingDao.class);
+            if (linkingDao.attachReservation(booking.id(), stay.reservationId(), stay.categoryId(),
+                    stay.rateId(), stay.startUtc(), stay.endUtc(), clock.instant()) != 1) {
+                throw new IllegalStateException("could not attach reservation to new booking");
+            }
+
+            CustomerDao customerDao = handle.attach(CustomerDao.class);
+            String email = stay.customerEmail().trim().toLowerCase();
+            Customer customer = customerDao.findByEmail(email).orElseGet(() -> {
+                customerDao.insert(email, trimToNull(stay.customerFirstName()), trimToNull(stay.customerLastName()));
+                return customerDao.findByEmail(email).orElseThrow();
+            });
+            customerDao.updateName(customer.id(), trimToNull(stay.customerFirstName()),
+                    trimToNull(stay.customerLastName()));
+            customerDao.setMewsCustomerId(customer.id(), stay.mewsCustomerId());
+            customer = customerDao.findById(customer.id()).orElseThrow();
+
+            // stripe_payment_method_id is NOT NULL UNIQUE; one row per linked
+            // reservation, since a returning guest's card backs several plans.
+            CustomerCardDao cardDao = handle.attach(CustomerCardDao.class);
+            String cardKey = "mews_link_" + stay.reservationId();
+            cardDao.insert(customer.id(), cardKey, stay.cardLastFour(),
+                    stay.cardExpMonth(), stay.cardExpYear(), stay.cardBrand(), true);
+            CustomerCard card = cardDao.findByPaymentMethodId(cardKey).orElseThrow();
+            cardDao.setMewsCard(card.id(), stay.mewsCreditCardId(), stay.cardLastFour(),
+                    stay.cardExpMonth(), stay.cardExpYear(), stay.cardBrand());
+
+            PaymentPlanDao planDao = handle.attach(PaymentPlanDao.class);
+            int installments = option.numPayments();
+            planDao.insertPendingMews(booking.id(), customer.id(), card.id(), stay.totalCents(),
+                    installments, stay.frequency().wire(), stay.bookedOn(),
+                    option.dueDates().get(installments - 1), stay.depositCents(), feeCents);
+            PaymentPlan plan = planDao.findLatestForBooking(booking.id())
+                    .orElseThrow(() -> new IllegalStateException("plan insert disappeared"));
+
+            PaymentScheduleDao scheduleDao = handle.attach(PaymentScheduleDao.class);
+            scheduleDao.insert(plan.id(), 1, stay.bookedOn(), stay.depositCents(),
+                    PaymentScheduleStatus.SCHEDULED.wire(), ScheduleKind.DEPOSIT.wire());
+            for (int i = 0; i < installments; i++) {
+                long amount = i == installments - 1
+                        ? option.finalPaymentAmountCents()
+                        : option.perPaymentAmountCents();
+                scheduleDao.insert(plan.id(), i + 2, option.dueDates().get(i), amount,
+                        PaymentScheduleStatus.SCHEDULED.wire(), ScheduleKind.INSTALLMENT.wire());
+            }
+            List<PaymentScheduleEntry> rows = scheduleDao.listForPlan(plan.id());
+            scheduleDao.markPaidMews(rows.get(0).id(), stay.depositPaymentId(), stay.depositPaidAt());
+            planDao.updateStatus(plan.id(), PaymentPlanStatus.ACTIVE.wire());
+
+            if (bookingDao.markAccepted(booking.id(), customer.id()) != 1) {
+                throw new IllegalStateException("new booking could not be accepted");
+            }
+            if (linkingDao.markLinked(stay.linkId(), booking.id(), clock.instant()) != 1) {
+                throw new PlanCreationException(Reason.BOOKING_NOT_OPEN, "reservation was already linked");
+            }
+            booking = bookingDao.findById(booking.id()).orElseThrow();
+            plan = planDao.findById(plan.id()).orElseThrow();
+            return new Outcome(merchant, customer, booking, plan, scheduleDao.listForPlan(plan.id()),
+                    null, PaymentPlanStatus.ACTIVE.wire());
+        });
+        return finalize(outcome);
+    }
+
+    /** Everything Bliss read from Mews about a booking-engine reservation, ready to build a plan on. */
+    public record MewsLinkedStay(
+            UUID linkId,
+            UUID merchantId,
+            String reservationId,
+            String rateId,
+            String categoryId,
+            PlanFrequency frequency,
+            LocalDate checkin,
+            LocalDate checkout,
+            Instant startUtc,
+            Instant endUtc,
+            LocalDate bookedOn,
+            String serviceName,
+            String serviceDescription,
+            long totalCents,
+            long depositCents,
+            String depositPaymentId,
+            Instant depositPaidAt,
+            String mewsCustomerId,
+            String customerEmail,
+            String customerFirstName,
+            String customerLastName,
+            String mewsCreditCardId,
+            String cardLastFour,
+            int cardExpMonth,
+            int cardExpYear,
+            String cardBrand) {
+    }
+
+    private static String joinName(String first, String last) {
+        String f = trimToNull(first);
+        String l = trimToNull(last);
+        if (f == null) return l;
+        return l == null ? f : f + " " + l;
     }
 
     /**

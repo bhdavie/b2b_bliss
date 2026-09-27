@@ -440,6 +440,19 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 log.warn("Mews confirm sweep failed: {}", e.getMessage());
             }
         }, 90, 60, java.util.concurrent.TimeUnit.SECONDS);
+        // Booking-engine linking: finds reservations on each property's Bliss
+        // rates and builds their plans. Every two minutes, on the same thread
+        // as the charge passes so a plan is never charged while being built.
+        com.bliss.b2b.service.MewsLinkService mewsLinkService =
+                new com.bliss.b2b.service.MewsLinkService(
+                        jdbi, mewsAdapterFactory, planCreationService, emailService, clock);
+        chargeScheduler.scheduleAtFixedRate(() -> {
+            try {
+                mewsLinkService.runLinkPass();
+            } catch (RuntimeException e) {
+                log.warn("Mews link pass failed: {}", e.getMessage());
+            }
+        }, 45, 120, java.util.concurrent.TimeUnit.SECONDS);
 
         // Two principal types now, so this is the polymorphic feature rather
         // than AuthDynamicFeature: Dropwizard picks the filter by the principal
