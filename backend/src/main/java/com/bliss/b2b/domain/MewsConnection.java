@@ -38,8 +38,42 @@ public record MewsConnection(
         // What the pop-up shows each Bliss rate charging upfront, in basis
         // points (V35). Display only; linking uses the actual Mews charge.
         Integer blissMonthlyDepositBps,
-        Integer blissBiweeklyDepositBps
+        Integer blissBiweeklyDepositBps,
+        // Guests this connection may link (V37). Null links every guest; set,
+        // only guests on it. Entries are full emails or "+tag" plus tags.
+        java.util.List<String> linkGuestAllowlist
 ) {
+    /**
+     * Whether the link pass may build a plan for this guest. With no
+     * allowlist, any guest; with one, only an email on it (exact, or whose
+     * local part contains a listed "+tag"), case-insensitive. A guest with no
+     * email never matches a list.
+     */
+    public boolean allowsGuest(String email) {
+        if (linkGuestAllowlist == null) {
+            return true;
+        }
+        if (email == null || email.isBlank()) {
+            return false;
+        }
+        String e = email.trim().toLowerCase(java.util.Locale.ROOT);
+        int at = e.indexOf('@');
+        String local = at < 0 ? e : e.substring(0, at);
+        for (String entry : linkGuestAllowlist) {
+            if (entry == null || entry.isBlank()) continue;
+            String x = entry.trim().toLowerCase(java.util.Locale.ROOT);
+            if (x.startsWith("+") ? local.contains(x) : e.equals(x)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** True when this connection links only allowlisted guests. */
+    public boolean hasGuestAllowlist() {
+        return linkGuestAllowlist != null;
+    }
+
     public boolean isValidated() {
         return validatedAt != null;
     }

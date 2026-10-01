@@ -154,6 +154,7 @@ public class MewsLinkService {
 
         int seen = 0;
         int flagged = 0;
+        int skippedGuests = 0;
         // Throws on Mews errors: the mark is not advanced, so the next pass re-reads.
         List<MewsReservation> updated = adapter.getReservationsUpdated(conn.serviceId(), from, now);
         for (MewsReservation r : updated) {
@@ -162,11 +163,23 @@ public class MewsLinkService {
             if (linked.isPresent()) {
                 flagged += checkLinked(merchantId, r, linked.get(), zone);
             } else if (conn.frequencyForRate(r.rateId()) != null) {
+                // A connection with a guest allowlist (a demo property on a
+                // shared Mews sandbox) ignores everyone else's reservations
+                // here, before any link row exists, so they can never become
+                // plans or be charged.
+                if (conn.hasGuestAllowlist() && !allowlisted(conn, adapter, r)) {
+                    skippedGuests++;
+                    continue;
+                }
                 seen++;
                 jdbi.useExtension(MewsLinkingDao.class, d -> d.insertPendingLink(merchantId, r.id(), now));
             }
         }
         jdbi.useExtension(MewsLinkingDao.class, d -> d.advanceLinkedThrough(merchantId, now));
+        if (skippedGuests > 0) {
+            log.info("Mews link pass for merchant {} ignored {} Bliss-rate reservations from guests "
+                    + "not on its allowlist", merchantId, skippedGuests);
+        }
 
         int linkedCount = 0;
         List<LinkRow> pending = jdbi.withExtension(MewsLinkingDao.class, d -> d.findPendingLinks(merchantId));
@@ -194,6 +207,26 @@ public class MewsLinkService {
             }
         }
         return new PassResult(seen, linkedCount, flagged, 0);
+    }
+
+    /**
+     * Whether a reservation's guest is on the connection's allowlist. Reads
+     * the guest from Mews; if Mews cannot say, the answer is no, so an
+     * unreadable guest is never linked on an allowlisted connection.
+     */
+    private boolean allowlisted(MewsConnection conn, MewsAdapter adapter, MewsReservation r) {
+        if (r.accountId() == null) {
+            return false;
+        }
+        try {
+            return adapter.getCustomer(r.accountId())
+                    .map(g -> conn.allowsGuest(g.email()))
+                    .orElse(false);
+        } catch (RuntimeException e) {
+            log.warn("Could not read the guest of reservation {} for the allowlist: {}; ignoring it",
+                    r.id(), e.getMessage());
+            return false;
+        }
     }
 
     // --- Reservations that already have a plan ---------------------------------
@@ -297,6 +330,14 @@ public class MewsLinkService {
             }
             warnIfDepositDiffers(conn, frequency, r.id(), total.totalMinorUnits(), deposit);
             PmsCustomer guest = adapter.getCustomer(r.accountId()).orElse(null);
+            if (!conn.allowsGuest(guest == null ? null : guest.email())) {
+                // Pending from before the allowlist was set: not this
+                // property's to link. Dropped quietly; it is someone else's
+                // booking, so the property is not emailed about it.
+                log.info("Reservation {} is from a guest not on merchant {}'s allowlist; dropping its link",
+                        r.id(), merchantId);
+                return drop(link);
+            }
             if (guest == null || guest.email() == null || guest.email().isBlank()) {
                 return flagLink(link, r, FLAG_LINK_FAILED,
                         "A Bliss booking has no guest email.",

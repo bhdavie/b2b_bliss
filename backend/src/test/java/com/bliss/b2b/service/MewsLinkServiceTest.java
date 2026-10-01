@@ -287,6 +287,80 @@ class MewsLinkServiceTest {
         assertThat(count("SELECT count(*) FROM bookings WHERE merchant_id = :m")).isZero();
     }
 
+    // --- Guest allowlist (V37) -----------------------------------------------------
+
+    private void setAllowlist(String... entries) {
+        jdbi.useHandle(h -> h.createUpdate(
+                        "UPDATE merchant_mews_connections SET link_guest_allowlist = :list WHERE merchant_id = :m")
+                .bind("list", entries).bind("m", merchantId).execute());
+    }
+
+    private int linkRows(String reservationId) {
+        return count("SELECT count(*) FROM mews_reservation_links WHERE merchant_id = :m AND reservation_id = '"
+                + reservationId + "'");
+    }
+
+    private int bookingsFor(String reservationId) {
+        return count("SELECT count(*) FROM bookings WHERE merchant_id = :m AND mews_reservation_id = '"
+                + reservationId + "'");
+    }
+
+    @Test
+    void anAllowlistLinksOnlyListedGuests_andRecordsNothingForAnyoneElse() {
+        setAllowlist("bliss.pms.demo@example.com", "+bliss-e2e");
+        String stranger = mews.book("r1", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        String exact = mews.book("r2", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        String tagged = mews.book("r3", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        mews.customers.put("cust-r2", new PmsCustomer("cust-r2", "Bliss", "Demo", "Bliss.PMS.Demo@example.com"));
+        mews.customers.put("cust-r3", new PmsCustomer("cust-r3", "Brad", "Test", "brad+bliss-e2e@example.com"));
+        for (String res : List.of(stranger, exact, tagged)) {
+            mews.charge(res, "pay-" + res, "Charged", 4_240, "card-1");
+        }
+
+        MewsLinkService.PassResult pass = service.runForMerchant(merchantId);
+
+        // Someone else's reservation is never even recorded as seen: no link
+        // row, no booking, no plan, no email.
+        assertThat(pass.seen()).isEqualTo(2);
+        assertThat(pass.linked()).isEqualTo(2);
+        assertThat(linkRows(stranger)).isZero();
+        assertThat(bookingsFor(stranger)).isZero();
+        assertThat(emails).noneMatch(m -> m.to().equals("guest-r1@example.com"));
+        // The listed guests link as usual.
+        assertThat(linkStatus(exact)).isEqualTo("linked");
+        assertThat(linkStatus(tagged)).isEqualTo("linked");
+
+        service.runForMerchant(merchantId);
+        assertThat(linkRows(stranger)).as("still ignored on the next pass").isZero();
+    }
+
+    @Test
+    void anAllowlistDropsALinkThatWasPendingBeforeItWasSet() {
+        // Seen while linking was open to everyone, waiting for its upfront charge.
+        String res = mews.book("r1", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        service.runForMerchant(merchantId);
+        assertThat(linkStatus(res)).isEqualTo("pending");
+
+        setAllowlist("bliss.pms.demo@example.com");
+        mews.charge(res, "pay-1", "Charged", 4_240, "card-1");
+        service.runForMerchant(merchantId);
+
+        assertThat(linkRows(res)).as("dropped quietly").isZero();
+        assertThat(bookingsFor(res)).isZero();
+        assertThat(count("SELECT count(*) FROM mews_flags WHERE merchant_id = :m")).isZero();
+    }
+
+    @Test
+    void anEmptyAllowlistLinksNobody() {
+        setAllowlist();
+        String res = mews.book("r1", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        mews.charge(res, "pay-1", "Charged", 4_240, "card-1");
+
+        service.runForMerchant(merchantId);
+
+        assertThat(linkRows(res)).isZero();
+    }
+
     @Test
     void flagsAGuestWithNoEmail() {
         String res = mews.book("r1", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);

@@ -30,8 +30,16 @@ public class MewsConnectionRowMapper implements RowMapper<MewsConnection> {
                 rs.getString("bliss_biweekly_rate_id"),
                 toInstant(rs.getTimestamp("linked_through_utc")),
                 (Integer) rs.getObject("bliss_monthly_deposit_bps"),
-                (Integer) rs.getObject("bliss_biweekly_deposit_bps")
+                (Integer) rs.getObject("bliss_biweekly_deposit_bps"),
+                allowlist(rs.getArray("link_guest_allowlist"))
         );
+    }
+
+    private static java.util.List<String> allowlist(java.sql.Array array) throws SQLException {
+        if (array == null) {
+            return null;
+        }
+        return java.util.List.of((String[]) array.getArray());
     }
 
     private static java.time.Instant toInstant(Timestamp ts) {
