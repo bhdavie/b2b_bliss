@@ -268,17 +268,19 @@ cancellation unless **D7** says otherwise.
 | **Plan defaulted** (retries exhausted, `treat_as_cancellation`) | As the matching row above, at the moment of default | Same |
 | **Hotel cancels** (overbooking, closure) | Full refund regardless of type | Full refund regardless of type; anything released is pulled back by transfer reversal |
 
-**The Bliss fee on cancellation (D9).** Proposed: refunded whenever the guest
-gets a full refund, and kept otherwise. In hold mode it is retained from the
-penalty that is released; in pay as you go mode it is part of what the hotel's
-policy keeps.
+**The Bliss fee on cancellation (D9, decided).** Bliss never gives its fee
+back. When the guest gets everything back, the hotel funds the fee's share: the
+refund reverses the hotel's transfer and keeps Bliss's application fee, as
+shipped in the refund fix. After the deadline the fee comes out of the hotel's
+penalty, not on top of it. In hold mode it is retained from the penalty that is
+released.
 
 **Built (pay as you go, 2026-10-01).** A booking that kept its booking type
 and terms (phase 2 snapshot) cancels by this table: `CancellationOutcome` picks
 the row, `CancellationTerms.penaltyAt` prices the penalty from the snapshotted
 Mews steps (largest applying step; relative fees on the stay price, capped at
 `FeeMaximumTimeUnits` nights; absolute fees in the stay's currency). The Bliss
-fee is kept within the penalty, as D9 proposes. On Stripe the rest is refunded;
+fee is kept within the penalty (D9). On Stripe the rest is refunded;
 on a Mews stay it becomes future-stay credit, since a Mews refund (D8) is not
 built. Bookings without a booking type keep the plan-rules cancellation. The
 guest portal shows the terms and the outcome before the guest confirms
@@ -396,8 +398,8 @@ fees, not in taxes.
   the hotel. It still posts to the folio as a line so the guest's total matches;
   the ledger payment posted at release covers the stay, and Bliss posts a
   matching ledger payment for the fee so the folio closes at zero (**D15**).
-- **On cancellation:** if the fee is refunded (D9), the folio line is reversed
-  (a negative item, or the order cancelled, per what the API supports).
+- **On cancellation:** Bliss keeps its fee (D9), so the folio line stays. On a
+  full refund the hotel funds the fee's share of what goes back.
 
 ---
 
@@ -687,7 +689,9 @@ the D1 answers from Mews and Stripe, plus D3, D4, D5 and D10.
 
 ## 12. Open decisions
 
-Decided: **D14**, the fee line posts untaxed by default and its tax code is a
+Decided: **D9**, Bliss never gives its fee back: on a full refund the hotel
+funds its share, and after the deadline it comes out of the hotel's penalty.
+**D14**, the fee line posts untaxed by default and its tax code is a
 per-property setting. **D1**, forward the card Mews holds to Stripe (option A), with the
 confirmation-page card step (option C) as the fallback (section 2.5). **D2**,
 hold-mode charges are made `on_behalf_of` the hotel, so the hotel is the
@@ -703,7 +707,6 @@ Still open:
 | **D5** | Refunds past the card refund window | Bank transfer; future-stay credit; disallow long holds | Credit, with a hotel-approved manual refund path |
 | **D7** | Non-refundable cancellation: keep collecting the remaining installments, or stop | Stop and forfeit what's paid; keep charging to the full price | Stop and forfeit. Friendlier, and fewer failed charges. The hotel's policy may say otherwise, so make it a setting |
 | **D8** | Pay as you go refunds through Mews | Mews refund API; credit only; hotel refunds by hand | Use the API if our integration may; otherwise credit by default |
-| **D9** | Bliss fee on cancellation | Refund with a full refund; always keep; never keep | Refund with a full refund, otherwise keep |
 | **D10** | Hold mode deposit | 0%; 20%; follow the Mews rate | 20%, editable |
 | **D11** | Reading a rate's upfront payment policy from Mews | Via API if exposed; hotel confirms in Bliss | API if available; otherwise a one-time confirmation in setup |
 | **D12** | Cancellation made in Mews on a linked booking | Act automatically; flag and wait for the hotel | Act automatically for refundable bookings before the deadline; flag otherwise |

@@ -15,6 +15,10 @@ package com.bliss.b2b.payments;
  *   <li>Non-refundable: nothing goes back.
  * </ul>
  *
+ * Bliss never gives its fee back. "Everything back" on a Stripe plan is
+ * refunded with the transfer reversed and the application fee kept, so the
+ * property funds the fee's share; on a Mews stay it is credit at the property.
+ *
  * In every case the remaining payments stop (spec D7, proposed default).
  * Whether "back" means a card refund or future-stay credit depends on the
  * payment rail and is decided by the caller.
