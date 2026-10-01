@@ -6,6 +6,10 @@ import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.PaymentMethod;
 import com.stripe.model.Refund;
+import com.stripe.model.Transfer;
+import com.stripe.model.TransferReversal;
+import com.stripe.param.TransferCreateParams;
+import com.stripe.param.TransferReversalCollectionCreateParams;
 import com.stripe.net.RequestOptions;
 import com.stripe.model.SetupIntent;
 import com.stripe.param.CustomerCreateParams;
@@ -153,15 +157,7 @@ public class StripePaymentsService {
         } else {
             params.setSetupFutureUsage(PaymentIntentCreateParams.SetupFutureUsage.OFF_SESSION);
         }
-        if (destination != null && destination.hasAccount()) {
-            params.setTransferData(PaymentIntentCreateParams.TransferData.builder()
-                    .setDestination(destination.accountId())
-                    .build());
-            long fee = applicationFeeCents(chargeAmount, destination.feeFraction());
-            if (fee > 0) {
-                params.setApplicationFeeAmount(fee);
-            }
-        }
+        route(params, destination, chargeAmount);
         RequestOptions opts = RequestOptions.builder()
                 .setIdempotencyKey(idempotencyKey)
                 .build();
@@ -174,7 +170,7 @@ public class StripePaymentsService {
      * the charge; clamped to the charge amount as a final guard, since Stripe
      * rejects an application fee larger than the payment.
      */
-    static long applicationFeeCents(long chargeAmountCents, BigDecimal feeFraction) {
+    public static long applicationFeeCents(long chargeAmountCents, BigDecimal feeFraction) {
         if (feeFraction == null || feeFraction.signum() <= 0 || chargeAmountCents <= 0) {
             return 0;
         }
@@ -186,15 +182,118 @@ public class StripePaymentsService {
     }
 
     /**
+     * Routes a charge. Pay as you go: a destination charge, the funds
+     * transferred to the property at once less Bliss's application fee. Hold
+     * mode: a charge on the platform {@code on_behalf_of} the property (so it is
+     * the merchant of record, D2) with the booking as {@code transfer_group};
+     * nothing is transferred and no fee is taken, because the money stays in the
+     * platform balance until a release transfers it, less the fee (spec 2.2).
+     */
+    static void route(PaymentIntentCreateParams.Builder params, Destination destination, long chargeAmount) {
+        if (destination == null) {
+            return;
+        }
+        if (destination.isHold()) {
+            params.setOnBehalfOf(destination.onBehalfOf());
+            params.setTransferGroup(destination.transferGroup());
+            return;
+        }
+        if (destination.hasAccount()) {
+            params.setTransferData(PaymentIntentCreateParams.TransferData.builder()
+                    .setDestination(destination.accountId())
+                    .build());
+            long fee = applicationFeeCents(chargeAmount, destination.feeFraction());
+            if (fee > 0) {
+                params.setApplicationFeeAmount(fee);
+            }
+        }
+    }
+
+    /**
      * Where a charge's funds go and what Bliss keeps. {@code accountId} is the
      * property's connected Standard account; {@code feeFraction} is its
      * {@code bliss_fee_percentage} (0.03 = 3%). A null Destination, or one with a
      * blank account, means a plain platform charge with no transfer and no fee.
+     *
+     * <p>A hold-mode booking instead carries {@code onBehalfOf} (the property's
+     * Express account, D6) and {@code transferGroup} (the booking id); see
+     * {@link #route}.
      */
-    public record Destination(String accountId, BigDecimal feeFraction) {
+    public record Destination(String accountId, BigDecimal feeFraction, String onBehalfOf, String transferGroup) {
+        public Destination(String accountId, BigDecimal feeFraction) {
+            this(accountId, feeFraction, null, null);
+        }
+
+        /** A hold-mode charge for the property's Express account. */
+        public static Destination hold(String expressAccountId, BigDecimal feeFraction, java.util.UUID bookingId) {
+            if (expressAccountId == null || expressAccountId.isBlank()) {
+                throw new IllegalStateException("hold mode needs the property's Express account");
+            }
+            return new Destination(null, feeFraction, expressAccountId, "booking_" + bookingId);
+        }
+
         public boolean hasAccount() {
             return accountId != null && !accountId.isBlank();
         }
+
+        public boolean isHold() {
+            return onBehalfOf != null && !onBehalfOf.isBlank();
+        }
+    }
+
+    /**
+     * Hold mode release: transfers {@code amountMinor} from the platform
+     * balance to the property's connected account. {@code idempotencyKey} is
+     * the release row, so a retried release never transfers twice.
+     */
+    public Transfer transferToProperty(String accountId, long amountMinor, String currency, String transferGroup,
+            String idempotencyKey, Map<String, String> metadata) throws StripeException {
+        requireConfigured();
+        TransferCreateParams params = TransferCreateParams.builder()
+                .setAmount(capCharge(amountMinor))
+                .setCurrency(currency.toLowerCase(java.util.Locale.ROOT))
+                .setDestination(accountId)
+                .setTransferGroup(transferGroup)
+                .putAllMetadata(metadata)
+                .build();
+        return Transfer.create(params, RequestOptions.builder().setIdempotencyKey(idempotencyKey).build());
+    }
+
+    /**
+     * Hold mode, D9: Bliss never gives its fee back, so when a refund leaves
+     * less than the fee the property funds the rest. An account debit: a
+     * transfer made on the property's Express account to the platform. Stripe
+     * draws it from the account's balance, which needs funds there (or
+     * negative-balance debits allowed on the platform).
+     */
+    public Transfer debitPropertyAccount(String accountId, long amountMinor, String currency, String idempotencyKey)
+            throws StripeException {
+        requireConfigured();
+        String platform = com.stripe.model.Account.retrieve().getId();
+        TransferCreateParams params = TransferCreateParams.builder()
+                .setAmount(amountMinor)
+                .setCurrency(currency.toLowerCase(java.util.Locale.ROOT))
+                .setDestination(platform)
+                .putMetadata("bliss_source", "fee_on_refund")
+                .build();
+        return Transfer.create(params, RequestOptions.builder()
+                .setStripeAccount(accountId).setIdempotencyKey(idempotencyKey).build());
+    }
+
+    /**
+     * Hold mode cancellation: pulls {@code amountMinor} of a release back from
+     * the property into the platform balance, so the guest's refund is funded.
+     */
+    public TransferReversal reverseTransfer(String transferId, long amountMinor, String idempotencyKey)
+            throws StripeException {
+        requireConfigured();
+        Transfer transfer = Transfer.retrieve(transferId);
+        TransferReversalCollectionCreateParams params = TransferReversalCollectionCreateParams.builder()
+                .setAmount(amountMinor)
+                .putMetadata("bliss_source", "plan_cancellation")
+                .build();
+        return transfer.getReversals().create(params,
+                RequestOptions.builder().setIdempotencyKey(idempotencyKey).build());
     }
 
     /** Whether the cardholder is present, which decides the Stripe flag used. */

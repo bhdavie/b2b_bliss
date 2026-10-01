@@ -114,11 +114,23 @@ public class BlissSettingsService {
         if (buffer < 0 || buffer > 30) {
             throw new SettingsException("invalid_setting", "The chargeback buffer must be 0 to 30 days.");
         }
-        if (mode == PayoutMode.HOLD && current.payoutMode() != PayoutMode.HOLD && !features.isHoldMode()) {
-            // TODO(D3): hold mode stays off until Stripe confirms the maximum
-            // hold period; then this also requires Express onboarding.
-            throw new SettingsException("hold_mode_unavailable",
-                    "Holding payments until they're yours isn't available yet.");
+        if (mode == PayoutMode.HOLD && current.payoutMode() != PayoutMode.HOLD) {
+            if (!features.isHoldMode()) {
+                // TODO(D3): hold mode stays off until Stripe confirms the
+                // maximum hold period.
+                throw new SettingsException("hold_mode_unavailable",
+                        "Holding payments until they're yours isn't available yet.");
+            }
+            // Held money is released to an Express account (D6), paid out by ACH.
+            if (merchant.stripeConnectAccountId() == null || merchant.stripeConnectAccountId().isBlank()
+                    || !"charges_enabled".equals(merchant.stripeConnectStatus())) {
+                throw new SettingsException("express_onboarding_required",
+                        "Finish setting up your Stripe payouts account first.");
+            }
+            if (!"USD".equalsIgnoreCase(merchant.currency())) {
+                throw new SettingsException("hold_mode_us_only",
+                        "Holding payments is available for properties paid in US dollars for now.");
+            }
         }
         settingsDao.insertDefaults(merchant.id());
         settingsDao.update(merchant.id(), mode.wire(), policy.wire(), buffer);
@@ -128,6 +140,20 @@ public class BlissSettingsService {
                     pick(feeTaxCode, current.feeTaxCode()),
                     pick(feeAccountingCategoryId, current.feeAccountingCategoryId()));
         }
+        return view(merchant);
+    }
+
+    /**
+     * The Mews external payment type hold-mode ledger payments post as (D16).
+     * Blank clears it, which makes ledger payments wait.
+     */
+    public SettingsView setLedgerPaymentType(Merchant merchant, String type) {
+        String value = type == null || type.isBlank() ? null : type.trim();
+        if (value != null && !value.matches("[A-Za-z]{1,64}")) {
+            throw new SettingsException("invalid_setting", "Choose one of your Mews external payment types.");
+        }
+        settingsDao.insertDefaults(merchant.id());
+        settingsDao.updateLedgerPaymentType(merchant.id(), value);
         return view(merchant);
     }
 
@@ -166,6 +192,14 @@ public class BlissSettingsService {
                 "Only used when held money is sent as each payment clears. A short wait in case the guest's "
                         + "bank disputes the payment.",
                 settings.chargebackBufferDays(), days(settings.chargebackBufferDays()), ownSource, true, null));
+        if (merchant.pmsType() == PmsType.MEWS) {
+            out.add(new Setting("ledgerPaymentType", "payouts", "How released money shows in Mews",
+                    "Only used when payments are held. Each release is recorded on the guest's folio as a "
+                            + "payment of this type, so the folio balances. Agree it with your accounting team.",
+                    settings.ledgerPaymentType(),
+                    settings.ledgerPaymentType() == null ? "Not chosen yet" : settings.ledgerPaymentType(),
+                    settings.ledgerPaymentType() == null ? SOURCE_DEFAULT : SOURCE_HOTEL, true, null));
+        }
 
         // Synced from the property's systems.
         out.add(new Setting("currency", "synced", "Currency",

@@ -210,4 +210,30 @@ class StripeAccountUpdatedWebhookTest {
         assertThat(StripeConnectResource.accountIdOf(accountUpdated("acct_new", "2026-04-22.dahlia")))
                 .isEqualTo("acct_new");
     }
+
+    @Test
+    void aPayoutToAHoldModePropertysBankIsRecorded() {
+        String account = id("acct_");
+        UUID merchant = insertMerchant("none", account);
+        FakeStripe stripe = new FakeStripe();
+        stripe.event = ApiResource.GSON.fromJson("""
+                {"id": "evt_po", "object": "event", "type": "payout.paid", "account": "%s",
+                 "api_version": "2020-08-27",
+                 "data": {"object": {"id": "po_123", "object": "payout", "amount": 58200, "currency": "usd",
+                                     "status": "paid", "arrival_date": 1790380800}}}
+                """.formatted(account), Event.class);
+
+        Response res = resource(stripe).withPayouts(jdbi.onDemand(com.bliss.b2b.persistence.PayoutReleaseDao.class))
+                .webhook("sig", "{}");
+
+        assertThat(res.getStatus()).isEqualTo(200);
+        assertThat(jdbi.onDemand(com.bliss.b2b.persistence.PayoutReleaseDao.class).payoutsForMerchant(merchant))
+                .singleElement().satisfies(p -> {
+                    assertThat(p.stripePayoutId()).isEqualTo("po_123");
+                    assertThat(p.amountMinor()).isEqualTo(58_200);
+                    assertThat(p.currency()).isEqualTo("USD");
+                    assertThat(p.status()).isEqualTo("paid");
+                    assertThat(p.arrivalDate()).isEqualTo(java.time.LocalDate.of(2026, 9, 26));
+                });
+    }
 }

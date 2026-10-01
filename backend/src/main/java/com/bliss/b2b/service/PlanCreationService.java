@@ -410,7 +410,9 @@ public class PlanCreationService {
         // the platform, so the guest's card is vaulted once and reusable for the
         // later installments. When there is no connected account we fall back to
         // the existing Express gate and a plain platform charge.
-        String connectedAccountId = stripeConnectResolver.resolveOrNull(merchant.id());
+        // Hold mode needs the Express account (D6) the money is held for.
+        boolean hold = com.bliss.b2b.payments.PayoutMode.HOLD.wire().equals(booking.payoutMode());
+        String connectedAccountId = hold ? null : stripeConnectResolver.resolveOrNull(merchant.id());
         if (connectedAccountId == null) {
             ConnectStatus connectStatus = ConnectStatus.fromWire(merchant.stripeConnectStatus());
             if (connectStatus != ConnectStatus.CHARGES_ENABLED) {
@@ -418,9 +420,8 @@ public class PlanCreationService {
                         "property has not completed Stripe onboarding");
             }
         }
-        StripePaymentsService.Destination destination = new StripePaymentsService.Destination(
-                connectedAccountId,
-                handle.attach(MerchantDao.class).findFeePercentage(merchant.id()).orElse(null));
+        StripePaymentsService.Destination destination = stripeConnectResolver.destinationFor(
+                handle, merchant.id(), booking.id(), booking.payoutMode());
 
         MerchantPlanRules rules = handle.attach(MerchantPlanRulesDao.class)
                 .findByMerchantId(merchant.id())

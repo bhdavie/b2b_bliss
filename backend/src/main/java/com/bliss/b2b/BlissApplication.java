@@ -217,6 +217,13 @@ public class BlissApplication extends Application<BlissConfiguration> {
                         ? (intentId, amount, key) -> stripePaymentsService
                                 .refundPaymentIntent(intentId, amount, key).getAmount()
                         : null);
+        // Hold mode: held payments are released to the property's Express
+        // account at their release points. Inert until a property is in hold
+        // mode, which needs the holdMode flag.
+        com.bliss.b2b.service.ReleaseService releaseService = new com.bliss.b2b.service.ReleaseService(
+                jdbi, com.bliss.b2b.service.ReleaseService.stripeTransfers(stripePaymentsService),
+                mewsAdapterFactory, emailService, config.getFeatures(), clock);
+        cancellationService.withReleases(releaseService);
         PlanPortalService planPortalService = new PlanPortalService(
                 jdbi, stripePaymentsService, stripeConnectResolver, mewsAdapterFactory,
                 cancellationService, planNotificationService, clock);
@@ -351,7 +358,10 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new MerchantsResource(merchantDao, stripeService, emailService));
         environment.jersey().register(new StripeConnectResource(
                 stripeService, merchantDao, emailService, config.getApp(),
-                stripeConnectionDao, onboardingService, clock));
+                stripeConnectionDao, onboardingService, clock)
+                .withPayouts(jdbi.onDemand(com.bliss.b2b.persistence.PayoutReleaseDao.class)));
+        environment.jersey().register(new com.bliss.b2b.api.PayoutsResource(
+                jdbi.onDemand(com.bliss.b2b.persistence.PayoutReleaseDao.class), bookingDao));
         environment.jersey().register(new StripeStandardConnectResource(
                 stripeConnectStandardService, stripeConnectionDao, onboardingService,
                 config.getApp(), clock));
@@ -454,7 +464,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
                         jdbi, mewsAdapterFactory, planCreationService, emailService, clock,
                         mewsSyncService,
                         new com.bliss.b2b.service.FeeLineService(
-                                jdbi, mewsAdapterFactory, config.getFeatures(), clock));
+                                jdbi, mewsAdapterFactory, config.getFeatures(), clock))
+                        .withFeatures(config.getFeatures(), null);
         chargeScheduler.scheduleAtFixedRate(() -> {
             try {
                 mewsLinkService.runLinkPass();
@@ -472,6 +483,18 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 log.warn("Mews setup sync failed: {}", e.getMessage());
             }
         }, 300, 86_400, java.util.concurrent.TimeUnit.SECONDS);
+        // Hold mode releases, every five minutes on the same thread, so a
+        // release never runs while that plan is being charged or linked.
+        chargeScheduler.scheduleAtFixedRate(() -> {
+            try {
+                int released = releaseService.run();
+                if (released > 0) {
+                    log.info("Hold mode: {} releases sent", released);
+                }
+            } catch (RuntimeException e) {
+                log.warn("Hold mode release pass failed: {}", e.getMessage());
+            }
+        }, 150, 300, java.util.concurrent.TimeUnit.SECONDS);
 
         // Two principal types now, so this is the polymorphic feature rather
         // than AuthDynamicFeature: Dropwizard picks the filter by the principal

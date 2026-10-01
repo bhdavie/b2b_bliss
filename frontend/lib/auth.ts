@@ -12,6 +12,8 @@ import {
   type AdminView,
   type AttentionResponse,
   type BlissSettingsView,
+  type HoldPayout,
+  type HoldRelease,
   type Booking,
   type BookingListResponse,
   type MerchantView,
@@ -229,6 +231,36 @@ export async function fetchBlissSettingsServer(): Promise<BlissSettingsView | nu
     throw new Error(`fetchBlissSettingsServer failed: ${res.status}`);
   }
   return (await res.json()) as BlissSettingsView;
+}
+
+/** Hold mode releases, newest first; null on 401. */
+export async function fetchHoldReleasesServer(): Promise<HoldRelease[] | null> {
+  const headers = await sessionHeader();
+  if (!headers) return null;
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/releases`, {
+    headers,
+    cache: "no-store",
+  });
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    throw new Error(`fetchHoldReleasesServer failed: ${res.status}`);
+  }
+  return (await res.json()) as HoldRelease[];
+}
+
+/** Stripe payouts to the property's bank; null on 401. */
+export async function fetchHoldPayoutsServer(): Promise<HoldPayout[] | null> {
+  const headers = await sessionHeader();
+  if (!headers) return null;
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/payouts`, {
+    headers,
+    cache: "no-store",
+  });
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    throw new Error(`fetchHoldPayoutsServer failed: ${res.status}`);
+  }
+  return (await res.json()) as HoldPayout[];
 }
 
 export async function fetchAttentionPlansServer(): Promise<AttentionResponse | null> {

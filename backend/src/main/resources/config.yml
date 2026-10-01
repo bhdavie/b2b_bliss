@@ -90,6 +90,8 @@ features:
   mewsCardForwarding: ${BLISS_FEATURE_MEWS_CARD_FORWARDING:-false}
   # "Bliss service fee" folio line. On; its tax is a per-property setting (untaxed by default).
   feeFolioLine: ${BLISS_FEATURE_FEE_FOLIO_LINE:-true}
+  # TODO(D3): Stripe's maximum hold, in days; unset means no cap is applied.
+  holdMaxDays: ${BLISS_HOLD_MAX_DAYS:-}
 
 database:
   # DATABASE_URL, when the platform sets it, overrides all three of these at

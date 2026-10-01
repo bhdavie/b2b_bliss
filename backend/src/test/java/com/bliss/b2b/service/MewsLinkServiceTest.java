@@ -293,6 +293,24 @@ class MewsLinkServiceTest {
     }
 
     @Test
+    void aHoldModePropertysStayIsFlaggedUntilTheCardCanReachStripe_andNothingIsCharged() {
+        jdbi.useHandle(h -> h.createUpdate("""
+                        INSERT INTO property_bliss_settings (merchant_id, payout_mode) VALUES (:m, 'hold')
+                        ON CONFLICT (merchant_id) DO UPDATE SET payout_mode = 'hold'""")
+                .bind("m", merchantId).execute());
+        String res = mews.book("r1", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        mews.charge(res, "pay-1", "Charged", 4_240, "card-1");
+
+        fullService.runForMerchant(merchantId);
+
+        assertThat(count("SELECT count(*) FROM payment_plans pp JOIN bookings b ON b.id = pp.booking_id "
+                + "WHERE b.merchant_id = :m")).as("no plan").isZero();
+        assertThat(count("SELECT count(*) FROM mews_flags WHERE merchant_id = :m AND kind = 'hold_card_needed'"))
+                .isEqualTo(1);
+        assertThat(mews.orders).as("no fee line either").isEmpty();
+    }
+
+    @Test
     void aNetPricingPropertyGetsTheFeeAsANetValue_andItsModeIsStored() {
         mews.pricing = "Net";
         mews.additionalServices.add(new com.bliss.b2b.integration.pms.MewsCatalog.AdditionalService(

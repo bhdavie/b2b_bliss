@@ -193,6 +193,11 @@ public class BlissConfiguration extends Configuration {
         @JsonProperty public void setHoldMode(boolean holdMode) { this.holdMode = holdMode; }
         @JsonProperty public boolean isMewsCardForwarding() { return mewsCardForwarding; }
         @JsonProperty public void setMewsCardForwarding(boolean v) { this.mewsCardForwarding = v; }
+        // TODO(D3): the longest Stripe lets the platform hold a payment before
+        // it must be released, in days. Null while unconfirmed: no cap applied.
+        private Integer holdMaxDays;
+        @JsonProperty public Integer getHoldMaxDays() { return holdMaxDays; }
+        @JsonProperty public void setHoldMaxDays(Integer holdMaxDays) { this.holdMaxDays = holdMaxDays; }
         @JsonProperty public boolean isFeeFolioLine() { return feeFolioLine; }
         @JsonProperty public void setFeeFolioLine(boolean feeFolioLine) { this.feeFolioLine = feeFolioLine; }
     }

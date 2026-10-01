@@ -188,6 +188,34 @@ public final class EmailTemplates {
         return new EmailMessage(merchant.email(), "We noticed a change in Mews", body.toString());
     }
 
+    /** One released payment in {@link #holdReleased}. */
+    public record ReleasedLine(String stay, java.time.LocalDate checkIn, long amountMinor, String currency,
+            String localeTag) {
+    }
+
+    /**
+     * To the hotel when Bliss releases held money to its Stripe account (hold
+     * mode). Stripe pays it to the hotel's bank on the account's payout
+     * schedule.
+     */
+    public static EmailMessage holdReleased(Merchant merchant, List<ReleasedLine> lines) {
+        StringBuilder body = new StringBuilder(
+                "Money from your Bliss bookings is now yours and on its way to your bank account.\n\n");
+        java.util.Map<String, Long> totals = new java.util.LinkedHashMap<>();
+        for (ReleasedLine line : lines) {
+            PropertyLocale pl = new PropertyLocale(line.currency(), null, line.localeTag());
+            body.append("- ").append(line.stay()).append(", check-in ").append(pl.date(line.checkIn()))
+                    .append(": ").append(pl.format(line.amountMinor())).append('\n');
+            totals.merge(line.currency(), line.amountMinor(), Long::sum);
+        }
+        body.append('\n');
+        totals.forEach((currency, total) -> body.append("Total: ")
+                .append(new PropertyLocale(currency, null, lines.get(0).localeTag()).format(total)).append('\n'));
+        body.append("\nStripe sends it to your bank on your usual payout schedule, usually within two "
+                + "business days. The Bliss fee has already been taken out.\n");
+        return new EmailMessage(merchant.email(), "Your Bliss payments are on their way", body.toString());
+    }
+
     /**
      * To the hotel when a guest cancels a Mews stay booked through Bliss. The
      * guest gets no cash refund; the amount is credit toward a future stay,

@@ -45,6 +45,8 @@ public class StripeConnectResource {
     private final MerchantStripeConnectionDao stripeConnectionDao;
     private final PropertyOnboardingService onboardingService;
     private final java.time.Clock clock;
+    /** Hold mode: where payout.* events are recorded. Null leaves them acknowledged only. */
+    private com.bliss.b2b.persistence.PayoutReleaseDao payouts;
 
     public StripeConnectResource(
             StripeConnectService stripe,
@@ -172,7 +174,48 @@ public class StripeConnectResource {
             }
             handleAccountUpdated(account);
         }
+        if (event.getType() != null && event.getType().startsWith("payout.")) {
+            recordPayout(event);
+        }
         return Response.ok(Map.of("received", true)).build();
+    }
+
+    /** Records payout.* events on hold-mode properties' connected accounts. */
+    public StripeConnectResource withPayouts(com.bliss.b2b.persistence.PayoutReleaseDao payouts) {
+        this.payouts = payouts;
+        return this;
+    }
+
+    /**
+     * A payout from a property's connected account to its bank (hold mode).
+     * Read from the event's raw JSON, like account.updated, so the event's API
+     * version doesn't matter. Events for accounts Bliss doesn't know are
+     * acknowledged and ignored.
+     */
+    void recordPayout(Event event) {
+        if (payouts == null || event.getAccount() == null || event.getDataObjectDeserializer() == null) {
+            return;
+        }
+        String raw = event.getDataObjectDeserializer().getRawJson();
+        try {
+            com.fasterxml.jackson.databind.JsonNode p = JSON.readTree(raw);
+            java.util.Optional<com.bliss.b2b.domain.Merchant> merchant =
+                    merchantDao.findByStripeAccountId(event.getAccount());
+            if (merchant.isEmpty() || p.path("id").asText("").isEmpty()) {
+                return;
+            }
+            java.time.LocalDate arrival = p.hasNonNull("arrival_date")
+                    ? java.time.Instant.ofEpochSecond(p.get("arrival_date").asLong())
+                            .atZone(java.time.ZoneOffset.UTC).toLocalDate()
+                    : null;
+            payouts.upsertPayout(merchant.get().id(), p.get("id").asText(), p.path("amount").asLong(),
+                    p.path("currency").asText("").toUpperCase(java.util.Locale.ROOT),
+                    p.path("status").asText(event.getType().substring("payout.".length())), arrival,
+                    p.hasNonNull("failure_message") ? p.get("failure_message").asText() : null);
+            log.info("Recorded {} {} for merchant {}", event.getType(), p.get("id").asText(), merchant.get().id());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException e) {
+            log.warn("Could not record {} {}: {}", event.getType(), event.getId(), e.toString());
+        }
     }
 
     /**

@@ -25,14 +25,19 @@ public interface FolioPostingDao {
     @RegisterConstructorMapper(Posting.class)
     Optional<Posting> find(@Bind("key") String key);
 
-    /** Pending postings for one property, oldest first. */
+    /** Pending fee lines for one property, oldest first. */
+    default List<Posting> pendingForMerchant(UUID merchantId) {
+        return pendingForMerchant(merchantId, "fee_line");
+    }
+
+    /** Pending postings of one kind for one property, oldest first. */
     @SqlQuery("""
             SELECT fp.* FROM folio_postings fp JOIN bookings b ON b.id = fp.booking_id
-            WHERE fp.status = 'pending' AND b.merchant_id = :merchantId
+            WHERE fp.status = 'pending' AND b.merchant_id = :merchantId AND fp.kind = :kind
             ORDER BY fp.created_at
             """)
     @RegisterConstructorMapper(Posting.class)
-    List<Posting> pendingForMerchant(@Bind("merchantId") UUID merchantId);
+    List<Posting> pendingForMerchant(@Bind("merchantId") UUID merchantId, @Bind("kind") String kind);
 
     @SqlUpdate("""
             UPDATE folio_postings SET status = 'posted', mews_id = :mewsId, posted_at = :at,

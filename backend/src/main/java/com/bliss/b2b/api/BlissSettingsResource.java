@@ -44,11 +44,17 @@ public class BlissSettingsResource {
             return Response.status(400).entity(Map.of("error", "body required")).build();
         }
         try {
-            return Response.ok(settings.update(principal.merchant(),
+            BlissSettingsService.SettingsView view = settings.update(principal.merchant(),
                     req.payoutMode(), req.releasePolicy(), req.chargebackBufferDays(),
-                    req.feeServiceId(), req.feeTaxCode(), req.feeAccountingCategoryId())).build();
+                    req.feeServiceId(), req.feeTaxCode(), req.feeAccountingCategoryId());
+            if (req.ledgerPaymentType() != null) {
+                view = settings.setLedgerPaymentType(principal.merchant(), req.ledgerPaymentType());
+            }
+            return Response.ok(view).build();
         } catch (SettingsException e) {
-            int status = "hold_mode_unavailable".equals(e.code()) ? 409 : 400;
+            // Not ready for hold mode is a conflict with the property's state, not a bad request.
+            int status = java.util.Set.of("hold_mode_unavailable", "express_onboarding_required",
+                    "hold_mode_us_only").contains(e.code()) ? 409 : 400;
             return Response.status(status).entity(Map.of("error", e.code(), "message", e.getMessage())).build();
         }
     }
@@ -65,6 +71,7 @@ public class BlissSettingsResource {
             @JsonProperty("chargebackBufferDays") Integer chargebackBufferDays,
             @JsonProperty("feeServiceId") String feeServiceId,
             @JsonProperty("feeTaxCode") String feeTaxCode,
-            @JsonProperty("feeAccountingCategoryId") String feeAccountingCategoryId) {
+            @JsonProperty("feeAccountingCategoryId") String feeAccountingCategoryId,
+            @JsonProperty("ledgerPaymentType") String ledgerPaymentType) {
     }
 }

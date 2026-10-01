@@ -61,6 +61,7 @@ public class MewsAdapter implements PmsAdapter {
     private static final String ORDER_ITEMS_GET_ALL = "/api/connector/v1/orderItems/getAll";
     private static final String CANCELLATION_POLICIES_GET_ALL = "/api/connector/v1/cancellationPolicies/getAll";
     private static final String ORDERS_ADD = "/api/connector/v1/orders/add";
+    private static final String PAYMENTS_ADD_EXTERNAL = "/api/connector/v1/payments/addExternal";
 
     /** Pages followed per catalogue list call; a small property never gets near it. */
     private static final int MAX_PAGES = 10;
@@ -635,6 +636,53 @@ public class MewsAdapter implements PmsAdapter {
             if (externalIdentifier.equals(textOrNull(item, "ExternalIdentifier"))
                     && textOrNull(item, "CanceledUtc") == null) {
                 return Optional.ofNullable(textOrNull(item, "ServiceOrderId"));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Hold mode: records money Bliss released to the property as a ledger-only
+     * payment on the reservation's folio, so the property's Mews balance shows
+     * money it now has. Nothing is charged. {@code type} must be one of the
+     * property's enabled external payment types (Mews refuses others: "Enterprise
+     * doesn't have the external payment type enabled", verified on Gross UK).
+     * Returns the {@code ExternalPaymentId}.
+     */
+    public String addExternalPayment(String accountId, String reservationId, long amountMinor, String currency,
+            String type, String externalIdentifier, String notes) {
+        Map<String, Object> body = auth();
+        body.put("AccountId", accountId);
+        if (reservationId != null) {
+            body.put("ReservationId", reservationId);
+        }
+        body.put("Amount", Map.of("Currency", currency, "GrossValue", toGrossValue(amountMinor, currency)));
+        body.put("Type", type);
+        body.put("ExternalIdentifier", externalIdentifier);
+        if (notes != null) {
+            body.put("Notes", notes);
+        }
+        String id = textOrNull(post(PAYMENTS_ADD_EXTERNAL, body), "ExternalPaymentId");
+        if (id == null || id.isBlank()) {
+            throw new PmsAdapterException("Mews accepted the external payment but returned no ExternalPaymentId");
+        }
+        return id;
+    }
+
+    /**
+     * The id of an external payment Bliss already posted with this identifier
+     * to the account in the window, if Mews has one. Mews returns the
+     * identifier under {@code Data.External.ExternalIdentifier}.
+     */
+    public Optional<String> findExternalPayment(String accountId, Instant createdFrom, Instant createdTo,
+            String externalIdentifier) {
+        Map<String, Object> body = auth();
+        body.put("AccountIds", List.of(accountId));
+        body.put("CreatedUtc", Map.of("StartUtc", createdFrom.toString(), "EndUtc", createdTo.toString()));
+        for (JsonNode p : getAllPaged(PAYMENTS_GET_ALL, body, "Payments")) {
+            JsonNode external = p.path("Data").path("External");
+            if (externalIdentifier.equals(textOrNull(external, "ExternalIdentifier"))) {
+                return Optional.ofNullable(textOrNull(p, "Id"));
             }
         }
         return Optional.empty();

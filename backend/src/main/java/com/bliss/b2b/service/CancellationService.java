@@ -62,6 +62,8 @@ public class CancellationService {
     private final EmailService emailService;
     /** Refunds Stripe PaymentIntents; null when Stripe is not configured. */
     private final StripeRefunder stripeRefunder;
+    /** Hold mode: settles what the property keeps. Null where hold mode isn't wired (tests, tools). */
+    private ReleaseService releases;
 
     /**
      * Refunds up to {@code amountMinor} of one PaymentIntent and returns the
@@ -99,6 +101,16 @@ public class CancellationService {
         this.stripeRefunder = stripeRefunder;
     }
 
+    /** Wires hold mode releases in. */
+    public CancellationService withReleases(ReleaseService releases) {
+        this.releases = releases;
+        return this;
+    }
+
+    static boolean hold(Booking booking) {
+        return com.bliss.b2b.payments.PayoutMode.HOLD.wire().equals(booking.payoutMode());
+    }
+
     /**
      * Cancel a plan, applying the merchant's Refund policy and Cancellation
      * fee as of {@code at}. Idempotent on plan id — calling twice with the
@@ -119,6 +131,9 @@ public class CancellationService {
         long creditCents = a.creditCents();
         long netRefundCents = a.netRefundCents();
         boolean mewsStay = booking.mewsReservationId() != null;
+        // In hold mode the money is in Stripe, not at the property, so even a
+        // Mews stay is refunded rather than credited.
+        boolean creditRail = mewsStay && !hold(booking);
 
         if (mewsStay) {
             // Before any Bliss change: a failure here must leave the plan as it was.
@@ -132,9 +147,16 @@ public class CancellationService {
 
         if (mewsStay) {
             bookingDao.markCanceled(booking.id());
+        }
+        if (creditRail) {
             issueCredit(plan, booking, creditCents, reason);
         }
-        long refundedCents = mewsStay || netRefundCents <= 0
+        if (hold(booking)) {
+            // Before refunding: pull back anything released beyond the
+            // property's share, so the refund is funded from the platform.
+            settleHold(plan, booking, schedule, paidCents - netRefundCents);
+        }
+        long refundedCents = creditRail || netRefundCents <= 0
                 ? 0L
                 : executeRefund(plan, schedule, netRefundCents, at);
 
@@ -153,6 +175,33 @@ public class CancellationService {
                 plan.id(), refundCents, feeCents, netRefundCents, refundedCents);
 
         return new CancellationOutcome(plan.id(), at, reason, assessment);
+    }
+
+    /**
+     * Hold mode: of what stays after the guest's refund ({@code keptCents}),
+     * Bliss keeps its fee on everything collected (D9: Bliss never gives its
+     * fee back) and the property gets the rest, settled by {@link
+     * ReleaseService#settleCancellation}.
+     */
+    private void settleHold(PaymentPlan plan, Booking booking, List<PaymentScheduleEntry> schedule, long keptCents) {
+        if (releases == null) {
+            log.warn("Plan {} is in hold mode but releases aren't wired; nothing settled", plan.id());
+            return;
+        }
+        java.math.BigDecimal fraction = merchantDao.findFeePercentage(booking.merchantId()).orElse(null);
+        long blissFee = schedule.stream()
+                .filter(e -> e.status() == PaymentScheduleStatus.PAID)
+                .mapToLong(e -> com.bliss.b2b.integration.StripePaymentsService.applicationFeeCents(
+                        e.amountCents(), fraction))
+                .sum();
+        // Negative when the refund leaves less than the fee: the property funds
+        // the rest, debited from its account.
+        long uncollected = releases.settleCancellation(plan.id(), booking.id(), keptCents - blissFee,
+                booking.currency());
+        if (uncollected > 0) {
+            log.error("Plan {} cancelled in hold mode with {} {} not collected; see its payout_releases rows",
+                    plan.id(), uncollected, booking.currency());
+        }
     }
 
     /**
@@ -186,7 +235,8 @@ public class CancellationService {
         int progressPercent = plan.totalAmountCents() == 0
                 ? 0
                 : (int) ((paidCents * 100L) / plan.totalAmountCents());
-        boolean mewsStay = booking.mewsReservationId() != null;
+        // Credit only where the money is at the property: a Mews stay outside hold mode.
+        boolean mewsStay = booking.mewsReservationId() != null && !hold(booking);
 
         if (booking.bookingType() != null) {
             com.bliss.b2b.payments.CancellationTerms terms =

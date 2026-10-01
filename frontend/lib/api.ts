@@ -1220,6 +1220,37 @@ export type BlissSettingsView = {
   settings: BlissSetting[];
 };
 
+// Hold mode (configurable-property spec, section 2.2): money Bliss holds and
+// releases to the property, and Stripe's payouts to its bank.
+
+export type HoldReleaseStatus = "scheduled" | "released" | "reversed" | "canceled";
+
+export type HoldRelease = {
+  id: string;
+  bookingId: string;
+  stay: string | null;
+  checkIn: string | null;
+  /** payment:{id}, cancellation, or fee_debit (the Bliss fee a refund left the property to fund). */
+  step: string;
+  releaseAt: string;
+  amountMinor: number;
+  feeMinor: number;
+  reversedMinor: number;
+  currency: string;
+  status: HoldReleaseStatus;
+  releasedAt: string | null;
+  failing: boolean;
+};
+
+export type HoldPayout = {
+  stripePayoutId: string;
+  amountMinor: number;
+  currency: string;
+  status: string;
+  arrivalDate: string | null;
+  failureMessage: string | null;
+};
+
 // Mews sync (configurable-property spec, phase 2).
 
 type ApiFailure = { ok: false; status: number; error: string; message: string };

@@ -83,6 +83,7 @@ public class MewsLinkService {
     static final String FLAG_NO_UPFRONT_CHARGE = "no_upfront_charge";
     static final String FLAG_NOT_ELIGIBLE = "not_eligible";
     static final String FLAG_LINK_FAILED = "link_failed";
+    static final String FLAG_HOLD_CARD_NEEDED = "hold_card_needed";
 
     private static final DateTimeFormatter SHORT_DATE =
             DateTimeFormatter.ofPattern("EEE d MMM yyyy", Locale.ENGLISH);
@@ -96,6 +97,34 @@ public class MewsLinkService {
     private final MewsSyncService syncService;
     /** Posts the Bliss fee line; null skips it. */
     private final FeeLineService feeLines;
+    /** Feature flags; the default has every flag at its configured default. */
+    private com.bliss.b2b.BlissConfiguration.FeaturesConfig features =
+            new com.bliss.b2b.BlissConfiguration.FeaturesConfig();
+    /** Hold mode card path A (D1). */
+    private MewsCardForwarder cardForwarder = MewsCardForwarder.NOT_AVAILABLE;
+
+    /**
+     * Hold mode, D1 option A: moves the card Mews holds for a reservation into
+     * Stripe, vault to vault through Mews's PCI tokenization, and returns the
+     * Stripe PaymentMethod id. Not built: it needs Mews to grant our
+     * integration card access and Stripe to accept the forwarded card.
+     */
+    public interface MewsCardForwarder {
+        String forward(UUID merchantId, String reservationId, String mewsCreditCardId);
+
+        MewsCardForwarder NOT_AVAILABLE = (merchantId, reservationId, cardId) -> {
+            // TODO(D1): Mews card access (PCI Proxy) and Stripe's acceptance of
+            // the forwarded card are both unanswered; option C is the fallback.
+            throw new UnsupportedOperationException("forwarding the Mews card to Stripe isn't available yet (D1)");
+        };
+    }
+
+    public MewsLinkService withFeatures(com.bliss.b2b.BlissConfiguration.FeaturesConfig features,
+            MewsCardForwarder cardForwarder) {
+        this.features = features;
+        this.cardForwarder = cardForwarder == null ? MewsCardForwarder.NOT_AVAILABLE : cardForwarder;
+        return this;
+    }
 
     public MewsLinkService(Jdbi jdbi, MewsAdapterFactory mewsFactory,
             PlanCreationService planCreationService, EmailService emailService, Clock clock) {
@@ -302,6 +331,29 @@ public class MewsLinkService {
             }
             if (!BOOKED_STATES.contains(r.state())) {
                 return waiting(link, "reservation is " + r.state());
+            }
+            boolean holdMode = jdbi.withExtension(com.bliss.b2b.persistence.BlissSettingsDao.class,
+                            d -> d.find(merchantId))
+                    .map(s -> s.payoutMode() == com.bliss.b2b.payments.PayoutMode.HOLD).orElse(false);
+            if (holdMode) {
+                // Held payments are charged in Stripe, so the card Mews holds
+                // has to reach Stripe first (D1). Until it can, the stay is
+                // flagged and nothing is charged through Mews.
+                String why;
+                if (!features.isMewsCardForwarding()) {
+                    why = "Card forwarding from Mews to Stripe isn't switched on.";
+                } else {
+                    try {
+                        cardForwarder.forward(merchantId, r.id(), null);
+                        why = "Linking a forwarded card isn't built yet.";
+                    } catch (RuntimeException e) {
+                        why = e.getMessage();
+                    }
+                }
+                return flagLink(link, r, FLAG_HOLD_CARD_NEEDED,
+                        "A guest booked a Bliss rate, but held payments can't start yet.",
+                        "Holding payments needs the guest's card in Stripe, and Bliss can't move it there "
+                                + "from Mews yet. " + why + " No plan was created and nothing was charged.");
             }
 
             List<MewsCardPayment> payments = adapter.getReservationCardPayments(r.id());

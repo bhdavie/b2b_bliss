@@ -155,4 +155,34 @@ class MewsAdapterSyncTest {
         assertThat(adapter(http).findOrderByExternalIdentifier("svc-bliss", java.time.Instant.EPOCH,
                 java.time.Instant.parse("2026-10-01T23:00:00Z"), "fee_line:plan-1")).isEmpty();
     }
+
+    @Test
+    void aReleaseIsRecordedAsALedgerPaymentOfTheChosenType() {
+        FakeHttp http = new FakeHttp().then(200, "{\"ExternalPaymentId\":\"97ed1fc7\"}");
+
+        String id = adapter(http).addExternalPayment("cust-1", "res-1", 27_160, "USD", "Unspecified",
+                "ledger:rel-1", "Paid through Bliss");
+
+        assertThat(id).isEqualTo("97ed1fc7");
+        assertThat(http.requests.get(0)).contains("\"GrossValue\":271.6").contains("\"Type\":\"Unspecified\"")
+                .contains("\"ExternalIdentifier\":\"ledger:rel-1\"").contains("\"ReservationId\":\"res-1\"");
+    }
+
+    @Test
+    void anEarlierLedgerPaymentIsFoundByItsIdentifier() {
+        // The shape payments/getAll returned on Gross UK for an external payment.
+        FakeHttp http = new FakeHttp().then(200, """
+                {"Payments":[
+                  {"Id":"p-other","Data":{"Discriminator":"External","External":{"Type":"Cash",
+                    "ExternalIdentifier":"ledger:rel-9"}}},
+                  {"Id":"p-card","Data":{"Discriminator":"CreditCard","External":null}},
+                  {"Id":"p-mine","Data":{"Discriminator":"External","External":{"Type":"Unspecified",
+                    "ExternalIdentifier":"ledger:rel-1"}}}
+                ],"Cursor":null}
+                """);
+
+        assertThat(adapter(http).findExternalPayment("cust-1", java.time.Instant.EPOCH,
+                java.time.Instant.parse("2026-10-02T00:00:00Z"), "ledger:rel-1")).contains("p-mine");
+        assertThat(http.requests.get(0)).contains("\"AccountIds\":[\"cust-1\"]");
+    }
 }

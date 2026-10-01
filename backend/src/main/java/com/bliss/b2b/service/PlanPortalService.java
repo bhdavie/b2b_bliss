@@ -170,10 +170,8 @@ public class PlanPortalService {
                     .orElseThrow(() -> new PortalException(PortalErrorCode.NO_CARD_ON_FILE,
                             "no card on file for this plan"));
 
-            StripePaymentsService.Destination destination = new StripePaymentsService.Destination(
-                    stripeConnectResolver.resolveOrNull(look.booking.merchantId()),
-                    handle.attach(MerchantDao.class)
-                            .findFeePercentage(look.booking.merchantId()).orElse(null));
+            StripePaymentsService.Destination destination = stripeConnectResolver.destinationFor(
+                    handle, look.booking.merchantId(), look.booking.id(), look.booking.payoutMode());
             PaymentIntent intent;
             try {
                 intent = stripeService.firePaymentOffSession(
@@ -346,10 +344,8 @@ public class PlanPortalService {
                     .orElseThrow(() -> new PortalException(PortalErrorCode.NO_CARD_ON_FILE,
                             "no card on file for this plan"));
 
-            StripePaymentsService.Destination destination = new StripePaymentsService.Destination(
-                    stripeConnectResolver.resolveOrNull(look.booking.merchantId()),
-                    handle.attach(MerchantDao.class)
-                            .findFeePercentage(look.booking.merchantId()).orElse(null));
+            StripePaymentsService.Destination destination = stripeConnectResolver.destinationFor(
+                    handle, look.booking.merchantId(), look.booking.id(), look.booking.payoutMode());
             PaymentIntent intent;
             try {
                 intent = stripeService.firePaymentOffSession(

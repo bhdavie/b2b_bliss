@@ -113,6 +113,41 @@ point is, by definition, a moment after which the released amount is no longer
 refundable under the booking's policy. Refunds before release come out of the
 platform balance; the hotel's balance is never touched.
 
+**Built, behind the `holdMode` flag (2026-10-01).** As shipped:
+
+- **Charges.** A booking snapshots its payout mode; a hold-mode booking's
+  charges (checkout, scheduled, pay early, pay off) are platform
+  PaymentIntents `on_behalf_of` the property's Express account with
+  `transfer_group = booking_{id}`, no transfer and no application fee. The plan
+  rail stays `stripe`; routing reads the booking's `payout_mode` instead of a
+  new `stripe_hold` rail value, so every existing rail branch is unchanged.
+- **Releases.** `ReleaseService` runs every five minutes on the charge thread.
+  Each paid payment gets a `payout_releases` row (`payment:{schedule id}`) dated
+  by `ReleaseSchedule`; when due it is transferred under the plan lock, at most
+  once (the row is the Stripe idempotency key), less the Bliss fee (the same
+  per-charge fee a destination charge takes). The hotel is emailed what was sent.
+- **Cancellations.** The section 3.2 outcome runs as in pay as you go, then the
+  property's share is settled: waiting releases are cancelled, a shortfall is
+  released at once (`cancellation`), an excess is pulled back by transfer
+  reversal, newest first, before the guest is refunded from the platform
+  balance. When the refund leaves less than the Bliss fee, the property funds
+  the rest by an account debit (`fee_debit`), per D9.
+- **Mews folio.** A release on a linked stay posts a ledger payment for the
+  property's share and one for the fee (D15's recommendation), with
+  `payments/addExternal`, searched by identifier first so it never posts twice.
+  The external payment type is a property setting (D16) and postings wait until
+  it is chosen. Mews refuses a type the enterprise hasn't enabled (Gross UK has
+  no "Prepayment").
+- **Payouts.** `payout.*` events on connected accounts are recorded in
+  `payouts`; Settings shows held, sent and paid-out money.
+- **Switching on.** Needs the flag (D3), a finished Express account (D6) and a
+  USD property (ACH).
+- **Not built:** the card path (D1). A guest booking a Bliss rate at a
+  hold-mode Mews property is flagged `hold_card_needed` and nothing is charged;
+  `mewsCardForwarding` gates a `MewsCardForwarder` that is a TODO. Penalty tier
+  releases, hotel-initiated cancellations, and the admin release endpoints are
+  not built either. `holdMaxDays` (D3) caps a release once Stripe confirms it.
+
 ### 2.3 Release points (proposed)
 
 A release point is when an amount stops being refundable to the guest. Each

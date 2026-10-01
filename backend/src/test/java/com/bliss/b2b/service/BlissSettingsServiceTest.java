@@ -107,6 +107,17 @@ class BlissSettingsServiceTest {
         return jdbi.onDemand(MerchantDao.class).findById(merchantId).orElseThrow();
     }
 
+    /** A US property that finished Express onboarding, so it can hold payments. */
+    private static Merchant holdReadyMerchant() {
+        Merchant m = newMerchant("none");
+        jdbi.useHandle(h -> h.createUpdate("""
+                        UPDATE merchants SET currency = 'USD', stripe_connect_account_id = :acct,
+                                             stripe_connect_status = 'charges_enabled'
+                        WHERE id = :m""")
+                .bind("acct", "acct_express_" + m.id().toString().substring(0, 8)).bind("m", m.id()).execute());
+        return jdbi.onDemand(MerchantDao.class).findById(m.id()).orElseThrow();
+    }
+
     private static Setting setting(SettingsView view, String key) {
         return view.settings().stream().filter(s -> s.key().equals(key)).findFirst().orElseThrow();
     }
@@ -178,7 +189,7 @@ class BlissSettingsServiceTest {
 
     @Test
     void holdModeStaysUnavailableUntilItsFeatureIsSwitchedOn() {
-        Merchant merchant = newMerchant("none");
+        Merchant merchant = holdReadyMerchant();
 
         assertThatThrownBy(() -> service(false).update(merchant, "hold", null, null))
                 .extracting(e -> ((SettingsException) e).code()).isEqualTo("hold_mode_unavailable");
@@ -191,6 +202,33 @@ class BlissSettingsServiceTest {
 
         SettingsView view = service(true).update(merchant, "hold", null, null);
         assertThat(setting(view, "payoutMode").value()).isEqualTo("hold");
+    }
+
+    @Test
+    void holdModeNeedsAFinishedExpressAccountAndUsDollars() {
+        Merchant noExpress = newMerchant("none");
+        jdbi.useHandle(h -> h.execute("UPDATE merchants SET currency = 'USD' WHERE id = ?", noExpress.id()));
+        Merchant usdNoExpress = jdbi.onDemand(MerchantDao.class).findById(noExpress.id()).orElseThrow();
+        assertThatThrownBy(() -> service(true).update(usdNoExpress, "hold", null, null))
+                .extracting(e -> ((SettingsException) e).code()).isEqualTo("express_onboarding_required");
+
+        Merchant pounds = holdReadyMerchant();
+        jdbi.useHandle(h -> h.execute("UPDATE merchants SET currency = 'GBP' WHERE id = ?", pounds.id()));
+        Merchant gbp = jdbi.onDemand(MerchantDao.class).findById(pounds.id()).orElseThrow();
+        assertThatThrownBy(() -> service(true).update(gbp, "hold", null, null))
+                .extracting(e -> ((SettingsException) e).code()).isEqualTo("hold_mode_us_only");
+    }
+
+    @Test
+    void theLedgerPaymentTypeIsAHotelSettingThatStartsUnchosen() {
+        Merchant merchant = newMerchant("mews");
+
+        assertThat(setting(service(false).view(merchant), "ledgerPaymentType").display()).isEqualTo("Not chosen yet");
+        SettingsView view = service(false).setLedgerPaymentType(merchant, "Unspecified");
+        assertThat(setting(view, "ledgerPaymentType").value()).isEqualTo("Unspecified");
+        assertThat(setting(view, "ledgerPaymentType").source()).isEqualTo("hotel");
+        assertThatThrownBy(() -> service(false).setLedgerPaymentType(merchant, "Cash; DROP"))
+                .extracting(e -> ((SettingsException) e).code()).isEqualTo("invalid_setting");
     }
 
     @Test
@@ -215,7 +253,7 @@ class BlissSettingsServiceTest {
     @Test
     void newBookingsRecordThePayoutModeTheyWereMadeUnder() {
         Merchant payAsYouGo = newMerchant("none");
-        Merchant holding = newMerchant("none");
+        Merchant holding = holdReadyMerchant();
         service(true).update(holding, "hold", null, null);
         BookingDao bookings = jdbi.onDemand(BookingDao.class);
 

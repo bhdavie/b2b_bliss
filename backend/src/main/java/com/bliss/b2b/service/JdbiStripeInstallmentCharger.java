@@ -98,10 +98,18 @@ public class JdbiStripeInstallmentCharger implements StripeInstallmentCharger {
         // one, else a plain platform charge. Same resolver plan creation uses.
         // The card itself is vaulted on the platform, which is what makes this
         // off-session charge possible without the guest present.
-        StripePaymentsService.Destination destination = new StripePaymentsService.Destination(
-                stripeConnectResolver.resolveOrNull(due.merchantId()),
-                jdbi.withHandle(h -> h.attach(MerchantDao.class)
-                        .findFeePercentage(due.merchantId()).orElse(null)));
+        // The booking's snapshotted payout mode decides: hold mode charges on
+        // the platform on behalf of the property and holds the money.
+        StripePaymentsService.Destination destination = jdbi.withHandle(h -> {
+            com.bliss.b2b.domain.Booking booking = h.attach(com.bliss.b2b.persistence.PaymentPlanDao.class)
+                    .findById(due.planId())
+                    .flatMap(p -> h.attach(com.bliss.b2b.persistence.BookingDao.class).findById(p.bookingId()))
+                    .orElse(null);
+            return booking == null
+                    ? new StripePaymentsService.Destination(stripeConnectResolver.resolveOrNull(due.merchantId()),
+                            h.attach(MerchantDao.class).findFeePercentage(due.merchantId()).orElse(null))
+                    : stripeConnectResolver.destinationFor(h, due.merchantId(), booking.id(), booking.payoutMode());
+        });
 
         PaymentIntent intent;
         try {
