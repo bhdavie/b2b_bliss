@@ -228,6 +228,73 @@ class PlanPortalRailTest {
         assertThat(statuses(f)).containsExactly("paid", "scheduled", "scheduled");
     }
 
+    // ------------------------------------------------- concurrent payers
+
+    private InstallmentChargeService chargePass() {
+        return new InstallmentChargeService(new InstallmentChargeService.JdbiLedger(jdbi),
+                merchantId -> Optional.of(new ChargeContext(mews, mewsCurrency)), CLOCK);
+    }
+
+    @Test
+    void payEarlyAndTheChargePassAtOnce_chargeTheInstallmentOnce() throws Exception {
+        // Installment 2 is due today, so the pass picks it up while the guest
+        // is paying it early.
+        Fixture f = plan("mews", "GBP", "mews_link_res-c1", "cust-c1", "card-c1", "res-c1", "2026-10-01");
+        mews.holdFirstCharge();
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var payEarly = pool.submit(() -> service().payNextInstallment(f.token));
+            assertThat(mews.entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                    .as("pay early reached Mews holding the plan lock").isTrue();
+
+            var pass = pool.submit(() -> chargePass().runDuePass(CLOCK.instant()));
+            Thread.sleep(500);
+            assertThat(pass.isDone()).as("the pass waits for the lock instead of charging").isFalse();
+            assertThat(mews.charges).hasSize(1);
+
+            mews.release.countDown();
+            payEarly.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            InstallmentChargeService.PassResult result = pass.get(10, java.util.concurrent.TimeUnit.SECONDS);
+
+            assertThat(mews.charges).as("one charge for the one installment").hasSize(1);
+            assertThat(result.charged()).isZero();
+            assertThat(result.alreadySettled()).isEqualTo(1);
+            assertThat(statuses(f)).containsExactly("paid", "paid", "scheduled");
+            assertThat(mewsPaymentIds(f).get(1)).isEqualTo("mews-pay-1");
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void chargePassThenPayOffAtOnce_payOffChargesOnlyWhatThePassDidNotPay() throws Exception {
+        Fixture f = plan("mews", "GBP", "mews_link_res-c2", "cust-c2", "card-c2", "res-c2", "2026-10-01");
+        mews.holdFirstCharge();
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var pass = pool.submit(() -> chargePass().runDuePass(CLOCK.instant()));
+            assertThat(mews.entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                    .as("the pass reached Mews holding the plan lock").isTrue();
+
+            var payOff = pool.submit(() -> service().payRemainingBalance(f.token));
+            Thread.sleep(500);
+            assertThat(payOff.isDone()).as("pay off waits for the lock").isFalse();
+
+            mews.release.countDown();
+            pass.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            payOff.get(10, java.util.concurrent.TimeUnit.SECONDS);
+
+            // The pass charged installment 2; pay off then saw only installment
+            // 3 unpaid. 600.00 in total, never 900.00.
+            assertThat(mews.charges).extracting(FakeMews.Charge::amountMinor)
+                    .containsExactly(30_000L, 30_000L);
+            assertThat(statuses(f)).containsExactly("paid", "paid", "paid");
+            assertThat(planStatus(f)).isEqualTo("completed");
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
     // ---------------------------------------------------------------- routing
 
     @Test
@@ -256,6 +323,12 @@ class PlanPortalRailTest {
     /** An active plan: deposit paid, then two 300.00 installments still scheduled. */
     private Fixture plan(String rail, String currency, String cardKey,
             String mewsCustomerId, String mewsCardId, String reservationId) {
+        return plan(rail, currency, cardKey, mewsCustomerId, mewsCardId, reservationId, "2026-12-02");
+    }
+
+    /** The same plan with installment 2 due on {@code secondDue}. */
+    private Fixture plan(String rail, String currency, String cardKey,
+            String mewsCustomerId, String mewsCardId, String reservationId, String secondDue) {
         UUID id = UUID.randomUUID();
         String token = "tok-" + id.toString().substring(0, 12);
         return jdbi.inTransaction(h -> {
@@ -303,7 +376,7 @@ class PlanPortalRailTest {
                     .mapTo(UUID.class).one();
             String[][] rows = {
                     {"1", "2026-10-01", "paid", "deposit"},
-                    {"2", "2026-12-02", "scheduled", "installment"},
+                    {"2", secondDue, "scheduled", "installment"},
                     {"3", "2027-01-04", "scheduled", "installment"}};
             for (String[] r : rows) {
                 h.createUpdate("""
@@ -361,16 +434,42 @@ class PlanPortalRailTest {
         record Call(long amountMinor, String currency) {}
     }
 
-    /** Mews that records charges and answers with {@link #next}. */
+    /**
+     * Mews that records charges and answers with {@link #next}. After
+     * {@link #holdFirstCharge} the first charge parks inside Mews until
+     * {@link #release} opens, so a test can start a second payer while the
+     * first is mid-charge.
+     */
     private static final class FakeMews implements PmsAdapter {
         PmsChargeStatus next = PmsChargeStatus.CHARGED;
         String reservationState = "Confirmed";
-        final List<Charge> charges = new ArrayList<>();
+        final List<Charge> charges = java.util.Collections.synchronizedList(new ArrayList<>());
+        final java.util.concurrent.CountDownLatch entered = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch release;
+
+        void holdFirstCharge() {
+            release = new java.util.concurrent.CountDownLatch(1);
+        }
 
         @Override public PmsChargeResult chargeStoredCard(String pmsCustomerId, String pmsCardId,
                 long amountMinorUnits, String currency, String reservationRef, String notes) {
-            charges.add(new Charge(pmsCustomerId, pmsCardId, amountMinorUnits, currency, reservationRef));
-            String paymentId = next == PmsChargeStatus.FAILED ? null : "mews-pay-" + charges.size();
+            int n;
+            synchronized (charges) {
+                charges.add(new Charge(pmsCustomerId, pmsCardId, amountMinorUnits, currency, reservationRef));
+                n = charges.size();
+            }
+            if (release != null && n == 1) {
+                entered.countDown();
+                try {
+                    if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("test never released the held charge");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+            }
+            String paymentId = next == PmsChargeStatus.FAILED ? null : "mews-pay-" + n;
             return new PmsChargeResult(paymentId, next, next.name(), amountMinorUnits, currency);
         }
 

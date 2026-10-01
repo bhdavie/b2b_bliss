@@ -145,6 +145,9 @@ public class PlanPortalService {
                 throw new PortalException(PortalErrorCode.PLAN_NOT_ACTIVE,
                         "plan is not active (status=" + look.plan.status().wire() + ")");
             }
+            // Same lock as the scheduled pass and the Mews paths, so no two of
+            // them can charge one installment.
+            handle.attach(PaymentPlanDao.class).lockForUpdate(look.plan.id());
             PaymentScheduleDao scheduleDao = handle.attach(PaymentScheduleDao.class);
             PaymentScheduleEntry next = scheduleDao.findNextScheduled(look.plan.id()).orElseThrow(
                     () -> new PortalException(PortalErrorCode.NO_NEXT_INSTALLMENT,
@@ -246,6 +249,7 @@ public class PlanPortalService {
                 throw new PortalException(PortalErrorCode.PLAN_NOT_ACTIVE,
                         "plan is not active (status=" + look.plan.status().wire() + ")");
             }
+            handle.attach(PaymentPlanDao.class).lockForUpdate(look.plan.id());
             PaymentScheduleDao scheduleDao = handle.attach(PaymentScheduleDao.class);
             PaymentScheduleEntry next = scheduleDao.findNextScheduled(look.plan.id()).orElseThrow(
                     () -> new PortalException(PortalErrorCode.NO_NEXT_INSTALLMENT,
@@ -291,6 +295,9 @@ public class PlanPortalService {
                 throw new PortalException(PortalErrorCode.PLAN_NOT_ACTIVE,
                         "plan is not active (status=" + look.plan.status().wire() + ")");
             }
+            // Same lock as the scheduled pass and the Mews paths, so no two of
+            // them can charge one installment.
+            handle.attach(PaymentPlanDao.class).lockForUpdate(look.plan.id());
             PaymentScheduleDao scheduleDao = handle.attach(PaymentScheduleDao.class);
             List<PaymentScheduleEntry> unsettled = requirePayableBalance(
                     scheduleDao.listUnsettledForPlan(look.plan.id()));
@@ -401,6 +408,7 @@ public class PlanPortalService {
                 throw new PortalException(PortalErrorCode.PLAN_NOT_ACTIVE,
                         "plan is not active (status=" + look.plan.status().wire() + ")");
             }
+            handle.attach(PaymentPlanDao.class).lockForUpdate(look.plan.id());
             PaymentScheduleDao scheduleDao = handle.attach(PaymentScheduleDao.class);
             List<PaymentScheduleEntry> unsettled = requirePayableBalance(
                     scheduleDao.listUnsettledForPlan(look.plan.id()));

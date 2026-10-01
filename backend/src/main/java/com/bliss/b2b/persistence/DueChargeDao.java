@@ -86,6 +86,22 @@ public interface DueChargeDao {
     List<ProcessingInstallment> findProcessingMews();
 
     /**
+     * Whether an installment can still be charged: scheduled or retrying, on
+     * an active plan. Read under the plan lock just before charging, because
+     * the due list was read before any lock and a guest may have paid since.
+     */
+    @SqlQuery("""
+            SELECT EXISTS (
+                SELECT 1
+                FROM payment_schedule ps
+                JOIN payment_plans pp ON pp.id = ps.payment_plan_id
+                WHERE ps.id = :scheduleId
+                  AND ps.status IN ('scheduled', 'retrying')
+                  AND pp.status = 'active')
+            """)
+    boolean isStillChargeable(@Bind("scheduleId") UUID scheduleId);
+
+    /**
      * One due installment plus the routing context it needs. {@code kind} and
      * {@code paymentRail} are the raw wire strings; the service maps them.
      * {@code mewsCustomerId}/{@code mewsCreditCardId} are null on Stripe-rail

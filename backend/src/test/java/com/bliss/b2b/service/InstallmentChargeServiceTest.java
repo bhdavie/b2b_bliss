@@ -57,7 +57,7 @@ class InstallmentChargeServiceTest {
         assertThat(ledger.completedPlans).containsExactly(due.planId());
         assertThat(ledger.processing).isEmpty();
         assertThat(ledger.failed).isEmpty();
-        assertThat(result).isEqualTo(new PassResult(1, 1, 0, 0, 0, 0, 0));
+        assertThat(result).isEqualTo(new PassResult(1, 1, 0, 0, 0, 0, 0, 0));
     }
 
     @Test
@@ -106,7 +106,7 @@ class InstallmentChargeServiceTest {
         assertThat(ledger.completedPlans).isEmpty();
         // charged exactly once; the PROCESSING guard means no re-charge here.
         assertThat(adapter.chargeCalls).hasSize(1);
-        assertThat(result).isEqualTo(new PassResult(1, 0, 1, 0, 0, 0, 0));
+        assertThat(result).isEqualTo(new PassResult(1, 0, 1, 0, 0, 0, 0, 0));
     }
 
     @Test
@@ -121,7 +121,7 @@ class InstallmentChargeServiceTest {
         assertThat(ledger.failed).containsExactly(due.scheduleId());
         assertThat(ledger.paid).isEmpty();
         assertThat(ledger.processing).isEmpty();
-        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 1, 0, 0, 0));
+        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 1, 0, 0, 0, 0));
     }
 
     @Test
@@ -138,7 +138,7 @@ class InstallmentChargeServiceTest {
 
         assertThat(adapter.chargeCalls).isEmpty();
         assertThat(ledger.anyWrite()).isFalse();
-        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1, 0));
+        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1, 0, 0));
     }
 
     @Test
@@ -154,7 +154,7 @@ class InstallmentChargeServiceTest {
 
         assertThat(adapter.chargeCalls).isEmpty();
         assertThat(ledger.anyWrite()).isFalse();
-        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 1, 0, 0));
+        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 1, 0, 0, 0));
     }
 
     @Test
@@ -168,7 +168,7 @@ class InstallmentChargeServiceTest {
 
         assertThat(adapter.chargeCalls).isEmpty();
         assertThat(ledger.anyWrite()).isFalse();
-        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1, 0));
+        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1, 0, 0));
     }
 
     @Test
@@ -181,7 +181,7 @@ class InstallmentChargeServiceTest {
 
         // A transport error is not a decline: no status write at all.
         assertThat(ledger.anyWrite()).isFalse();
-        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1, 0));
+        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1, 0, 0));
     }
 
     // -- reservation state --------------------------------------------------
@@ -198,7 +198,7 @@ class InstallmentChargeServiceTest {
         assertThat(adapter.stateReads).containsExactly("res_1");
         assertThat(adapter.chargeCalls).extracting(ChargeCall::reservationRef).containsExactly("res_1");
         assertThat(ledger.paid).containsExactly(due.scheduleId());
-        assertThat(result).isEqualTo(new PassResult(1, 1, 0, 0, 0, 0, 0));
+        assertThat(result).isEqualTo(new PassResult(1, 1, 0, 0, 0, 0, 0, 0));
     }
 
     @Test
@@ -229,7 +229,7 @@ class InstallmentChargeServiceTest {
         assertThat(ledger.heldReasons).containsExactly("mews reservation res_1 is canceled; not charged");
         assertThat(ledger.paid).isEmpty();
         assertThat(ledger.failed).isEmpty();
-        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 0, 1));
+        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 0, 1, 0));
     }
 
     @Test
@@ -261,7 +261,7 @@ class InstallmentChargeServiceTest {
 
         assertThat(adapter.chargeCalls).isEmpty();
         assertThat(ledger.anyWrite()).isFalse();
-        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1, 0));
+        assertThat(result).isEqualTo(new PassResult(1, 0, 0, 0, 0, 1, 0, 0));
     }
 
     @Test
@@ -337,6 +337,14 @@ class InstallmentChargeServiceTest {
 
         @Override public List<DueInstallment> findDue(Instant asOf) {
             return due;
+        }
+
+        int locksTaken;
+
+        @Override public <T> Optional<T> withInstallmentLock(
+                UUID planId, UUID scheduleId, java.util.function.Function<Ledger, T> work) {
+            locksTaken++;
+            return Optional.ofNullable(work.apply(this));
         }
 
         @Override public void markPaid(UUID scheduleId, String mewsPaymentId, Instant now) {

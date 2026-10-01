@@ -310,10 +310,12 @@ public interface PaymentPlanDao {
     Optional<ChargeRoute> chargeRoute(@Bind("planId") UUID planId);
 
     /**
-     * Row-locks the plan for the rest of the transaction. A guest payment that
-     * has no processor-side idempotency (the Mews rail) takes this first, so a
-     * double submit waits for the first to commit and then finds the rows
-     * already settled instead of charging them again.
+     * Row-locks the plan for the rest of the transaction. Everything that
+     * charges an installment takes it first (guest pay early and pay off on
+     * both rails, and the scheduled charge pass per installment) and only then
+     * reads which rows are still unpaid, so one installment is never charged
+     * twice: a second payer waits for the first to commit and then finds the
+     * row settled.
      */
     @SqlQuery("SELECT id FROM payment_plans WHERE id = :planId FOR UPDATE")
     Optional<UUID> lockForUpdate(@Bind("planId") UUID planId);
