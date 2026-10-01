@@ -169,7 +169,8 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
      * What each demo property trades in (V36). Marbrook House is on the Gross UK
      * Mews demo, so it takes that enterprise's GBP, Budapest zone and en-GB
      * language (as configuration/get reports them). The other demo properties
-     * are US inns in Hudson, NY. Fills only what is unset, then gives each
+     * are US inns in Hudson, NY, including ones with no bookings yet (Marbrook
+     * Lodge), which need a currency before they can take their first. Fills only what is unset, then gives each
      * demo booking without a currency its property's values.
      */
     private static void seedPropertyLocales(Handle handle) {
@@ -193,14 +194,10 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
         handle.createUpdate("""
                 UPDATE merchants
                 SET currency = 'USD', time_zone = 'America/New_York', locale = 'en-US'
-                WHERE id IN (
-                    SELECT DISTINCT merchant_id FROM bookings
-                    UNION SELECT :marbrookGrand
-                ) AND id <> :marbrookHouse AND currency IS NULL
+                WHERE id <> :marbrookHouse AND currency IS NULL
                   AND address_city = 'Hudson' AND address_state = 'NY'
                 """)
                 .bind("marbrookHouse", MARBROOK_HOUSE_ID)
-                .bind("marbrookGrand", MARBROOK_GRAND_ID)
                 .execute();
         handle.createUpdate("""
                 UPDATE bookings b
