@@ -1,7 +1,5 @@
-import {
-  formatDollarsCompact,
-  type PublicPolicies,
-} from "@/lib/publicApi";
+import { formatMoneyCompact, type MoneyContext } from "@/lib/money";
+import { type PublicPolicies } from "@/lib/publicApi";
 
 /**
  * "Cancellation policy" trust-signal section below the schedule on the
@@ -12,16 +10,19 @@ import {
 export function PolicyDisclosure({
   policies,
   creditInsteadOfRefund = false,
+  money,
 }: {
   policies: PublicPolicies;
+  // Fixed fees are minor units of the property's currency.
+  money: MoneyContext;
   /** Mews stays: a cancellation is credited toward a future stay, never refunded in cash. */
   creditInsteadOfRefund?: boolean;
 }) {
   const refundLine = creditInsteadOfRefund ? creditCopy(policies) : refundCopy(policies);
-  const cancelFeeLine = cancellationFeeCopy(policies);
+  const cancelFeeLine = cancellationFeeCopy(policies, money);
   const dueLine = dueDateCopy(policies);
   const failureLine = failedPaymentCopy(policies);
-  const lateFeeLine = lateFeeCopy(policies);
+  const lateFeeLine = lateFeeCopy(policies, money);
 
   return (
     <section className="mt-6 rounded-card border border-sand-200 bg-white p-4">
@@ -96,11 +97,11 @@ export function creditCopy(policies: PublicPolicies): string {
   }
 }
 
-function cancellationFeeCopy(policies: PublicPolicies): string | null {
+function cancellationFeeCopy(policies: PublicPolicies, money: MoneyContext): string | null {
   if (!policies.cancellationFeeEnabled || policies.cancellationFeeValue == null) return null;
   const amount = policies.cancellationFeeType === "percentage"
     ? `${policies.cancellationFeeValue}%`
-    : formatDollarsCompact(policies.cancellationFeeValue);
+    : formatMoneyCompact(policies.cancellationFeeValue, money);
   if (policies.cancellationFeeThresholdPercent != null) {
     return `${amount} cancellation fee after ${policies.cancellationFeeThresholdPercent}% through your plan.`;
   }
@@ -134,11 +135,11 @@ export function failedPaymentCopy(policies: PublicPolicies): string {
   return `If a payment fails, ${retryClause}. After that, ${afterClause}.`;
 }
 
-function lateFeeCopy(policies: PublicPolicies): string | null {
+function lateFeeCopy(policies: PublicPolicies, money: MoneyContext): string | null {
   if (!policies.lateFeeEnabled || policies.lateFeeValue == null) return null;
   const amount = policies.lateFeeType === "percentage"
     ? `${policies.lateFeeValue}%`
-    : formatDollarsCompact(policies.lateFeeValue);
+    : formatMoneyCompact(policies.lateFeeValue, money);
   const scope = policies.lateFeeScope === "once_per_plan" ? "once" : "each time";
   return `${amount} late fee applies ${scope} a payment fails.`;
 }

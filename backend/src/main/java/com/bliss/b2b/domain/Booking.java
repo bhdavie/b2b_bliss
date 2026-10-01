@@ -27,5 +27,17 @@ public record Booking(
         String mewsReservationId,
         String mewsResourceCategoryId,
         String mewsRateId,
-        Integer adultCount
-) {}
+        Integer adultCount,
+        // The property's currency, zone and locale when the booking was made
+        // (V36). Every amount on the booking and its plans is minor units of
+        // this currency. Null currency only on a pre-V36 Mews booking whose
+        // property never had one.
+        String currency,
+        String timeZone,
+        String localeTag
+) {
+    /** The booking's currency, zone and locale. Throws when it has no currency. */
+    public com.bliss.b2b.payments.PropertyLocale propertyLocale() {
+        return new com.bliss.b2b.payments.PropertyLocale(currency, timeZone, localeTag);
+    }
+}

@@ -30,7 +30,8 @@ public class PaymentScheduleRowMapper implements RowMapper<PaymentScheduleEntry>
                 rs.getInt("retry_count"),
                 rs.getString("last_error"),
                 toInstant(rs.getTimestamp("created_at")),
-                toInstant(rs.getTimestamp("updated_at"))
+                toInstant(rs.getTimestamp("updated_at")),
+                rs.getString("mews_payment_id")
         );
     }
 

@@ -113,7 +113,10 @@ public class PublicMerchantsResource {
                                 ? stripeConnectResolver.resolveOrNull(merchant.id()) : null),
                 merchant.pmsType() == com.bliss.b2b.domain.PmsType.MEWS
                         ? "mews"
-                        : (stripeService.isConfigured() ? "stripe" : "demo")
+                        : (stripeService.isConfigured() ? "stripe" : "demo"),
+                merchant.currency(),
+                merchant.localeTag(),
+                merchant.timeZone()
         )).build();
     }
 

@@ -18,6 +18,9 @@ export default async function SettingsPage() {
       <PaymentSettingsTabs
         planRules={planRules ?? DEFAULT_PLAN_RULES}
         isMews={session.pmsType === "mews"}
+        currency={session.currency}
+        locale={session.locale}
+        timeZone={session.timeZone}
       />
     </div>
   );

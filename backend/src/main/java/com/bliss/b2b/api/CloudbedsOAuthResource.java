@@ -102,7 +102,7 @@ public class CloudbedsOAuthResource {
             PmsPropertyConfiguration property = adapterFactory.identifyProperty(tokens.accessToken());
             Instant expiresAt = Instant.now(clock).plusSeconds(tokens.expiresInSeconds());
             adapterFactory.saveConnection(merchantId, property, tokens, expiresAt, Instant.now(clock));
-            onboardingService.markCloudbedsConnected(merchantId);
+            onboardingService.markCloudbedsConnected(merchantId, property);
             log.info("Cloudbeds connected for merchant {} (property {})",
                     merchantId, property.enterpriseId());
             return redirect(settings + "?cloudbeds=connected");

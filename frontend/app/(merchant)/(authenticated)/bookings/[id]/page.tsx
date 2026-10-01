@@ -7,11 +7,11 @@ import { Panel, RecordTitle, SectionHeading } from "@/components/ui/primitives";
 import { fetchBookingServer } from "@/lib/auth";
 import {
   fetchPlanPortal,
-  formatDollars,
   formatScheduleDateLong,
   formatScheduleDateShort,
   type PublicPlanPortal,
 } from "@/lib/publicApi";
+import { formatInstant, formatMoney } from "@/lib/money";
 
 type Booking = NonNullable<Awaited<ReturnType<typeof fetchBookingServer>>>;
 
@@ -81,9 +81,14 @@ function PlanDetail({
             Refunded
           </span>
           <span className="text-[14px] text-ink-500">
-            {formatDollars(portal.plan.refundAmountCents ?? 0)} refunded to the guest
+            {formatMoney(portal.plan.refundAmountCents ?? 0, booking)} refunded to the guest
             {portal.plan.refundedAt
-              ? ` on ${formatScheduleDateLong(portal.plan.refundedAt.slice(0, 10))}`
+              ? ` on ${formatInstant(portal.plan.refundedAt, booking.locale, booking.timeZone, {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}`
               : ""}
             .
           </span>
@@ -94,9 +99,9 @@ function PlanDetail({
         {booking.customerNameHint ? <Row label="Guest" value={booking.customerNameHint} /> : null}
         {booking.customerEmailHint ? <Row label="Email" value={booking.customerEmailHint} /> : null}
         <Row label="Stay" value={booking.serviceName} />
-        <Row label="Check-in" value={formatScheduleDateLong(booking.appointmentDate)} />
+        <Row label="Check-in" value={formatScheduleDateLong(booking.appointmentDate, booking.locale)} />
         {booking.checkoutDate ? (
-          <Row label="Check-out" value={formatScheduleDateLong(booking.checkoutDate)} />
+          <Row label="Check-out" value={formatScheduleDateLong(booking.checkoutDate, booking.locale)} />
         ) : null}
         <Row
           label="Plan status"
@@ -106,20 +111,20 @@ function PlanDetail({
 
       <Card title="Plan summary">
         <div className="space-y-2.5">
-          <Line label="Subtotal" value={formatDollars(portal.plan.totalAmountCents)} />
+          <Line label="Subtotal" value={formatMoney(portal.plan.totalAmountCents, booking)} />
           {portal.processingFeeCents > 0 ? (
-            <Line label="Processing fee" value={`+${formatDollars(portal.processingFeeCents)}`} />
+            <Line label="Processing fee" value={`+${formatMoney(portal.processingFeeCents, booking)}`} />
           ) : null}
         </div>
         <div className="mt-[18px] flex items-baseline justify-between border-t border-sand-300 pt-[18px]">
           <span className="text-[14px] text-ink-900">Total</span>
           <span className="text-2xl font-medium tracking-[-0.02em] tabular-nums text-ink-900">
-            {formatDollars(totalDue)}
+            {formatMoney(totalDue, booking)}
           </span>
         </div>
         <div className="mt-7 grid grid-cols-2 gap-3">
-          <Stat label="Paid to date" value={formatDollars(portal.paidCents)} />
-          <Stat label="Remaining" value={formatDollars(portal.remainingCents)} />
+          <Stat label="Paid to date" value={formatMoney(portal.paidCents, booking)} />
+          <Stat label="Remaining" value={formatMoney(portal.remainingCents, booking)} />
         </div>
       </Card>
 
@@ -139,12 +144,12 @@ function PlanDetail({
                     <div className="text-[14px] text-ink-900">{label}</div>
                     <div className="mt-0.5 text-[13px] text-ink-500">
                       {SCHEDULE_DATE_PREFIX[rowStatus]}
-                      {formatScheduleDateShort(entry.dueDate)}
+                      {formatScheduleDateShort(entry.dueDate, booking.locale)}
                     </div>
                   </div>
                 </div>
                 <div className="text-[14px] tabular-nums text-ink-900">
-                  {formatDollars(entry.amountCents)}
+                  {formatMoney(entry.amountCents, booking)}
                 </div>
               </li>
             );
@@ -173,6 +178,8 @@ function PlanDetail({
           currentAppointmentDate={booking.appointmentDate}
           currentCheckoutDate={booking.checkoutDate}
           currentTotalCents={booking.totalAmountCents}
+          currency={booking.currency}
+          locale={booking.locale}
         />
       ) : null}
 
@@ -182,6 +189,7 @@ function PlanDetail({
         refunded={refunded}
         refundAmountCents={portal.plan.refundAmountCents}
         paidCents={portal.paidCents}
+        money={{ currency: booking.currency, locale: booking.locale }}
       />
     </div>
   );
@@ -192,8 +200,8 @@ function NoPlan({ booking, head }: { booking: Booking; head: React.ReactNode }) 
     <div className="flex flex-col gap-4">
       <Card title="Booking" head={head}>
         <Row label="Stay" value={booking.serviceName} />
-        <Row label="Check-in" value={formatScheduleDateLong(booking.appointmentDate)} />
-        <Row label="Total" value={formatDollars(booking.totalAmountCents)} />
+        <Row label="Check-in" value={formatScheduleDateLong(booking.appointmentDate, booking.locale)} />
+        <Row label="Total" value={formatMoney(booking.totalAmountCents, booking)} />
       </Card>
       <Card title="Plan">
         <p className="text-[14px] text-ink-900">

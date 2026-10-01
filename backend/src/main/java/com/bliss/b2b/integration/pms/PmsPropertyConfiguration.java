@@ -5,7 +5,9 @@ package com.bliss.b2b.integration.pms;
  * {@link PmsAdapter#getPropertyConfiguration()}.
  *
  * <p>{@code defaultCurrency} is the property's default enabled currency (ISO
- * 4217). {@code pricing} is "Gross" or "Net" and matters for how amounts are
+ * 4217). {@code languageCode} is its default language as a BCP 47 tag (Mews
+ * {@code DefaultLanguageCode}, e.g. "en-GB"), used to format guest-facing
+ * amounts and dates. {@code pricing} is "Gross" or "Net" and matters for how amounts are
  * interpreted when charging is added later. Fields are nullable because a given
  * PMS may not populate all of them.
  */
@@ -15,5 +17,6 @@ public record PmsPropertyConfiguration(
         String defaultCurrency,
         String countryCode,
         String pricing,
-        String timeZoneIdentifier) {
+        String timeZoneIdentifier,
+        String languageCode) {
 }

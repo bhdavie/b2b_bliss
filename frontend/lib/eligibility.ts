@@ -4,6 +4,14 @@
 // update as they pick an appointment date, without a round-trip per keystroke.
 
 import { DEFAULT_PLAN_RULES, type PlanRules } from "./api";
+import {
+  addDaysIso,
+  daysBetweenIso,
+  formatPlainDate,
+  plainDateToUtc,
+  splitInstallments,
+  utcToPlainDate,
+} from "./money";
 
 export type PlanFrequency = "biweekly" | "monthly";
 
@@ -51,19 +59,31 @@ const MIN_FINAL_PAYMENT_BUFFER_DAYS = 3;
 const MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS = 14;
 
 /**
+ * A calendar date: a YYYY-MM-DD string (preferred), or a Date read by its
+ * local calendar fields (kept so older callers still compile). Either way it
+ * is reduced to a calendar day and every computation below runs on UTC
+ * midnights, so the browser's zone never moves a date. "Today" must be the
+ * property's today (`todayIn(timeZone)` from lib/money), matching the
+ * backend's PropertyLocale.today.
+ */
+export type CalendarDate = string | Date;
+
+/**
  * `departureDate` is the end of the stay. Nullable: bookings.checkout_date is
- * nullable and single-day services have no departure. Accepted but not yet
- * consulted, mirroring PlanEligibilityService.evaluate, so a later stage can
- * gate on the full stay range rather than the arrival alone.
+ * nullable and single-day services have no departure. Consulted only for
+ * blackout dates, mirroring PlanEligibilityService.evaluate.
  */
 export function previewEligibility(
-  today: Date,
-  appointmentDate: Date | null,
-  departureDate: Date | null,
+  todayInput: CalendarDate,
+  appointmentInput: CalendarDate | null,
+  departureInput: CalendarDate | null,
   totalAmountCents: number,
   rules: PlanRules = DEFAULT_PLAN_RULES,
 ): PreviewResult {
-  if (!appointmentDate || Number.isNaN(appointmentDate.getTime())) {
+  const today = toCalendarIso(todayInput);
+  const appointmentDate = appointmentInput == null ? null : toCalendarIso(appointmentInput);
+  const departureDate = departureInput == null ? null : toCalendarIso(departureInput);
+  if (!today || !appointmentDate) {
     return {
       eligible: false,
       reason: "invalid_input",
@@ -203,8 +223,8 @@ function resolveRecommended(rules: PlanRules): PlanFrequency | null {
 }
 
 function buildInstallments(
-  today: Date,
-  appointmentDate: Date,
+  today: string,
+  appointmentDate: string,
   installmentTotalCents: number,
   hasDeposit: boolean,
   frequency: PlanFrequency,
@@ -241,7 +261,7 @@ function buildInstallments(
       // Payment 1 without a deposit is charged at checkout, so it stays today
       // even on a weekend. Mirrors PlanEligibilityService.
       const isPaymentOne = !hasDeposit && i === 0;
-      dueDates.push(formatDate(isPaymentOne ? due : rollForwardToWeekday(due)));
+      dueDates.push(isPaymentOne ? due : rollForwardToWeekday(due));
     }
   }
 
@@ -249,9 +269,9 @@ function buildInstallments(
   if (numPayments < 1) return null;
   if (installmentTotalCents <= 0) return null;
 
-  const perPayment = Math.floor(installmentTotalCents / numPayments);
-  const remainder = installmentTotalCents - perPayment * numPayments;
-  const finalPayment = perPayment + remainder;
+  const split = splitInstallments(installmentTotalCents, numPayments);
+  const perPayment = split[0] ?? 0;
+  const finalPayment = split[numPayments - 1] ?? 0;
 
   return {
     frequency,
@@ -270,24 +290,31 @@ function buildInstallments(
 // MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS days after the booking, and payments
 // 3..N advance one month at a time on the same anchor. Each anchor date is
 // resolved through the weekend roll-forward.
-function monthlyDueDates(today: Date, cutoff: Date, hasDeposit: boolean): string[] {
+function monthlyDueDates(today: string, cutoff: string, hasDeposit: boolean): string[] {
   const dates: string[] = [];
   if (!hasDeposit) {
-    dates.push(formatDate(today));
+    dates.push(today);
   }
-  const anchorDay = monthlyAnchorDay(today.getDate());
-  let cursor = new Date(today.getFullYear(), today.getMonth(), anchorDay);
-  while (daysBetween(today, cursor) < MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS) {
-    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, anchorDay);
+  const t = plainDateToUtc(today);
+  if (!t) return dates;
+  const anchorDay = monthlyAnchorDay(t.getUTCDate());
+  let year = t.getUTCFullYear();
+  let month = t.getUTCMonth();
+  const anchorIso = () => utcToPlainDate(new Date(Date.UTC(year, month, anchorDay)));
+  const nextMonth = () => {
+    month += 1;
+    if (month > 11) {
+      month = 0;
+      year += 1;
+    }
+  };
+  while (daysBetween(today, anchorIso()) < MONTHLY_FIRST_INSTALLMENT_MIN_GAP_DAYS) {
+    nextMonth();
   }
-  for (
-    ;
-    ;
-    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, anchorDay)
-  ) {
-    const due = rollForwardToWeekday(cursor);
-    if (due.getTime() > cutoff.getTime()) break;
-    dates.push(formatDate(due));
+  for (;; nextMonth()) {
+    const due = rollForwardToWeekday(anchorIso());
+    if (due > cutoff) break;
+    dates.push(due);
   }
   return dates;
 }
@@ -314,88 +341,50 @@ function monthlyAnchorDay(bookingDayOfMonth: number): number {
  * uses, so a DST boundary inside the stay cannot skip or repeat a night.
  */
 function stayHitsBlackout(
-  arrival: Date,
-  departure: Date | null,
+  arrival: string,
+  departure: string | null,
   blackoutDates: string[],
 ): boolean {
   if (blackoutDates.length === 0) return false;
   const blacked = new Set(blackoutDates);
-  const startUtc = Date.UTC(
-    arrival.getFullYear(),
-    arrival.getMonth(),
-    arrival.getDate(),
-  );
-  if (!departure || Number.isNaN(departure.getTime())) {
-    return blacked.has(utcToIso(startUtc));
-  }
-  const endUtc = Date.UTC(
-    departure.getFullYear(),
-    departure.getMonth(),
-    departure.getDate(),
-  );
-  if (endUtc <= startUtc) return blacked.has(utcToIso(startUtc));
-  const DAY_MS = 1000 * 60 * 60 * 24;
-  for (let night = startUtc; night < endUtc; night += DAY_MS) {
-    if (blacked.has(utcToIso(night))) return true;
+  if (!departure || departure <= arrival) return blacked.has(arrival);
+  for (let night = arrival; night < departure; night = addDays(night, 1)) {
+    if (blacked.has(night)) return true;
   }
   return false;
 }
 
-/** yyyy-MM-dd from a UTC-midnight timestamp, read back in UTC. */
-function utcToIso(utcMs: number): string {
-  const d = new Date(utcMs);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+/** Reduces a CalendarDate to YYYY-MM-DD, or null when it is not a date. */
+function toCalendarIso(d: CalendarDate): string | null {
+  if (typeof d === "string") {
+    const utc = plainDateToUtc(d);
+    return utc ? utcToPlainDate(utc) : null;
+  }
+  if (Number.isNaN(d.getTime())) return null;
+  return utcToPlainDate(new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())));
 }
 
-function daysBetween(a: Date, b: Date): number {
-  const aUtc = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
-  const bUtc = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
-  return Math.floor((bUtc - aUtc) / (1000 * 60 * 60 * 24));
+function daysBetween(a: string, b: string): number {
+  return daysBetweenIso(a, b);
 }
 
-function addDays(d: Date, n: number): Date {
-  const next = new Date(d);
-  next.setDate(next.getDate() + n);
-  return next;
+function addDays(d: string, n: number): string {
+  return addDaysIso(d, n);
 }
 
 // Weekday-only rule (mirrors PlanEligibilityService.rollForwardToWeekday on the
 // backend): no payment may land on a weekend. Saturday and Sunday both roll
 // FORWARD to the following Monday; weekdays are returned unchanged. Never rolls
-// backward, so an adjusted date is never earlier than its computed date.
-function rollForwardToWeekday(d: Date): Date {
-  const day = d.getDay(); // 0 = Sunday, 6 = Saturday
+// backward, so an adjusted date is never earlier than its computed date. The
+// weekday is read in UTC off a calendar date, so the browser zone is irrelevant.
+function rollForwardToWeekday(d: string): string {
+  const day = plainDateToUtc(d)?.getUTCDay(); // 0 = Sunday, 6 = Saturday
   if (day === 6) return addDays(d, 2);
   if (day === 0) return addDays(d, 1);
   return d;
 }
 
-function formatDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-export function formatCents(cents: number): string {
-  return (cents / 100).toLocaleString(undefined, {
-    style: "currency",
-    currency: "USD",
-  });
-}
-
-export function formatScheduleDate(iso: string): string {
-  const parts = iso.split("-").map(Number);
-  const y = parts[0] ?? 0;
-  const m = parts[1] ?? 1;
-  const d = parts[2] ?? 1;
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+/** "Jan 15, 2027" / "15 Jan 2027": a schedule due date in the booking's locale. */
+export function formatScheduleDate(iso: string, locale: string | null | undefined): string {
+  return formatPlainDate(iso, locale, { month: "short", day: "numeric", year: "numeric" });
 }

@@ -3,8 +3,6 @@ package com.bliss.b2b.integration.pms;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -41,8 +39,6 @@ import org.slf4j.LoggerFactory;
 public class CloudbedsAdapter implements PmsAdapter {
 
     private static final Logger log = LoggerFactory.getLogger(CloudbedsAdapter.class);
-
-    private static final int MINOR_UNIT_SCALE = 2;
     private static final int PAGE_LIMIT = 100;
 
     private final String apiBaseUrl;
@@ -86,7 +82,8 @@ public class CloudbedsAdapter implements PmsAdapter {
                 textOrNull(hotel, "propertyCurrency", "currencyCode", "currency"),
                 textOrNull(hotel, "propertyCountry", "country"),
                 null, // pricing model n/a
-                textOrNull(hotel, "propertyTimezone", "timezone"));
+                textOrNull(hotel, "propertyTimezone", "timezone"),
+                textOrNull(hotel, "propertyLanguage", "language"));
     }
 
     @Override
@@ -162,7 +159,7 @@ public class CloudbedsAdapter implements PmsAdapter {
         Map<String, String> body = new LinkedHashMap<>();
         body.put("propertyID", propertyId);
         body.put("paymentMethodID", pmsCardId);
-        body.put("amount", toDecimal(chargeAmount));
+        body.put("amount", toDecimal(chargeAmount, currency));
         body.put("currency", currency);
         if (reservationRef != null && !reservationRef.isBlank()) {
             body.put("reservationID", reservationRef);
@@ -256,12 +253,17 @@ public class CloudbedsAdapter implements PmsAdapter {
                 textOrNull(g, "guestEmail", "email"));
     }
 
-    /** Converts integer minor units to the decimal major-unit string Cloudbeds expects. */
-    static String toDecimal(long amountMinorUnits) {
-        return BigDecimal.valueOf(amountMinorUnits)
-                .movePointLeft(MINOR_UNIT_SCALE)
-                .setScale(MINOR_UNIT_SCALE, RoundingMode.UNNECESSARY)
-                .toPlainString();
+    /**
+     * Converts integer minor units to the decimal major-unit string Cloudbeds
+     * expects, at the currency's own scale (1050 USD is "10.50", 1050 JPY is
+     * "1050").
+     */
+    static String toDecimal(long amountMinorUnits, String currency) {
+        try {
+            return com.bliss.b2b.payments.Money.toMajor(amountMinorUnits, currency).toPlainString();
+        } catch (IllegalArgumentException e) {
+            throw new PmsAdapterException("Cannot charge in currency '" + currency + "': " + e.getMessage());
+        }
     }
 
     private static JsonNode firstOf(JsonNode maybeArray) {

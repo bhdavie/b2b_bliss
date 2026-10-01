@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { PaymentPlanStatus, PlanDetail } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
+import { formatMoneyCompact } from "@/lib/money";
 
 const STATUS_LABEL: Record<PaymentPlanStatus, string> = {
   pending_card: "Awaiting card",
@@ -63,12 +64,12 @@ export function AttentionCard({ plans }: { plans: PlanDetail[] }) {
                 {plan.status === "balance_due" ? (
                   <div className="mt-1 text-xs font-medium text-brand-purple">
                     Balance due at check-in:{" "}
-                    {formatCents(balanceDue(plan))}
+                    {formatMoneyCompact(balanceDue(plan), plan)}
                   </div>
                 ) : plan.failedInstallment ? (
                   <div className="mt-1 text-xs text-ink-muted">
                     Failed installment {plan.failedInstallment.sequence}:{" "}
-                    {formatCents(plan.failedInstallment.amountCents)} ·{" "}
+                    {formatMoneyCompact(plan.failedInstallment.amountCents, plan)} ·{" "}
                     {plan.failedInstallment.retryCount} retr
                     {plan.failedInstallment.retryCount === 1 ? "y" : "ies"}
                   </div>
@@ -94,12 +95,4 @@ function balanceDue(plan: PlanDetail): number {
     .filter((e) => e.status === "paid")
     .reduce((sum, e) => sum + e.amountCents, 0);
   return Math.max(0, plan.totalAmountCents - paid);
-}
-
-function formatCents(cents: number): string {
-  if (cents % 100 === 0) return `$${(cents / 100).toLocaleString()}`;
-  return (cents / 100).toLocaleString(undefined, {
-    style: "currency",
-    currency: "USD",
-  });
 }

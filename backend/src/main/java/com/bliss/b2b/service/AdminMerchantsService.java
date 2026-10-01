@@ -255,7 +255,7 @@ public class AdminMerchantsService {
         return jdbi.withHandle(h -> h.createQuery("""
                 SELECT b.id, b.booking_token, b.service_name, b.total_amount_cents,
                        b.status, b.booking_source, b.created_at, b.checkout_date,
-                       b.customer_name_hint,
+                       b.customer_name_hint, b.currency, b.locale,
                        p.id AS plan_id, p.status AS plan_status, p.num_payments,
                        p.processing_fee_cents, p.total_amount_cents AS plan_total_cents
                 FROM bookings b
@@ -284,7 +284,9 @@ public class AdminMerchantsService {
                             planId == null ? null : rs.getString("plan_status"),
                             planId == null ? null : rs.getInt("num_payments"),
                             fee,
-                            derivedRate(planTotal, fee));
+                            derivedRate(planTotal, fee, rs.getString("currency")),
+                            rs.getString("currency"),
+                            rs.getString("locale"));
                 })
                 .list());
     }
@@ -309,9 +311,11 @@ public class AdminMerchantsService {
      *       authoritative record is the fee-rate history either way.
      * </ul>
      */
-    static BigDecimal derivedRate(Long planTotalCents, Long feeCents) {
+    static BigDecimal derivedRate(Long planTotalCents, Long feeCents, String currency) {
         if (planTotalCents == null || feeCents == null || planTotalCents <= 0) return null;
-        if (feeCents == LEGACY_FLAT_FEE_CENTS) return null;
+        // The legacy flat fee was $20, so only a USD plan can be one. 2000
+        // minor units of any other currency is an ordinary percentage fee.
+        if (feeCents == LEGACY_FLAT_FEE_CENTS && "USD".equals(currency)) return null;
         BigDecimal rate = BigDecimal.valueOf(feeCents)
                 .divide(BigDecimal.valueOf(planTotalCents), 5, RoundingMode.HALF_UP);
         long roundTrip = BigDecimal.valueOf(planTotalCents)
@@ -346,7 +350,9 @@ public class AdminMerchantsService {
             String status, String bookingSource, Instant createdAt,
             java.time.LocalDate checkoutDate, String customerNameHint,
             UUID planId, String planStatus, Integer numPayments,
-            Long processingFeeCents, BigDecimal derivedFeeRate) {}
+            Long processingFeeCents, BigDecimal derivedFeeRate,
+            // The booking's currency (amounts above are minor units of it) and locale.
+            String currency, String locale) {}
 
     public record MerchantDetail(
             MerchantRow merchant, Profile profile, List<FeeRateRow> feeRateHistory,

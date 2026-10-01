@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   fetchPlanPortal,
-  formatDollarsCompact,
   formatScheduleDateLong,
   formatScheduleDateShort,
   type CreatePlanResponse,
   type PublicBooking,
 } from "@/lib/publicApi";
 import { feeForAtRate } from "@/lib/blissFee";
+import { formatMoneyCompact, type MoneyContext } from "@/lib/money";
 
 export function Confirmation({
   booking,
@@ -42,6 +42,7 @@ export function Confirmation({
       ? Math.round((savings / plan.originalTotalAmountCents) * 100)
       : 0;
   const processingFeeCents = feeForAtRate(plan.totalAmountCents, feeRate);
+  const money: MoneyContext = { currency: booking.currency, locale: booking.locale };
   const hostName = booking.merchant.businessName?.trim();
   const checkout = booking.service.checkoutDate;
   // Payment 1 is always taken at checkout: the deposit when there is one,
@@ -71,9 +72,9 @@ export function Confirmation({
           {booking.service.name}
         </div>
         <div className="mt-0.5 text-[12px] text-ink-muted">
-          {formatScheduleDateLong(booking.service.appointmentDate)}
+          {formatScheduleDateLong(booking.service.appointmentDate, money.locale)}
           {checkout && checkout !== booking.service.appointmentDate ? (
-            <> to {formatScheduleDateLong(checkout)}</>
+            <> to {formatScheduleDateLong(checkout, money.locale)}</>
           ) : null}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-y-2 text-[12px]">
@@ -81,13 +82,13 @@ export function Confirmation({
             <>
               <div className="text-[11px] text-ink-muted">Subtotal</div>
               <div className="text-right text-[11px] text-ink-muted line-through tabular-nums">
-                {formatDollarsCompact(plan.originalTotalAmountCents)}
+                {formatMoneyCompact(plan.originalTotalAmountCents, money)}
               </div>
               <div className="text-[11px] text-emerald-700">
                 Plan discount ({percent}%)
               </div>
               <div className="text-right text-[11px] text-emerald-700 tabular-nums">
-                -{formatDollarsCompact(savings)}
+                -{formatMoneyCompact(savings, money)}
               </div>
             </>
           ) : null}
@@ -95,19 +96,19 @@ export function Confirmation({
             <>
               <div className="text-[11px] text-ink-muted">Processing fee</div>
               <div className="text-right text-[11px] text-ink-muted tabular-nums">
-                +{formatDollarsCompact(processingFeeCents)}
+                +{formatMoneyCompact(processingFeeCents, money)}
               </div>
             </>
           ) : null}
           <div className="text-[15px] font-bold text-ink">Total</div>
           <div className="text-right text-[15px] font-bold text-ink tabular-nums">
-            {formatDollarsCompact(displayedTotalCents)}
+            {formatMoneyCompact(displayedTotalCents, money)}
           </div>
           {plan.depositAmountCents > 0 ? (
             <>
               <div className="text-ink-muted">Deposit today</div>
               <div className="text-right text-ink">
-                {formatDollarsCompact(plan.depositAmountCents)}
+                {formatMoneyCompact(plan.depositAmountCents, money)}
               </div>
             </>
           ) : null}
@@ -153,11 +154,11 @@ export function Confirmation({
                 <span>
                   {entry.kind === "deposit" || entry.sequence === chargedAtCheckoutSequence
                     ? "Today"
-                    : formatScheduleDateShort(entry.dueDate)}
+                    : formatScheduleDateShort(entry.dueDate, money.locale)}
                 </span>
               </span>
               <span className="tabular-nums text-ink">
-                {formatDollarsCompact(entry.amountCents)}
+                {formatMoneyCompact(entry.amountCents, money)}
               </span>
             </li>
           ))}

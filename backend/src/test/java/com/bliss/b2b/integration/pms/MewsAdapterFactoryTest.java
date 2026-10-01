@@ -41,7 +41,7 @@ class MewsAdapterFactoryTest {
             @Override
             public void upsertValidated(UUID merchantId, String platformUrl, String encryptedClientToken,
                     String encryptedAccessToken, String enterpriseId, String enterpriseName,
-                    String currency, Instant validatedAt) {
+                    String currency, String timeZone, String locale, Instant validatedAt) {
                 stored[0] = encryptedClientToken;
                 stored[1] = encryptedAccessToken;
             }
@@ -59,7 +59,7 @@ class MewsAdapterFactoryTest {
         };
         new MewsAdapterFactory(capturing, CIPHER, 0).saveValidatedConnection(
                 MERCHANT, "https://api.mews.com", "client-plain", "access-plain",
-                new PmsPropertyConfiguration("ent", "Cranberry", "USD", "US", "Gross", "America/New_York"),
+                new PmsPropertyConfiguration("ent", "Cranberry", "USD", "US", "Gross", "America/New_York", "en-US"),
                 Instant.now());
 
         assertThat(stored[0]).startsWith("v1:").doesNotContain("client-plain");
@@ -87,7 +87,7 @@ class MewsAdapterFactoryTest {
             @Override
             public void upsertValidated(UUID merchantId, String platformUrl, String encryptedClientToken,
                     String encryptedAccessToken, String enterpriseId, String enterpriseName,
-                    String currency, Instant validatedAt) {
+                    String currency, String timeZone, String locale, Instant validatedAt) {
                 throw new UnsupportedOperationException();
             }
 

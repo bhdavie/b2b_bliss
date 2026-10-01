@@ -1,6 +1,7 @@
 package com.bliss.b2b.integration.pms;
 
 import com.bliss.b2b.BlissConfiguration.PmsConfig.MewsPmsConfig;
+import com.bliss.b2b.payments.Money;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -65,12 +66,6 @@ public class MewsAdapter implements PmsAdapter {
     /** Cap on rows pulled per list call; a demo property holds far fewer. */
     private static final int PAGE_LIMIT = 100;
 
-    /**
-     * Minor-unit exponent used to convert Bliss integer amounts to Mews'
-     * decimal {@code GrossValue}. Fixed at 2 (GBP/USD/EUR); zero-decimal
-     * currencies such as JPY are out of scope for the demo.
-     */
-    private static final int MINOR_UNIT_SCALE = 2;
 
     private final MewsPmsConfig config;
     private final HttpClient http;
@@ -113,7 +108,8 @@ public class MewsAdapter implements PmsAdapter {
                 defaultCurrency(enterprise.path("Currencies")),
                 textOrNull(address, "CountryCode"),
                 textOrNull(enterprise, "Pricing"),
-                textOrNull(enterprise, "TimeZoneIdentifier"));
+                textOrNull(enterprise, "TimeZoneIdentifier"),
+                textOrNull(enterprise, "DefaultLanguageCode"));
     }
 
     @Override
@@ -196,7 +192,7 @@ public class MewsAdapter implements PmsAdapter {
         body.put("CreditCardId", pmsCardId);
         body.put("Amount", Map.of(
                 "Currency", currency,
-                "GrossValue", toGrossValue(chargeAmount)));
+                "GrossValue", toGrossValue(chargeAmount, currency)));
         if (reservationRef != null && !reservationRef.isBlank()) {
             body.put("ReservationId", reservationRef);
         }
@@ -222,7 +218,7 @@ public class MewsAdapter implements PmsAdapter {
             }
             String reason = declineReason(e.pmsMessage());
             log.warn("Mews charge of {} {} on card {} (reservation {}) refused: {}",
-                    toGrossValue(chargeAmount), currency, pmsCardId, reservationRef, e.getMessage());
+                    toGrossValue(chargeAmount, currency), currency, pmsCardId, reservationRef, e.getMessage());
             return new PmsChargeResult(null, PmsChargeStatus.FAILED, reason, amountMinorUnits, currency);
         }
         String paymentId = textOrNull(charge, "PaymentId");
@@ -462,12 +458,13 @@ public class MewsAdapter implements PmsAdapter {
             if (!gross.isNumber()) {
                 throw new PmsAdapterException("Mews payment " + textOrNull(p, "Id") + " has no amount");
             }
+            String paymentCurrency = textOrNull(amount, "Currency");
             out.add(new MewsCardPayment(
                     textOrNull(p, "Id"),
                     textOrNull(p, "State"),
                     // Mews books a payment as a negative bill entry; Bliss wants what was paid.
-                    toMinorUnits(gross.decimalValue().abs()),
-                    textOrNull(amount, "Currency"),
+                    toMinorUnits(gross.decimalValue().abs(), paymentCurrency),
+                    paymentCurrency,
                     textOrNull(p.path("Data").path("CreditCard"), "CreditCardId"),
                     parseInstant(textOrNull(p, "CreatedUtc"))));
         }
@@ -506,7 +503,7 @@ public class MewsAdapter implements PmsAdapter {
         if (items == 0) {
             throw new PmsAdapterException("Reservation " + reservationId + " has no order items");
         }
-        return new StayPrice(toMinorUnits(sum), currency);
+        return new StayPrice(toMinorUnits(sum, currency), currency);
     }
 
     /** A Mews customer by id, or empty. */
@@ -741,27 +738,28 @@ public class MewsAdapter implements PmsAdapter {
     }
 
     /**
-     * Converts integer minor units (e.g. 1050 pence) to the decimal major-unit
-     * value Mews expects in {@code Amount.GrossValue} (e.g. 10.50). Kept as a
-     * {@link BigDecimal} so no float ever enters the money path.
+     * Converts integer minor units to the decimal major-unit value Mews expects
+     * in {@code Amount.GrossValue}, at the currency's own scale: 1050 GBP is
+     * 10.50, 1050 JPY is 1050, 1050 KWD is 1.050. Kept as a {@link BigDecimal}
+     * so no float ever enters the money path.
      */
-    private static BigDecimal toGrossValue(long amountMinorUnits) {
-        return BigDecimal.valueOf(amountMinorUnits)
-                .movePointLeft(MINOR_UNIT_SCALE)
-                .setScale(MINOR_UNIT_SCALE, RoundingMode.UNNECESSARY);
+    static BigDecimal toGrossValue(long amountMinorUnits, String currency) {
+        try {
+            return Money.toMajor(amountMinorUnits, currency);
+        } catch (IllegalArgumentException e) {
+            throw new PmsAdapterException("Cannot charge in currency '" + currency + "': " + e.getMessage());
+        }
     }
 
     /**
-     * Inverse of {@link #toGrossValue}. Exact: a price with more than two
-     * decimals is an error, never silently rounded.
+     * Inverse of {@link #toGrossValue}. Exact: a price with more decimals than
+     * the currency has is an error, never silently rounded.
      */
-    static long toMinorUnits(BigDecimal majorUnits) {
+    static long toMinorUnits(BigDecimal majorUnits, String currency) {
         try {
-            return majorUnits.setScale(MINOR_UNIT_SCALE, RoundingMode.UNNECESSARY)
-                    .movePointRight(MINOR_UNIT_SCALE)
-                    .longValueExact();
-        } catch (ArithmeticException e) {
-            throw new PmsAdapterException("Mews price " + majorUnits + " is not a whole number of cents");
+            return Money.toMinor(majorUnits, currency);
+        } catch (IllegalArgumentException e) {
+            throw new PmsAdapterException("Mews price " + majorUnits + " " + currency + ": " + e.getMessage());
         }
     }
 

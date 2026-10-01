@@ -3,6 +3,7 @@
 
 import { API_BASE_URL } from "./api";
 import { feeForAtRate } from "./blissFee";
+import { formatPlainDate, splitInstallments } from "./money";
 
 /**
  * Customer-facing schedule shape, mirroring how the backend persists rows in
@@ -29,18 +30,19 @@ export function deriveDisplayAmounts(opts: {
 }
 
 /**
- * Split the post-deposit remaining balance evenly across N installments.
- * The first N-1 entries round to the nearest cent; the final entry absorbs
- * any remainder so the sum equals remainingCents exactly.
+ * Split the post-deposit remaining balance evenly across N installments, the
+ * backend's way: the first N-1 entries are floor(remaining / N) and the final
+ * entry takes the remainder, so it is never smaller and the sum equals
+ * remainingCents exactly. Minor units of the booking's currency.
  */
 export function distributeInstallments(opts: {
   remainingCents: number;
   numPayments: number;
 }) {
   if (opts.numPayments <= 0) return { perPaymentCents: 0, finalPaymentCents: 0 };
-  const perPaymentCents = Math.round(opts.remainingCents / opts.numPayments);
-  const finalPaymentCents =
-    opts.remainingCents - perPaymentCents * (opts.numPayments - 1);
+  const split = splitInstallments(opts.remainingCents, opts.numPayments);
+  const perPaymentCents = split[0] ?? 0;
+  const finalPaymentCents = split[opts.numPayments - 1] ?? 0;
   return { perPaymentCents, finalPaymentCents };
 }
 
@@ -125,6 +127,11 @@ export type PublicBooking = {
   policies: PublicPolicies;
   status: string;
   rail: PublicRail;
+  // The booking's currency (every *Cents field is minor units of it), and the
+  // locale and zone to format its amounts and dates in.
+  currency: string;
+  locale: string | null;
+  timeZone: string | null;
 };
 
 export async function fetchPublicBooking(
@@ -175,6 +182,11 @@ export type PublicMerchant = {
     chargesEnabled: boolean;
   };
   rail: PublicRail;
+  // The property's currency, null when it has none (checkout is then refused),
+  // and its locale and zone.
+  currency: string | null;
+  locale: string | null;
+  timeZone: string | null;
 };
 
 export async function fetchPublicMerchant(
@@ -206,6 +218,9 @@ export type CheckoutRequest = {
   customerPhone?: string | null;
   paymentMethodId: string;
   frequency: PublicPlanFrequency;
+  // ISO 4217 code the cart was priced in, when the checkout URL carries one.
+  // The backend rejects a mismatch with the property's currency.
+  currency?: string | null;
   // Optional card metadata used only by the backend's demo-mode persistence
   // path. The frontend's DemoCardSection sends these so the persisted card
   // row reflects what the customer typed.
@@ -233,6 +248,9 @@ export type CheckoutResponse = {
   }[];
   firstChargeIntentId: string;
   firstChargeStatus: string;
+  currency: string;
+  locale: string | null;
+  timeZone: string | null;
 };
 
 export async function submitCheckout(
@@ -324,13 +342,9 @@ export async function createPlan(
   return { ok: true, data: body as CreatePlanResponse };
 }
 
-export function formatScheduleDateLong(iso: string): string {
-  const parts = iso.split("-").map(Number);
-  const y = parts[0] ?? 0;
-  const m = parts[1] ?? 1;
-  const d = parts[2] ?? 1;
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString(undefined, {
+/** "Friday, January 15, 2027" / "Friday 15 January 2027", in the booking's locale. */
+export function formatScheduleDateLong(iso: string, locale: string | null | undefined): string {
+  return formatPlainDate(iso, locale, {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -338,36 +352,14 @@ export function formatScheduleDateLong(iso: string): string {
   });
 }
 
-export function formatScheduleDateShort(iso: string): string {
-  const parts = iso.split("-").map(Number);
-  const y = parts[0] ?? 0;
-  const m = parts[1] ?? 1;
-  const d = parts[2] ?? 1;
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
+/** "Jan 15" / "15 Jan", in the booking's locale. */
+export function formatScheduleDateShort(iso: string, locale: string | null | undefined): string {
+  return formatPlainDate(iso, locale, { month: "short", day: "numeric" });
 }
 
-export function formatScheduleDatePill(iso: string): string {
+export function formatScheduleDatePill(iso: string, locale: string | null | undefined): string {
   // 9px uppercase per spec: "MAY 1" form.
-  return formatScheduleDateShort(iso).toUpperCase();
-}
-
-export function formatDollars(cents: number): string {
-  return (cents / 100).toLocaleString(undefined, {
-    style: "currency",
-    currency: "USD",
-  });
-}
-
-export function formatDollarsCompact(cents: number): string {
-  // No decimals when even.
-  if (cents % 100 === 0) {
-    return `$${(cents / 100).toLocaleString()}`;
-  }
-  return formatDollars(cents);
+  return formatScheduleDateShort(iso, locale).toUpperCase();
 }
 
 // ---------------------------------------------------------------------------
@@ -431,6 +423,11 @@ export type PublicPlanPortal = {
     publishableKey: string | null;
   };
   rail: PublicRail;
+  // The booking's currency (every *Cents field is minor units of it), and the
+  // locale and zone to format its amounts and dates in.
+  currency: string;
+  locale: string | null;
+  timeZone: string | null;
 };
 
 export async function fetchPlanPortal(token: string): Promise<PublicPlanPortal | null> {
@@ -587,6 +584,11 @@ export type AccountPlanCard = {
   nextDueAmountCents: number | null;
   refunded: boolean;
   refundAmountCents: number | null;
+  // This card's booking currency, locale and zone. Cards on one account can
+  // be in different currencies.
+  currency: string;
+  locale: string | null;
+  timeZone: string | null;
 };
 
 export type AccountPlansResponse = {

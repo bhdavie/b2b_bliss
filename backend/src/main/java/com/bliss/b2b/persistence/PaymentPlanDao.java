@@ -179,7 +179,10 @@ public interface PaymentPlanDao {
                 b.service_name AS serviceName,
                 b.appointment_date AS appointmentDate,
                 b.checkout_date AS checkoutDate,
-                b.original_total_cents AS originalTotalCents
+                b.original_total_cents AS originalTotalCents,
+                b.currency AS currency,
+                b.time_zone AS timeZone,
+                b.locale AS localeTag
             FROM payment_plans pp
             JOIN bookings  b ON b.id = pp.booking_id
             JOIN merchants m ON m.id = b.merchant_id
@@ -285,6 +288,48 @@ public interface PaymentPlanDao {
             Long overdueCount       // null when no plan
     ) {}
 
+    /**
+     * How a plan's charges move: its rail, and on the Mews rail the guest,
+     * card and reservation a charge goes against. Reads the plan's own card
+     * (customer_card_id), as the scheduled charge pass does, not whichever card
+     * is currently the customer's default.
+     */
+    @SqlQuery("""
+            SELECT pp.payment_rail          AS paymentRail,
+                   c.mews_customer_id       AS mewsCustomerId,
+                   cc.mews_credit_card_id   AS mewsCreditCardId,
+                   cc.stripe_payment_method_id AS cardKey,
+                   b.mews_reservation_id    AS mewsReservationId
+            FROM payment_plans pp
+            JOIN customers      c  ON c.id  = pp.customer_id
+            JOIN customer_cards cc ON cc.id = pp.customer_card_id
+            JOIN bookings       b  ON b.id  = pp.booking_id
+            WHERE pp.id = :planId
+            """)
+    @RegisterConstructorMapper(ChargeRoute.class)
+    Optional<ChargeRoute> chargeRoute(@Bind("planId") UUID planId);
+
+    /**
+     * Row-locks the plan for the rest of the transaction. Everything that
+     * charges an installment takes it first (guest pay early and pay off on
+     * both rails, and the scheduled charge pass per installment) and only then
+     * reads which rows are still unpaid, so one installment is never charged
+     * twice: a second payer waits for the first to commit and then finds the
+     * row settled.
+     */
+    @SqlQuery("SELECT id FROM payment_plans WHERE id = :planId FOR UPDATE")
+    Optional<UUID> lockForUpdate(@Bind("planId") UUID planId);
+
+    record ChargeRoute(
+            String paymentRail,
+            String mewsCustomerId,
+            String mewsCreditCardId,
+            // customer_cards.stripe_payment_method_id: a real pm_..., a demo
+            // pm_demo_..., or the mews_link_... placeholder on linked Mews plans.
+            String cardKey,
+            String mewsReservationId
+    ) {}
+
     record PaymentPlanListItem(
             UUID id,
             UUID bookingId,
@@ -303,7 +348,11 @@ public interface PaymentPlanDao {
             String serviceName,
             LocalDate appointmentDate,
             LocalDate checkoutDate,
-            Long originalTotalCents
+            Long originalTotalCents,
+            // The booking's snapshot (V36): amounts above are minor units of currency.
+            String currency,
+            String timeZone,
+            String localeTag
     ) {}
 
     record PlanScheduleSummary(

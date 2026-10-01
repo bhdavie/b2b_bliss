@@ -64,7 +64,11 @@ export default async function HostedPaymentPlanPage(props: {
     return (
       <PageChrome>
         <MerchantBlock merchant={booking.merchant} />
-        <ServiceCard service={booking.service} feeRate={feeRate} />
+        <ServiceCard
+          service={booking.service}
+          feeRate={feeRate}
+          money={{ currency: booking.currency, locale: booking.locale }}
+        />
         <TooClose booking={booking} />
       </PageChrome>
     );

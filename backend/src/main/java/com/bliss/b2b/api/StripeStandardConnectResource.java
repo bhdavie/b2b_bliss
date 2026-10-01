@@ -180,6 +180,7 @@ public class StripeStandardConnectResource {
         boolean was = conn.isChargesEnabled();
         connectionDao.updateStatus(
                 merchant.id(), newStatus.wire(), chargesEnabled, Instant.now(clock));
+        onboardingService.recordStripeAccountLocale(merchant.id(), account);
         if (!was && chargesEnabled) {
             onboardingService.markStripeConnected(merchant.id());
             log.info("Merchant {} Stripe Standard charges enabled (account {})",

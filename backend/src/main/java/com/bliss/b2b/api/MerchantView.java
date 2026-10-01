@@ -16,7 +16,12 @@ public record MerchantView(
         boolean onboardingComplete,
         String onboardingState,
         String pmsType,
-        Instant emailVerifiedAt
+        Instant emailVerifiedAt,
+        // What the property trades in: null until a PMS or Stripe is connected
+        // or the property sets it. New bookings are priced in this currency.
+        String currency,
+        String locale,
+        String timeZone
 ) {
     public static MerchantView from(Merchant m) {
         return new MerchantView(
@@ -39,7 +44,10 @@ public record MerchantView(
                 m.onboardingComplete(),
                 m.onboardingState().wire(),
                 m.pmsType().wire(),
-                m.emailVerifiedAt()
+                m.emailVerifiedAt(),
+                m.currency(),
+                m.localeTag(),
+                m.timeZone()
         );
     }
 }

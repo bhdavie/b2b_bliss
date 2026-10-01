@@ -10,6 +10,9 @@ import {
   DEFAULT_PLAN_RULES,
 } from "@/lib/api";
 import { previewEligibility, formatScheduleDate } from "@/lib/eligibility";
+
+// Demo US inn: prices are USD by design.
+const DEMO_US_LOCALE = "en-US";
 import { calcInstallmentPlan } from "@/lib/blissFee";
 import { useFeeRate } from "@/lib/useFeeRate";
 import {
@@ -1826,7 +1829,7 @@ function PlanChoice({
       </div>
       <div className="mt-0.5 text-[11px] text-brand-navy/60">
         {option.numPayments} payments
-        {lastDate ? ` through ${formatScheduleDate(lastDate)}` : ""}
+        {lastDate ? ` through ${formatScheduleDate(lastDate, DEMO_US_LOCALE)}` : ""}
       </div>
     </button>
   );
@@ -1857,7 +1860,7 @@ function PlanSchedule({ option }: { option: PlanOptionPreview }) {
             key={r.date}
             className="flex items-center justify-between rounded-none bg-brand-lavender/20 px-3 py-2 text-sm"
           >
-            <span className="text-brand-navy/80">{formatScheduleDate(r.date)}</span>
+            <span className="text-brand-navy/80">{formatScheduleDate(r.date, DEMO_US_LOCALE)}</span>
             <span className="font-medium tabular-nums text-brand-navy">
               {formatUsd(r.amountCents)}
             </span>

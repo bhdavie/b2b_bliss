@@ -250,6 +250,16 @@ WHERE id = 'be72e70e-4162-4196-9c68-c5ee6e7c3363'
 
 COMMIT;
 
+-- V36: the property trades in USD on New York time, and its bookings carry
+-- that snapshot. Only fills what is unset, so re-running changes nothing.
+UPDATE merchants m
+SET currency = 'USD', time_zone = 'America/New_York', locale = 'en-US'
+WHERE m.currency IS NULL AND m.id = 'cc78d7ec-d61d-4415-a14c-424af1b533b8';
+UPDATE bookings b
+SET currency = m.currency, time_zone = m.time_zone, locale = m.locale
+FROM merchants m
+WHERE m.id = b.merchant_id AND b.currency IS NULL AND m.id = 'cc78d7ec-d61d-4415-a14c-424af1b533b8';
+
 -- Reset:
 --   DELETE FROM payment_schedule WHERE payment_plan_id = 'be72e70e-4162-4196-9c68-c5ee6e7c3363';
 --   DELETE FROM payment_plans    WHERE id = 'be72e70e-4162-4196-9c68-c5ee6e7c3363';

@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 import {
   deriveDisplayAmounts,
   distributeInstallments,
-  formatDollarsCompact,
   submitCheckout,
   type CheckoutResponse,
   type PublicMerchant,
@@ -20,6 +19,7 @@ import {
   type PlanFrequency,
   type PreviewResult,
 } from "@/lib/eligibility";
+import { formatMoneyCompact, todayIn, type MoneyContext } from "@/lib/money";
 import { DepositCallout } from "./DepositCallout";
 import { MerchantBlock, hostName } from "./MerchantBlock";
 import { PlanPicker } from "./PlanPicker";
@@ -36,7 +36,11 @@ import { CheckoutSummaryCard } from "./CheckoutSummaryCard";
 import { DemoCardSection } from "./DemoCardSection";
 
 export type CheckoutCart = {
+  // Minor units of the property's currency.
   totalCents: number;
+  // ISO 4217 code from the checkout URL, when it carries one. Sent with the
+  // checkout so the backend can refuse a cart priced in another currency.
+  currency: string | null;
   checkin: string;
   checkout: string | null;
   description: string | null;
@@ -52,9 +56,13 @@ export function CheckoutFlow({
   cart,
   returnUrl,
   feeRate,
+  money,
 }: {
   merchant: PublicMerchant;
   cart: CheckoutCart;
+  // The property's currency and locale. The page refuses to render checkout
+  // for a property with no currency, so this is always present here.
+  money: MoneyContext;
   // Resolved server-side from the route's slug and threaded through, so every
   // figure on this page and its confirmation quotes the one rate.
   feeRate: number;
@@ -71,18 +79,19 @@ export function CheckoutFlow({
   // Mirror the backend rules type for the eligibility helper. The public
   // /merchants/:slug endpoint already returns these in the right shape.
   const rules = adaptPolicies(merchant.policies);
-  const checkinDate = parseLocalDate(cart.checkin);
+  // "Today" is the property's calendar date, as the backend computes it, so
+  // the preview offers the same schedule the plan will be built on.
   const preview: PreviewResult = useMemo(
     () =>
       previewEligibility(
-        today(),
-        checkinDate,
-        parseLocalDate(cart.checkout),
+        todayIn(merchant.timeZone),
+        cart.checkin,
+        cart.checkout,
         cart.totalCents,
         rules,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cart.totalCents, cart.checkin, cart.checkout],
+    [cart.totalCents, cart.checkin, cart.checkout, merchant.timeZone],
   );
 
   const defaultFreq: PlanFrequency =
@@ -99,7 +108,7 @@ export function CheckoutFlow({
 
   if (step === "confirmed" && confirmed) {
     return <Confirmation
-        booking={syntheticBookingFromCart(merchant, cart)}
+        booking={syntheticBookingFromCart(merchant, cart, money, confirmed)}
         plan={syntheticPlanFromCheckout(confirmed)}
         feeRate={feeRate} />;
   }
@@ -116,9 +125,10 @@ export function CheckoutFlow({
           originalTotalCents={preview.originalTotalAmountCents}
           discountedTotalCents={preview.discountedTotalAmountCents}
           feeRate={feeRate}
+          money={money}
         />
         <TooClose
-          booking={syntheticBookingFromCart(merchant, cart, preview.reason, preview.daysToAppointment)}
+          booking={syntheticBookingFromCart(merchant, cart, money, null, preview.reason, preview.daysToAppointment)}
           returnUrl={returnUrl}
         />
       </>
@@ -149,6 +159,7 @@ export function CheckoutFlow({
         originalTotalCents={preview.originalTotalAmountCents}
         discountedTotalCents={preview.discountedTotalAmountCents}
         feeRate={feeRate}
+        money={money}
       />
 
       <div className={showCardStep ? "pointer-events-none opacity-30" : ""}>
@@ -157,6 +168,7 @@ export function CheckoutFlow({
             todayCents={display.todayCents}
             remainingCents={display.remainingCents}
             depositRate={display.depositRate}
+            money={money}
           />
         ) : null}
         <PlanPicker
@@ -164,16 +176,19 @@ export function CheckoutFlow({
           selected={publicOption.frequency}
           onSelect={(f) => setSelected(f)}
           remainingCents={display.remainingCents}
+          money={money}
         />
         <ScheduleVisualizer
           option={publicOption}
           todayCents={display.todayCents}
           perPaymentCents={distribution.perPaymentCents}
           finalPaymentCents={distribution.finalPaymentCents}
+          money={money}
         />
         <PolicyDisclosure
           policies={merchant.policies}
           creditInsteadOfRefund={merchant.rail === "mews"}
+          money={money}
         />
       </div>
 
@@ -208,7 +223,7 @@ export function CheckoutFlow({
               busy={busy}
               onCancel={() => setStep("plan")}
               ctaLabel="Book now"
-              disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, publicOption)}
+              disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, publicOption, money)}
               onCardCollected={async (card) => {
                 await handleSubmit(card);
               }}
@@ -225,7 +240,7 @@ export function CheckoutFlow({
             busy={busy}
             onCancel={() => setStep("plan")}
             ctaLabel="Book now"
-            disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, publicOption)}
+            disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, publicOption, money)}
             onDemoSubmit={handleDemoSubmit}
             returnUrl={returnUrl}
             merchantName={hostName(merchant.merchant)}
@@ -245,6 +260,7 @@ export function CheckoutFlow({
     const result = await submitCheckout({
       merchantSlug: merchant.merchant.slug,
       totalAmountCents: cart.totalCents,
+      currency: cart.currency,
       appointmentDate: cart.checkin,
       checkoutDate: cart.checkout,
       description: cart.description,
@@ -273,6 +289,7 @@ export function CheckoutFlow({
     const result = await submitCheckout({
       merchantSlug: merchant.merchant.slug,
       totalAmountCents: cart.totalCents,
+      currency: cart.currency,
       appointmentDate: cart.checkin,
       checkoutDate: cart.checkout,
       description: cart.description,
@@ -329,35 +346,22 @@ function disclosureCopy(
   todayCents: number,
   perPaymentCents: number,
   option: PublicPlanOption,
+  money: MoneyContext,
 ): string {
   const cadence = option.frequency === "biweekly" ? "bi-weekly" : "monthly";
   if (hasDeposit) {
     return (
-      `Your card will be charged ${formatDollarsCompact(todayCents)} today as a deposit. ` +
+      `Your card will be charged ${formatMoneyCompact(todayCents, money)} today as a deposit. ` +
       `${option.numPayments} ${cadence} payment${option.numPayments === 1 ? "" : "s"} ` +
-      `of ${formatDollarsCompact(perPaymentCents)} will be charged automatically on the schedule above. ` +
+      `of ${formatMoneyCompact(perPaymentCents, money)} will be charged automatically on the schedule above. ` +
       `Cancel your booking anytime before check-in.`
     );
   }
   return (
-    `Your card will be charged ${formatDollarsCompact(perPaymentCents)} today. ` +
+    `Your card will be charged ${formatMoneyCompact(perPaymentCents, money)} today. ` +
     `${option.numPayments - 1} more ${cadence} payments will follow on the schedule above. ` +
     `Cancel your booking anytime before check-in.`
   );
-}
-
-function parseLocalDate(iso: string | null): Date | null {
-  if (!iso) return null;
-  const [y, m, d] = iso.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  const dt = new Date(y, m - 1, d);
-  if (Number.isNaN(dt.getTime())) return null;
-  return dt;
-}
-
-function today(): Date {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
 /**
@@ -367,6 +371,10 @@ function today(): Date {
 function syntheticBookingFromCart(
   merchant: PublicMerchant,
   cart: CheckoutCart,
+  money: MoneyContext,
+  // The created booking's currency, locale and zone once checkout has gone
+  // through; before that, the property's.
+  confirmed: CheckoutResponse | null = null,
   reason: string = "ok",
   daysToAppointment: number = 0,
 ) {
@@ -395,6 +403,9 @@ function syntheticBookingFromCart(
     policies: merchant.policies,
     status: "sent",
     rail: merchant.rail,
+    currency: confirmed?.currency ?? money.currency,
+    locale: confirmed ? confirmed.locale : (money.locale ?? null),
+    timeZone: confirmed ? confirmed.timeZone : merchant.timeZone,
   };
 }
 

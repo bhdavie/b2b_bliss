@@ -22,7 +22,12 @@ public record PublicBookingView(
         Stripe stripe,
         Policies policies,
         String status,
-        String rail
+        String rail,
+        // The booking's currency (every amount here is minor units of it),
+        // and the locale and zone to format amounts and dates in.
+        String currency,
+        String locale,
+        String timeZone
 ) {
     /**
      * Which card-capture rail the hosted page should use: {@code "mews"} for a
@@ -178,7 +183,10 @@ public record PublicBookingView(
                         stripeConfigured ? connectedAccountId : null),
                 policies,
                 booking.status().wire(),
-                railOf(merchant, stripeConfigured)
+                railOf(merchant, stripeConfigured),
+                booking.currency(),
+                booking.localeTag(),
+                booking.timeZone()
         );
     }
 }

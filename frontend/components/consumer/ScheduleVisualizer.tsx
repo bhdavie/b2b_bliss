@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { SectionLabel } from "./SectionLabel";
+import { formatMoneyCompact, type MoneyContext } from "@/lib/money";
 import {
-  formatDollarsCompact,
   formatScheduleDateLong,
   type PublicPlanOption,
 } from "@/lib/publicApi";
@@ -27,18 +27,20 @@ export function ScheduleVisualizer({
   todayCents,
   perPaymentCents,
   finalPaymentCents,
+  money,
 }: {
   option: PublicPlanOption;
   todayCents: number;
   perPaymentCents: number;
   finalPaymentCents: number;
+  money: MoneyContext;
 }) {
   const [expanded, setExpanded] = useState(false);
 
   const installmentRows: Row[] = option.dueDates.map((d, i) => {
     const isFinal = i === option.dueDates.length - 1;
     return {
-      label: formatScheduleDateLong(d),
+      label: formatScheduleDateLong(d, money.locale),
       amount: isFinal ? finalPaymentCents : perPaymentCents,
     };
   });
@@ -62,7 +64,7 @@ export function ScheduleVisualizer({
           >
             <span className="text-ink-500">{r.label}</span>
             <span className="font-medium tabular-nums text-ink-900">
-              {formatDollarsCompact(r.amount)}
+              {formatMoneyCompact(r.amount, money)}
             </span>
           </div>
         ))}

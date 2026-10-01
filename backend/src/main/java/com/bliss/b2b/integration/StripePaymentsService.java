@@ -105,6 +105,9 @@ public class StripePaymentsService {
      * error including card decline (CardException). Caller wraps in a transaction
      * so a decline rolls back the plan.
      *
+     * <p>{@code currency} is the booking's ISO code and is required: there is
+     * no default currency.
+     *
      * <p>{@code idempotencyKey} should be the PaymentSchedule row id so a retry
      * on the same row does not double-charge.
      *
@@ -115,6 +118,7 @@ public class StripePaymentsService {
      */
     public PaymentIntent firePaymentOffSession(
             long amountCents,
+            String currency,
             String stripeCustomerId,
             String paymentMethodId,
             String idempotencyKey,
@@ -128,7 +132,9 @@ public class StripePaymentsService {
         long chargeAmount = capCharge(amountCents);
         PaymentIntentCreateParams.Builder params = PaymentIntentCreateParams.builder()
                 .setAmount(chargeAmount)
-                .setCurrency("usd")
+                // The booking's currency; amountCents is in its minor units,
+                // which is what Stripe expects (whole yen for JPY).
+                .setCurrency(com.bliss.b2b.payments.Money.code(currency).toLowerCase(java.util.Locale.ROOT))
                 .setCustomer(stripeCustomerId)
                 .setPaymentMethod(paymentMethodId)
                 .setConfirm(true)

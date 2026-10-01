@@ -41,6 +41,13 @@ export type MerchantView = {
   onboardingState: OnboardingStateWire;
   pmsType: PmsType;
   emailVerifiedAt: string | null;
+  // The property's currency (ISO 4217), null until a PMS or Stripe connection
+  // (or Settings) gives it one. New bookings are priced in it.
+  currency: string | null;
+  // BCP 47 tag; null formats in plain English ("en").
+  locale: string | null;
+  // IANA zone; null reads as UTC.
+  timeZone: string | null;
 };
 
 async function unwrap<T>(res: Response): Promise<T> {
@@ -273,6 +280,9 @@ export type AdminRecentBooking = {
    * percentage). Render a dash, never a zero.
    */
   derivedFeeRate: number | null;
+  // The booking's currency (amounts above are minor units of it) and locale.
+  currency: string;
+  locale: string | null;
 };
 
 export type AdminMerchantDetail = {
@@ -427,6 +437,42 @@ export async function updateMerchant(
     body: JSON.stringify(payload),
   });
   return unwrap<MerchantView>(res);
+}
+
+export type PropertyLocalePayload = {
+  currency: string;
+  timeZone: string;
+  locale?: string | null;
+};
+
+/**
+ * Sets the property's currency, time zone and locale by hand. Allowed only for
+ * a property with no system to read them from (no PMS, or Stripe while Stripe
+ * is not configured); otherwise 409 property_locale_sourced. 400
+ * invalid_property_locale on bad input.
+ */
+export async function setPropertyLocale(
+  payload: PropertyLocalePayload,
+): Promise<
+  | { ok: true; merchant: MerchantView }
+  | { ok: false; status: number; error: string; message: string }
+> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/property-locale`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.ok) {
+    return { ok: true, merchant: (await res.json()) as MerchantView };
+  }
+  const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+  return {
+    ok: false,
+    status: res.status,
+    error: body.error ?? "unknown_error",
+    message: body.message ?? `Could not save (${res.status}).`,
+  };
 }
 
 // --- Property onboarding (PMS selection + Mews connection) ---
@@ -798,6 +844,11 @@ export type Booking = {
   derivedStatus: DerivedBookingStatus | null;
   eligibility: Eligibility | null;
   planOptions: PlanOption[] | null;
+  // The booking's currency (every *Cents field is minor units of it), and the
+  // locale and zone to format its amounts and dates in.
+  currency: string;
+  locale: string | null;
+  timeZone: string | null;
 };
 
 export type DerivedBookingStatus =
@@ -998,6 +1049,10 @@ export type PlanDetail = {
   customerHint: string | null;
   schedule: PlanScheduleEntry[];
   failedInstallment: FailedInstallment | null;
+  // The booking's currency, locale and zone.
+  currency: string;
+  locale: string | null;
+  timeZone: string | null;
 };
 
 export type AttentionResponse = { plans: PlanDetail[]; count: number };

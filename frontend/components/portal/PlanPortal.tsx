@@ -5,10 +5,16 @@ import Link from "next/link";
 import { BlissWordmark } from "@/components/BlissWordmark";
 import {
   fetchPlanPortal,
-  formatDollars,
   formatScheduleDateLong,
   type PublicPlanPortal,
 } from "@/lib/publicApi";
+import {
+  daysBetweenIso,
+  formatMoney,
+  formatPlainDate,
+  plainDateToUtc,
+  type MoneyContext,
+} from "@/lib/money";
 import { Panel, RecordTitle, SectionHeading } from "@/components/ui/primitives";
 import { PayEarlyButton } from "./PayEarlyButton";
 import { UpdateCardSection } from "./UpdateCardSection";
@@ -35,6 +41,8 @@ export function PlanPortal({
     if (next) setPortal(next);
   }
 
+  // Every amount on the portal is minor units of the booking's currency.
+  const money: MoneyContext = { currency: portal.currency, locale: portal.locale };
   const totalDue = portal.plan.totalAmountCents + portal.processingFeeCents;
   const hasFee = portal.processingFeeCents > 0;
   // Fill share for the progress bar, from the same two values the old balance
@@ -71,6 +79,7 @@ export function PlanPortal({
   const stay = formatStay(
     portal.booking.appointmentDate,
     portal.booking.checkoutDate,
+    portal.locale,
   );
 
   return (
@@ -125,13 +134,13 @@ export function PlanPortal({
             <div className="flex flex-col gap-[7px]">
               <div className="text-[13px] font-medium text-ink-500">Paid to date</div>
               <div className="text-[14px] text-ink-900">
-                {formatDollars(portal.paidCents)}
+                {formatMoney(portal.paidCents, money)}
               </div>
             </div>
             <div className="flex flex-col items-end gap-[7px]">
               <div className="text-[13px] font-medium text-ink-500">Remaining</div>
               <div className="text-[14px] text-ink-900">
-                {formatDollars(portal.remainingCents)}
+                {formatMoney(portal.remainingCents, money)}
               </div>
             </div>
           </div>
@@ -146,7 +155,7 @@ export function PlanPortal({
             Refunded
           </span>
           <span className="text-[14px] text-ink-500">
-            {formatDollars(portal.plan.refundAmountCents ?? 0)} has been
+            {formatMoney(portal.plan.refundAmountCents ?? 0, money)} has been
             refunded to you.
           </span>
         </div>
@@ -185,7 +194,7 @@ export function PlanPortal({
           <Field label="Stay" value={stay ?? portal.booking.serviceName} />
           <Field
             label="Check-in"
-            value={formatScheduleDateLong(portal.booking.appointmentDate)}
+            value={formatScheduleDateLong(portal.booking.appointmentDate, money.locale)}
           />
           <div className="flex flex-col gap-[7px]">
             <div className="text-[13px] font-medium text-ink-500">Plan status</div>
@@ -219,7 +228,7 @@ export function PlanPortal({
       <div className="grid grid-cols-1 items-start gap-3 pb-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
         <Panel variant="filled" className="p-5 xl:col-start-1 xl:row-start-1">
           <SectionHeading className="mb-4">Schedule</SectionHeading>
-          <ScheduleTimeline schedule={portal.schedule} />
+          <ScheduleTimeline schedule={portal.schedule} money={money} />
         </Panel>
 
         <div className="flex flex-col gap-3 xl:col-start-2 xl:row-start-1 xl:row-span-2">
@@ -235,15 +244,16 @@ export function PlanPortal({
                 Next payment
               </SectionHeading>
               <div className="mb-3 text-[44px] font-medium leading-none tracking-[-0.035em] text-ink-900">
-                {formatDollars(nextDueAmount ?? 0)}
+                {formatMoney(nextDueAmount ?? 0, money)}
               </div>
               <div className="mb-3 text-[14px] text-ink-500">
-                Due {formatTimelineDate(nextDueDate ?? "")}
+                Due {formatTimelineDate(nextDueDate ?? "", money.locale)}
               </div>
               <PayEarlyButton
                 token={token}
                 amount={nextDueAmount ?? 0}
                 remaining={portal.remainingCents}
+                money={money}
                 onPaid={refresh}
               />
             </Panel>
@@ -295,25 +305,25 @@ export function PlanPortal({
                 <>
                   <SummaryLine
                     label="Subtotal"
-                    value={formatDollars(portal.booking.originalTotalAmountCents)}
+                    value={formatMoney(portal.booking.originalTotalAmountCents, money)}
                   />
                   <SummaryLine
                     label={`Plan discount (${savingsPercent}%)`}
-                    value={`−${formatDollars(savings)}`}
+                    value={`−${formatMoney(savings, money)}`}
                     last={!hasFee}
                   />
                 </>
               ) : (
                 <SummaryLine
                   label="Subtotal"
-                  value={formatDollars(portal.plan.totalAmountCents)}
+                  value={formatMoney(portal.plan.totalAmountCents, money)}
                   last={!hasFee}
                 />
               )}
               {hasFee ? (
                 <SummaryLine
                   label="Processing fee"
-                  value={formatDollars(portal.processingFeeCents)}
+                  value={formatMoney(portal.processingFeeCents, money)}
                   last
                 />
               ) : null}
@@ -321,7 +331,7 @@ export function PlanPortal({
               <div className="flex items-baseline justify-between pt-[18px]">
                 <div className="text-[14px] text-ink-900">Total</div>
                 <div className="text-2xl font-medium tracking-[-0.02em] text-ink-900">
-                  {formatDollars(totalDue)}
+                  {formatMoney(totalDue, money)}
                 </div>
               </div>
             </div>
@@ -344,6 +354,8 @@ export function PlanPortal({
                 paidCents={portal.paidCents}
                 processingFeeCents={portal.processingFeeCents}
                 rail={portal.rail}
+                money={money}
+                timeZone={portal.timeZone}
               />
             </div>
           </Panel>
@@ -394,34 +406,33 @@ function SummaryLine({
 }
 
 /**
- * "Dec 25 – Dec 28, 2026 · 3 nights" from the stay's two dates.
+ * "Dec 25 – 28, 2026 · 3 nights" (en-US) or "25–28 Dec 2026 · 3 nights"
+ * (en-GB) from the stay's two dates, in the booking's locale.
  *
  * Returns null when there is no check-out date: neither the range nor the
  * night count can be derived from check-in alone, and the caller falls back to
  * the booking's service name rather than showing a half-formed value.
  */
-function formatStay(checkIn: string, checkOut: string | null): string | null {
+function formatStay(
+  checkIn: string,
+  checkOut: string | null,
+  locale: string | null | undefined,
+): string | null {
   if (!checkOut) return null;
-  const a = parseIsoDate(checkIn);
-  const b = parseIsoDate(checkOut);
+  const a = plainDateToUtc(checkIn);
+  const b = plainDateToUtc(checkOut);
   if (!a || !b) return null;
-  const nights = Math.round((b.getTime() - a.getTime()) / 86_400_000);
-  if (nights < 1) return null;
-  const short = (d: Date) =>
-    d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  return `${short(a)} – ${short(b)}, ${b.getFullYear()} · ${nights} ${
-    nights === 1 ? "night" : "nights"
-  }`;
-}
-
-function parseIsoDate(iso: string): Date | null {
-  const parts = iso.split("-").map(Number);
-  const y = parts[0];
-  const m = parts[1];
-  const d = parts[2];
-  if (!y || !m || !d) return null;
-  const dt = new Date(y, m - 1, d);
-  return Number.isNaN(dt.getTime()) ? null : dt;
+  const nights = daysBetweenIso(checkIn, checkOut);
+  if (!(nights >= 1)) return null;
+  // Calendar dates sit on UTC midnights and are formatted in UTC, so the
+  // browser's zone cannot shift either end of the range.
+  const range = new Intl.DateTimeFormat(locale || "en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).formatRange(a, b);
+  return `${range} · ${nights} ${nights === 1 ? "night" : "nights"}`;
 }
 
 /**
@@ -464,20 +475,13 @@ function labelSchedule(schedule: ScheduleEntry[]): { entry: ScheduleEntry; label
 }
 
 /**
- * "August 2, 2026" — the timeline's date format in the design. Neither shared
- * formatter produces it: formatScheduleDateLong prepends the weekday and
- * formatScheduleDateShort drops the year.
+ * "August 2, 2026" / "2 August 2026": the timeline's date format in the
+ * design, in the booking's locale. Neither shared formatter produces it:
+ * formatScheduleDateLong prepends the weekday and formatScheduleDateShort
+ * drops the year.
  */
-function formatTimelineDate(iso: string): string {
-  const parts = iso.split("-").map(Number);
-  const y = parts[0] ?? 0;
-  const m = parts[1] ?? 1;
-  const d = parts[2] ?? 1;
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+function formatTimelineDate(iso: string, locale: string | null | undefined): string {
+  return formatPlainDate(iso, locale, { month: "long", day: "numeric", year: "numeric" });
 }
 
 type TimelineState = "paid" | "next" | "scheduled" | "canceled";
@@ -506,7 +510,13 @@ function TimelineNode({ state }: { state: TimelineState }) {
  * which is how the export draws it. Continuity comes from every segment
  * filling its row's height, not from a border between rows.
  */
-function ScheduleTimeline({ schedule }: { schedule: ScheduleEntry[] }) {
+function ScheduleTimeline({
+  schedule,
+  money,
+}: {
+  schedule: ScheduleEntry[];
+  money: MoneyContext;
+}) {
   const rows = labelSchedule(schedule);
   const nextIndex = rows.findIndex(
     ({ entry }) => rowDisplayStatus(entry.status) === "scheduled",
@@ -532,8 +542,8 @@ function ScheduleTimeline({ schedule }: { schedule: ScheduleEntry[] }) {
               : "Scheduled";
         const meta =
           state === "next"
-            ? `Automatic on ${formatTimelineDate(entry.dueDate)} · Next payment · ${statusWord}`
-            : `Due ${formatTimelineDate(entry.dueDate)} · ${statusWord}`;
+            ? `Automatic on ${formatTimelineDate(entry.dueDate, money.locale)} · Next payment · ${statusWord}`
+            : `Due ${formatTimelineDate(entry.dueDate, money.locale)} · ${statusWord}`;
 
         return (
           <li key={entry.sequence} className="flex gap-x-[26px]">
@@ -566,7 +576,7 @@ function ScheduleTimeline({ schedule }: { schedule: ScheduleEntry[] }) {
                     state === "canceled" ? "text-ink-500" : "text-ink-900"
                   }`}
                 >
-                  {formatDollars(entry.amountCents)}
+                  {formatMoney(entry.amountCents, money)}
                 </div>
               </div>
 

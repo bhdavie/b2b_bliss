@@ -1,5 +1,5 @@
+import { formatMoneyCompact, type MoneyContext } from "@/lib/money";
 import {
-  formatDollarsCompact,
   formatScheduleDateLong,
   type PublicBooking,
 } from "@/lib/publicApi";
@@ -10,6 +10,7 @@ export function ServiceCard({
   originalTotalCents,
   discountedTotalCents,
   feeRate,
+  money,
 }: {
   service: PublicBooking["service"];
   originalTotalCents?: number;
@@ -17,6 +18,7 @@ export function ServiceCard({
   // The property's rate, resolved by whoever has the slug. Required rather
   // than defaulted: a silent default here is how the hardcoded 5% survived.
   feeRate: number;
+  money: MoneyContext;
 }) {
   const hasDiscount =
     originalTotalCents !== undefined &&
@@ -36,14 +38,14 @@ export function ServiceCard({
     <section className="mt-5 rounded-card bg-sand-100 p-4">
       <div className="text-[14px] font-medium text-ink-900">{service.name}</div>
       <div className="mt-0.5 text-[12px] text-ink-500">
-        {formatScheduleDateLong(service.appointmentDate)}
+        {formatScheduleDateLong(service.appointmentDate, money.locale)}
       </div>
       <div className="mt-5 flex items-baseline justify-between border-t border-sand-200 pt-3">
         <div className="text-[12px] text-ink-500">Subtotal</div>
         <div
           className={`text-[12px] text-ink-500 tabular-nums${hasDiscount ? " line-through" : ""}`}
         >
-          {formatDollarsCompact(subtotalCents)}
+          {formatMoneyCompact(subtotalCents, money)}
         </div>
       </div>
       {hasDiscount ? (
@@ -52,7 +54,7 @@ export function ServiceCard({
             Plan discount ({percent}%)
           </div>
           <div className="text-[12px] text-emerald-700 tabular-nums">
-            -{formatDollarsCompact(savings)}
+            -{formatMoneyCompact(savings, money)}
           </div>
         </div>
       ) : null}
@@ -60,14 +62,14 @@ export function ServiceCard({
         <div className="mt-1 flex items-baseline justify-between">
           <div className="text-[12px] text-ink-500">Processing fee</div>
           <div className="text-[12px] text-ink-500 tabular-nums">
-            +{formatDollarsCompact(processingFeeCents)}
+            +{formatMoneyCompact(processingFeeCents, money)}
           </div>
         </div>
       ) : null}
       <div className="mt-3 flex items-baseline justify-between">
         <div className="text-[12px] text-ink-500">Total</div>
         <div className="text-[24px] font-semibold leading-none text-ink-900">
-          {formatDollarsCompact(displayedTotalCents)}
+          {formatMoneyCompact(displayedTotalCents, money)}
         </div>
       </div>
     </section>

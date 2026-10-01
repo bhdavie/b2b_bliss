@@ -176,6 +176,298 @@
   };
 
   // =========================================================================
+  // CURRENCY AND LOCALE
+  //
+  // Identical in mews-, beachfront-, ayres- and olive-overlay.js; change all
+  // four together. Nothing here assumes USD, two decimal places or US date
+  // order, because a property can price in any currency and any locale.
+  //
+  // Every "cents" figure in these files means the currency's MINOR unit
+  // (cents, pence, yen, fils). The only conversions between major and minor
+  // units go through minorDigits, so JPY has no decimals and KWD has three.
+  //
+  // Sits above CONFIG because CONFIG's default price patterns are built from
+  // the regex sources here. Everything that reads CONFIG does so at call time.
+  // =========================================================================
+
+  /**
+   * ISO 4217 codes recognised in page text. A list rather than /[A-Z]{3}/ so
+   * "VAT 20" or "BED 2" is never read as a price.
+   */
+  var ISO_CURRENCIES = (
+    "USD EUR GBP CHF SEK NOK DKK ISK PLN CZK HUF RON BGN TRY CAD AUD NZD MXN BRL ARS CLP COP PEN " +
+    "JPY CNY HKD TWD KRW SGD MYR THB IDR PHP VND INR LKR AED SAR QAR KWD BHD OMR JOD ILS EGP MAD ZAR KES"
+  ).split(" ");
+
+  /**
+   * Symbols that name exactly one currency. "$" (USD, CAD, AUD, NZD, MXN, SGD,
+   * HKD...) and "¥" (JPY or CNY) are left out on purpose: a bare one says
+   * nothing, so the currency must come from page data or CONFIG instead.
+   */
+  var SYMBOL_CURRENCY = { "£": "GBP", "€": "EUR", "₹": "INR", "₩": "KRW", "₪": "ILS", "₺": "TRY", "₱": "PHP", "₫": "VND", "฿": "THB" };
+
+  /** Prefixed dollars, which are unambiguous where the bare "$" is not. */
+  var DOLLAR_PREFIX_CURRENCY = {
+    US: "USD", CA: "CAD", C: "CAD", AU: "AUD", A: "AUD", NZ: "NZD",
+    HK: "HKD", SG: "SGD", S: "SGD", MX: "MXN", R: "BRL",
+  };
+
+  /**
+   * Regex SOURCES, shared by the price patterns below and by CONFIG.
+   *
+   * CURRENCY_MARK_SRC: anything that marks a figure as money. Wider than
+   * sniffCurrency on purpose: "$", "¥" and "kr" say "this is a price" even
+   * though they do not say which currency.
+   *
+   * NUM_SRC: a number as it appears next to a currency mark. Grouping by ".",
+   * ",", apostrophe or any space (1,234.56 / 1.234,56 / 1 234,56 / 1'234.56).
+   *
+   * NUM_DEC_SRC: a number that looks like money WITHOUT a mark: it carries a
+   * decimal part, or a 3-digit group that parseMoneyText settles per currency.
+   * A plain-space group only counts with a comma decimal (1 234,56), so "Room
+   * 101 154.00" reads 154.00 rather than 101154.00.
+   */
+  var CURRENCY_MARK_SRC =
+    "(?:^|[^A-Za-z])(?:" + ISO_CURRENCIES.join("|") + "|kr|zł)(?![A-Za-z])" +
+    "|[A-Z]{1,2}\\$|[$£€¥₹₩₪₺₱₫฿]";
+  var NUM_SRC = "\\d{1,3}(?:[.,'’\u00a0\u202f\u2009 ]\\d{3})+(?:[.,]\\d{1,3})?|\\d+(?:[.,]\\d{1,3})?";
+  var NUM_DEC_SRC =
+    "\\d{1,3}(?:[.,'’\u00a0\u202f\u2009]\\d{3})*[.,]\\d{2,3}(?!\\d)" +
+    "|\\d{1,3}(?: \\d{3})+,\\d{2}(?!\\d)" +
+    "|\\d+[.,]\\d{2,3}(?!\\d)";
+
+  var CURRENCY_MARK_RE = new RegExp(CURRENCY_MARK_SRC);
+  var NUM_DEC_RE = new RegExp(NUM_DEC_SRC);
+  /** "$1,234.56", "EUR 1.234,56", "US$ 300": mark first. Group 1 is the number. */
+  var PREFIX_PRICE_RE = new RegExp("(?:" + CURRENCY_MARK_SRC + ")\\s*(" + NUM_SRC + ")");
+  /**
+   * "1.234,56 €", "12 000 ¥": mark after. The lookahead stops "2 $154.00"
+   * reading as 2, the "$" there belonging to the number that follows it.
+   */
+  var SUFFIX_PRICE_RE = new RegExp("(" + NUM_SRC + ")\\s*(?:" + CURRENCY_MARK_SRC + ")(?!\\s*\\d)");
+  /** A money-shaped string: marked either side, or a bare decimal amount. */
+  var AMOUNT_RE = new RegExp(
+    "(?:" + CURRENCY_MARK_SRC + ")\\s*(?:" + NUM_SRC + ")" +
+      "|(?:" + NUM_SRC + ")\\s*(?:" + CURRENCY_MARK_SRC + ")(?!\\s*\\d)" +
+      "|" + NUM_DEC_SRC
+  );
+  /** Loose "there is a price in here" test. */
+  var PRICE_SHAPE_RE = new RegExp("(?:" + CURRENCY_MARK_SRC + ")\\s*\\d|" + NUM_DEC_SRC);
+
+  /**
+   * The first currency-marked price in `text`, mark first preferred (a mark
+   * before the number is the less ambiguous form). Shaped like the regex match
+   * it replaces: {index, text, num}. null when nothing in the text is marked.
+   */
+  function findPrice(text) {
+    var s = String(text == null ? "" : text);
+    var m = PREFIX_PRICE_RE.exec(s) || SUFFIX_PRICE_RE.exec(s);
+    if (!m) return null;
+    return { index: m.index, text: m[0].replace(/^[^A-Za-z0-9$£€¥₹₩₪₺₱₫฿]+/, ""), num: m[1] };
+  }
+
+  /** An ISO code, upper-cased, or null for anything that is not one. */
+  function normCurrency(currency) {
+    var c = currency == null ? "" : String(currency).trim().toUpperCase();
+    return /^[A-Z]{3}$/.test(c) ? c : null;
+  }
+
+  var minorDigitsCache = {};
+
+  /**
+   * Minor-unit digits for an ISO 4217 code: 2 for USD/EUR/GBP, 0 for JPY/KRW,
+   * 3 for KWD/BHD/OMR. 2 is the answer ONLY when the currency is unknown.
+   */
+  function minorDigits(currency) {
+    var code = normCurrency(currency);
+    if (!code) return 2;
+    if (minorDigitsCache[code] != null) return minorDigitsCache[code];
+    var d = 2;
+    try {
+      d = new Intl.NumberFormat("en", { style: "currency", currency: code }).resolvedOptions().maximumFractionDigits;
+    } catch (e) {
+      d = 2;
+    }
+    minorDigitsCache[code] = d;
+    return d;
+  }
+
+  function minorFactor(currency) {
+    return Math.pow(10, minorDigits(currency));
+  }
+
+  /** A major-unit figure (dataLayer 302.72, or "302.72") to integer minor units. */
+  function majorToMinor(major, currency) {
+    var n = typeof major === "number" ? major : parseFloat(String(major == null ? "" : major).replace(/[^0-9.\-]/g, ""));
+    return isFinite(n) ? Math.round(n * minorFactor(currency)) : null;
+  }
+
+  /** Minor units to whole major units, rounded: 30272 USD -> 303, 303 JPY -> 303. */
+  function wholeUnits(minor, currency) {
+    return minor == null || !isFinite(minor) ? null : Math.round(minor / minorFactor(currency));
+  }
+
+  /**
+   * The currency a piece of text names unambiguously, or null. ISO codes,
+   * prefixed dollars (US$, CA$, A$, NZ$, HK$, S$, C$) and single-currency
+   * symbols only. A bare "$" or "¥" returns null rather than a guess.
+   */
+  function sniffCurrency(text) {
+    var s = String(text == null ? "" : text);
+    var m = /(?:^|[^A-Za-z])(US|CA|AU|NZ|HK|SG|MX|C|A|S|R)\$/.exec(s);
+    if (m) return DOLLAR_PREFIX_CURRENCY[m[1]];
+    var re = /(?:^|[^A-Za-z])([A-Z]{3})(?![A-Za-z])/g;
+    while ((m = re.exec(s))) {
+      if (ISO_CURRENCIES.indexOf(m[1]) !== -1) return m[1];
+      re.lastIndex = m.index + 1;
+    }
+    for (var i = 0; i < s.length; i++) {
+      if (SYMBOL_CURRENCY[s.charAt(i)]) return SYMBOL_CURRENCY[s.charAt(i)];
+    }
+    return null;
+  }
+
+  /**
+   * Integer minor units out of a rendered price, for `currency`.
+   *
+   * Reads the currency-marked number if there is one, else the first amount
+   * with a decimal part, else the first number, so "2 nights: €300" is 300
+   * and not 2300. Then decides which separator is
+   * the decimal point:
+   *   - both "." and "," present: the LAST one is the decimal (1.234,56 and
+   *     1,234.56 both parse)
+   *   - one kind, repeated: grouping (1.234.567)
+   *   - one kind, once, 3 digits after it: grouping, unless the currency has
+   *     3 decimals (KWD 12.345). So "¥12,000" is 12000 and "$1,234" is 1234.
+   *   - otherwise: the decimal point
+   * Spaces and apostrophes are always grouping. Returns null when there is no
+   * number. With no currency the minor unit is assumed to be hundredths.
+   */
+  function parseMoneyText(text, currency) {
+    var s = String(text == null ? "" : text);
+    var priced = findPrice(s);
+    var tok = priced ? priced.num : null;
+    if (!tok) {
+      var t = NUM_DEC_RE.exec(s) || /\d{1,3}(?:[.,'’\u00a0\u202f\u2009]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?/.exec(s);
+      tok = t ? t[0] : null;
+    }
+    if (!tok) return null;
+    var raw = tok.replace(/['’\u00a0\u202f\u2009 ]/g, "");
+    var d = minorDigits(currency);
+    var lastDot = raw.lastIndexOf(".");
+    var lastComma = raw.lastIndexOf(",");
+    var at = Math.max(lastDot, lastComma);
+    var intPart = raw;
+    var frac = "";
+    if (at !== -1) {
+      var sep = raw.charAt(at);
+      var tail = raw.slice(at + 1);
+      var isDecimal;
+      if (lastDot !== -1 && lastComma !== -1) isDecimal = true;
+      else if (raw.indexOf(sep) !== at) isDecimal = false;
+      else if (tail.length === 3) isDecimal = d === 3;
+      else isDecimal = tail.length > 0;
+      if (isDecimal) {
+        intPart = raw.slice(0, at);
+        frac = tail;
+      }
+    }
+    intPart = intPart.replace(/[.,]/g, "");
+    if (!intPart && !frac) return null;
+    var f = Math.pow(10, d);
+    var minor = Number(intPart || "0") * f + (frac ? Math.round(Number("0." + frac) * f) : 0);
+    return isFinite(minor) ? minor : null;
+  }
+
+  var localeCache = { key: null, value: undefined };
+
+  /**
+   * The locale every figure and date is formatted in: CONFIG.locale, else the
+   * page's <html lang>, else the browser's. undefined (the runtime default)
+   * when none of them is a valid tag.
+   */
+  function pageLocale() {
+    var cands = [
+      CONFIG.locale,
+      document.documentElement && document.documentElement.lang,
+      typeof navigator !== "undefined" ? navigator.language : null,
+    ];
+    var key = cands.join("|");
+    if (localeCache.key === key) return localeCache.value;
+    var value;
+    for (var i = 0; i < cands.length && value === undefined; i++) {
+      if (!cands[i]) continue;
+      try {
+        new Intl.NumberFormat(String(cands[i]));
+        value = String(cands[i]);
+      } catch (e) {
+        /* not a valid tag; try the next */
+      }
+    }
+    localeCache = { key: key, value: value };
+    return value;
+  }
+
+  /**
+   * "MDY" or "DMY" for an ambiguous numeric date like 04/05/2026.
+   * CONFIG.dateOrder when set, else MDY for en-US and DMY for every other
+   * locale.
+   */
+  function dateOrder() {
+    var o = String(CONFIG.dateOrder || "").toUpperCase();
+    if (o === "MDY" || o === "DMY") return o;
+    return /^en-us\b/i.test(String(pageLocale() || "")) ? "MDY" : "DMY";
+  }
+
+  /**
+   * Which of two numeric date parts is the month. A part over 12 settles it
+   * (13/05 can only be day-first); otherwise dateOrder() decides. Returns
+   * {month: 1-12, day} or null when neither reading is a month.
+   */
+  function orderDayMonth(a, b) {
+    a = Number(a);
+    b = Number(b);
+    if (a > 12 && b > 12) return null;
+    if (a > 12) return { month: b, day: a };
+    if (b > 12) return { month: a, day: b };
+    return dateOrder() === "MDY" ? { month: a, day: b } : { month: b, day: a };
+  }
+
+  var warnedNoCurrency = false;
+
+  /**
+   * Minor units to display text in the page locale. With a currency this is
+   * Intl currency formatting. Without one it does NOT guess: it prints the
+   * plain grouped number (two decimals) and says so once on the console.
+   */
+  function formatMinor(minor, currency, whole) {
+    var code = normCurrency(currency);
+    var d = minorDigits(code);
+    var major = minor / Math.pow(10, d);
+    var digits = whole ? 0 : d;
+    var opts = { minimumFractionDigits: digits, maximumFractionDigits: digits };
+    if (code) {
+      opts.style = "currency";
+      opts.currency = code;
+    } else if (!warnedNoCurrency) {
+      warnedNoCurrency = true;
+      console.warn(
+        "[bliss] no currency on the page data and no CONFIG.currencyFallback; amounts are shown without a currency symbol. " +
+          "Set CONFIG.currencyFallback to this property's ISO code."
+      );
+    }
+    try {
+      return new Intl.NumberFormat(pageLocale(), opts).format(major);
+    } catch (e) {
+      return major.toFixed(digits) + (code ? " " + code : "");
+    }
+  }
+
+  // =========================================================================
+  // END CURRENCY AND LOCALE
+  // =========================================================================
+
+  // =========================================================================
   // CONFIG
   // =========================================================================
   var CONFIG = {
@@ -248,14 +540,15 @@
       priceLabelInlineRe: /current\s*price\s*:?/i,
 
       /**
-       * An assembled amount: digits, optional thousands commas, then exactly
-       * two decimals. Deliberately does NOT require a currency symbol, because
-       * the "$" is a separate text node from the digits.
+       * An assembled amount: a number next to a currency mark or ISO code
+       * (either side), or a bare number with a decimal part (154.00, 1.234,56,
+       * 1 234,56). Does NOT require the mark, because the "$" is a separate
+       * text node from the digits. See AMOUNT_RE in CURRENCY AND LOCALE.
        */
-      amountRe: /\d[\d,]*\.\d{2}/,
+      amountRe: AMOUNT_RE,
 
       /** Loose "there is a price in here" test, for the card boundary. */
-      priceShapeRe: /\$\s*\d|\d[\d,]*\.\d{2}/,
+      priceShapeRe: PRICE_SHAPE_RE,
 
       /**
        * The text that identifies a price as a nightly rate rather than a total,
@@ -308,10 +601,33 @@
     },
 
     /**
-     * Currency for figures rendered before anything confirms one. The overlay
-     * sniffs the symbol off the scraped price; this outranks the sniff.
+     * ISO code for this property's prices. iHotelier publishes no currency in
+     * data, so this is the only certain source; the overlay otherwise sniffs
+     * an unambiguous mark off the scraped price (never a bare "$" or "¥"),
+     * and this outranks the sniff. Deliberately no default: with nothing to
+     * go on, amounts render as plain numbers and the console says so once.
+     * The Ayres pilot prices in US dollars.
+     * @type {string|null}
      */
     currencyFallback: "USD",
+
+    /**
+     * BCP 47 locale for amounts and dates, e.g. "en-US". null uses the page's
+     * <html lang>, then the browser's language.
+     * @type {string|null}
+     */
+    locale: null,
+
+    /**
+     * How to read an ambiguous slash date in the URL fallback, such as
+     * datein=04/05/2026 ("MDY" or "DMY"). ISO dates and dates with a part
+     * over 12 never need it. null derives it from the locale: MDY for en-US,
+     * DMY otherwise. A US property whose page has no lang="en-US" should set
+     * "MDY" here. The Ayres pilot is a US property, so its iHotelier dates
+     * are month first.
+     * @type {"MDY"|"DMY"|null}
+     */
+    dateOrder: "MDY",
 
     /**
      * CHECKOUT STEP — the "Your Reservation" panel on
@@ -500,26 +816,17 @@
   };
 
   // =========================================================================
-  // MONEY TEXT PARSING — unchanged from mews-overlay.js
+  // MONEY TEXT PARSING — same as mews-overlay.js
   // =========================================================================
 
   /**
-   * Pulls integer cents out of a rendered price string. Locale-agnostic: the
-   * LAST separator wins as the decimal point, so both 1.234,56 and 1,234.56
-   * parse. Returns null when the string carries no number.
+   * Integer minor units out of a rendered price string. The currency is the
+   * one the text names unambiguously, else the page's (see cur), because the
+   * decimal places depend on it: "¥12,000" is 12000 yen, "$1,234" is 123400
+   * cents. See parseMoneyText for the separator rules.
    */
-  function parseMoneyTextToCents(text) {
-    var raw = String(text == null ? "" : text).replace(/[^0-9.,]/g, "");
-    if (!raw) return null;
-    var decimalAt = Math.max(raw.lastIndexOf("."), raw.lastIndexOf(","));
-    // A trailing group of 3 digits is a thousands group, not a decimal.
-    if (decimalAt !== -1 && raw.length - decimalAt - 1 === 3) decimalAt = -1;
-    var normalised =
-      decimalAt === -1
-        ? raw.replace(/[.,]/g, "")
-        : raw.slice(0, decimalAt).replace(/[.,]/g, "") + "." + raw.slice(decimalAt + 1).replace(/[.,]/g, "");
-    var n = parseFloat(normalised);
-    return isFinite(n) ? Math.round(n * 100) : null;
+  function parseMoneyTextToCents(text, currency) {
+    return parseMoneyText(text, currency || sniffCurrency(text) || cur(null));
   }
 
   /**
@@ -593,13 +900,14 @@
     return Math.round(withFee / nights / numPayments);
   }
 
-  var SYMBOL_CURRENCY = { "$": "USD", "£": "GBP", "€": "EUR", "¥": "JPY", "₹": "INR" };
-
-  /** Best-effort currency. Ambiguous by nature, which is why CONFIG wins. */
+  /**
+   * Best-effort currency, from unambiguous marks only (see sniffCurrency): a
+   * bare "$" or "¥" leaves the hint as it was rather than guessing. CONFIG
+   * wins over it.
+   */
   function rememberCurrencyHint(text) {
-    var m = /[$£€¥₹]|\b(USD|GBP|EUR|CHF|SEK|NOK|DKK|PLN|AUD|CAD)\b/.exec(String(text || ""));
-    if (!m) return;
-    state.currencyHint = SYMBOL_CURRENCY[m[0]] || m[0];
+    var c = sniffCurrency(text);
+    if (c) state.currencyHint = c;
   }
 
   // =========================================================================
@@ -876,19 +1184,27 @@
   }
 
   /**
-   * MM/DD/YYYY to a LOCAL date. Slashes may arrive percent-encoded depending on
-   * how the engine wrote the URL, so the caller decodes first.
+   * A URL date to a LOCAL date. YYYY-MM-DD is taken as is and preferred;
+   * otherwise NN/NN/YYYY, which iHotelier writes month-first on US
+   * properties but which is day-first elsewhere: a part over 12 settles it,
+   * else orderDayMonth uses CONFIG.dateOrder or the page locale. Slashes may
+   * arrive percent-encoded depending on how the engine wrote the URL, so the
+   * caller decodes first.
    *
    * Single-digit month and day are accepted ("2/9/2027"): the engine is not
    * consistent about zero-padding and rejecting those would silently kill the
    * overlay on a date the guest can plainly see.
    */
-  function parseUsDate(text) {
+  function parseUrlDate(text) {
     if (!text) return null;
-    var m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/.exec(String(text).trim());
+    var iso = parseLocalDate(String(text).trim());
+    if (iso) return iso;
+    var m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/.exec(String(text).trim());
     if (!m) return null;
-    var mo = Number(m[1]);
-    var day = Number(m[2]);
+    var md = orderDayMonth(m[1], m[2]);
+    if (!md) return null;
+    var mo = md.month;
+    var day = md.day;
     var yr = Number(m[3]);
     if (mo < 1 || mo > 12 || day < 1 || day > 31) return null;
     var d = new Date(yr, mo - 1, day);
@@ -1151,8 +1467,8 @@
       controlEl = dom.controlEl;
       source = "date control in the page";
     } else {
-      checkin = parseUsDate(rawIn);
-      checkout = parseUsDate(rawOut);
+      checkin = parseUrlDate(rawIn);
+      checkout = parseUrlDate(rawOut);
       source = "URL query string (date control not found or not parsable)";
 
       // dateout is routinely absent on the accommodations step. Default rather
@@ -1198,7 +1514,7 @@
           "[bliss] no usable stay. The page's date control was not found or not " +
             "parsable (expected something like \"17 Sun Jan - 23 Sat Jan\"), and the URL carried no " +
             "usable date either: looked for " + CONFIG.stay.checkinParams.join(", ") +
-            " in MM/DD/YYYY and found " + JSON.stringify(rawIn) + ". " +
+            " as YYYY-MM-DD or NN/NN/YYYY (" + dateOrder() + ") and found " + JSON.stringify(rawIn) + ". " +
             "Every figure needs a stay, so nothing will render."
         );
       }
@@ -1581,7 +1897,7 @@
       if (el.shadowRoot) continue;
       var own = normText(el);
       if (!own) continue;
-      if (!/[$£€¥₹]/.test(own) && !/\d/.test(own)) continue;
+      if (!CURRENCY_MARK_RE.test(own) && !/\d/.test(own)) continue;
       if (isStruckThrough(el, card)) continue;
 
       // The element's OWN text first. Widening is only for the split-fragment
@@ -1892,37 +2208,23 @@
   // FORMATTING — unchanged from mews-overlay.js
   // =========================================================================
 
+  /** Minor units in the page locale. No currency: a plain number, see formatMinor. */
   function money(cents, currency) {
     if (cents == null || !isFinite(cents)) return "—";
-    try {
-      return new Intl.NumberFormat(undefined, {
-        style: "currency",
-        currency: currency || "USD",
-      }).format(cents / 100);
-    } catch (e) {
-      return (cents / 100).toFixed(2) + " " + (currency || "");
-    }
+    return formatMinor(cents, currency, false);
   }
 
   /** Whole units, no cents. Matches the Marbrook teaser's rounding. */
   function moneyWhole(cents, currency) {
     if (cents == null || !isFinite(cents)) return "—";
-    try {
-      return new Intl.NumberFormat(undefined, {
-        style: "currency",
-        currency: currency || "USD",
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(cents / 100);
-    } catch (e) {
-      return Math.round(cents / 100) + " " + (currency || "");
-    }
+    return formatMinor(cents, currency, true);
   }
 
+  /** Same locale as money(). */
   function shortDate(iso) {
     var d = parseLocalDate(iso);
     if (!d) return iso || "—";
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    return d.toLocaleDateString(pageLocale(), { month: "short", day: "numeric", year: "numeric" });
   }
 
   var REASON_COPY = {
@@ -2027,11 +2329,15 @@
     };
   }
 
-  /** Per-trigger currency: the matched rate's own, then config, then the sniff. */
+  /**
+   * Per-trigger currency: the matched rate's own, then config, then the sniff.
+   * null when none of them knows: money() then renders a plain number rather
+   * than guessing a currency.
+   */
   function cur(t) {
     if (t && t.currency) return t.currency;
     if (state.dl && state.dl.currency) return state.dl.currency;
-    return CONFIG.currencyFallback || state.currencyHint || "USD";
+    return CONFIG.currencyFallback || state.currencyHint || null;
   }
 
   // -------------------------------------------------------------------------
@@ -3620,14 +3926,14 @@
     var listed = [];
     for (var j = 0; j < candidates.length; j++) {
       listed.push(
-        money(candidates[j].cents, CONFIG.currencyFallback) +
+        money(candidates[j].cents, cur(null)) +
           (candidates[j].boxed ? " (laid out)" : " (no box)")
       );
     }
     console.warn(
       "[bliss] " + CONFIG.detailsStep.totalElementSelector +
         " resolved to more than one amount: " + listed.join(", ") + ".\n" +
-        "  CHOSE " + money(pick.cents, CONFIG.currencyFallback) +
+        "  CHOSE " + money(pick.cents, cur(null)) +
         (pick.boxed ? " (laid out, preferred)" : " (no box, no laid-out candidate available)") +
         ". If that is the wrong figure, narrow CONFIG.detailsStep.totalElementSelector."
     );
@@ -4419,7 +4725,7 @@
     if (cents != null && cents !== lastLoggedTotal) {
       lastLoggedTotal = cents;
       console.log(
-        "[bliss] checkout block: total " + money(cents, CONFIG.currencyFallback) +
+        "[bliss] checkout block: total " + money(cents, cur(null)) +
           " (tax-inclusive basis, plan written against this plus the Bliss fee)" +
           "  |  anchor: " +
           (found.source === "element"

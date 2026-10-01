@@ -208,7 +208,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 jdbi.onDemand(com.bliss.b2b.persistence.MerchantMewsConnectionDao.class),
                 merchantDao, customerDao, emailService);
         PlanPortalService planPortalService = new PlanPortalService(
-                jdbi, stripePaymentsService, stripeConnectResolver, cancellationService, clock);
+                jdbi, stripePaymentsService, stripeConnectResolver, mewsAdapterFactory,
+                cancellationService, planNotificationService, clock);
         // Property onboarding + per-property Mews connection. The factory both
         // validates connections and resolves each property's charge credentials.
         com.bliss.b2b.persistence.MerchantMewsConnectionDao mewsConnectionDao =
@@ -412,7 +413,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 environment.lifecycle().scheduledExecutorService("mews-charge-pass").threads(1).build();
         chargeScheduler.scheduleAtFixedRate(() -> {
             try {
-                installmentChargeService.runDuePass(java.time.LocalDate.now(clock));
+                installmentChargeService.runDuePass(clock.instant());
             } catch (RuntimeException e) {
                 log.warn("Installment charge pass failed: {}", e.getMessage());
             }

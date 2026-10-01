@@ -4,6 +4,7 @@ import { PlanDetailActions } from "@/components/merchant/PlanDetailActions";
 import { Panel, RecordTitle, SectionHeading } from "@/components/ui/primitives";
 import { fetchPlanServer } from "@/lib/auth";
 import type { PaymentPlanStatus } from "@/lib/api";
+import { formatMoneyCompact, formatPlainDate } from "@/lib/money";
 
 const STATUS_LABEL: Record<PaymentPlanStatus, string> = {
   pending_card: "Awaiting card",
@@ -73,7 +74,7 @@ export default async function PlanDetailPage({
           </div>
           <div className="text-[14px] text-ink-500">
             {plan.customerHint ?? "Customer info pending"} · Appointment{" "}
-            {plan.appointmentDate}
+            {formatPlainDate(plan.appointmentDate, plan.locale)}
           </div>
         </div>
 
@@ -87,17 +88,17 @@ export default async function PlanDetailPage({
             </div>
             {plan.depositAmountCents > 0 ? (
               <div className="mt-1 text-[13px] text-ink-500">
-                + {formatCents(plan.depositAmountCents)} deposit
+                + {formatMoneyCompact(plan.depositAmountCents, plan)} deposit
               </div>
             ) : null}
           </div>
           <div>
             <SectionHeading className="mb-4">Total · Paid · Balance</SectionHeading>
             <div className="text-[14px] tabular-nums text-ink-900">
-              {formatCents(plan.totalAmountCents)} ·{" "}
-              <span className="text-emerald-700">{formatCents(paidCents)}</span> ·{" "}
+              {formatMoneyCompact(plan.totalAmountCents, plan)} ·{" "}
+              <span className="text-emerald-700">{formatMoneyCompact(paidCents, plan)}</span> ·{" "}
               <span className={balance > 0 ? "text-ink-900" : "text-ink-500"}>
-                {formatCents(balance)}
+                {formatMoneyCompact(balance, plan)}
               </span>
             </div>
           </div>
@@ -110,7 +111,7 @@ export default async function PlanDetailPage({
             Balance due at check-in
           </SectionHeading>
           <div className="text-[24px] font-medium tabular-nums text-ink-900">
-            {formatCents(balance)}
+            {formatMoneyCompact(balance, plan)}
           </div>
           <p className="mt-1.5 text-[14px] text-ink-500">
             Booking is still confirmed. Collect the remaining balance from the
@@ -124,8 +125,8 @@ export default async function PlanDetailPage({
           <SectionHeading className="mb-4">Failed installment</SectionHeading>
           <div className="text-[14px] text-ink-900">
             Installment {plan.failedInstallment.sequence} of{" "}
-            {formatCents(plan.failedInstallment.amountCents)} failed on{" "}
-            {plan.failedInstallment.dueDate}. Retries attempted:{" "}
+            {formatMoneyCompact(plan.failedInstallment.amountCents, plan)} failed on{" "}
+            {formatPlainDate(plan.failedInstallment.dueDate, plan.locale)}. Retries attempted:{" "}
             {plan.failedInstallment.retryCount}.
           </div>
           {plan.failedInstallment.lastError ? (
@@ -153,7 +154,7 @@ export default async function PlanDetailPage({
                     Deposit
                   </span>
                 ) : null}
-                <span>{entry.dueDate}</span>
+                <span>{formatPlainDate(entry.dueDate, plan.locale)}</span>
                 <StatusPill status={entry.status} />
                 {entry.retryCount > 0 ? (
                   <span className="text-[12px] text-ink-500">
@@ -162,7 +163,7 @@ export default async function PlanDetailPage({
                 ) : null}
               </span>
               <span className="tabular-nums text-ink-900">
-                {formatCents(entry.amountCents)}
+                {formatMoneyCompact(entry.amountCents, plan)}
               </span>
             </li>
           ))}
@@ -190,12 +191,4 @@ function StatusPill({ status }: { status: string }) {
       {status}
     </span>
   );
-}
-
-function formatCents(cents: number): string {
-  if (cents % 100 === 0) return `$${(cents / 100).toLocaleString()}`;
-  return (cents / 100).toLocaleString(undefined, {
-    style: "currency",
-    currency: "USD",
-  });
 }

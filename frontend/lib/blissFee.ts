@@ -9,6 +9,7 @@
 // backend/src/main/java/com/bliss/b2b/service/PlanCreationService.java.
 
 import { API_BASE_URL } from "./api";
+import { splitInstallments } from "./money";
 
 /**
  * Used ONLY when the rate fetch fails: a network error, a non-OK response, or
@@ -76,9 +77,10 @@ export async function fetchFeeRate(slug: string): Promise<number> {
 
 /**
  * Even-split installment plan over the fee-inclusive total. Matches the
- * backend no-deposit schedule build: every installment is round(totalWithFee /
- * numPayments) and the final one absorbs the rounding remainder, so the
- * installments sum exactly to totalWithFee.
+ * backend no-deposit schedule build: every installment is floor(totalWithFee /
+ * numPayments) and the final one takes the remainder (so it is never smaller
+ * than the others), and the installments sum exactly to totalWithFee. Amounts
+ * are minor units of the booking's currency.
  */
 export function calcInstallmentPlan({
   baseCents,
@@ -99,7 +101,8 @@ export function calcInstallmentPlan({
   if (numPayments <= 0) {
     return { feeCents, totalWithFeeCents, perPaymentCents: 0, finalPaymentCents: 0 };
   }
-  const perPaymentCents = Math.round(totalWithFeeCents / numPayments);
-  const finalPaymentCents = totalWithFeeCents - perPaymentCents * (numPayments - 1);
+  const split = splitInstallments(totalWithFeeCents, numPayments);
+  const perPaymentCents = split[0] ?? 0;
+  const finalPaymentCents = split[numPayments - 1] ?? 0;
   return { feeCents, totalWithFeeCents, perPaymentCents, finalPaymentCents };
 }

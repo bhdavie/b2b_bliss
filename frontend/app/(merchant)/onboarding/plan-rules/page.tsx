@@ -51,6 +51,11 @@ export default async function OnboardingPlanRulesPage() {
   }
   const planRules = await fetchPlanRulesServer();
   const onboarding = await fetchOnboardingServer();
+  // Amounts in these cards are minor units of the property's currency; null
+  // until it has one, and the amount fields then stay disabled.
+  const money = session.currency
+    ? { currency: session.currency, locale: session.locale }
+    : null;
 
   return (
     <main className="min-h-screen bg-sand-100 font-inter text-ink-900">
@@ -73,6 +78,7 @@ export default async function OnboardingPlanRulesPage() {
           <PlanRulesCard
             initial={planRules ?? DEFAULT_PLAN_RULES}
             hideDeposit={session.pmsType === "mews"}
+            money={money}
           />
         </Panel>
 
@@ -80,14 +86,18 @@ export default async function OnboardingPlanRulesPage() {
           Blackout dates
         </SectionHeading>
         <Panel variant="filled" className="p-5">
-          <BlackoutDatesCard initial={planRules ?? DEFAULT_PLAN_RULES} />
+          <BlackoutDatesCard
+            initial={planRules ?? DEFAULT_PLAN_RULES}
+            locale={session.locale}
+            timeZone={session.timeZone}
+          />
         </Panel>
 
         <SectionHeading className="mb-5 mt-14">
           Cancellation &amp; policies
         </SectionHeading>
         <Panel variant="filled" className="p-5">
-          <PoliciesCard initial={planRules ?? DEFAULT_PLAN_RULES} />
+          <PoliciesCard initial={planRules ?? DEFAULT_PLAN_RULES} money={money} />
         </Panel>
 
         <div className="mt-14 flex flex-wrap items-center justify-between gap-4 border-t border-sand-200 pt-8">

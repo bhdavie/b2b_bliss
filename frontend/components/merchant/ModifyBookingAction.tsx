@@ -3,7 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { modifyBooking, type ModificationResult } from "@/lib/api";
-import { formatDollars, formatScheduleDateShort } from "@/lib/publicApi";
+import { formatScheduleDateShort } from "@/lib/publicApi";
+import {
+  formatMoney,
+  minorDigits,
+  minorToInput,
+  parseMoneyInput,
+  type MoneyContext,
+} from "@/lib/money";
 import { Button } from "@/components/ui/Button";
 import { Panel, SectionHeading } from "@/components/ui/primitives";
 
@@ -16,21 +23,28 @@ export function ModifyBookingAction({
   currentAppointmentDate,
   currentCheckoutDate,
   currentTotalCents,
+  currency,
+  locale,
 }: {
   bookingId: string;
   currentAppointmentDate: string;
   currentCheckoutDate: string | null;
+  // Minor units of `currency`, the booking's own.
   currentTotalCents: number;
+  currency: string;
+  locale: string | null;
 }) {
+  const money: MoneyContext = { currency, locale };
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [appt, setAppt] = useState(currentAppointmentDate);
   const [checkout, setCheckout] = useState(currentCheckoutDate ?? "");
-  const [totalDollars, setTotalDollars] = useState((currentTotalCents / 100).toFixed(2));
+  const [totalInput, setTotalInput] = useState(minorToInput(currentTotalCents, currency));
   const [preview, setPreview] = useState<ModificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<null | "preview" | "apply">(null);
 
+  // Null when the total field does not parse in the booking's currency.
   function buildPayload(isPreview: boolean) {
     const p: {
       appointmentDate?: string;
@@ -40,12 +54,20 @@ export function ModifyBookingAction({
     } = { preview: isPreview };
     if (appt && appt !== currentAppointmentDate) p.appointmentDate = appt;
     if (checkout && checkout !== (currentCheckoutDate ?? "")) p.checkoutDate = checkout;
-    const cents = Math.round(parseFloat(totalDollars) * 100);
-    if (Number.isFinite(cents) && cents !== currentTotalCents) p.newTotalAmountCents = cents;
+    const minor = parseMoneyInput(totalInput, currency);
+    if (minor === null) return null;
+    if (minor !== currentTotalCents) p.newTotalAmountCents = minor;
     return p;
   }
 
-  function hasChange(p: ReturnType<typeof buildPayload>) {
+  function totalError(): string {
+    const d = minorDigits(currency);
+    return d === 0
+      ? `Enter the total in ${currency} as a whole number.`
+      : `Enter the total in ${currency} with up to ${d} decimal places.`;
+  }
+
+  function hasChange(p: NonNullable<ReturnType<typeof buildPayload>>) {
     return (
       p.appointmentDate !== undefined ||
       p.checkoutDate !== undefined ||
@@ -56,6 +78,10 @@ export function ModifyBookingAction({
   async function runPreview() {
     setError(null);
     const payload = buildPayload(true);
+    if (payload === null) {
+      setError(totalError());
+      return;
+    }
     if (!hasChange(payload)) {
       setError("Change a date or the total first.");
       return;
@@ -74,6 +100,10 @@ export function ModifyBookingAction({
   async function apply() {
     setError(null);
     const payload = buildPayload(false);
+    if (payload === null) {
+      setError(totalError());
+      return;
+    }
     if (!hasChange(payload)) {
       setError("Change a date or the total first.");
       return;
@@ -144,14 +174,13 @@ export function ModifyBookingAction({
         </label>
         <label className="block">
           <span className="text-[12px] uppercase tracking-[0.08em] text-ink-500">
-            Total ($)
+            Total ({currency})
           </span>
           <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={totalDollars}
-            onChange={(e) => setTotalDollars(e.target.value)}
+            type="text"
+            inputMode={minorDigits(currency) === 0 ? "numeric" : "decimal"}
+            value={totalInput}
+            onChange={(e) => setTotalInput(e.target.value)}
             className="mt-1 w-full border border-brand-neutral px-2 py-1.5 text-[13px] tabular-nums"
           />
         </label>
@@ -168,10 +197,10 @@ export function ModifyBookingAction({
           </div>
           <p className="mt-1 text-[13px] text-ink-900">{preview.message}</p>
           <div className="mt-3 grid grid-cols-2 gap-3 text-[13px] sm:grid-cols-4">
-            <Stat label="Collected" value={formatDollars(preview.collectedCents)} />
-            <Stat label="Remaining" value={formatDollars(preview.remainingToCollectCents)} />
+            <Stat label="Collected" value={formatMoney(preview.collectedCents, money)} />
+            <Stat label="Remaining" value={formatMoney(preview.remainingToCollectCents, money)} />
             {preview.overpaidCents > 0 ? (
-              <Stat label="Refund due" value={formatDollars(preview.overpaidCents)} />
+              <Stat label="Refund due" value={formatMoney(preview.overpaidCents, money)} />
             ) : null}
             <Stat label="Installments" value={String(preview.numPayments)} />
           </div>
@@ -179,10 +208,10 @@ export function ModifyBookingAction({
             {preview.schedule.map((r) => (
               <li key={r.sequence} className="flex items-center justify-between py-1.5 text-[13px]">
                 <span className="text-ink-500">
-                  #{r.sequence} · {formatScheduleDateShort(r.dueDate)} ·{" "}
+                  #{r.sequence} · {formatScheduleDateShort(r.dueDate, money.locale)} ·{" "}
                   <span className="uppercase">{r.status}</span>
                 </span>
-                <span className="tabular-nums text-ink-900">{formatDollars(r.amountCents)}</span>
+                <span className="tabular-nums text-ink-900">{formatMoney(r.amountCents, money)}</span>
               </li>
             ))}
           </ol>

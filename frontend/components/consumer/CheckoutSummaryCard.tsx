@@ -1,7 +1,5 @@
-import {
-  formatDollarsCompact,
-  formatScheduleDateLong,
-} from "@/lib/publicApi";
+import { formatScheduleDateLong } from "@/lib/publicApi";
+import { formatMoneyCompact, type MoneyContext } from "@/lib/money";
 import { feeForAtRate } from "@/lib/blissFee";
 
 /**
@@ -15,6 +13,7 @@ export function CheckoutSummaryCard({
   originalTotalCents,
   discountedTotalCents,
   feeRate,
+  money,
 }: {
   cart: {
     totalCents: number;
@@ -28,6 +27,8 @@ export function CheckoutSummaryCard({
   // The property's rate, resolved by whoever has the slug. Required rather
   // than defaulted: a silent default here is how the hardcoded 5% survived.
   feeRate: number;
+  // The property's currency and locale; every amount here is minor units of it.
+  money: MoneyContext;
 }) {
   const hasDiscount =
     originalTotalCents !== undefined &&
@@ -50,8 +51,8 @@ export function CheckoutSummaryCard({
       </div>
       <div className="mt-0.5 text-[12px] text-ink-muted">
         {cart.checkout
-          ? `${formatScheduleDateLong(cart.checkin)} → ${formatScheduleDateLong(cart.checkout)}`
-          : formatScheduleDateLong(cart.checkin)}
+          ? `${formatScheduleDateLong(cart.checkin, money.locale)} → ${formatScheduleDateLong(cart.checkout, money.locale)}`
+          : formatScheduleDateLong(cart.checkin, money.locale)}
       </div>
       {cart.name ? (
         <div className="mt-2 text-[12px] text-ink-muted">For {cart.name}</div>
@@ -61,7 +62,7 @@ export function CheckoutSummaryCard({
         <div
           className={`text-[12px] text-ink-muted tabular-nums${hasDiscount ? " line-through" : ""}`}
         >
-          {formatDollarsCompact(subtotalCents)}
+          {formatMoneyCompact(subtotalCents, money)}
         </div>
       </div>
       {hasDiscount ? (
@@ -70,7 +71,7 @@ export function CheckoutSummaryCard({
             Plan discount ({percent}%)
           </div>
           <div className="text-[12px] text-emerald-700 tabular-nums">
-            -{formatDollarsCompact(savings)}
+            -{formatMoneyCompact(savings, money)}
           </div>
         </div>
       ) : null}
@@ -78,14 +79,14 @@ export function CheckoutSummaryCard({
         <div className="mt-1 flex items-baseline justify-between">
           <div className="text-[12px] text-ink-muted">Processing fee</div>
           <div className="text-[12px] text-ink-muted tabular-nums">
-            +{formatDollarsCompact(processingFeeCents)}
+            +{formatMoneyCompact(processingFeeCents, money)}
           </div>
         </div>
       ) : null}
       <div className="mt-3 flex items-baseline justify-between">
         <div className="text-[12px] text-ink-muted">Total</div>
         <div className="text-[24px] font-medium leading-none text-ink">
-          {formatDollarsCompact(displayedTotalCents)}
+          {formatMoneyCompact(displayedTotalCents, money)}
         </div>
       </div>
     </section>

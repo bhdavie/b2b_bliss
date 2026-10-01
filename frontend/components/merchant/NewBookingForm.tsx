@@ -8,18 +8,23 @@ import {
   type CreateBookingPayload,
   type PlanRules,
 } from "@/lib/api";
+import { formatScheduleDate, previewEligibility } from "@/lib/eligibility";
 import {
-  formatCents,
-  formatScheduleDate,
-  previewEligibility,
-} from "@/lib/eligibility";
+  addDaysIso,
+  formatMoney,
+  minorToInput,
+  parseMoneyInput,
+  todayIn,
+  type MoneyContext,
+} from "@/lib/money";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SectionHeading } from "@/components/ui/primitives";
+import { CurrencyMissingNote } from "./MoneyInput";
 
 type FormState = {
   serviceName: string;
-  totalDollars: string;
+  totalInput: string;
   appointmentDate: string;
   customerNameHint: string;
   customerEmailHint: string;
@@ -28,7 +33,7 @@ type FormState = {
 
 const EMPTY: FormState = {
   serviceName: "",
-  totalDollars: "",
+  totalInput: "",
   appointmentDate: "",
   customerNameHint: "",
   customerEmailHint: "",
@@ -38,10 +43,22 @@ const EMPTY: FormState = {
 export function NewBookingForm({
   planRules = DEFAULT_PLAN_RULES,
   head,
+  currency,
+  locale,
+  timeZone,
 }: {
   planRules?: PlanRules;
   /** Rendered at the top of the form's own card. See the note at its call site. */
   head?: React.ReactNode;
+  /**
+   * The property's currency from /me. Null until a PMS or Stripe connection
+   * (or Account settings) gives it one; the form is then disabled, since the
+   * backend refuses to price a booking without one.
+   */
+  currency: string | null;
+  locale: string | null;
+  /** The property's zone: "today" and the earliest date are its calendar days. */
+  timeZone: string | null;
 }) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -52,21 +69,27 @@ export function NewBookingForm({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  const totalCents = parseDollarsToCents(form.totalDollars);
-  const appointmentDate = parseLocalDate(form.appointmentDate);
+  const money: MoneyContext | null = currency ? { currency, locale } : null;
+  const parsedTotal = currency ? parseMoneyInput(form.totalInput, currency) : null;
+  const totalCents = parsedTotal !== null && parsedTotal > 0 ? parsedTotal : null;
+  const appointmentDate = /^\d{4}-\d{2}-\d{2}$/.test(form.appointmentDate)
+    ? form.appointmentDate
+    : null;
+  // The property's today, as the backend computes it when it validates.
+  const today = todayIn(timeZone);
   const preview = useMemo(
     // Merchant-created bookings have no checkout-date field, so there is no
     // departure to pass.
-    () => previewEligibility(today(), appointmentDate, null, totalCents ?? 0, planRules),
-    [appointmentDate, totalCents, planRules],
+    () => previewEligibility(today, appointmentDate, null, totalCents ?? 0, planRules),
+    [today, appointmentDate, totalCents, planRules],
   );
 
   const valid =
+    money !== null &&
     form.serviceName.trim() !== "" &&
     totalCents !== null &&
-    totalCents > 0 &&
     appointmentDate !== null &&
-    appointmentDate > today();
+    appointmentDate > today;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -86,7 +109,12 @@ export function NewBookingForm({
       router.push(`/bookings/${booking.id}`);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create booking");
+      const message = err instanceof Error ? err.message : "";
+      setError(
+        message.includes("property_currency_missing")
+          ? "Set your property's currency before creating bookings."
+          : message || "Could not create booking",
+      );
       setSubmitting(false);
     }
   }
@@ -98,6 +126,7 @@ export function NewBookingForm({
           the form's own card. */}
       <section className="space-y-3 rounded-card border border-sand-200 bg-white p-5">
         {head}
+        {money === null ? <CurrencyMissingNote /> : null}
         <label className="block">
           <span className="label">Service name</span>
           <Input
@@ -112,13 +141,14 @@ export function NewBookingForm({
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
-            <span className="label">Total price (USD)</span>
+            <span className="label">Total price ({currency ?? "currency not set"})</span>
             <Input
               className="mt-1.5"
-              value={form.totalDollars}
-              onChange={(e) => update("totalDollars", e.target.value)}
-              placeholder="4000.00"
+              value={form.totalInput}
+              onChange={(e) => update("totalInput", e.target.value)}
+              placeholder={currency ? minorToInput(400_000, currency) : ""}
               inputMode="decimal"
+              disabled={money === null}
               required
             />
           </label>
@@ -129,7 +159,8 @@ export function NewBookingForm({
               type="date"
               value={form.appointmentDate}
               onChange={(e) => update("appointmentDate", e.target.value)}
-              min={tomorrowIso()}
+              min={addDaysIso(today, 1)}
+              disabled={money === null}
               required
             />
           </label>
@@ -199,11 +230,18 @@ export function NewBookingForm({
           surface holding content in this app is white. */}
       <aside className="self-start space-y-3 rounded-card border border-sand-200 bg-white p-5">
         <SectionHeading className="mb-1">Plan preview</SectionHeading>
-        <EligibilityPreview
-          totalCents={totalCents}
-          appointmentDate={appointmentDate}
-          preview={preview}
-        />
+        {money ? (
+          <EligibilityPreview
+            totalCents={totalCents}
+            appointmentDate={appointmentDate}
+            preview={preview}
+            money={money}
+          />
+        ) : (
+          <p className="text-[13px] text-ink-500">
+            Plans preview once your property has a currency.
+          </p>
+        )}
       </aside>
     </form>
   );
@@ -213,10 +251,12 @@ function EligibilityPreview({
   totalCents,
   appointmentDate,
   preview,
+  money,
 }: {
   totalCents: number | null;
-  appointmentDate: Date | null;
+  appointmentDate: string | null;
   preview: ReturnType<typeof previewEligibility>;
+  money: MoneyContext;
 }) {
   if (!appointmentDate || totalCents === null) {
     return (
@@ -244,7 +284,7 @@ function EligibilityPreview({
             Deposit today
           </div>
           <div className="mt-0.5 text-[14px] tabular-nums">
-            {formatCents(preview.depositAmountCents)}
+            {formatMoney(preview.depositAmountCents, money)}
           </div>
         </div>
       ) : null}
@@ -273,14 +313,14 @@ function EligibilityPreview({
             <div className="text-ink-500">{opt.numPayments} payments</div>
           </div>
           <div className="mt-1 text-ink-500">
-            {opt.numPayments - 1} of {formatCents(opt.perPaymentAmountCents)}
+            {opt.numPayments - 1} of {formatMoney(opt.perPaymentAmountCents, money)}
             {opt.finalPaymentAmountCents !== opt.perPaymentAmountCents
-              ? ` then ${formatCents(opt.finalPaymentAmountCents)}`
+              ? ` then ${formatMoney(opt.finalPaymentAmountCents, money)}`
               : ""}
           </div>
           <div className="mt-2 text-[11px] text-ink-500">
-            First: {formatScheduleDate(opt.dueDates[0] ?? "")} · Last:{" "}
-            {formatScheduleDate(opt.dueDates[opt.dueDates.length - 1] ?? "")}
+            First: {formatScheduleDate(opt.dueDates[0] ?? "", money.locale)} · Last:{" "}
+            {formatScheduleDate(opt.dueDates[opt.dueDates.length - 1] ?? "", money.locale)}
           </div>
         </div>
       ))}
@@ -350,36 +390,4 @@ function IneligibleHint({
         </p>
       );
   }
-}
-
-function parseDollarsToCents(input: string): number | null {
-  const trimmed = input.trim();
-  if (trimmed === "") return null;
-  if (!/^\d+(\.\d{0,2})?$/.test(trimmed)) return null;
-  const [whole, fraction = ""] = trimmed.split(".");
-  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  if (!Number.isFinite(cents) || cents <= 0) return null;
-  return cents;
-}
-
-function parseLocalDate(iso: string): Date | null {
-  if (!iso) return null;
-  const [y, m, d] = iso.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  const dt = new Date(y, m - 1, d);
-  if (Number.isNaN(dt.getTime())) return null;
-  return dt;
-}
-
-function today(): Date {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function tomorrowIso(): string {
-  const t = today();
-  t.setDate(t.getDate() + 1);
-  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(
-    t.getDate(),
-  ).padStart(2, "0")}`;
 }

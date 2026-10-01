@@ -24,7 +24,12 @@ public record BookingView(
         Instant createdAt,
         String derivedStatus,
         EligibilityView eligibility,
-        List<PlanOptionView> planOptions
+        List<PlanOptionView> planOptions,
+        // The booking's currency (amounts above are minor units of it), and
+        // the locale and zone to format them and its dates in.
+        String currency,
+        String locale,
+        String timeZone
 ) {
     public static BookingView summary(Booking b, String hostedUrl, String derivedStatus) {
         return new BookingView(
@@ -46,7 +51,10 @@ public record BookingView(
                 b.createdAt(),
                 derivedStatus,
                 null,
-                null
+                null,
+                b.currency(),
+                b.localeTag(),
+                b.timeZone()
         );
     }
 
@@ -75,7 +83,10 @@ public record BookingView(
                 b.createdAt(),
                 null,
                 eligibility,
-                planOptions
+                planOptions,
+                b.currency(),
+                b.localeTag(),
+                b.timeZone()
         );
     }
 

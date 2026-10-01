@@ -89,7 +89,8 @@ class PlanCreationFeeRateTest {
     }
 
     private static PlanOption option(long total, int n) {
-        long per = Math.round((double) total / n);
+        // Eligibility's split: floor, remainder on the final installment.
+        long per = total / n;
         long last = total - per * (n - 1);
         List<LocalDate> dates = new ArrayList<>();
         for (int i = 0; i < n; i++) dates.add(TODAY.plusMonths(i + 1L));
@@ -165,6 +166,20 @@ class PlanCreationFeeRateTest {
         assertThat(dao.sum()).isEqualTo(total);
         assertThat(dao.rows).hasSize(6);
         assertThat(dao.rows).noneMatch(r -> r.kind().equals("deposit"));
+    }
+
+    @Test
+    void noDepositSplitIsFloorWithTheRemainderLast() {
+        // The same rule eligibility quotes with, so the quote is what is
+        // charged. 1006 over 4 is 251, 251, 251, 253: the final installment
+        // is never the smallest (the old rounding gave 252, 252, 252, 250).
+        RecordingScheduleDao dao = new RecordingScheduleDao();
+
+        PlanCreationService.buildSchedule(
+                dao, PLAN, TODAY, false, 0L, 0L, 1_006L, 4, option(1_006L, 4));
+
+        assertThat(dao.rows).extracting(RecordingScheduleDao.Row::amountCents)
+                .containsExactly(251L, 251L, 251L, 253L);
     }
 
     @Test

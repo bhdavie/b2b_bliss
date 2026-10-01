@@ -9,6 +9,13 @@ import {
   type PlanRules,
 } from "@/lib/api";
 import { Input } from "@/components/ui/Input";
+import { type MoneyContext } from "@/lib/money";
+import {
+  CurrencyMissingNote,
+  MoneyInput,
+  minorToFieldText,
+  parseOptionalMoney,
+} from "./MoneyInput";
 
 type FormState = {
   minLeadTimeWeeks: string;
@@ -29,8 +36,15 @@ export function PlanRulesCard({
   initial,
   saveButtonClassName = "btn-primary-merchant",
   hideDeposit = false,
+  money,
 }: {
   initial: PlanRules;
+  /**
+   * The property's currency and locale from /me; amount thresholds are minor
+   * units of it. Null until the property has a currency: the amount fields are
+   * then disabled and saved unchanged.
+   */
+  money: MoneyContext | null;
   saveButtonClassName?: string;
   /**
    * Mews properties: the deposit is whatever the Bliss rate charges in Mews
@@ -38,7 +52,8 @@ export function PlanRulesCard({
    */
   hideDeposit?: boolean;
 }) {
-  const [form, setForm] = useState<FormState>(toForm(initial));
+  const currency = money?.currency ?? null;
+  const [form, setForm] = useState<FormState>(toForm(initial, currency));
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,14 +92,19 @@ export function PlanRulesCard({
       setError("Maximum lead time must be at least the minimum.");
       return;
     }
-    const minAmtCents = parseDollarsOrNull(form.minBookingDollars);
-    const maxAmtCents = parseDollarsOrNull(form.maxBookingDollars);
+    // No currency: the amount fields are disabled, so they keep what is stored.
+    const minAmtCents = currency
+      ? parseOptionalMoney(form.minBookingDollars, currency)
+      : initial.minBookingAmountCents;
+    const maxAmtCents = currency
+      ? parseOptionalMoney(form.maxBookingDollars, currency)
+      : initial.maxBookingAmountCents;
     if (minAmtCents === undefined) {
-      setError("Minimum booking amount must be a positive number.");
+      setError(`Minimum booking amount must be a positive amount in ${currency}.`);
       return;
     }
     if (maxAmtCents === undefined) {
-      setError("Maximum booking amount must be a positive number.");
+      setError(`Maximum booking amount must be a positive amount in ${currency}.`);
       return;
     }
     if (minAmtCents !== null && maxAmtCents !== null && maxAmtCents < minAmtCents) {
@@ -104,17 +124,25 @@ export function PlanRulesCard({
           return;
         }
         depositValue = pct;
+      } else if (!currency) {
+        depositValue = initial.depositType === "fixed" ? initial.depositValue : null;
+        if (depositValue === null) {
+          setError("Set your currency before using a fixed deposit.");
+          return;
+        }
       } else {
-        const cents = parseDollarsOrNull(form.depositDollars);
+        const cents = parseOptionalMoney(form.depositDollars, currency);
         if (cents === undefined || cents === null) {
-          setError("Deposit amount must be a positive dollar value.");
+          setError(`Deposit amount must be a positive amount in ${currency}.`);
           return;
         }
         depositValue = cents;
       }
-      const maxCents = parseDollarsOrNull(form.depositMaxDollars);
+      const maxCents = currency
+        ? parseOptionalMoney(form.depositMaxDollars, currency)
+        : initial.depositMaxCents;
       if (maxCents === undefined) {
-        setError("Deposit max must be a positive dollar value or blank.");
+        setError(`Deposit max must be a positive amount in ${currency} or blank.`);
         return;
       }
       depositMaxCents = maxCents;
@@ -155,7 +183,7 @@ export function PlanRulesCard({
         discountBasisPoints,
       };
       const saved = await updatePlanRules(payload);
-      setForm(toForm(saved));
+      setForm(toForm(saved, currency));
       setSavedAt(Date.now());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save plan rules.");
@@ -237,18 +265,21 @@ export function PlanRulesCard({
       ) : null}
 
       <Row label="Booking amount" hint="Cap or floor the prices you accept payment plans on.">
+        {money === null ? <div className="mb-3"><CurrencyMissingNote /></div> : null}
         <div className="grid grid-cols-2 gap-3">
-          <DollarInput
+          <MoneyInput
             label="Minimum (optional)"
             value={form.minBookingDollars}
             onChange={(v) => update("minBookingDollars", v)}
             placeholder="No floor"
+            money={money}
           />
-          <DollarInput
+          <MoneyInput
             label="Maximum (optional)"
             value={form.maxBookingDollars}
             onChange={(v) => update("maxBookingDollars", v)}
             placeholder="No cap"
+            money={money}
           />
         </div>
       </Row>
@@ -313,25 +344,27 @@ export function PlanRulesCard({
                       placeholder="25"
                     />
                   ) : (
-                    <DollarInput
+                    <MoneyInput
                       label="Deposit amount"
                       value={form.depositDollars}
                       onChange={(v) => update("depositDollars", v)}
                       placeholder="200"
+                      money={money}
                     />
                   )}
-                  <DollarInput
+                  <MoneyInput
                     label="Max deposit (optional)"
                     value={form.depositMaxDollars}
                     onChange={(v) => update("depositMaxDollars", v)}
                     placeholder="No cap"
+                    money={money}
                   />
                 </div>
 
                 <p className="text-[11px] text-ink-500 leading-[1.4]">
                   {form.depositType === "percentage"
                     ? "A percentage of the booking total is charged at signup. The optional cap protects against runaway deposits on big-ticket bookings."
-                    : "A fixed dollar amount is charged at signup. If the booking total is smaller than the deposit, the plan flow rejects so you don't accidentally charge above the booking price."}
+                    : "A fixed amount is charged at signup. If the booking total is smaller than the deposit, the plan flow rejects so you don't accidentally charge above the booking price."}
                 </p>
               </div>
             ) : null}
@@ -378,14 +411,14 @@ export function PlanRulesCard({
   );
 }
 
-function toForm(rules: PlanRules): FormState {
+function toForm(rules: PlanRules, currency: string | null): FormState {
   const depositType: DepositType = rules.depositType ?? "percentage";
   return {
     minLeadTimeWeeks: String(rules.minLeadTimeWeeks),
     maxLeadTimeWeeks: rules.maxLeadTimeWeeks == null ? "" : String(rules.maxLeadTimeWeeks),
     allowedFrequencies: rules.allowedFrequencies,
-    minBookingDollars: centsToDollars(rules.minBookingAmountCents),
-    maxBookingDollars: centsToDollars(rules.maxBookingAmountCents),
+    minBookingDollars: minorToFieldText(rules.minBookingAmountCents, currency),
+    maxBookingDollars: minorToFieldText(rules.maxBookingAmountCents, currency),
     recommendedFrequency: rules.recommendedFrequency ?? "",
     depositRequired: rules.depositRequired,
     depositType,
@@ -395,32 +428,14 @@ function toForm(rules: PlanRules): FormState {
         : "",
     depositDollars:
       depositType === "fixed" && rules.depositValue != null
-        ? centsToDollars(rules.depositValue)
+        ? minorToFieldText(rules.depositValue, currency)
         : "",
-    depositMaxDollars: centsToDollars(rules.depositMaxCents),
+    depositMaxDollars: minorToFieldText(rules.depositMaxCents, currency),
     discountPercent:
       rules.discountBasisPoints > 0
         ? String(Math.round(rules.discountBasisPoints / 100))
         : "",
   };
-}
-
-function centsToDollars(cents: number | null): string {
-  if (cents == null) return "";
-  if (cents % 100 === 0) return String(cents / 100);
-  return (cents / 100).toFixed(2);
-}
-
-// Returns null for blank input, the parsed cents for valid input, or
-// undefined for invalid input (so the caller can surface a validation error).
-function parseDollarsOrNull(input: string): number | null | undefined {
-  const trimmed = input.trim();
-  if (trimmed === "") return null;
-  if (!/^\d+(\.\d{0,2})?$/.test(trimmed)) return undefined;
-  const [whole, fraction = ""] = trimmed.split(".");
-  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  if (!Number.isFinite(cents) || cents <= 0) return undefined;
-  return cents;
 }
 
 function Row({
@@ -470,40 +485,6 @@ function NumberInput({
         className="mt-1.5"
         placeholder={placeholder}
       />
-    </label>
-  );
-}
-
-function DollarInput({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="text-[14px] text-ink-500">{label}</span>
-      <div className="relative mt-1.5">
-        <span
-          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[13px] text-ink-500"
-          aria-hidden="true"
-        >
-          $
-        </span>
-        <Input
-          type="text"
-          inputMode="decimal"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="pl-7"
-          placeholder={placeholder}
-        />
-      </div>
     </label>
   );
 }

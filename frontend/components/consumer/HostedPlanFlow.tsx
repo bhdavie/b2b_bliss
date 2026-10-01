@@ -7,12 +7,12 @@ import {
   createPlan,
   deriveDisplayAmounts,
   distributeInstallments,
-  formatDollarsCompact,
   type CreatePlanResponse,
   type PublicBooking,
   type PublicPlanFrequency,
   type PublicPlanOption,
 } from "@/lib/publicApi";
+import { formatMoneyCompact, todayIn, type MoneyContext } from "@/lib/money";
 import { DepositCallout } from "./DepositCallout";
 import { MerchantBlock } from "./MerchantBlock";
 import { PlanPicker } from "./PlanPicker";
@@ -50,6 +50,7 @@ export function HostedPlanFlow({
     booking.planOptions.find((o) => o.frequency === selected) ??
     booking.planOptions[0];
 
+  const money: MoneyContext = { currency: booking.currency, locale: booking.locale };
   const depositCents = booking.eligibility.depositAmountCents;
   const hasDeposit = depositCents > 0;
 
@@ -83,6 +84,7 @@ export function HostedPlanFlow({
         originalTotalCents={booking.eligibility.originalTotalAmountCents}
         discountedTotalCents={booking.eligibility.discountedTotalAmountCents}
         feeRate={feeRate}
+        money={money}
       />
 
       <div className={showCardStep ? "pointer-events-none opacity-30" : ""}>
@@ -91,6 +93,7 @@ export function HostedPlanFlow({
             todayCents={display.todayCents}
             remainingCents={display.remainingCents}
             depositRate={display.depositRate}
+            money={money}
           />
         ) : null}
         <PlanPicker
@@ -98,14 +101,16 @@ export function HostedPlanFlow({
           selected={selectedOption.frequency}
           onSelect={(f) => setSelected(f)}
           remainingCents={display.remainingCents}
+          money={money}
         />
         <ScheduleVisualizer
           option={selectedOption}
           todayCents={display.todayCents}
           perPaymentCents={distribution.perPaymentCents}
           finalPaymentCents={distribution.finalPaymentCents}
+          money={money}
         />
-        <PolicyDisclosure policies={booking.policies} />
+        <PolicyDisclosure policies={booking.policies} money={money} />
       </div>
 
       {step === "plan" ? (
@@ -129,7 +134,7 @@ export function HostedPlanFlow({
               busy={busy}
               onCancel={() => setStep("plan")}
               ctaLabel="Book now"
-              disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, selectedOption)}
+              disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, selectedOption, money)}
               onCardCollected={async (card) => {
                 await handleSubmit(booking, selectedOption.frequency, card);
               }}
@@ -146,7 +151,7 @@ export function HostedPlanFlow({
             busy={busy}
             onCancel={() => setStep("plan")}
             ctaLabel="Book now"
-            disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, selectedOption)}
+            disclosure={disclosureCopy(hasDeposit, display.todayCents, distribution.perPaymentCents, selectedOption, money)}
             onDemoSubmit={handleDemoSubmit}
           />
         )
@@ -166,7 +171,7 @@ export function HostedPlanFlow({
     if (display.todayCents > 0) {
       schedule.push({
         sequence: schedule.length + 1,
-        dueDate: isoToday(),
+        dueDate: todayIn(booking.timeZone),
         amountCents: display.todayCents,
         status: "scheduled",
         kind: "deposit",
@@ -234,11 +239,6 @@ function pickDefaultFrequency(booking: PublicBooking): PublicPlanFrequency {
   return booking.planOptions[0]?.frequency ?? "monthly";
 }
 
-function isoToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 function extractTokenFromCurrentPath(): string {
   // The path is /pay/{slug}/{token}. We're a client component so reading
   // window.location is fine; the parent server component already validated
@@ -252,18 +252,19 @@ function disclosureCopy(
   todayCents: number,
   perPaymentCents: number,
   option: PublicPlanOption,
+  money: MoneyContext,
 ): string {
   const cadence = option.frequency === "biweekly" ? "bi-weekly" : "monthly";
   if (hasDeposit) {
     return (
-      `Your card will be charged ${formatDollarsCompact(todayCents)} today as a deposit. ` +
+      `Your card will be charged ${formatMoneyCompact(todayCents, money)} today as a deposit. ` +
       `${option.numPayments} ${cadence} payment${option.numPayments === 1 ? "" : "s"} ` +
-      `of ${formatDollarsCompact(perPaymentCents)} will be charged automatically on the schedule above. ` +
+      `of ${formatMoneyCompact(perPaymentCents, money)} will be charged automatically on the schedule above. ` +
       `Cancel your booking anytime before check-in.`
     );
   }
   return (
-    `Your card will be charged ${formatDollarsCompact(perPaymentCents)} today. ` +
+    `Your card will be charged ${formatMoneyCompact(perPaymentCents, money)} today. ` +
     `${option.numPayments - 1} more ${cadence} payments will follow on the schedule above. ` +
     `Cancel your booking anytime before check-in.`
   );

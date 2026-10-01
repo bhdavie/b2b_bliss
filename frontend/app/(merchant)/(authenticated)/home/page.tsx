@@ -8,7 +8,8 @@ import {
   fetchMerchantSession,
   fetchOnboardingServer,
 } from "@/lib/auth";
-import { formatCents, formatScheduleDate } from "@/lib/eligibility";
+import { formatScheduleDate } from "@/lib/eligibility";
+import { formatMoney } from "@/lib/money";
 import type { Booking } from "@/lib/api";
 
 export default async function HomePage() {
@@ -122,11 +123,11 @@ function BookingRow({ booking }: { booking: Booking }) {
         </div>
         <div className="text-[14px] text-ink-500">
           {booking.customerNameHint ?? "Guest pending"} ·{" "}
-          {formatScheduleDate(booking.appointmentDate)}
+          {formatScheduleDate(booking.appointmentDate, booking.locale)}
         </div>
       </div>
       <div className="whitespace-nowrap text-[14px] tabular-nums text-ink-900">
-        {formatCents(booking.totalAmountCents)}
+        {formatMoney(booking.totalAmountCents, booking)}
       </div>
     </Link>
   );

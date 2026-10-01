@@ -14,7 +14,6 @@ import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentScheduleDao;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -86,158 +85,194 @@ public class InstallmentChargeService {
     }
 
     /**
-     * Charges every Mews-rail installment due on or before {@code asOf}. Stripe
-     * rows are counted and skipped. Returns a tally of what happened.
+     * Charges every installment due as of {@code now}, where "due" means its due
+     * date has begun in the booking's own time zone. Returns a tally of what
+     * happened.
+     *
+     * <p>Each installment is charged holding its plan's row lock, the same lock
+     * guest pay early and pay off take, and only after re-checking under that
+     * lock that it is still chargeable. The due list is read before any lock,
+     * so a guest may have paid a row since; that row is skipped, never charged
+     * a second time. Every write for the row (status, completion) goes through
+     * the locked transaction; emails go out after it commits.
      */
-    public PassResult runDuePass(LocalDate asOf) {
+    public PassResult runDuePass(Instant asOf) {
         List<DueInstallment> due = ledger.findDue(asOf);
         int charged = 0, processing = 0, failed = 0, skippedStripe = 0, errors = 0, held = 0;
+        int alreadySettled = 0;
 
         for (DueInstallment d : due) {
-            String rail = d.paymentRail();
-            if (RAIL_STRIPE.equalsIgnoreCase(rail)) {
-                if (stripeCharger == null) {
-                    // No Stripe charger wired (e.g. unit tests): keep the original
-                    // skip so a Stripe row is never charged without one present.
-                    skippedStripe++;
-                    continue;
-                }
-                // Charge the due Stripe row off-session via the same path the
-                // inline first charge and pay-early use; completion is applied
-                // here through the shared ledger, exactly like the Mews branch.
-                switch (stripeCharger.charge(d)) {
-                    case PAID -> {
-                        ledger.completePlanIfDone(d.planId(), ScheduleKind.fromWire(d.kind()));
-                        notificationService.onInstallmentPaid(d.planId(), d.scheduleId());
-                        notificationService.onPlanCompleted(d.planId());
-                        charged++;
-                    }
-                    case PROCESSING -> processing++;
-                    case FAILED -> {
-                        notificationService.onInstallmentFailed(d.planId(), d.scheduleId());
-                        failed++;
-                    }
-                    case SKIPPED -> skippedStripe++;
-                    case REQUIRES_ACTION, ERROR -> errors++;
-                }
+            Optional<RowOutcome> outcome = ledger.withInstallmentLock(
+                    d.planId(), d.scheduleId(), locked -> chargeOne(d, locked));
+            if (outcome.isEmpty()) {
+                log.info("Installment {} was settled or claimed since the due list was read; not charged",
+                        d.scheduleId());
+                alreadySettled++;
                 continue;
             }
-            if (RAIL_CLOUDBEDS.equalsIgnoreCase(rail)) {
-                // Third rail recognized and dispatched to its own resolver (proving
-                // the per-property token/refresh wiring). Charging a row still needs
-                // a vaulted Cloudbeds card token, which the guest-checkout
-                // tokenization seam provides; until that lands the row carries no
-                // card, so leave it scheduled (a config gap, not a decline).
-                if (cloudbedsResolver == null || cloudbedsResolver.resolve(d.merchantId()).isEmpty()) {
-                    log.warn("Cloudbeds-rail schedule {} has no property connection; leaving scheduled",
-                            d.scheduleId());
-                } else {
-                    log.warn("Cloudbeds-rail schedule {} connected but has no vaulted card "
-                            + "(guest checkout seam pending); leaving scheduled", d.scheduleId());
+            switch (outcome.get()) {
+                case CHARGED -> {
+                    notificationService.onInstallmentPaid(d.planId(), d.scheduleId());
+                    notificationService.onPlanCompleted(d.planId());
+                    charged++;
                 }
-                errors++;
-                continue;
-            }
-            if (!RAIL_MEWS.equalsIgnoreCase(rail)) {
-                log.warn("Unknown payment_rail '{}' on schedule {}; skipping", rail, d.scheduleId());
-                errors++;
-                continue;
-            }
-            if (isBlank(d.mewsCustomerId()) || isBlank(d.mewsCreditCardId())) {
-                // Config gap, not a decline: leave the row scheduled so it
-                // charges once a card is vaulted. Do not consume a retry.
-                log.warn("Mews-rail schedule {} has no vaulted card; leaving scheduled", d.scheduleId());
-                errors++;
-                continue;
-            }
-            // Resolve the property's OWN Mews adapter + currency. A Mews-rail
-            // plan whose property has no validated connection is a config gap,
-            // not a decline: leave it scheduled, do not charge on someone else's
-            // credentials.
-            Optional<ChargeContext> ctxMaybe = resolver.resolve(d.merchantId());
-            if (ctxMaybe.isEmpty()) {
-                log.warn("Mews-rail schedule {} has no property connection (merchant {}); leaving scheduled",
-                        d.scheduleId(), d.merchantId());
-                errors++;
-                continue;
-            }
-            ChargeContext ctx = ctxMaybe.get();
-
-            Instant now = Instant.now(clock);
-            // The stay must still be on in Mews. A reservation the hotel
-            // cancelled, or one that never left Optional, is not charged: the
-            // installment is held with a reason and stays due. If Mews cannot
-            // say, nothing is charged this pass.
-            String reservationId = d.mewsReservationId();
-            if (reservationId != null) {
-                Optional<String> state;
-                try {
-                    state = ctx.adapter().getReservationState(reservationId);
-                } catch (PmsAdapterException e) {
-                    log.warn("Could not read Mews reservation {} for schedule {}: {}; not charging",
-                            reservationId, d.scheduleId(), e.getMessage());
-                    errors++;
-                    continue;
+                case PROCESSING -> processing++;
+                case FAILED -> {
+                    notificationService.onInstallmentFailed(d.planId(), d.scheduleId());
+                    failed++;
                 }
-                if (state.isEmpty() || !CHARGEABLE_RESERVATION_STATES.contains(state.get())) {
-                    String reason = "mews reservation " + reservationId + " is "
-                            + state.map(s -> s.toLowerCase(Locale.ROOT)).orElse("missing") + "; not charged";
-                    if (ledger.markHeld(d.scheduleId(), reason, now)) {
-                        log.warn("Mews installment {} held: {}", d.scheduleId(), reason);
-                    }
-                    held++;
-                    continue;
-                }
-            }
-            try {
-                PmsChargeResult result = ctx.adapter().chargeStoredCard(
-                        d.mewsCustomerId(),
-                        d.mewsCreditCardId(),
-                        d.amountCents(),
-                        ctx.currency(),
-                        reservationId,
-                        "Bliss installment seq " + d.sequence());
-                PaymentScheduleStatus mapped = mapChargeStatus(result.status());
-                switch (mapped) {
-                    case PAID -> {
-                        ledger.markPaid(d.scheduleId(), result.paymentId(), now);
-                        ledger.completePlanIfDone(d.planId(), ScheduleKind.fromWire(d.kind()));
-                        notificationService.onInstallmentPaid(d.planId(), d.scheduleId());
-                        notificationService.onPlanCompleted(d.planId());
-                        charged++;
-                        log.info("Mews installment {} charged (payment {})",
-                                d.scheduleId(), result.paymentId());
-                    }
-                    case PROCESSING -> {
-                        ledger.markProcessing(d.scheduleId(), result.paymentId(),
-                                "mews state=" + result.rawState(), now);
-                        processing++;
-                        log.info("Mews installment {} in flight (payment {}, state {})",
-                                d.scheduleId(), result.paymentId(), result.rawState());
-                    }
-                    case FAILED -> {
-                        ledger.markFailed(d.scheduleId(),
-                                "mews charge declined (state=" + result.rawState() + ")", now);
-                        notificationService.onInstallmentFailed(d.planId(), d.scheduleId());
-                        failed++;
-                        log.info("Mews installment {} declined (state {})",
-                                d.scheduleId(), result.rawState());
-                    }
-                    default -> errors++;
-                }
-            } catch (PmsAdapterException e) {
-                // Protocol/transport error: the charge did not settle. Leave the
-                // row unchanged (still scheduled/retrying) so it is retried next
-                // pass; do not bump retry, since this was not a card decline.
-                log.warn("Mews charge error for schedule {}: {}", d.scheduleId(), e.getMessage());
-                errors++;
+                case SKIPPED_STRIPE -> skippedStripe++;
+                case HELD -> held++;
+                case ERROR -> errors++;
             }
         }
 
         PassResult result = new PassResult(
-                due.size(), charged, processing, failed, skippedStripe, errors, held);
+                due.size(), charged, processing, failed, skippedStripe, errors, held, alreadySettled);
         log.info("Installment charge pass asOf={} -> {}", asOf, result);
         return result;
+    }
+
+    /** What happened to one installment, for the pass tally and the emails. */
+    enum RowOutcome { CHARGED, PROCESSING, FAILED, SKIPPED_STRIPE, HELD, ERROR }
+
+    /**
+     * Charges one due installment through its rail. Runs inside the plan lock;
+     * {@code ledger} writes on the locked transaction.
+     */
+    private RowOutcome chargeOne(DueInstallment d, Ledger ledger) {
+        String rail = d.paymentRail();
+        if (RAIL_STRIPE.equalsIgnoreCase(rail)) {
+            if (stripeCharger == null) {
+                // No Stripe charger wired (e.g. unit tests): keep the original
+                // skip so a Stripe row is never charged without one present.
+                return RowOutcome.SKIPPED_STRIPE;
+            }
+            // Charge the due Stripe row off-session via the same path the
+            // inline first charge and pay-early use; completion is applied
+            // here through the shared ledger, exactly like the Mews branch.
+            return switch (stripeCharger.charge(d)) {
+                case PAID -> {
+                    ledger.completePlanIfDone(d.planId(), ScheduleKind.fromWire(d.kind()));
+                    yield RowOutcome.CHARGED;
+                }
+                case PROCESSING -> RowOutcome.PROCESSING;
+                case FAILED -> RowOutcome.FAILED;
+                case SKIPPED -> RowOutcome.SKIPPED_STRIPE;
+                case REQUIRES_ACTION, ERROR -> RowOutcome.ERROR;
+            };
+        }
+        if (RAIL_CLOUDBEDS.equalsIgnoreCase(rail)) {
+            // Third rail recognized and dispatched to its own resolver (proving
+            // the per-property token/refresh wiring). Charging a row still needs
+            // a vaulted Cloudbeds card token, which the guest-checkout
+            // tokenization seam provides; until that lands the row carries no
+            // card, so leave it scheduled (a config gap, not a decline).
+            if (cloudbedsResolver == null || cloudbedsResolver.resolve(d.merchantId()).isEmpty()) {
+                log.warn("Cloudbeds-rail schedule {} has no property connection; leaving scheduled",
+                        d.scheduleId());
+            } else {
+                log.warn("Cloudbeds-rail schedule {} connected but has no vaulted card "
+                        + "(guest checkout seam pending); leaving scheduled", d.scheduleId());
+            }
+            return RowOutcome.ERROR;
+        }
+        if (!RAIL_MEWS.equalsIgnoreCase(rail)) {
+            log.warn("Unknown payment_rail '{}' on schedule {}; skipping", rail, d.scheduleId());
+            return RowOutcome.ERROR;
+        }
+        if (isBlank(d.mewsCustomerId()) || isBlank(d.mewsCreditCardId())) {
+            // Config gap, not a decline: leave the row scheduled so it
+            // charges once a card is vaulted. Do not consume a retry.
+            log.warn("Mews-rail schedule {} has no vaulted card; leaving scheduled", d.scheduleId());
+            return RowOutcome.ERROR;
+        }
+        // Resolve the property's OWN Mews adapter + currency. A Mews-rail
+        // plan whose property has no validated connection is a config gap,
+        // not a decline: leave it scheduled, do not charge on someone else's
+        // credentials.
+        Optional<ChargeContext> ctxMaybe = resolver.resolve(d.merchantId());
+        if (ctxMaybe.isEmpty()) {
+            log.warn("Mews-rail schedule {} has no property connection (merchant {}); leaving scheduled",
+                    d.scheduleId(), d.merchantId());
+            return RowOutcome.ERROR;
+        }
+        ChargeContext ctx = ctxMaybe.get();
+        // The plan's amounts are minor units of the booking's currency. If
+        // the property's Mews currency no longer matches, charging would
+        // take the wrong amount, so leave the row for someone to look at.
+        if (d.currency() == null || !d.currency().equalsIgnoreCase(ctx.currency())) {
+            log.warn("Mews-rail schedule {} is in {} but the property now charges in {}; leaving scheduled",
+                    d.scheduleId(), d.currency(), ctx.currency());
+            return RowOutcome.ERROR;
+        }
+
+        Instant now = Instant.now(clock);
+        // The stay must still be on in Mews. A reservation the hotel
+        // cancelled, or one that never left Optional, is not charged: the
+        // installment is held with a reason and stays due. If Mews cannot
+        // say, nothing is charged this pass.
+        String reservationId = d.mewsReservationId();
+        if (reservationId != null) {
+            Optional<String> state;
+            try {
+                state = ctx.adapter().getReservationState(reservationId);
+            } catch (PmsAdapterException e) {
+                log.warn("Could not read Mews reservation {} for schedule {}: {}; not charging",
+                        reservationId, d.scheduleId(), e.getMessage());
+                return RowOutcome.ERROR;
+            }
+            if (state.isEmpty() || !CHARGEABLE_RESERVATION_STATES.contains(state.get())) {
+                String reason = "mews reservation " + reservationId + " is "
+                        + state.map(s -> s.toLowerCase(Locale.ROOT)).orElse("missing") + "; not charged";
+                if (ledger.markHeld(d.scheduleId(), reason, now)) {
+                    log.warn("Mews installment {} held: {}", d.scheduleId(), reason);
+                }
+                return RowOutcome.HELD;
+            }
+        }
+        try {
+            PmsChargeResult result = ctx.adapter().chargeStoredCard(
+                    d.mewsCustomerId(),
+                    d.mewsCreditCardId(),
+                    d.amountCents(),
+                    d.currency(),
+                    reservationId,
+                    "Bliss installment seq " + d.sequence());
+            PaymentScheduleStatus mapped = mapChargeStatus(result.status());
+            switch (mapped) {
+                case PAID -> {
+                    ledger.markPaid(d.scheduleId(), result.paymentId(), now);
+                    ledger.completePlanIfDone(d.planId(), ScheduleKind.fromWire(d.kind()));
+                    log.info("Mews installment {} charged (payment {})",
+                            d.scheduleId(), result.paymentId());
+                    return RowOutcome.CHARGED;
+                }
+                case PROCESSING -> {
+                    ledger.markProcessing(d.scheduleId(), result.paymentId(),
+                            "mews state=" + result.rawState(), now);
+                    log.info("Mews installment {} in flight (payment {}, state {})",
+                            d.scheduleId(), result.paymentId(), result.rawState());
+                    return RowOutcome.PROCESSING;
+                }
+                case FAILED -> {
+                    ledger.markFailed(d.scheduleId(),
+                            "mews charge declined (state=" + result.rawState() + ")", now);
+                    log.info("Mews installment {} declined (state {})",
+                            d.scheduleId(), result.rawState());
+                    return RowOutcome.FAILED;
+                }
+                default -> {
+                    return RowOutcome.ERROR;
+                }
+            }
+        } catch (PmsAdapterException e) {
+            // Protocol/transport error: the charge did not settle. Leave the
+            // row unchanged (still scheduled/retrying) so it is retried next
+            // pass; do not bump retry, since this was not a card decline.
+            log.warn("Mews charge error for schedule {}: {}", d.scheduleId(), e.getMessage());
+            return RowOutcome.ERROR;
+        }
     }
 
     /**
@@ -298,7 +333,7 @@ public class InstallmentChargeService {
 
     /** Persistence boundary, kept narrow so it is trivial to fake in tests. */
     public interface Ledger {
-        List<DueInstallment> findDue(LocalDate asOf);
+        List<DueInstallment> findDue(Instant now);
 
         void markPaid(UUID scheduleId, String mewsPaymentId, Instant now);
 
@@ -314,17 +349,33 @@ public class InstallmentChargeService {
          * once, not every pass.
          */
         boolean markHeld(UUID scheduleId, String reason, Instant now);
+
+        /**
+         * Runs {@code work} holding the installment's plan row lock (the lock
+         * guest pay early and pay off also take), in one transaction, with a
+         * ledger that writes on that transaction. Returns empty, without
+         * running {@code work}, when under the lock the installment is no
+         * longer chargeable: not scheduled or retrying any more, or its plan is
+         * no longer active.
+         */
+        <T> Optional<T> withInstallmentLock(UUID planId, UUID scheduleId, java.util.function.Function<Ledger, T> work);
     }
 
     /** Tally of a single pass. */
     public record PassResult(
-            int due, int charged, int processing, int failed, int skippedStripe, int errors, int held) {
+            int due, int charged, int processing, int failed, int skippedStripe, int errors, int held,
+            // Rows a guest paid (or a payment claimed) between the due list
+            // being read and the row's lock being taken: skipped, not charged.
+            int alreadySettled) {
     }
 
     /**
      * Real {@link Ledger} over the database. Mirrors the existing Stripe
      * recording semantics exactly, but writes Mews ids to their own column and
      * replicates {@code PlanPortalService.maybeCompletePlan} for completion.
+     * Each call runs on its own handle; {@link #withInstallmentLock} hands its
+     * work a {@link HandleLedger} on the locked transaction instead, so writes
+     * made under the lock never wait on the lock from another connection.
      */
     public static final class JdbiLedger implements Ledger {
 
@@ -335,31 +386,81 @@ public class InstallmentChargeService {
         }
 
         @Override
-        public List<DueInstallment> findDue(LocalDate asOf) {
+        public List<DueInstallment> findDue(Instant asOf) {
             return jdbi.withHandle(h -> h.attach(DueChargeDao.class).findDueForCharge(asOf));
         }
 
         @Override
         public void markPaid(UUID scheduleId, String mewsPaymentId, Instant now) {
-            jdbi.useHandle(h -> h.attach(PaymentScheduleDao.class)
-                    .markPaidMews(scheduleId, mewsPaymentId, now));
+            jdbi.useHandle(h -> new HandleLedger(h).markPaid(scheduleId, mewsPaymentId, now));
         }
 
         @Override
         public void markProcessing(UUID scheduleId, String mewsPaymentId, String note, Instant now) {
-            jdbi.useHandle(h -> h.attach(PaymentScheduleDao.class)
-                    .recordMewsProcessing(scheduleId, mewsPaymentId, note, now));
+            jdbi.useHandle(h -> new HandleLedger(h).markProcessing(scheduleId, mewsPaymentId, note, now));
         }
 
         @Override
         public void markFailed(UUID scheduleId, String error, Instant now) {
-            jdbi.useHandle(h -> h.attach(PaymentScheduleDao.class)
-                    .updateStatusWithError(scheduleId, PaymentScheduleStatus.FAILED.wire(), error, 1, now));
+            jdbi.useHandle(h -> new HandleLedger(h).markFailed(scheduleId, error, now));
         }
 
         @Override
         public boolean markHeld(UUID scheduleId, String reason, Instant now) {
-            return jdbi.withHandle(h -> h.attach(PaymentScheduleDao.class).noteHeld(scheduleId, reason)) == 1;
+            return jdbi.withHandle(h -> new HandleLedger(h).markHeld(scheduleId, reason, now));
+        }
+
+        @Override
+        public void completePlanIfDone(UUID planId, ScheduleKind justPaidKind) {
+            jdbi.useTransaction(h -> new HandleLedger(h).completePlanIfDone(planId, justPaidKind));
+        }
+
+        @Override
+        public <T> Optional<T> withInstallmentLock(
+                UUID planId, UUID scheduleId, java.util.function.Function<Ledger, T> work) {
+            return jdbi.inTransaction(h -> {
+                h.attach(PaymentPlanDao.class).lockForUpdate(planId);
+                if (!h.attach(DueChargeDao.class).isStillChargeable(scheduleId)) {
+                    return Optional.<T>empty();
+                }
+                return Optional.ofNullable(work.apply(new HandleLedger(h)));
+            });
+        }
+    }
+
+    /** {@link Ledger} writes on one open handle (the locked transaction). */
+    static final class HandleLedger implements Ledger {
+
+        private final org.jdbi.v3.core.Handle h;
+
+        HandleLedger(org.jdbi.v3.core.Handle h) {
+            this.h = h;
+        }
+
+        @Override
+        public List<DueInstallment> findDue(Instant asOf) {
+            return h.attach(DueChargeDao.class).findDueForCharge(asOf);
+        }
+
+        @Override
+        public void markPaid(UUID scheduleId, String mewsPaymentId, Instant now) {
+            h.attach(PaymentScheduleDao.class).markPaidMews(scheduleId, mewsPaymentId, now);
+        }
+
+        @Override
+        public void markProcessing(UUID scheduleId, String mewsPaymentId, String note, Instant now) {
+            h.attach(PaymentScheduleDao.class).recordMewsProcessing(scheduleId, mewsPaymentId, note, now);
+        }
+
+        @Override
+        public void markFailed(UUID scheduleId, String error, Instant now) {
+            h.attach(PaymentScheduleDao.class)
+                    .updateStatusWithError(scheduleId, PaymentScheduleStatus.FAILED.wire(), error, 1, now);
+        }
+
+        @Override
+        public boolean markHeld(UUID scheduleId, String reason, Instant now) {
+            return h.attach(PaymentScheduleDao.class).noteHeld(scheduleId, reason) == 1;
         }
 
         @Override
@@ -370,21 +471,25 @@ public class InstallmentChargeService {
             if (justPaidKind != ScheduleKind.INSTALLMENT) {
                 return;
             }
-            jdbi.useTransaction(h -> {
-                PaymentScheduleDao scheduleDao = h.attach(PaymentScheduleDao.class);
-                if (scheduleDao.findNextScheduled(planId).isPresent()) {
-                    return;
-                }
-                PaymentPlanDao planDao = h.attach(PaymentPlanDao.class);
-                PaymentPlan plan = planDao.findById(planId).orElse(null);
-                if (plan == null) {
-                    return;
-                }
-                if (!PaymentPlanStateMachine.isAllowed(plan.status(), PaymentPlanStatus.COMPLETED)) {
-                    return;
-                }
-                planDao.updateStatus(planId, PaymentPlanStatus.COMPLETED.wire());
-            });
+            PaymentScheduleDao scheduleDao = h.attach(PaymentScheduleDao.class);
+            if (scheduleDao.findNextScheduled(planId).isPresent()) {
+                return;
+            }
+            PaymentPlanDao planDao = h.attach(PaymentPlanDao.class);
+            PaymentPlan plan = planDao.findById(planId).orElse(null);
+            if (plan == null) {
+                return;
+            }
+            if (!PaymentPlanStateMachine.isAllowed(plan.status(), PaymentPlanStatus.COMPLETED)) {
+                return;
+            }
+            planDao.updateStatus(planId, PaymentPlanStatus.COMPLETED.wire());
+        }
+
+        @Override
+        public <T> Optional<T> withInstallmentLock(
+                UUID planId, UUID scheduleId, java.util.function.Function<Ledger, T> work) {
+            throw new UnsupportedOperationException("already inside an installment lock");
         }
     }
 }

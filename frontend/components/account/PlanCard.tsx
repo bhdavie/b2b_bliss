@@ -1,6 +1,6 @@
 import Link from "next/link";
+import { formatMoney, type MoneyContext } from "@/lib/money";
 import {
-  formatDollars,
   formatScheduleDateLong,
   formatScheduleDateShort,
   type AccountPlanCard,
@@ -82,9 +82,11 @@ export function PlanRow({
   const href = from
     ? `/plan/${plan.bookingToken}?from=${from}`
     : `/plan/${plan.bookingToken}`;
+  // Cards on one account can be in different currencies; each reads its own.
+  const money: MoneyContext = { currency: plan.currency, locale: plan.locale };
   const stay = plan.checkoutDate
-    ? `${formatScheduleDateShort(plan.appointmentDate)} to ${formatScheduleDateShort(plan.checkoutDate)}`
-    : formatScheduleDateLong(plan.appointmentDate);
+    ? `${formatScheduleDateShort(plan.appointmentDate, money.locale)} to ${formatScheduleDateShort(plan.checkoutDate, money.locale)}`
+    : formatScheduleDateLong(plan.appointmentDate, money.locale);
   const pill = statusPill(plan);
   const hasNext = plan.nextDueDate != null && plan.nextDueAmountCents != null;
 
@@ -134,10 +136,10 @@ export function PlanRow({
             </div>
             {hasNext ? (
               <div className="text-[14px] text-ink-900">
-                {formatDollars(plan.nextDueAmountCents ?? 0)}
+                {formatMoney(plan.nextDueAmountCents ?? 0, money)}
                 <span className="text-ink-500">
                   {" "}
-                  on {formatScheduleDateShort(plan.nextDueDate ?? "")}
+                  on {formatScheduleDateShort(plan.nextDueDate ?? "", money.locale)}
                 </span>
               </div>
             ) : (
@@ -161,7 +163,7 @@ export function PlanRow({
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-6">
         <div className="flex flex-wrap items-baseline text-[14px] text-ink-500">
           <span>
-            Remaining <Figure>{formatDollars(plan.remainingCents)}</Figure>
+            Remaining <Figure>{formatMoney(plan.remainingCents, money)}</Figure>
           </span>
           <Dot />
           <span>

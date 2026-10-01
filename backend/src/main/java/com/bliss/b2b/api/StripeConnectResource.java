@@ -173,6 +173,8 @@ public class StripeConnectResource {
             log.warn("account.updated for unknown stripe account {}", account.getId());
             return;
         }
+        com.bliss.b2b.service.PropertyOnboardingService.recordStripeAccountLocale(
+                merchantDao, maybeMerchant.get().id(), account);
         Merchant merchant = maybeMerchant.get();
         ConnectStatus newStatus = StripeConnectService.fromAccount(account);
         ConnectStatus oldStatus = ConnectStatus.fromWire(merchant.stripeConnectStatus());
@@ -197,6 +199,7 @@ public class StripeConnectResource {
             return false;
         }
         StripeConnection conn = maybe.get();
+        onboardingService.recordStripeAccountLocale(conn.merchantId(), account);
         ConnectStatus newStatus = StripeConnectStandardService.statusOf(account);
         boolean chargesEnabled = StripeConnectStandardService.chargesEnabled(account);
         boolean was = conn.isChargesEnabled();

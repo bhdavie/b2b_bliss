@@ -65,29 +65,68 @@ public class PlanNotificationService {
         }));
     }
 
-    /** 2. An installment settled to PAID. */
+    /**
+     * 2. An installment settled to PAID: one receipt per payment, not per row.
+     *
+     * <p>A pay off settles several rows with one charge, so they share its
+     * payment id. Those get a single receipt for the whole charge, sent once
+     * every row of it has settled (reconciliation settles them one by one) and
+     * claimed against the payment id, so whichever row is last sends it and
+     * the others send nothing. A row with its own payment gets the usual
+     * receipt for its amount.
+     */
     public void onInstallmentPaid(UUID planId, UUID scheduleId) {
-        dispatch("receipt:" + scheduleId, "receipt", () -> jdbi.withHandle(h -> {
-            Ctx c = load(h, planId);
-            if (c == null) return null;
-            PaymentScheduleEntry row = c.schedule.stream()
-                    .filter(e -> e.id().equals(scheduleId)).findFirst().orElse(null);
-            if (row == null) return null;
-            long paid = sum(c.schedule, PaymentScheduleStatus.PAID);
-            long total = c.schedule.stream()
-                    .filter(e -> e.status() != PaymentScheduleStatus.CANCELED)
-                    .mapToLong(PaymentScheduleEntry::amountCents).sum();
-            long remaining = Math.max(0, total - paid);
-            PaymentScheduleEntry next = c.schedule.stream()
-                    .filter(e -> e.status() == PaymentScheduleStatus.SCHEDULED)
-                    .min(java.util.Comparator.comparing(PaymentScheduleEntry::dueDate))
-                    .orElse(null);
-            return EmailTemplates.paymentReceipt(
-                    c.customer.email(), c.merchant, c.booking, row.amountCents(), remaining,
-                    next == null ? null : next.dueDate(),
-                    next == null ? null : next.amountCents(),
-                    consumerBaseUrl);
-        }));
+        Receipt receipt;
+        try {
+            receipt = jdbi.withHandle(h -> receiptFor(load(h, planId), scheduleId));
+        } catch (RuntimeException e) {
+            log.warn("Receipt for schedule {} failed (non-blocking): {}", scheduleId, e.getMessage());
+            return;
+        }
+        if (receipt == null) {
+            return;
+        }
+        dispatch(receipt.dedupeKey(), "receipt", receipt::message);
+    }
+
+    private record Receipt(String dedupeKey, Supplier<EmailMessage> build) {
+        EmailMessage message() {
+            return build.get();
+        }
+    }
+
+    private Receipt receiptFor(Ctx c, UUID scheduleId) {
+        if (c == null) return null;
+        PaymentScheduleEntry row = c.schedule.stream()
+                .filter(e -> e.id().equals(scheduleId)).findFirst().orElse(null);
+        if (row == null || row.status() != PaymentScheduleStatus.PAID) return null;
+        String ref = row.paymentRef();
+        List<PaymentScheduleEntry> charge = ref == null
+                ? List.of(row)
+                : c.schedule.stream().filter(e -> ref.equals(e.paymentRef())).toList();
+        if (charge.stream().anyMatch(e -> e.status() != PaymentScheduleStatus.PAID)) {
+            // Part of a pay off whose other rows have not settled yet; the
+            // last of them sends the one receipt.
+            return null;
+        }
+        long amount = charge.stream().mapToLong(PaymentScheduleEntry::amountCents).sum();
+        long paid = sum(c.schedule, PaymentScheduleStatus.PAID);
+        long total = c.schedule.stream()
+                .filter(e -> e.status() != PaymentScheduleStatus.CANCELED)
+                .mapToLong(PaymentScheduleEntry::amountCents).sum();
+        long remaining = Math.max(0, total - paid);
+        PaymentScheduleEntry next = c.schedule.stream()
+                .filter(e -> e.status() == PaymentScheduleStatus.SCHEDULED)
+                .min(java.util.Comparator.comparing(PaymentScheduleEntry::dueDate))
+                .orElse(null);
+        // Keyed per row for a single-row charge, as before, so receipts already
+        // logged under that key are never sent again; per payment otherwise.
+        String key = charge.size() == 1 ? "receipt:" + row.id() : "receipt:payment:" + ref;
+        return new Receipt(key, () -> EmailTemplates.paymentReceipt(
+                c.customer.email(), c.merchant, c.booking, amount, remaining,
+                next == null ? null : next.dueDate(),
+                next == null ? null : next.amountCents(),
+                consumerBaseUrl));
     }
 
     /** 3. Plan completed. Self-guards: only sends when the plan is actually COMPLETED. */

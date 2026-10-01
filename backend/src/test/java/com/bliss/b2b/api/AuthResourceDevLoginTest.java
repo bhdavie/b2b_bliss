@@ -126,7 +126,7 @@ class AuthResourceDevLoginTest {
                         UUID.randomUUID(), "marbrook", email, "Marbrook House", null, null,
                         null, null, null, null, null, "US", null, "not_started",
                         MerchantStatus.ACTIVE, PmsType.NONE, OnboardingState.ACTIVE,
-                        Instant.EPOCH, Instant.EPOCH, Instant.EPOCH, null, null);
+                        Instant.EPOCH, Instant.EPOCH, Instant.EPOCH, null, null, null, null, null);
             }
         };
     }

@@ -1,7 +1,7 @@
 "use client";
 
+import { formatMoneyCompact, splitInstallments, type MoneyContext } from "@/lib/money";
 import {
-  formatDollarsCompact,
   formatScheduleDateShort,
   type PublicPlanFrequency,
   type PublicPlanOption,
@@ -13,11 +13,13 @@ export function PlanPicker({
   selected,
   onSelect,
   remainingCents,
+  money,
 }: {
   options: PublicPlanOption[];
   selected: PublicPlanFrequency;
   onSelect: (frequency: PublicPlanFrequency) => void;
   remainingCents: number;
+  money: MoneyContext;
 }) {
   return (
     <section className="mt-6">
@@ -31,6 +33,7 @@ export function PlanPicker({
             isOnly={options.length === 1}
             onSelect={() => onSelect(option.frequency)}
             remainingCents={remainingCents}
+            money={money}
           />
         ))}
       </div>
@@ -44,19 +47,20 @@ function PlanCard({
   isOnly,
   onSelect,
   remainingCents,
+  money,
 }: {
   option: PublicPlanOption;
   isSelected: boolean;
   isOnly: boolean;
   onSelect: () => void;
   remainingCents: number;
+  money: MoneyContext;
 }) {
   const visuallySelected = isSelected || isOnly;
   const finalDate = option.dueDates[option.dueDates.length - 1] ?? "";
-  const perPaymentCents =
-    option.numPayments > 0
-      ? Math.round(remainingCents / option.numPayments)
-      : 0;
+  // The regular per-payment amount: the backend split puts any remainder on
+  // the last payment, so payment 1 is the one every other payment matches.
+  const perPaymentCents = splitInstallments(remainingCents, option.numPayments)[0] ?? 0;
 
   return (
     <button
@@ -90,7 +94,7 @@ function PlanCard({
           </div>
           <div className="mt-0.5 text-[12px] text-ink-500">
             {option.numPayments} payments through{" "}
-            {formatScheduleDateShort(finalDate)}
+            {formatScheduleDateShort(finalDate, money.locale)}
           </div>
         </div>
         <div className="flex-none text-right">
@@ -99,7 +103,7 @@ function PlanCard({
               visuallySelected ? "text-brand-violet-deep" : "text-ink-900"
             }`}
           >
-            {formatDollarsCompact(perPaymentCents)}
+            {formatMoneyCompact(perPaymentCents, money)}
           </div>
           <div className="text-[11px] text-ink-500">/payment</div>
         </div>
