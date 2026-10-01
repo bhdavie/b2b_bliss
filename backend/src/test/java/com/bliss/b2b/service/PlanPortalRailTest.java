@@ -59,6 +59,9 @@ class PlanPortalRailTest {
     private static final TokenCipher CIPHER = TokenCipher.development();
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-01T12:00:00Z"), ZoneOffset.UTC);
 
+    /** Makes fake payment ids unique per test, as real ones are; the email log dedupes on them. */
+    private static String RUN = UUID.randomUUID().toString();
+
     private static Jdbi jdbi;
     private static String dbUrl;
 
@@ -96,14 +99,93 @@ class PlanPortalRailTest {
 
     @BeforeEach
     void setUp() {
+        RUN = UUID.randomUUID().toString();
         stripe = new FakeStripe(true);
         mews = new FakeMews();
         mewsCurrency = "GBP";
     }
 
     private PlanPortalService service() {
+        return service(PlanNotificationService.disabled());
+    }
+
+    private PlanPortalService service(PlanNotificationService notifications) {
         return new PlanPortalService(jdbi, stripe, new StripeConnectResolver(jdbi),
-                merchantId -> Optional.of(new ChargeContext(mews, mewsCurrency)), null, CLOCK);
+                merchantId -> Optional.of(new ChargeContext(mews, mewsCurrency)), null,
+                notifications, CLOCK);
+    }
+
+    // --------------------------------------------------------------- receipts
+
+    private final List<com.bliss.b2b.integration.EmailMessage> emails =
+            java.util.Collections.synchronizedList(new ArrayList<>());
+
+    private PlanNotificationService recordingNotifications() {
+        emails.clear();
+        return new PlanNotificationService(jdbi, emails::add, "http://localhost:3000");
+    }
+
+    private List<String> receiptSubjects() {
+        return emails.stream().map(com.bliss.b2b.integration.EmailMessage::subject)
+                .filter(sub -> sub.startsWith("Receipt")).toList();
+    }
+
+    @Test
+    void mewsPayOff_sendsOneReceiptForTheFullAmount() {
+        PlanNotificationService notifications = recordingNotifications();
+        Fixture f = plan("mews", "GBP", "mews_link_res-r1", "cust-r1", "card-r1", "res-r1");
+
+        service(notifications).payRemainingBalance(f.token);
+
+        assertThat(receiptSubjects()).containsExactly("Receipt: £600.00 payment to Test Inn");
+    }
+
+    @Test
+    void stripePayOff_sendsOneReceiptForTheFullAmount() {
+        PlanNotificationService notifications = recordingNotifications();
+        Fixture f = plan("stripe", "GBP", "pm_real_" + UUID.randomUUID(), null, null, null);
+
+        service(notifications).payRemainingBalance(f.token);
+
+        assertThat(receiptSubjects()).containsExactly("Receipt: £600.00 payment to Test Inn");
+    }
+
+    @Test
+    void mewsPayOffSettledByReconciliation_sendsOneReceiptOnceEveryRowHasSettled() {
+        PlanNotificationService notifications = recordingNotifications();
+        mews.next = PmsChargeStatus.PENDING;
+        Fixture f = plan("mews", "GBP", "mews_link_res-r2", "cust-r2", "card-r2", "res-r2");
+
+        service(notifications).payRemainingBalance(f.token);
+        assertThat(receiptSubjects()).as("nothing settled yet").isEmpty();
+
+        // Reconciliation settles the pay off's rows one at a time and notifies
+        // each, as MewsReconciliationService does.
+        List<UUID> rows = jdbi.withHandle(h -> h.createQuery(
+                        "SELECT id FROM payment_schedule WHERE payment_plan_id = :p AND status = 'processing' "
+                                + "ORDER BY sequence")
+                .bind("p", f.planId).mapTo(UUID.class).list());
+        assertThat(rows).hasSize(2);
+        for (UUID row : rows) {
+            jdbi.useHandle(h -> h.attach(com.bliss.b2b.persistence.PaymentScheduleDao.class)
+                    .markPaidMews(row, "mews-pay-1-" + RUN, CLOCK.instant()));
+            notifications.onInstallmentPaid(f.planId, row);
+            if (row.equals(rows.get(0))) {
+                assertThat(receiptSubjects()).as("first row settled, second still processing").isEmpty();
+            }
+        }
+
+        assertThat(receiptSubjects()).containsExactly("Receipt: £600.00 payment to Test Inn");
+    }
+
+    @Test
+    void payEarly_stillSendsAReceiptForThatInstallment() {
+        PlanNotificationService notifications = recordingNotifications();
+        Fixture f = plan("mews", "GBP", "mews_link_res-r3", "cust-r3", "card-r3", "res-r3");
+
+        service(notifications).payNextInstallment(f.token);
+
+        assertThat(receiptSubjects()).containsExactly("Receipt: £300.00 payment to Test Inn");
     }
 
     // ------------------------------------------------------------ Stripe rail
@@ -151,10 +233,10 @@ class PlanPortalRailTest {
         assertThat(c.reservationId()).isEqualTo("res-1");
         assertThat(c.amountMinor()).isEqualTo(30_000L);
         assertThat(c.currency()).isEqualTo("GBP");
-        assertThat(result.paymentIntentId()).isEqualTo("mews-pay-1");
+        assertThat(result.paymentIntentId()).startsWith("mews-pay-1-");
         assertThat(result.status()).isEqualTo("succeeded");
         assertThat(statuses(f)).containsExactly("paid", "paid", "scheduled");
-        assertThat(mewsPaymentIds(f).get(1)).isEqualTo("mews-pay-1");
+        assertThat(mewsPaymentIds(f).get(1)).startsWith("mews-pay-1-");
     }
 
     @Test
@@ -180,7 +262,7 @@ class PlanPortalRailTest {
         assertThat(mews.charges.get(0).amountMinor()).isEqualTo(60_000L);
         assertThat(stripe.calls).isEmpty();
         assertThat(statuses(f)).containsExactly("paid", "paid", "paid");
-        assertThat(mewsPaymentIds(f).subList(1, 3)).containsOnly("mews-pay-1");
+        assertThat(mewsPaymentIds(f).subList(1, 3)).allMatch(id -> id.startsWith("mews-pay-1-"));
         assertThat(planStatus(f)).isEqualTo("completed");
     }
 
@@ -193,7 +275,7 @@ class PlanPortalRailTest {
 
         assertThat(result.status()).isEqualTo("processing");
         assertThat(statuses(f)).containsExactly("paid", "processing", "scheduled");
-        assertThat(mewsPaymentIds(f).get(1)).isEqualTo("mews-pay-1");
+        assertThat(mewsPaymentIds(f).get(1)).startsWith("mews-pay-1-");
     }
 
     @Test
@@ -260,7 +342,7 @@ class PlanPortalRailTest {
             assertThat(result.charged()).isZero();
             assertThat(result.alreadySettled()).isEqualTo(1);
             assertThat(statuses(f)).containsExactly("paid", "paid", "scheduled");
-            assertThat(mewsPaymentIds(f).get(1)).isEqualTo("mews-pay-1");
+            assertThat(mewsPaymentIds(f).get(1)).startsWith("mews-pay-1-");
         } finally {
             pool.shutdownNow();
         }
@@ -426,7 +508,7 @@ class PlanPortalRailTest {
                 Map<String, String> metadata, Destination destination, SessionMode sessionMode) {
             calls.add(new Call(amountCents, currency));
             PaymentIntent intent = new PaymentIntent();
-            intent.setId("pi_test_" + calls.size());
+            intent.setId("pi_test_" + calls.size() + "_" + UUID.randomUUID());
             intent.setStatus("succeeded");
             return intent;
         }
@@ -469,7 +551,8 @@ class PlanPortalRailTest {
                     throw new IllegalStateException(e);
                 }
             }
-            String paymentId = next == PmsChargeStatus.FAILED ? null : "mews-pay-" + n;
+            // Unique like real Mews PaymentIds; the suffix keeps the order readable.
+            String paymentId = next == PmsChargeStatus.FAILED ? null : "mews-pay-" + n + "-" + RUN;
             return new PmsChargeResult(paymentId, next, next.name(), amountMinorUnits, currency);
         }
 

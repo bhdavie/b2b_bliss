@@ -18,5 +18,15 @@ public record PaymentScheduleEntry(
         int retryCount,
         String lastError,
         Instant createdAt,
-        Instant updatedAt
-) {}
+        Instant updatedAt,
+        // The Mews PaymentId that charged this row, on the Mews rail.
+        String mewsPaymentId
+) {
+    /**
+     * The charge that settled this row on whichever rail: the Mews payment id
+     * or the Stripe PaymentIntent id. Rows a pay off settled together share it.
+     */
+    public String paymentRef() {
+        return mewsPaymentId != null && !mewsPaymentId.isBlank() ? mewsPaymentId : stripePaymentIntentId;
+    }
+}

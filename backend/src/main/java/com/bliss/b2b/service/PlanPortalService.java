@@ -61,6 +61,7 @@ public class PlanPortalService {
     private final StripeConnectResolver stripeConnectResolver;
     private final ChargeContextResolver mewsResolver;
     private final CancellationService cancellationService;
+    private final PlanNotificationService notificationService;
     private final Clock clock;
 
     public PlanPortalService(
@@ -69,12 +70,14 @@ public class PlanPortalService {
             StripeConnectResolver stripeConnectResolver,
             ChargeContextResolver mewsResolver,
             CancellationService cancellationService,
+            PlanNotificationService notificationService,
             Clock clock) {
         this.jdbi = jdbi;
         this.stripeService = stripeService;
         this.stripeConnectResolver = stripeConnectResolver;
         this.mewsResolver = mewsResolver;
         this.cancellationService = cancellationService;
+        this.notificationService = notificationService;
         this.clock = clock;
     }
 
@@ -130,15 +133,15 @@ public class PlanPortalService {
      * charged through the plan's rail (see {@link #routeOf}).
      */
     public PayResult payNextInstallment(String bookingToken) {
-        return switch (routeFor(bookingToken)) {
+        return notifyPaid(switch (routeFor(bookingToken)) {
             case STRIPE -> payNextInstallmentStripe(bookingToken);
             case MEWS -> payNextInstallmentMews(bookingToken);
             case DEMO -> payNextInstallmentDemo(bookingToken);
-        };
+        });
     }
 
     /** Stripe rail: the same off-session charge path the deposit went through. */
-    private PayResult payNextInstallmentStripe(String bookingToken) {
+    private Paid payNextInstallmentStripe(String bookingToken) {
         return jdbi.inTransaction(handle -> {
             Lookup look = resolveOrThrow(handle, bookingToken);
             if (look.plan.status() != PaymentPlanStatus.ACTIVE) {
@@ -203,7 +206,8 @@ public class PlanPortalService {
                         "card requires authentication; please use a different card");
             }
             maybeCompletePlan(handle, look.plan, next);
-            return new PayResult(intent.getId(), wireStatus);
+            return new Paid(new PayResult(intent.getId(), wireStatus), look.plan.id(),
+                    newStatus == PaymentScheduleStatus.PAID ? List.of(next.id()) : List.of());
         });
     }
 
@@ -215,7 +219,7 @@ public class PlanPortalService {
      * settle exactly as it does for scheduled charges. A decline writes
      * nothing, so the installment stays scheduled.
      */
-    private PayResult payNextInstallmentMews(String bookingToken) {
+    private Paid payNextInstallmentMews(String bookingToken) {
         return jdbi.inTransaction(handle -> {
             Lookup look = resolveOrThrow(handle, bookingToken);
             if (look.plan.status() != PaymentPlanStatus.ACTIVE) {
@@ -234,15 +238,17 @@ public class PlanPortalService {
             if (charge.status() == PaymentScheduleStatus.PAID) {
                 scheduleDao.markPaidMews(next.id(), charge.paymentId(), now);
                 maybeCompletePlan(handle, look.plan, next);
-                return new PayResult(charge.paymentId(), "succeeded");
+                return new Paid(new PayResult(charge.paymentId(), "succeeded"), look.plan.id(),
+                        List.of(next.id()));
             }
             scheduleDao.recordMewsProcessing(next.id(), charge.paymentId(),
                     "mews state=" + charge.rawState(), now);
-            return new PayResult(charge.paymentId(), "processing");
+            // Reconciliation sends the receipt once Mews settles it.
+            return new Paid(new PayResult(charge.paymentId(), "processing"), look.plan.id(), List.of());
         });
     }
 
-    private PayResult payNextInstallmentDemo(String bookingToken) {
+    private Paid payNextInstallmentDemo(String bookingToken) {
         return jdbi.inTransaction(handle -> {
             Lookup look = resolveOrThrow(handle, bookingToken);
             if (look.plan.status() != PaymentPlanStatus.ACTIVE) {
@@ -257,7 +263,7 @@ public class PlanPortalService {
             String demoIntentId = StripeIds.intentIdFor(next.id());
             scheduleDao.markPaidNow(next.id(), demoIntentId, Instant.now(clock));
             maybeCompletePlan(handle, look.plan, next);
-            return new PayResult(demoIntentId, "succeeded");
+            return new Paid(new PayResult(demoIntentId, "succeeded"), look.plan.id(), List.of(next.id()));
         });
     }
 
@@ -281,14 +287,37 @@ public class PlanPortalService {
      * twice for the same installment.
      */
     public PayResult payRemainingBalance(String bookingToken) {
-        return switch (routeFor(bookingToken)) {
+        return notifyPaid(switch (routeFor(bookingToken)) {
             case STRIPE -> payRemainingBalanceStripe(bookingToken);
             case MEWS -> payRemainingBalanceMews(bookingToken);
             case DEMO -> payRemainingBalanceDemo(bookingToken);
-        };
+        });
     }
 
-    private PayResult payRemainingBalanceStripe(String bookingToken) {
+    /** A guest payment's result plus the rows it settled, for the emails sent after commit. */
+    private record Paid(PayResult result, UUID planId, List<UUID> settledRowIds) {}
+
+    /**
+     * Receipts once the payment has committed. A pay off's rows share one
+     * charge, and the notification service turns them into a single receipt
+     * for the full amount. Only rows this call settled are passed, so no
+     * earlier payment is receipted late.
+     */
+    private PayResult notifyPaid(Paid paid) {
+        for (UUID rowId : paid.settledRowIds()) {
+            notificationService.onInstallmentPaid(paid.planId(), rowId);
+        }
+        if (!paid.settledRowIds().isEmpty()) {
+            notificationService.onPlanCompleted(paid.planId());
+        }
+        return paid.result();
+    }
+
+    private static List<UUID> ids(List<PaymentScheduleEntry> rows) {
+        return rows.stream().map(PaymentScheduleEntry::id).toList();
+    }
+
+    private Paid payRemainingBalanceStripe(String bookingToken) {
         return jdbi.inTransaction(handle -> {
             Lookup look = resolveOrThrow(handle, bookingToken);
             if (look.plan.status() != PaymentPlanStatus.ACTIVE) {
@@ -357,7 +386,7 @@ public class PlanPortalService {
             settleAll(handle, look.plan, unsettled, intent.getId());
             log.info("Plan {} paid off early: {} rows, {}c, intent {}",
                     look.plan.id(), unsettled.size(), amountCents, intent.getId());
-            return new PayResult(intent.getId(), wireStatus);
+            return new Paid(new PayResult(intent.getId(), wireStatus), look.plan.id(), ids(unsettled));
         });
     }
 
@@ -368,7 +397,7 @@ public class PlanPortalService {
      * processing under it, and the reconciliation pass settles them together.
      * A decline writes nothing.
      */
-    private PayResult payRemainingBalanceMews(String bookingToken) {
+    private Paid payRemainingBalanceMews(String bookingToken) {
         return jdbi.inTransaction(handle -> {
             Lookup look = resolveOrThrow(handle, bookingToken);
             if (look.plan.status() != PaymentPlanStatus.ACTIVE) {
@@ -391,17 +420,19 @@ public class PlanPortalService {
                 maybeCompletePlan(handle, look.plan, unsettled.get(unsettled.size() - 1));
                 log.info("Plan {} paid off early on Mews: {} rows, {} minor units, payment {}",
                         look.plan.id(), unsettled.size(), amountCents, charge.paymentId());
-                return new PayResult(charge.paymentId(), "succeeded");
+                return new Paid(new PayResult(charge.paymentId(), "succeeded"), look.plan.id(),
+                        ids(unsettled));
             }
             for (PaymentScheduleEntry row : unsettled) {
                 scheduleDao.recordMewsProcessing(row.id(), charge.paymentId(),
                         "mews payoff state=" + charge.rawState(), now);
             }
-            return new PayResult(charge.paymentId(), "processing");
+            // Reconciliation sends the one receipt once Mews settles it.
+            return new Paid(new PayResult(charge.paymentId(), "processing"), look.plan.id(), List.of());
         });
     }
 
-    private PayResult payRemainingBalanceDemo(String bookingToken) {
+    private Paid payRemainingBalanceDemo(String bookingToken) {
         return jdbi.inTransaction(handle -> {
             Lookup look = resolveOrThrow(handle, bookingToken);
             if (look.plan.status() != PaymentPlanStatus.ACTIVE) {
@@ -419,7 +450,7 @@ public class PlanPortalService {
             settleAll(handle, look.plan, unsettled, demoIntentId);
             log.info("Plan {} paid off early (demo): {} rows, {}c, intent {}",
                     look.plan.id(), unsettled.size(), sumAmounts(unsettled), demoIntentId);
-            return new PayResult(demoIntentId, "succeeded");
+            return new Paid(new PayResult(demoIntentId, "succeeded"), look.plan.id(), ids(unsettled));
         });
     }
 

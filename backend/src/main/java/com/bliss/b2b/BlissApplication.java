@@ -209,7 +209,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 merchantDao, customerDao, emailService);
         PlanPortalService planPortalService = new PlanPortalService(
                 jdbi, stripePaymentsService, stripeConnectResolver, mewsAdapterFactory,
-                cancellationService, clock);
+                cancellationService, planNotificationService, clock);
         // Property onboarding + per-property Mews connection. The factory both
         // validates connections and resolves each property's charge credentials.
         com.bliss.b2b.persistence.MerchantMewsConnectionDao mewsConnectionDao =
