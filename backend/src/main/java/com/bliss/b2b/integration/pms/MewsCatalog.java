@@ -20,7 +20,8 @@ public final class MewsCatalog {
     }
 
     /** A rate on a service. Bliss books a private one with no payment policy. */
-    public record Rate(String id, String name, String type, boolean isPublic, boolean enabled, boolean active) {
+    public record Rate(String id, String name, String type, boolean isPublic, boolean enabled, boolean active,
+            String groupId) {
         /**
          * Enabled, active, and not an availability-block rate. Block rates belong
          * to a group allotment and need an AvailabilityBlockId to book, which a
@@ -29,6 +30,10 @@ public final class MewsCatalog {
         public boolean bookable() {
             return enabled && active && !"AvailabilityBlock".equals(type);
         }
+    }
+
+    /** An additional (orderable) service, the kind Mews accepts orders such as the Bliss fee line on. */
+    public record AdditionalService(String id, String name, boolean active) {
     }
 
     /**

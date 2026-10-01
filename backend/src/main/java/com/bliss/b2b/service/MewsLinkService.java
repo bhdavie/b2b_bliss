@@ -92,14 +92,26 @@ public class MewsLinkService {
     private final PlanCreationService planCreationService;
     private final EmailService emailService;
     private final Clock clock;
+    /** Rate terms from Mews; null skips the booking snapshot (older tests). */
+    private final MewsSyncService syncService;
+    /** Posts the Bliss fee line; null skips it. */
+    private final FeeLineService feeLines;
 
     public MewsLinkService(Jdbi jdbi, MewsAdapterFactory mewsFactory,
             PlanCreationService planCreationService, EmailService emailService, Clock clock) {
+        this(jdbi, mewsFactory, planCreationService, emailService, clock, null, null);
+    }
+
+    public MewsLinkService(Jdbi jdbi, MewsAdapterFactory mewsFactory,
+            PlanCreationService planCreationService, EmailService emailService, Clock clock,
+            MewsSyncService syncService, FeeLineService feeLines) {
         this.jdbi = jdbi;
         this.mewsFactory = mewsFactory;
         this.planCreationService = planCreationService;
         this.emailService = emailService;
         this.clock = clock;
+        this.syncService = syncService;
+        this.feeLines = feeLines;
     }
 
     /** One pass over every property with Bliss rates. A failing property never stops the others. */
@@ -142,6 +154,9 @@ public class MewsLinkService {
             return PassResult.EMPTY;
         }
         MewsAdapter adapter = mewsFactory.adapterForConnection(conn);
+        if (feeLines != null) {
+            feeLines.retryPending(merchantId);
+        }
 
         Instant now = clock.instant();
         Instant mark = conn.linkedThroughUtc() != null ? conn.linkedThroughUtc() : now.minus(FIRST_LOOKBACK);
@@ -247,6 +262,12 @@ public class MewsLinkService {
                 && r.startUtc() != null && r.endUtc() != null
                 && (!booking.startUtc().equals(r.startUtc()) || !booking.endUtc().equals(r.endUtc()));
         if (moved) {
+            // The booking keeps the terms it was made under, but its free
+            // cancellation deadline follows the stay's new start.
+            jdbi.useExtension(com.bliss.b2b.persistence.BookingDao.class, d -> d.findCancellationTerms(
+                    booking.bookingId()).ifPresent(json -> d.setFreeCancellationUntil(booking.bookingId(),
+                    com.bliss.b2b.persistence.BlissRateDao.parseTerms(json)
+                            .freeCancellationUntil(r.createdUtc(), r.startUtc(), zone))));
             String detail = "Bliss built the plan for " + stayLabel(booking.startUtc(), booking.endUtc(), zone)
                     + ". Mews now has " + stayLabel(r.startUtc(), r.endUtc(), zone)
                     + ". The payment schedule has not been changed.";
@@ -360,6 +381,10 @@ public class MewsLinkService {
             LocalDate bookedOn = (first.createdUtc() != null ? first.createdUtc() : r.createdUtc())
                     .atZone(zone).toLocalDate();
 
+            // The rate's terms from Mews (synced now if never synced), which
+            // the booking keeps whatever Mews changes later.
+            com.bliss.b2b.domain.BlissRate rate = syncService == null ? null
+                    : syncService.rateFor(merchantId, r.rateId()).filter(x -> x.syncedAt() != null).orElse(null);
             PlanCreationService.MewsLinkedStay stay = new PlanCreationService.MewsLinkedStay(
                     link.id(), merchantId, r.id(), r.rateId(), r.categoryId(), frequency,
                     checkin, checkout, r.startUtc(), r.endUtc(), bookedOn,
@@ -371,9 +396,16 @@ public class MewsLinkService {
                     cardId, lastFour(card.obfuscatedNumber()),
                     card.expiryMonth() == null ? 12 : card.expiryMonth(),
                     card.expiryYear() == null ? 2099 : card.expiryYear(),
-                    "card");
+                    "card",
+                    rate == null ? null : rate.bookingType(),
+                    rate == null ? null : rate.terms(),
+                    rate == null ? null : rate.terms().freeCancellationUntil(r.createdUtc(), r.startUtc(), zone));
             try {
                 var result = planCreationService.createFromMewsReservation(stay);
+                if (feeLines != null) {
+                    feeLines.postForPlan(merchantId, result.booking().id(), result.planId(),
+                            result.plan().processingFeeCents(), currency);
+                }
                 log.info("Linked Mews reservation {} to plan {} ({}, total {}, deposit {} {})",
                         r.id(), result.planId(), frequency.wire(), total.totalMinorUnits(), deposit, currency);
                 return Attempt.LINKED;

@@ -173,6 +173,22 @@ public final class EmailTemplates {
     }
 
     /**
+     * To the hotel when the daily sync finds its Mews setup for Bliss changed:
+     * a Bliss rate that can no longer be booked, or new cancellation terms.
+     * One line per change, already in plain language.
+     */
+    public static EmailMessage mewsSetupChanged(Merchant merchant, List<String> changes) {
+        StringBuilder body = new StringBuilder("We noticed a change in Mews that affects Bliss.\n\n");
+        for (String line : changes) {
+            body.append("- ").append(line).append('\n');
+        }
+        body.append("\nBliss follows your Mews setup, so there's nothing you need to do. If this "
+                + "wasn't intended, change it back in Mews and Bliss will follow again on its next sync. "
+                + "You can see your Bliss settings at any time under Settings.\n");
+        return new EmailMessage(merchant.email(), "We noticed a change in Mews", body.toString());
+    }
+
+    /**
      * To the hotel when a guest cancels a Mews stay booked through Bliss. The
      * guest gets no cash refund; the amount is credit toward a future stay,
      * which the hotel applies by hand because Mews has nowhere to hold it.

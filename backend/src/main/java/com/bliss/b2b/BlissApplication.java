@@ -198,6 +198,11 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 new com.bliss.b2b.integration.pms.MewsAdapterFactory(jdbi, tokenCipher, chargeCapCents);
         // Prices Mews stays against the property's own Mews; the only source of a
         // Mews plan's total.
+        // Keeps each Mews property's Bliss rates, their cancellation terms and
+        // the fee line service in step with Mews (daily, on demand, and before
+        // linking on a rate never synced).
+        com.bliss.b2b.service.MewsSyncService mewsSyncService =
+                new com.bliss.b2b.service.MewsSyncService(jdbi, mewsAdapterFactory, emailService, clock);
         PlanCreationService planCreationService = new PlanCreationService(
                 jdbi, eligibilityService, stripePaymentsService, stripeConnectResolver,
                 emailService, planNotificationService, clock, config.getApp());
@@ -377,7 +382,11 @@ public class BlissApplication extends Application<BlissConfiguration> {
                         jdbi.onDemand(com.bliss.b2b.persistence.MerchantPlanRulesDao.class),
                         jdbi.onDemand(com.bliss.b2b.persistence.MerchantFeeRateDao.class),
                         jdbi.onDemand(com.bliss.b2b.persistence.MerchantMewsConnectionDao.class),
+                        jdbi.onDemand(com.bliss.b2b.persistence.BlissRateDao.class),
                         config.getFeatures(), clock)));
+        environment.jersey().register(new com.bliss.b2b.api.MewsSyncResource(mewsSyncService,
+                jdbi.onDemand(com.bliss.b2b.persistence.BlissRateDao.class),
+                jdbi.onDemand(com.bliss.b2b.persistence.MewsSyncRunDao.class)));
         environment.jersey().register(new PropertyOnboardingResource(onboardingService));
         environment.jersey().register(new com.bliss.b2b.api.CloudbedsOAuthResource(
                 cloudbedsOAuthClient, cloudbedsAdapterFactory, onboardingService, config.getApp(), clock));
@@ -442,7 +451,10 @@ public class BlissApplication extends Application<BlissConfiguration> {
         // as the charge passes so a plan is never charged while being built.
         com.bliss.b2b.service.MewsLinkService mewsLinkService =
                 new com.bliss.b2b.service.MewsLinkService(
-                        jdbi, mewsAdapterFactory, planCreationService, emailService, clock);
+                        jdbi, mewsAdapterFactory, planCreationService, emailService, clock,
+                        mewsSyncService,
+                        new com.bliss.b2b.service.FeeLineService(
+                                jdbi, mewsAdapterFactory, config.getFeatures(), clock));
         chargeScheduler.scheduleAtFixedRate(() -> {
             try {
                 mewsLinkService.runLinkPass();
@@ -450,6 +462,16 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 log.warn("Mews link pass failed: {}", e.getMessage());
             }
         }, 45, 120, java.util.concurrent.TimeUnit.SECONDS);
+        // Daily sync of each Mews property's setup, on the same thread as the
+        // passes so a sync never overlaps a link.
+        chargeScheduler.scheduleAtFixedRate(() -> {
+            try {
+                int synced = mewsSyncService.syncAll();
+                log.info("Mews setup sync: {} properties synced", synced);
+            } catch (RuntimeException e) {
+                log.warn("Mews setup sync failed: {}", e.getMessage());
+            }
+        }, 300, 86_400, java.util.concurrent.TimeUnit.SECONDS);
 
         // Two principal types now, so this is the polymorphic feature rather
         // than AuthDynamicFeature: Dropwizard picks the filter by the principal

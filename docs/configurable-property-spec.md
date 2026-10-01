@@ -362,16 +362,21 @@ dates.
 Decided: the Bliss fee is its own clearly labeled folio line, alongside other
 fees, not in taxes.
 
-- **Posting:** when a plan is created, Bliss adds an order item to the
-  reservation, "Bliss service fee", for the fee amount in the booking's
-  currency (`orders/add` linked to the reservation, or a product configured
-  for Bliss, **D13**). It is posted once, idempotently, keyed on the plan.
+- **Posting (built in phase 2, on by default):** when a Mews plan is linked,
+  Bliss adds a custom item "Bliss service fee" for the fee amount, in the
+  booking's currency, with `orders/add` linked to the reservation. Mews only
+  takes orders on an **additional** service (a stay service is refused as
+  "Invalid ServiceId", verified on Gross UK), so the property needs one: Bliss
+  picks an active service named like "Bliss", otherwise the hotel chooses it in
+  Settings and the line waits until then. Posted once per plan, claimed in
+  `folio_postings` before Mews is called; a failed post stays pending and is
+  retried on the next link pass.
 - **Accounting category:** a "Bliss fees" category the hotel maps in Mews, so it
   reports with other fees, not taxes.
-- **Tax treatment:** Mews requires a tax code on every item. Whether the fee
-  carries VAT or sales tax depends on jurisdiction and on who supplies the
-  service (**D14**). The spec assumes an explicit, configurable tax code per
-  property, not a guess.
+- **Tax treatment (D14, decided as a setting):** the line posts untaxed by
+  default (Mews accepts an item with no tax code and books it with no tax,
+  verified on Gross UK). A property can set a tax code later; it must be one of
+  its own Mews tax rate codes, for example `UK-2022-20%`.
 - **Pay as you go:** with the fee on the folio, the folio total equals what Bliss
   charges in total, so the guest's installments no longer overpay the bill. This
   removes today's "fee overpays the Mews bill" warning.
@@ -401,13 +406,16 @@ Bliss is switched on)
 | release_policy | varchar | `cancellation_deadline` (default), `check_in`, `on_collection` |
 | chargeback_buffer_days | int | default per D4 |
 | cancellation_outcome | varchar | `refund` (default) or `credit` |
-| fee_tax_code | varchar | Mews tax code for the fee line (D14) |
-| fee_accounting_category_id | varchar | Mews accounting category |
+| fee_service_id | varchar | Mews additional service the fee line posts under (V39) |
+| fee_tax_code | varchar | Mews tax rate code for the fee line; null is untaxed (V39) |
+| fee_accounting_category_id | varchar | Mews accounting category; null is the service's own (V39) |
 | bliss_enabled_at | timestamptz | |
 | updated_at | timestamptz | |
 
-**`merchant_bliss_rates`** replaces the two rate columns on
-`merchant_mews_connections` (data migrated):
+**`merchant_bliss_rates`** (V39) holds what Bliss knows about each Bliss rate.
+As built, which rates are Bliss rates is still chosen by the two columns on
+`merchant_mews_connections`, which every existing flow and the production
+walkthrough use; this table is kept in step by the sync:
 
 | column | type | notes |
 |---|---|---|
@@ -667,7 +675,8 @@ the D1 answers from Mews and Stripe, plus D3, D4, D5 and D10.
 
 ## 12. Open decisions
 
-Decided: **D1**, forward the card Mews holds to Stripe (option A), with the
+Decided: **D14**, the fee line posts untaxed by default and its tax code is a
+per-property setting. **D1**, forward the card Mews holds to Stripe (option A), with the
 confirmation-page card step (option C) as the fallback (section 2.5). **D2**,
 hold-mode charges are made `on_behalf_of` the hotel, so the hotel is the
 merchant of record. **D6**, hold-mode properties use Express
@@ -686,8 +695,7 @@ Still open:
 | **D10** | Hold mode deposit | 0%; 20%; follow the Mews rate | 20%, editable |
 | **D11** | Reading a rate's upfront payment policy from Mews | Via API if exposed; hotel confirms in Bliss | API if available; otherwise a one-time confirmation in setup |
 | **D12** | Cancellation made in Mews on a linked booking | Act automatically; flag and wait for the hotel | Act automatically for refundable bookings before the deadline; flag otherwise |
-| **D13** | Fee line mechanism | Ad hoc order item; a "Bliss service fee" product created per property | A product, so hotels' reports group it |
-| **D14** | Tax on the Bliss fee | No tax; hotel's standard rate; per jurisdiction | Needs an accountant's view per market; spec assumes a configurable tax code |
+| **D13** | Fee line mechanism | Custom order item on an additional service; a "Bliss service fee" product | Built as a custom item under an additional service (phase 2); a product remains an option if hotels want it grouped in reports |
 | **D15** | Folio closing in hold mode | Ledger payment for stay only; plus a matching ledger payment for the fee | Both, so the folio closes at zero |
 | **D16** | External payment type for ledger postings | One of Mews's external types (for example Prepayment), chosen with Aparium's accounting | Agree with Aparium before Phase 5 |
 

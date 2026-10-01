@@ -183,10 +183,11 @@ public class BlissConfiguration extends Configuration {
          */
         private boolean mewsCardForwarding = false;
         /**
-         * The "Bliss service fee" folio line (spec section 6). TODO(D14): the
-         * fee's tax treatment per market; off until a tax code is agreed.
+         * The "Bliss service fee" folio line (spec section 6). Decided and on by
+         * default. Its tax treatment (D14) is a per-property setting: untaxed
+         * until a property chooses a tax code.
          */
-        private boolean feeFolioLine = false;
+        private boolean feeFolioLine = true;
 
         @JsonProperty public boolean isHoldMode() { return holdMode; }
         @JsonProperty public void setHoldMode(boolean holdMode) { this.holdMode = holdMode; }

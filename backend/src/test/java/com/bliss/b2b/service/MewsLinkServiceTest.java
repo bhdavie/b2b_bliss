@@ -117,7 +117,189 @@ class MewsLinkServiceTest {
             }
         };
         service = new MewsLinkService(jdbi, factory, planCreation, email, clock);
+        // The phase 2 wiring: rate terms synced from Mews and the fee line.
+        syncService = new MewsSyncService(jdbi, factory, email, clock);
+        fullService = new MewsLinkService(jdbi, factory, planCreation, email, clock, syncService,
+                new FeeLineService(jdbi, factory, new com.bliss.b2b.BlissConfiguration.FeaturesConfig(), clock));
         merchantId = insertMerchant();
+    }
+
+    private MewsSyncService syncService;
+    private MewsLinkService fullService;
+
+    // --- Phase 2: rate terms, booking types, the fee line -------------------------
+
+    private Map<String, Object> bookingSnapshot(String reservationId) {
+        return one("""
+                SELECT booking_type, cancellation_terms::text AS terms, free_cancellation_until AS free_until
+                FROM bookings WHERE mews_reservation_id = :r""", reservationId);
+    }
+
+    private List<Map<String, Object>> feePostings() {
+        return jdbi.withHandle(h -> h.createQuery("""
+                        SELECT fp.status, fp.amount_minor, fp.currency, fp.mews_id
+                        FROM folio_postings fp JOIN bookings b ON b.id = fp.booking_id
+                        WHERE b.merchant_id = :m""")
+                .bind("m", merchantId).mapToMap().list());
+    }
+
+    @Test
+    void aLinkedBookingKeepsItsRatesBookingTypeAndCancellationTerms() {
+        // The monthly Bliss rate's group lets guests cancel free until 14 days out.
+        mews.policies.put("grp-1", List.of(new com.bliss.b2b.payments.CancellationTerms.Step(
+                "Start", "P0M14DT0H0M0S", "TimeUnits", java.math.BigDecimal.ONE, null, null, null)));
+        String res = mews.book("r1", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        mews.charge(res, "pay-1", "Charged", 4_240, "card-1");
+
+        fullService.runForMerchant(merchantId);
+
+        assertThat(linkStatus(res)).isEqualTo("linked");
+        Map<String, Object> snapshot = bookingSnapshot(res);
+        assertThat(snapshot).containsEntry("booking_type", "refundable");
+        assertThat((String) snapshot.get("terms")).contains("\"applicability\": \"Start\"");
+        // 14 days before the stay's start (15:00 in Budapest on 14 December).
+        assertThat(((java.sql.Timestamp) snapshot.get("free_until")).toInstant())
+                .isEqualTo(stayStart("2026-12-14").minus(Duration.ofDays(14)));
+    }
+
+    @Test
+    void aRateChargedInFullFromBookingIsNonRefundable_unlessTheHotelOverridesIt() {
+        mews.policies.put("grp-1", List.of(new com.bliss.b2b.payments.CancellationTerms.Step(
+                "Creation", "P0M0DT0H0M0S", "TimeUnits", java.math.BigDecimal.ONE, null, null, null)));
+        String first = mews.book("r1", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        mews.charge(first, "pay-1", "Charged", 4_240, "card-1");
+
+        fullService.runForMerchant(merchantId);
+        assertThat(bookingSnapshot(first)).containsEntry("booking_type", "non_refundable");
+
+        jdbi.useExtension(com.bliss.b2b.persistence.BlissRateDao.class,
+                d -> d.setOverride(merchantId, MONTHLY_RATE, "refundable"));
+        String second = mews.book("r2", MONTHLY_RATE, "2026-12-20", "2026-12-22", "Confirmed", 21_200);
+        mews.charge(second, "pay-2", "Charged", 4_240, "card-1");
+        fullService.runForMerchant(merchantId);
+
+        assertThat(bookingSnapshot(second)).containsEntry("booking_type", "refundable");
+        assertThat(bookingSnapshot(first)).as("an earlier booking keeps its type")
+                .containsEntry("booking_type", "non_refundable");
+    }
+
+    @Test
+    void theBlissFeePostsToTheFolioOnce_underTheServiceNamedBliss() {
+        mews.additionalServices.add(new com.bliss.b2b.integration.pms.MewsCatalog.AdditionalService(
+                "svc-bliss", "Bliss fees", true));
+        String res = mews.book("r1", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        mews.charge(res, "pay-1", "Charged", 4_240, "card-1");
+
+        fullService.runForMerchant(merchantId);
+        fullService.runForMerchant(merchantId);
+
+        assertThat(mews.orders).hasSize(1);
+        FakeMews.Order order = mews.orders.get(0);
+        assertThat(order.serviceId()).isEqualTo("svc-bliss");
+        assertThat(order.reservationId()).isEqualTo(res);
+        assertThat(order.name()).isEqualTo("Bliss service fee");
+        assertThat(order.currency()).isEqualTo("GBP");
+        assertThat(order.taxCode()).as("untaxed until the hotel picks a tax code").isNull();
+        long fee = (Long) one("""
+                SELECT pp.processing_fee_cents FROM payment_plans pp JOIN bookings b ON b.id = pp.booking_id
+                WHERE b.mews_reservation_id = :r""", res).get("processing_fee_cents");
+        assertThat(order.amountMinor()).isEqualTo(fee).isPositive();
+        assertThat(feePostings()).singleElement().satisfies(p -> {
+            assertThat(p).containsEntry("status", "posted").containsEntry("mews_id", "order-1");
+        });
+    }
+
+    @Test
+    void withoutAServiceTheFeeLineWaits_andPostsOnceOneIsChosen() {
+        String res = mews.book("r1", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        mews.charge(res, "pay-1", "Charged", 4_240, "card-1");
+
+        fullService.runForMerchant(merchantId);
+        assertThat(mews.orders).isEmpty();
+        assertThat(feePostings()).singleElement().satisfies(p -> assertThat(p).containsEntry("status", "pending"));
+
+        jdbi.useExtension(com.bliss.b2b.persistence.BlissSettingsDao.class, d -> {
+            d.insertDefaults(merchantId);
+            d.updateFeeLine(merchantId, "svc-chosen", "UK-2022-20%", null);
+        });
+        fullService.runForMerchant(merchantId);
+
+        assertThat(mews.orders).singleElement().satisfies(o -> {
+            assertThat(o.serviceId()).isEqualTo("svc-chosen");
+            assertThat(o.taxCode()).isEqualTo("UK-2022-20%");
+        });
+        assertThat(feePostings()).singleElement().satisfies(p -> assertThat(p).containsEntry("status", "posted"));
+    }
+
+    @Test
+    void aMewsErrorLeavesTheFeeLinePendingForTheNextPass() {
+        mews.additionalServices.add(new com.bliss.b2b.integration.pms.MewsCatalog.AdditionalService(
+                "svc-bliss", "Bliss", true));
+        mews.failOrders = true;
+        String res = mews.book("r1", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        mews.charge(res, "pay-1", "Charged", 4_240, "card-1");
+
+        fullService.runForMerchant(merchantId);
+        assertThat(linkStatus(res)).as("the plan is linked even when the fee line fails").isEqualTo("linked");
+        assertThat(feePostings()).singleElement().satisfies(p -> assertThat(p).containsEntry("status", "pending"));
+
+        mews.failOrders = false;
+        fullService.runForMerchant(merchantId);
+        assertThat(mews.orders).hasSize(1);
+        assertThat(feePostings()).singleElement().satisfies(p -> assertThat(p).containsEntry("status", "posted"));
+    }
+
+    @Test
+    void whenMewsMovesTheStayTheDeadlineMovesWithIt_butTheTermsStay() {
+        mews.policies.put("grp-1", List.of(new com.bliss.b2b.payments.CancellationTerms.Step(
+                "Start", "P0M14DT0H0M0S", "TimeUnits", java.math.BigDecimal.ONE, null, null, null)));
+        String res = mews.book("r1", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        mews.charge(res, "pay-1", "Charged", 4_240, "card-1");
+        fullService.runForMerchant(merchantId);
+        String termsBefore = (String) bookingSnapshot(res).get("terms");
+
+        // Mews moves the stay a week later, and the hotel's policy changes too.
+        mews.policies.put("grp-1", List.of());
+        mews.reservations.put(res, withDates(mews.reservations.get(res), "2026-12-21", "2026-12-23"));
+        fullService.runForMerchant(merchantId);
+
+        Map<String, Object> snapshot = bookingSnapshot(res);
+        assertThat(((java.sql.Timestamp) snapshot.get("free_until")).toInstant())
+                .isEqualTo(stayStart("2026-12-21").minus(Duration.ofDays(14)));
+        assertThat(snapshot.get("terms")).as("the booking keeps the terms it was made under").isEqualTo(termsBefore);
+    }
+
+    @Test
+    void theSyncEmailsTheHotelWhenARatesTermsChangeInMews() {
+        syncService.sync(merchantId);
+        assertThat(emails).as("the first sync is not a change").isEmpty();
+
+        mews.policies.put("grp-1", List.of(new com.bliss.b2b.payments.CancellationTerms.Step(
+                "Creation", "P0M0DT0H0M0S", "TimeUnits", java.math.BigDecimal.ONE, null, null, null)));
+        MewsSyncService.Result result = syncService.sync(merchantId);
+
+        assertThat(result.ok()).isTrue();
+        assertThat(emails).singleElement().satisfies(m -> {
+            assertThat(m.subject()).isEqualTo("We noticed a change in Mews");
+            assertThat(m.body()).contains("Your Bliss rate \"Monthly Bliss\" has new cancellation terms in Mews: "
+                    + "Non-refundable (it was: Free cancellation until arrival)");
+            assertThat(m.body()).contains("is now non-refundable in Mews");
+            assertThat(m.body()).doesNotContain("\u2014");
+        });
+    }
+
+    @Test
+    void aBlissRateSwitchedOffInMewsIsReported() {
+        syncService.sync(merchantId);
+        mews.inactiveRates.add(MONTHLY_RATE);
+
+        syncService.sync(merchantId);
+
+        assertThat(emails).singleElement().satisfies(m ->
+                assertThat(m.body()).contains("can no longer be booked in Mews"));
+        java.util.Optional<com.bliss.b2b.domain.BlissRate> rate = jdbi.withExtension(
+                com.bliss.b2b.persistence.BlissRateDao.class, d -> d.find(merchantId, MONTHLY_RATE));
+        assertThat(rate).hasValueSatisfying(r -> assertThat(r.active()).isFalse());
     }
 
     // --- Linking -------------------------------------------------------------------
@@ -498,7 +680,52 @@ class MewsLinkServiceTest {
         final Map<String, List<MewsCardPayment>> payments = new HashMap<>();
         final Map<String, Long> totals = new HashMap<>();
         final Map<String, PmsCustomer> customers = new HashMap<>();
+        final Map<String, List<com.bliss.b2b.payments.CancellationTerms.Step>> policies = new HashMap<>();
+        final List<com.bliss.b2b.integration.pms.MewsCatalog.AdditionalService> additionalServices =
+                new ArrayList<>();
+        final java.util.Set<String> inactiveRates = new java.util.HashSet<>();
+        final List<Order> orders = new ArrayList<>();
+        boolean failOrders;
         private int nextNumber = 1001;
+
+        record Order(String serviceId, String accountId, String reservationId, String name, long amountMinor,
+                String currency, String taxCode) {
+        }
+
+        @Override
+        public List<com.bliss.b2b.integration.pms.MewsCatalog.Rate> getRates(String serviceId) {
+            return List.of(
+                    new com.bliss.b2b.integration.pms.MewsCatalog.Rate(MONTHLY_RATE, "Monthly Bliss", "Private",
+                            false, true, !inactiveRates.contains(MONTHLY_RATE), "grp-1"),
+                    new com.bliss.b2b.integration.pms.MewsCatalog.Rate(BIWEEKLY_RATE, "Every 2 weeks Bliss",
+                            "Private", false, true, !inactiveRates.contains(BIWEEKLY_RATE), "grp-2"));
+        }
+
+        @Override
+        public Map<String, List<com.bliss.b2b.payments.CancellationTerms.Step>> getCancellationPolicies(
+                String serviceId, List<String> rateGroupIds) {
+            Map<String, List<com.bliss.b2b.payments.CancellationTerms.Step>> out = new HashMap<>();
+            for (String g : rateGroupIds) {
+                if (policies.containsKey(g)) out.put(g, policies.get(g));
+            }
+            return out;
+        }
+
+        @Override
+        public List<com.bliss.b2b.integration.pms.MewsCatalog.AdditionalService> getAdditionalServices() {
+            return List.copyOf(additionalServices);
+        }
+
+        @Override
+        public String addOrderItem(String serviceId, String accountId, String reservationId, String name,
+                long amountMinor, String currency, String taxCode, String accountingCategoryId,
+                String externalIdentifier, String notes) {
+            if (failOrders) {
+                throw new com.bliss.b2b.integration.pms.PmsAdapterException("Mews HTTP 503");
+            }
+            orders.add(new Order(serviceId, accountId, reservationId, name, amountMinor, currency, taxCode));
+            return "order-" + orders.size();
+        }
 
         FakeMews() {
             super(new MewsPmsConfig());

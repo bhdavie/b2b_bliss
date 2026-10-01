@@ -1,0 +1,107 @@
+package com.bliss.b2b.integration.pms;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.bliss.b2b.BlissConfiguration.PmsConfig.MewsPmsConfig;
+import com.bliss.b2b.integration.pms.MewsAdapterChargeTest.FakeHttp;
+import com.bliss.b2b.payments.BookingType;
+import com.bliss.b2b.payments.CancellationTerms;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+/**
+ * The Mews calls behind auto-sync and the fee line, against response shapes
+ * captured from the Gross UK demo enterprise on 2026-10-01.
+ */
+class MewsAdapterSyncTest {
+
+    private static MewsAdapter adapter(FakeHttp http) {
+        MewsPmsConfig config = new MewsPmsConfig();
+        config.setPlatformUrl("https://api.mews-demo.com");
+        config.setClientToken("ct");
+        config.setAccessToken("at");
+        return new MewsAdapter(config, http,
+                new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS));
+    }
+
+    @Test
+    void ratesCarryTheirRateGroup() {
+        FakeHttp http = new FakeHttp().then(200, """
+                {"Rates":[{"Id":"221075f6","GroupId":"fd0f8993","Name":"Siestify Pricing ","Type":"Private",
+                  "IsPublic":false,"IsEnabled":true,"IsActive":true}],"Cursor":null}
+                """);
+
+        assertThat(adapter(http).getRates("svc").get(0).groupId()).isEqualTo("fd0f8993");
+    }
+
+    @Test
+    void cancellationPoliciesAreGroupedByRateGroup_andInactiveOnesSkipped() {
+        FakeHttp http = new FakeHttp().then(200, """
+                {"CancellationPolicies":[
+                  {"Id":"416852eb","RateGroupId":"c2dd3409","Applicability":"Creation","FeeExtent":["TimeUnits"],
+                   "ApplicabilityOffset":"P0M0DT0H0M0S","FeeMaximumTimeUnits":null,
+                   "AbsoluteFee":{"Currency":"GBP","Value":50.0},"RelativeFee":0.5,"IsActive":true},
+                  {"Id":"old","RateGroupId":"c2dd3409","Applicability":"Creation","FeeExtent":["TimeUnits"],
+                   "ApplicabilityOffset":"P0M0DT0H0M0S","RelativeFee":1.0,"IsActive":false}
+                ],"Cursor":null}
+                """);
+
+        Map<String, List<CancellationTerms.Step>> policies =
+                adapter(http).getCancellationPolicies("svc", List.of("c2dd3409", "fd0f8993"));
+
+        assertThat(http.requests.get(0)).contains("\"ServiceIds\":[\"svc\"]")
+                .contains("\"RateGroupIds\":[\"c2dd3409\",\"fd0f8993\"]");
+        assertThat(policies).containsOnlyKeys("c2dd3409");
+        CancellationTerms.Step step = policies.get("c2dd3409").get(0);
+        assertThat(step.applicability()).isEqualTo("Creation");
+        assertThat(step.feeExtent()).isEqualTo("TimeUnits");
+        assertThat(step.relativeFee()).isEqualByComparingTo(new BigDecimal("0.5"));
+        assertThat(step.absoluteFeeMinor()).isEqualTo(5_000L);
+        assertThat(new CancellationTerms(policies.get("c2dd3409")).derivedType()).isEqualTo(BookingType.REFUNDABLE);
+    }
+
+    @Test
+    void additionalServicesAreTheOnesThatTakeOrders() {
+        FakeHttp http = new FakeHttp().then(200, """
+                {"Services":[
+                  {"Id":"stay","Name":"API HOTEL","IsActive":true,"Data":{"Discriminator":"Bookable","Value":{}}},
+                  {"Id":"bliss","Name":"Bliss","IsActive":true,"Data":{"Discriminator":"Additional","Value":{}}}
+                ],"Cursor":null}
+                """);
+
+        assertThat(adapter(http).getAdditionalServices())
+                .containsExactly(new MewsCatalog.AdditionalService("bliss", "Bliss", true));
+    }
+
+    @Test
+    void theFeeLinePostsAsOneUntaxedCustomItemLinkedToTheReservation() {
+        FakeHttp http = new FakeHttp().then(200, """
+                {"OrderId":"2648b297","ChargeId":"2648b297"}
+                """);
+
+        String orderId = adapter(http).addOrderItem("svc-bliss", "cust-1", "res-1", "Bliss service fee",
+                11_421, "GBP", null, null, "fee_line:plan-1", "Bliss payment plan fee");
+
+        assertThat(orderId).isEqualTo("2648b297");
+        String body = http.requests.get(0);
+        assertThat(body).contains("\"ServiceId\":\"svc-bliss\"").contains("\"AccountId\":\"cust-1\"")
+                .contains("\"LinkedReservationId\":\"res-1\"").contains("\"Name\":\"Bliss service fee\"")
+                .contains("\"GrossValue\":114.21").contains("\"ExternalIdentifier\":\"fee_line:plan-1\"")
+                .doesNotContain("TaxCodes").doesNotContain("AccountingCategoryId");
+    }
+
+    @Test
+    void aChosenTaxCodeAndAccountingCategoryAreSent() {
+        FakeHttp http = new FakeHttp().then(200, "{\"OrderId\":\"o2\"}");
+
+        adapter(http).addOrderItem("svc-bliss", "cust-1", "res-1", "Bliss service fee", 1_000, "GBP",
+                "UK-2022-20%", "cat-fees", "fee_line:plan-2", null);
+
+        assertThat(http.requests.get(0)).contains("\"TaxCodes\":[\"UK-2022-20%\"]")
+                .contains("\"AccountingCategoryId\":\"cat-fees\"");
+    }
+}

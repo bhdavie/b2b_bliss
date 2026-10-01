@@ -16,6 +16,24 @@ import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 @RegisterRowMapper(BookingRowMapper.class)
 public interface BookingDao {
 
+    /** The booking type, cancellation terms and free cancellation deadline it was made under (V38). */
+    @SqlUpdate("""
+            UPDATE bookings
+            SET booking_type = :type, cancellation_terms = CAST(:terms AS jsonb),
+                free_cancellation_until = :freeUntil
+            WHERE id = :id
+            """)
+    int setCancellationSnapshot(@Bind("id") UUID id, @Bind("type") String bookingType,
+            @Bind("terms") String termsJson, @Bind("freeUntil") java.time.Instant freeCancellationUntil);
+
+    /** The cancellation terms a booking was made under, as stored JSON; empty when it has none. */
+    @SqlQuery("SELECT cancellation_terms::text FROM bookings WHERE id = :id AND cancellation_terms IS NOT NULL")
+    java.util.Optional<String> findCancellationTerms(@Bind("id") UUID id);
+
+    /** Moves the free cancellation deadline, when Mews moves the stay. */
+    @SqlUpdate("UPDATE bookings SET free_cancellation_until = :freeUntil WHERE id = :id")
+    int setFreeCancellationUntil(@Bind("id") UUID id, @Bind("freeUntil") java.time.Instant freeUntil);
+
     /**
      * Inserts a booking priced in its property's currency, snapshotting the
      * property's currency, time zone and locale onto the row. Returns 0, and

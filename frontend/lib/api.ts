@@ -1219,3 +1219,43 @@ export type BlissSettingsView = {
   enabledAt: string | null;
   settings: BlissSetting[];
 };
+
+// Mews sync (configurable-property spec, phase 2).
+
+type ApiFailure = { ok: false; status: number; error: string; message: string };
+
+async function failure(res: Response, fallback: string): Promise<ApiFailure> {
+  const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+  return {
+    ok: false,
+    status: res.status,
+    error: body.error ?? "unknown_error",
+    message: body.message ?? fallback,
+  };
+}
+
+/** Reads the property's setup from Mews again ("Resync now"). */
+export async function resyncMews(): Promise<{ ok: true } | ApiFailure> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/mews-sync`, {
+    method: "POST",
+    credentials: "include",
+  });
+  return res.ok ? { ok: true } : failure(res, `Could not sync (${res.status}).`);
+}
+
+/** Sets a Bliss rate's booking type; null goes back to following Mews. */
+export async function setBlissRateBookingType(
+  rateId: string,
+  bookingType: "refundable" | "non_refundable" | null,
+): Promise<{ ok: true } | ApiFailure> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/merchants/me/bliss-rates/${encodeURIComponent(rateId)}/booking-type`,
+    {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bookingType }),
+    },
+  );
+  return res.ok ? { ok: true } : failure(res, `Could not save (${res.status}).`);
+}

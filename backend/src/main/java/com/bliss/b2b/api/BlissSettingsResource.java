@@ -45,7 +45,8 @@ public class BlissSettingsResource {
         }
         try {
             return Response.ok(settings.update(principal.merchant(),
-                    req.payoutMode(), req.releasePolicy(), req.chargebackBufferDays())).build();
+                    req.payoutMode(), req.releasePolicy(), req.chargebackBufferDays(),
+                    req.feeServiceId(), req.feeTaxCode(), req.feeAccountingCategoryId())).build();
         } catch (SettingsException e) {
             int status = "hold_mode_unavailable".equals(e.code()) ? 409 : 400;
             return Response.status(status).entity(Map.of("error", e.code(), "message", e.getMessage())).build();
@@ -61,6 +62,9 @@ public class BlissSettingsResource {
     public record UpdateRequest(
             @JsonProperty("payoutMode") String payoutMode,
             @JsonProperty("releasePolicy") String releasePolicy,
-            @JsonProperty("chargebackBufferDays") Integer chargebackBufferDays) {
+            @JsonProperty("chargebackBufferDays") Integer chargebackBufferDays,
+            @JsonProperty("feeServiceId") String feeServiceId,
+            @JsonProperty("feeTaxCode") String feeTaxCode,
+            @JsonProperty("feeAccountingCategoryId") String feeAccountingCategoryId) {
     }
 }

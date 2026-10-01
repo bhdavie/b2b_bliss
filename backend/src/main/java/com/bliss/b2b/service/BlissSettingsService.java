@@ -52,16 +52,18 @@ public class BlissSettingsService {
     private final MerchantPlanRulesDao planRulesDao;
     private final MerchantFeeRateDao feeRateDao;
     private final MerchantMewsConnectionDao mewsConnectionDao;
+    private final com.bliss.b2b.persistence.BlissRateDao blissRateDao;
     private final FeaturesConfig features;
     private final Clock clock;
 
     public BlissSettingsService(BlissSettingsDao settingsDao, MerchantPlanRulesDao planRulesDao,
             MerchantFeeRateDao feeRateDao, MerchantMewsConnectionDao mewsConnectionDao,
-            FeaturesConfig features, Clock clock) {
+            com.bliss.b2b.persistence.BlissRateDao blissRateDao, FeaturesConfig features, Clock clock) {
         this.settingsDao = settingsDao;
         this.planRulesDao = planRulesDao;
         this.feeRateDao = feeRateDao;
         this.mewsConnectionDao = mewsConnectionDao;
+        this.blissRateDao = blissRateDao;
         this.features = features;
         this.clock = clock;
     }
@@ -89,6 +91,16 @@ public class BlissSettingsService {
      */
     public SettingsView update(Merchant merchant, String payoutMode, String releasePolicy,
             Integer chargebackBufferDays) {
+        return update(merchant, payoutMode, releasePolicy, chargebackBufferDays, null, null, null);
+    }
+
+    /**
+     * As above, plus where and how the Bliss fee line posts. For the three fee
+     * fields, null leaves a value as it is and a blank string clears it (a
+     * cleared tax code means untaxed).
+     */
+    public SettingsView update(Merchant merchant, String payoutMode, String releasePolicy,
+            Integer chargebackBufferDays, String feeServiceId, String feeTaxCode, String feeAccountingCategoryId) {
         BlissSettings current = settingsFor(merchant.id());
         PayoutMode mode;
         ReleasePolicy policy;
@@ -110,6 +122,12 @@ public class BlissSettingsService {
         }
         settingsDao.insertDefaults(merchant.id());
         settingsDao.update(merchant.id(), mode.wire(), policy.wire(), buffer);
+        if (feeServiceId != null || feeTaxCode != null || feeAccountingCategoryId != null) {
+            settingsDao.updateFeeLine(merchant.id(),
+                    pick(feeServiceId, current.feeServiceId()),
+                    pick(feeTaxCode, current.feeTaxCode()),
+                    pick(feeAccountingCategoryId, current.feeAccountingCategoryId()));
+        }
         return view(merchant);
     }
 
@@ -167,6 +185,20 @@ public class BlissSettingsService {
             out.add(new Setting("blissRates", "synced", "Your Bliss rates",
                     "Guests choose a payment plan by booking one of these rates in Mews.",
                     blissRatesValue(c), blissRatesLabel(c), SOURCE_MEWS, false, null));
+            // Each Bliss rate's booking type, from its Mews cancellation policy.
+            for (com.bliss.b2b.domain.BlissRate rate : blissRateDao.listForMerchant(merchant.id())) {
+                String name = rate.rateName() == null ? rate.mewsRateId() : rate.rateName().trim();
+                String terms = rate.syncedAt() == null ? "Not synced yet" : rate.terms().describe();
+                out.add(new Setting("bookingType:" + rate.mewsRateId(), "synced",
+                        "Booking type for " + name,
+                        "Whether guests get money back if they cancel. Bliss follows the rate's cancellation "
+                                + "policy in Mews; you can override it.",
+                        rate.bookingType().wire(),
+                        bookingTypeLabel(rate.bookingType()) + ". " + terms,
+                        rate.override() != null ? SOURCE_HOTEL : SOURCE_MEWS, true,
+                        List.of(new Option("refundable", "Refundable", true, null),
+                                new Option("non_refundable", "Non-refundable", true, null))));
+            }
         }
 
         // Plans.
@@ -204,11 +236,27 @@ public class BlissSettingsService {
                 "Added to each plan, so the guest pays it, not you.",
                 fee, percent(fee) + " of each plan", storedFee.isPresent() ? SOURCE_BLISS : SOURCE_DEFAULT,
                 false, null));
+        boolean feeLineReady = features.isFeeFolioLine() && settings.feeServiceId() != null;
         out.add(new Setting("feeOnFolio", "fees", "Bliss fee on the folio",
                 "The fee appears as its own line on the guest's folio, alongside other fees.",
-                features.isFeeFolioLine(),
-                features.isFeeFolioLine() ? "Shown as \"Bliss service fee\"" : "Coming soon",
+                feeLineReady,
+                !features.isFeeFolioLine() ? "Off"
+                        : feeLineReady ? "Shown as \"Bliss service fee\""
+                        : merchant.pmsType() == PmsType.MEWS ? "Needs a Mews service to post under"
+                        : "Not used without Mews",
                 SOURCE_BLISS, false, null));
+        if (merchant.pmsType() == PmsType.MEWS) {
+            out.add(new Setting("feeService", "fees", "Mews service for the Bliss fee",
+                    "Mews adds charges like the Bliss fee under a service. Bliss uses one named \"Bliss\" if "
+                            + "you have one.",
+                    settings.feeServiceId(), settings.feeServiceId() == null ? "Not chosen yet"
+                            : settings.feeServiceId(),
+                    settings.feeServiceId() == null ? SOURCE_DEFAULT : SOURCE_HOTEL, true, null));
+            out.add(new Setting("feeTaxCode", "fees", "Tax on the Bliss fee",
+                    "The Mews tax rate applied to the fee line. Untaxed until you choose one.",
+                    settings.feeTaxCode(), settings.feeTaxCode() == null ? "Untaxed" : settings.feeTaxCode(),
+                    settings.feeTaxCode() == null ? SOURCE_DEFAULT : SOURCE_HOTEL, true, null));
+        }
 
         // Emails.
         out.add(new Setting("guestEmails", "emails", "Guest emails",
@@ -225,6 +273,16 @@ public class BlissSettingsService {
             case STRIPE -> SOURCE_STRIPE;
             case NONE -> merchant.currency() == null ? SOURCE_DEFAULT : SOURCE_HOTEL;
         };
+    }
+
+    static String bookingTypeLabel(com.bliss.b2b.payments.BookingType type) {
+        return type == com.bliss.b2b.payments.BookingType.NON_REFUNDABLE ? "Non-refundable" : "Refundable";
+    }
+
+    /** A new value for a nullable setting: null keeps {@code current}, blank clears it. */
+    private static String pick(String requested, String current) {
+        if (requested == null) return current;
+        return requested.isBlank() ? null : requested.trim();
     }
 
     static String payoutModeLabel(PayoutMode mode) {

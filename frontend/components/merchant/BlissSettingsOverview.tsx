@@ -1,5 +1,6 @@
 import type { BlissSetting, BlissSettingSource, BlissSettingsView } from "@/lib/api";
 import { Panel, SectionHeading } from "@/components/ui/primitives";
+import { BookingTypeSelect, ResyncMewsButton } from "./BlissSettingsControls";
 
 /**
  * Every setting that governs how Bliss runs for the property, in one read-only
@@ -26,7 +27,13 @@ const SOURCE_LABEL: Record<BlissSettingSource, string> = {
   bliss: "Set by Bliss",
 };
 
-export function BlissSettingsOverview({ view }: { view: BlissSettingsView }) {
+export function BlissSettingsOverview({
+  view,
+  isMews = false,
+}: {
+  view: BlissSettingsView;
+  isMews?: boolean;
+}) {
   return (
     <Panel className="gap-[20px] p-[28px]">
       <div className="flex flex-col gap-[6px]">
@@ -42,7 +49,10 @@ export function BlissSettingsOverview({ view }: { view: BlissSettingsView }) {
         if (settings.length === 0) return null;
         return (
           <section key={group.key} className="flex flex-col gap-[10px]">
-            <h3 className="text-[15px] font-medium text-ink-900">{group.title}</h3>
+            <div className="flex flex-wrap items-center justify-between gap-[8px]">
+              <h3 className="text-[15px] font-medium text-ink-900">{group.title}</h3>
+              {group.key === "synced" && isMews ? <ResyncMewsButton /> : null}
+            </div>
             <dl className="flex flex-col divide-y divide-sand-200">
               {settings.map((s) => (
                 <div key={s.key} className="flex flex-col gap-[2px] py-[10px] sm:flex-row sm:items-start sm:gap-[16px]">
@@ -53,6 +63,13 @@ export function BlissSettingsOverview({ view }: { view: BlissSettingsView }) {
                   <dd className="flex flex-1 flex-col gap-[4px] sm:items-end sm:text-right">
                     <span className="text-[14px] text-ink-900">{s.display}</span>
                     <span className="text-[12px] text-ink-500">{SOURCE_LABEL[s.source]}</span>
+                    {s.key.startsWith("bookingType:") ? (
+                      <BookingTypeSelect
+                        rateId={s.key.slice("bookingType:".length)}
+                        followsMews={s.source === "mews"}
+                        value={String(s.value)}
+                      />
+                    ) : null}
                   </dd>
                 </div>
               ))}

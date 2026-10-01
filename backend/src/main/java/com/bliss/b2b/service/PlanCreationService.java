@@ -787,9 +787,10 @@ public class PlanCreationService {
                 throw new PlanCreationException(Reason.ELIGIBILITY_FAILED, "no_plan_fits");
             }
             if (feeCents > 0) {
-                log.warn("Mews plan for reservation {} (merchant {}) adds a {} Bliss fee on top of the "
-                        + "Mews bill of {}; the reservation bill will be overpaid by the fee",
-                        stay.reservationId(), merchant.id(), feeCents, stay.totalCents());
+                // Balanced on the folio by the "Bliss service fee" line
+                // (FeeLineService) when that is on and has a service to post to.
+                log.info("Mews plan for reservation {} (merchant {}) adds a {} Bliss fee on top of the "
+                        + "Mews bill of {}", stay.reservationId(), merchant.id(), feeCents, stay.totalCents());
             }
 
             BookingDao bookingDao = handle.attach(BookingDao.class);
@@ -811,6 +812,11 @@ public class PlanCreationService {
             }
             Booking booking = bookingDao.findByToken(token)
                     .orElseThrow(() -> new IllegalStateException("booking insert disappeared"));
+            if (stay.bookingType() != null && stay.cancellationTerms() != null) {
+                bookingDao.setCancellationSnapshot(booking.id(), stay.bookingType().wire(),
+                        com.bliss.b2b.persistence.BlissRateDao.termsJson(stay.cancellationTerms()),
+                        stay.freeCancellationUntil());
+            }
             MewsLinkingDao linkingDao = handle.attach(MewsLinkingDao.class);
             if (linkingDao.attachReservation(booking.id(), stay.reservationId(), stay.categoryId(),
                     stay.rateId(), stay.startUtc(), stay.endUtc(), clock.instant()) != 1) {
@@ -903,7 +909,14 @@ public class PlanCreationService {
             String cardLastFour,
             int cardExpMonth,
             int cardExpYear,
-            String cardBrand) {
+            String cardBrand,
+            // The rate's booking type and cancellation terms as synced from
+            // Mews, and the free cancellation deadline they give this stay.
+            // Null when the rate has not been synced; the booking then keeps
+            // no snapshot.
+            com.bliss.b2b.payments.BookingType bookingType,
+            com.bliss.b2b.payments.CancellationTerms cancellationTerms,
+            Instant freeCancellationUntil) {
     }
 
     /** The booking's currency, zone and locale; a booking with no currency cannot take a plan. */

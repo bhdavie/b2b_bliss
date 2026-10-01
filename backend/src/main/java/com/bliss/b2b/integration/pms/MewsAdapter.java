@@ -59,6 +59,8 @@ public class MewsAdapter implements PmsAdapter {
     private static final String RESERVATIONS_CANCEL = "/api/connector/v1/reservations/cancel";
     private static final String RESERVATIONS_GET_ALL = "/api/connector/v1/reservations/getAll/2023-06-06";
     private static final String ORDER_ITEMS_GET_ALL = "/api/connector/v1/orderItems/getAll";
+    private static final String CANCELLATION_POLICIES_GET_ALL = "/api/connector/v1/cancellationPolicies/getAll";
+    private static final String ORDERS_ADD = "/api/connector/v1/orders/add";
 
     /** Pages followed per catalogue list call; a small property never gets near it. */
     private static final int MAX_PAGES = 10;
@@ -353,9 +355,105 @@ public class MewsAdapter implements PmsAdapter {
                     textOrNull(r, "Type"),
                     r.path("IsPublic").asBoolean(false),
                     r.path("IsEnabled").asBoolean(false),
-                    r.path("IsActive").asBoolean(false)));
+                    r.path("IsActive").asBoolean(false),
+                    textOrNull(r, "GroupId")));
         }
         return out;
+    }
+
+    /** Every additional (orderable) service on the enterprise, active or not. */
+    public List<MewsCatalog.AdditionalService> getAdditionalServices() {
+        List<MewsCatalog.AdditionalService> out = new ArrayList<>();
+        for (JsonNode s : getAllPaged(SERVICES_GET_ALL, auth(), "Services")) {
+            if (!"Additional".equals(textOrNull(s.path("Data"), "Discriminator"))) {
+                continue;
+            }
+            out.add(new MewsCatalog.AdditionalService(
+                    textOrNull(s, "Id"), textOrNull(s, "Name"), s.path("IsActive").asBoolean(false)));
+        }
+        return out;
+    }
+
+    /**
+     * The active cancellation policies of a service's rate groups, by rate
+     * group id. A group with no entry has no policy: free cancellation until
+     * arrival. Mews requires the service alongside the groups.
+     */
+    public Map<String, List<com.bliss.b2b.payments.CancellationTerms.Step>> getCancellationPolicies(
+            String serviceId, List<String> rateGroupIds) {
+        Map<String, List<com.bliss.b2b.payments.CancellationTerms.Step>> out = new java.util.LinkedHashMap<>();
+        if (rateGroupIds.isEmpty()) {
+            return out;
+        }
+        Map<String, Object> body = auth();
+        body.put("ServiceIds", List.of(serviceId));
+        body.put("RateGroupIds", rateGroupIds);
+        for (JsonNode p : getAllPaged(CANCELLATION_POLICIES_GET_ALL, body, "CancellationPolicies")) {
+            if (!p.path("IsActive").asBoolean(true)) {
+                continue;
+            }
+            JsonNode extent = p.path("FeeExtent");
+            String feeExtent = extent.isArray() && extent.size() > 0 ? extent.get(0).asText()
+                    : textOrNull(p, "FeeExtent");
+            JsonNode absolute = p.path("AbsoluteFee");
+            String absoluteCurrency = textOrNull(absolute, "Currency");
+            Long absoluteMinor = absolute.path("Value").isNumber() && absoluteCurrency != null
+                    ? toMinorUnits(absolute.path("Value").decimalValue(), absoluteCurrency)
+                    : null;
+            JsonNode relative = p.path("RelativeFee");
+            out.computeIfAbsent(textOrNull(p, "RateGroupId"), k -> new ArrayList<>())
+                    .add(new com.bliss.b2b.payments.CancellationTerms.Step(
+                            textOrNull(p, "Applicability"),
+                            textOrNull(p, "ApplicabilityOffset"),
+                            feeExtent,
+                            relative.isNumber() ? relative.decimalValue() : null,
+                            absoluteMinor,
+                            absoluteCurrency,
+                            p.path("FeeMaximumTimeUnits").isNumber() ? p.path("FeeMaximumTimeUnits").asInt() : null));
+        }
+        return out;
+    }
+
+    /**
+     * Posts one custom item to a reservation's bill (orders/add), such as the
+     * "Bliss service fee" line, and returns the Mews order id. Mews only takes
+     * orders on an additional service. With no {@code taxCode} the item is
+     * untaxed; with one, it must be one of the property's own tax rate codes
+     * (for example "UK-2022-20%"). {@code externalIdentifier} marks the item as
+     * Bliss's in Mews.
+     */
+    public String addOrderItem(String serviceId, String accountId, String reservationId, String name,
+            long amountMinor, String currency, String taxCode, String accountingCategoryId,
+            String externalIdentifier, String notes) {
+        Map<String, Object> unitAmount = new LinkedHashMap<>();
+        unitAmount.put("Currency", currency);
+        unitAmount.put("GrossValue", toGrossValue(amountMinor, currency));
+        if (taxCode != null && !taxCode.isBlank()) {
+            unitAmount.put("TaxCodes", List.of(taxCode));
+        }
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("Name", name);
+        item.put("UnitCount", 1);
+        item.put("UnitAmount", unitAmount);
+        if (accountingCategoryId != null && !accountingCategoryId.isBlank()) {
+            item.put("AccountingCategoryId", accountingCategoryId);
+        }
+        if (externalIdentifier != null) {
+            item.put("ExternalIdentifier", externalIdentifier);
+        }
+        Map<String, Object> body = auth();
+        body.put("ServiceId", serviceId);
+        body.put("AccountId", accountId);
+        body.put("LinkedReservationId", reservationId);
+        body.put("Items", List.of(item));
+        if (notes != null) {
+            body.put("Notes", notes);
+        }
+        String orderId = textOrNull(post(ORDERS_ADD, body), "OrderId");
+        if (orderId == null || orderId.isBlank()) {
+            throw new PmsAdapterException("Mews accepted the order but returned no OrderId");
+        }
+        return orderId;
     }
 
     // --- Availability and pricing -------------------------------------------

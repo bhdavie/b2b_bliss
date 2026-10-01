@@ -13,7 +13,8 @@ import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 public interface BlissSettingsDao {
 
     @SqlQuery("""
-            SELECT merchant_id, payout_mode, release_policy, chargeback_buffer_days, bliss_enabled_at
+            SELECT merchant_id, payout_mode, release_policy, chargeback_buffer_days, bliss_enabled_at,
+                   fee_service_id, fee_tax_code, fee_accounting_category_id
             FROM property_bliss_settings WHERE merchant_id = :merchantId
             """)
     @org.jdbi.v3.sqlobject.config.RegisterRowMapper(BlissSettingsDao.Mapper.class)
@@ -46,6 +47,19 @@ public interface BlissSettingsDao {
                @Bind("releasePolicy") String releasePolicy,
                @Bind("bufferDays") int chargebackBufferDays);
 
+    /** Sets where and how the Bliss fee line posts; null clears a value. */
+    @SqlUpdate("""
+            UPDATE property_bliss_settings
+            SET fee_service_id = :serviceId,
+                fee_tax_code = :taxCode,
+                fee_accounting_category_id = :accountingCategoryId
+            WHERE merchant_id = :merchantId
+            """)
+    int updateFeeLine(@Bind("merchantId") UUID merchantId,
+                      @Bind("serviceId") String serviceId,
+                      @Bind("taxCode") String taxCode,
+                      @Bind("accountingCategoryId") String accountingCategoryId);
+
     final class Mapper implements org.jdbi.v3.core.mapper.RowMapper<BlissSettings> {
         @Override
         public BlissSettings map(java.sql.ResultSet rs, org.jdbi.v3.core.statement.StatementContext ctx)
@@ -57,6 +71,9 @@ public interface BlissSettingsDao {
                     ReleasePolicy.fromWire(rs.getString("release_policy")),
                     rs.getInt("chargeback_buffer_days"),
                     enabled == null ? null : enabled.toInstant(),
+                    rs.getString("fee_service_id"),
+                    rs.getString("fee_tax_code"),
+                    rs.getString("fee_accounting_category_id"),
                     true);
         }
     }

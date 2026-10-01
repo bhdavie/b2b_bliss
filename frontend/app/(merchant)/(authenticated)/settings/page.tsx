@@ -17,7 +17,9 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-[24px]">
-      {blissSettings ? <BlissSettingsOverview view={blissSettings} /> : null}
+      {blissSettings ? (
+        <BlissSettingsOverview view={blissSettings} isMews={session.pmsType === "mews"} />
+      ) : null}
       <PaymentSettingsTabs
         planRules={planRules ?? DEFAULT_PLAN_RULES}
         isMews={session.pmsType === "mews"}

@@ -92,7 +92,8 @@ class BlissSettingsServiceTest {
         features.setHoldMode(holdModeFeature);
         return new BlissSettingsService(jdbi.onDemand(BlissSettingsDao.class),
                 jdbi.onDemand(MerchantPlanRulesDao.class), jdbi.onDemand(MerchantFeeRateDao.class),
-                jdbi.onDemand(MerchantMewsConnectionDao.class), features, CLOCK);
+                jdbi.onDemand(MerchantMewsConnectionDao.class),
+                jdbi.onDemand(com.bliss.b2b.persistence.BlissRateDao.class), features, CLOCK);
     }
 
     private static Merchant newMerchant(String pmsType) {
@@ -128,7 +129,8 @@ class BlissSettingsServiceTest {
         assertThat(setting(view, "refundPolicy").display()).isEqualTo("Full refund of what they've paid");
         assertThat(setting(view, "blissFee").display()).isEqualTo("5% of each plan");
         assertThat(setting(view, "blissFee").source()).isEqualTo("default");
-        assertThat(setting(view, "feeOnFolio").display()).isEqualTo("Coming soon");
+        // On by default; a property without Mews has no folio to post to.
+        assertThat(setting(view, "feeOnFolio").display()).isEqualTo("Not used without Mews");
         assertThat(setting(view, "currency").value()).isEqualTo("GBP");
         // Every setting has a plain-language display, and none uses an em dash.
         assertThat(view.settings()).allSatisfy(s -> {
