@@ -216,7 +216,9 @@ ON CONFLICT (id) DO NOTHING;
 -- fixtures: these were written directly rather than through the demo charge
 -- path, so no pi_demo_* id was ever minted.
 --
--- Plan 1 (active):    73,500 x 4 = 294,000
+-- Plan 1 (active):    77,175 x 4 = 308,700  (294,000 plus the 14,700 fee: with
+--                     no deposit the fee is spread across the installments,
+--                     as PlanCreationService builds it)
 -- Plan 2 (late):      57,750 x 4 = 231,000
 -- Plan 3 (paid):      65,333 + 65,333 + 65,334 = 196,000  (remainder on the last)
 -- Plan 4 (cancelled): 78,750 x 4 = 315,000
@@ -226,13 +228,13 @@ INSERT INTO payment_schedule (
 ) VALUES
     -- Plan 1: installment 1 paid, 2-4 ahead.
     ('55555555-0000-4000-8000-000000000101', '44444444-0000-4000-8000-000000000001',
-     1, DATE '2026-06-15', 73500, 'paid',      'installment', TIMESTAMPTZ '2026-06-15 08:00:00-04'),
+     1, DATE '2026-06-15', 77175, 'paid',      'installment', TIMESTAMPTZ '2026-06-15 08:00:00-04'),
     ('55555555-0000-4000-8000-000000000102', '44444444-0000-4000-8000-000000000001',
-     2, DATE '2026-09-02', 73500, 'scheduled', 'installment', NULL),
+     2, DATE '2026-09-02', 77175, 'scheduled', 'installment', NULL),
     ('55555555-0000-4000-8000-000000000103', '44444444-0000-4000-8000-000000000001',
-     3, DATE '2026-10-02', 73500, 'scheduled', 'installment', NULL),
+     3, DATE '2026-10-02', 77175, 'scheduled', 'installment', NULL),
     ('55555555-0000-4000-8000-000000000104', '44444444-0000-4000-8000-000000000001',
-     4, DATE '2026-11-02', 73500, 'scheduled', 'installment', NULL),
+     4, DATE '2026-11-02', 77175, 'scheduled', 'installment', NULL),
 
     -- Plan 2: installment 1 paid; installment 2 is past due and still scheduled.
     ('55555555-0000-4000-8000-000000000201', '44444444-0000-4000-8000-000000000002',
@@ -287,6 +289,17 @@ ON CONFLICT (payment_plan_id, sequence) DO NOTHING;
 --
 -- Idempotent like the rest of this file: inserts key on slug / merchant_id,
 -- and the one UPDATE below is a no-op once it has run.
+
+-- seed-active-001 fee correction ------------------------------------------
+-- Its schedule used to leave out the 14,700 processing fee (73,500 x 4 =
+-- 294,000), so the portal's remaining balance, which includes the fee, never
+-- matched what was scheduled. ON CONFLICT DO NOTHING cannot fix rows already
+-- seeded, so this resets them to 77,175 x 4 = 308,700. Idempotent: matches
+-- only rows still at the old amount.
+UPDATE payment_schedule
+   SET amount_cents = 77175
+ WHERE payment_plan_id = '44444444-0000-4000-8000-000000000001'
+   AND amount_cents = 73500;
 
 -- Marbrook House correction ------------------------------------------------
 -- The merchant INSERT above predates V17 and sets neither pms_type nor

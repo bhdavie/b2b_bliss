@@ -12,7 +12,9 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Statement;
 import java.util.Optional;
 import java.util.UUID;
+import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.Namespace;
+import net.sourceforge.argparse4j.inf.Subparser;
 import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
@@ -99,8 +101,22 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
     private static final String MEWS_DEMO_TIME_ZONE = "Europe/Budapest";
 
 
+    /** Opt-in flag: designate Marbrook House's Bliss rates, which turns Mews linking on for it. */
+    static final String LINK_BLISS_RATES = "link_bliss_rates";
+
     public SeedDemoCommand() {
         super("seed-demo", "Idempotently create the Marbrook House demo merchant and fixture bookings");
+    }
+
+    @Override
+    public void configure(Subparser subparser) {
+        super.configure(subparser);
+        subparser.addArgument("--link-bliss-rates")
+                .dest(LINK_BLISS_RATES)
+                .action(Arguments.storeTrue())
+                .help("Also designate Marbrook House's Bliss rates on the shared Gross UK demo, which starts "
+                        + "linking (and later charging) every reservation anyone makes on those rates. "
+                        + "Off by default.");
     }
 
     @Override
@@ -131,7 +147,7 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
 
             Counts before = Counts.read(handle);
             execute(handle, script);
-            seedPmsConnections(handle, cipher);
+            seedPmsConnections(handle, cipher, Boolean.TRUE.equals(namespace.getBoolean(LINK_BLISS_RATES)));
             seedPropertyLocales(handle);
             Counts after = Counts.read(handle);
 
@@ -170,16 +186,21 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
      * Mews demo, so it takes that enterprise's GBP, Budapest zone and en-GB
      * language (as configuration/get reports them). The other demo properties
      * are US inns in Hudson, NY, including ones with no bookings yet (Marbrook
-     * Lodge), which need a currency before they can take their first. Fills only what is unset, then gives each
-     * demo booking without a currency its property's values.
+     * Lodge), which need a currency before they can take their first. Fills
+     * each field only where it is unset, then gives demo bookings their
+     * property's values in any field they lack.
      */
     private static void seedPropertyLocales(Handle handle) {
+        // Fill whatever is missing, field by field, never overwriting a value
+        // already set (V36 may have set a currency and left the rest empty).
         handle.createUpdate("""
                 UPDATE merchants m
-                SET currency = mc.currency, time_zone = mc.time_zone,
-                    locale = COALESCE(mc.locale, :mewsLocale)
+                SET currency  = COALESCE(m.currency, mc.currency),
+                    time_zone = COALESCE(m.time_zone, mc.time_zone),
+                    locale    = COALESCE(m.locale, mc.locale, :mewsLocale)
                 FROM merchant_mews_connections mc
-                WHERE mc.merchant_id = m.id AND m.id = :marbrookHouse AND m.currency IS NULL
+                WHERE mc.merchant_id = m.id AND m.id = :marbrookHouse
+                  AND (m.currency IS NULL OR m.time_zone IS NULL OR m.locale IS NULL)
                 """)
                 .bind("marbrookHouse", MARBROOK_HOUSE_ID)
                 .bind("mewsLocale", MEWS_DEMO_LOCALE)
@@ -193,21 +214,33 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
                 .execute();
         handle.createUpdate("""
                 UPDATE merchants
-                SET currency = 'USD', time_zone = 'America/New_York', locale = 'en-US'
-                WHERE id <> :marbrookHouse AND currency IS NULL
+                SET currency  = COALESCE(currency, 'USD'),
+                    time_zone = COALESCE(time_zone, 'America/New_York'),
+                    locale    = COALESCE(locale, 'en-US')
+                WHERE id <> :marbrookHouse
                   AND address_city = 'Hudson' AND address_state = 'NY'
+                  AND (currency IS NULL OR time_zone IS NULL OR locale IS NULL)
                 """)
                 .bind("marbrookHouse", MARBROOK_HOUSE_ID)
                 .execute();
+        // Demo bookings take whatever their property now has, again only into
+        // empty fields. Scoped to the demo properties, so no real property's
+        // bookings are touched by a seed.
         handle.createUpdate("""
                 UPDATE bookings b
-                SET currency = m.currency, time_zone = m.time_zone, locale = m.locale
+                SET currency  = COALESCE(b.currency, m.currency),
+                    time_zone = COALESCE(b.time_zone, m.time_zone),
+                    locale    = COALESCE(b.locale, m.locale)
                 FROM merchants m
-                WHERE m.id = b.merchant_id AND b.currency IS NULL AND m.currency IS NOT NULL
-                """).execute();
+                WHERE m.id = b.merchant_id
+                  AND (m.id = :marbrookHouse OR (m.address_city = 'Hudson' AND m.address_state = 'NY'))
+                  AND (b.currency IS NULL OR b.time_zone IS NULL OR b.locale IS NULL)
+                """)
+                .bind("marbrookHouse", MARBROOK_HOUSE_ID)
+                .execute();
     }
 
-    private static void seedPmsConnections(Handle handle, TokenCipher cipher) {
+    private static void seedPmsConnections(Handle handle, TokenCipher cipher, boolean linkBlissRates) {
         String clientToken = cipher.encrypt(Field.MEWS_CLIENT_TOKEN, MARBROOK_HOUSE_ID, MEWS_DEMO_CLIENT_TOKEN);
         String accessToken = cipher.encrypt(Field.MEWS_ACCESS_TOKEN, MARBROOK_HOUSE_ID, MEWS_DEMO_ACCESS_TOKEN);
         handle.createUpdate("""
@@ -273,9 +306,12 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
             log.info("Pointed Marbrook House's Mews connection at the Gross pricing UK demo enterprise (GBP)");
         }
 
-        // Designate the Bliss rates once. Linking starts from the moment they
-        // are set, so older demo reservations on these rates never become plans.
-        int designated = handle.createUpdate("""
+        // Designate the Bliss rates only when asked (--link-bliss-rates). The
+        // Gross UK demo is communal: once these are set, every reservation
+        // anyone makes on these rates with an upfront charge becomes a Bliss
+        // plan, and its installments are later charged. Linking starts from the
+        // moment they are set, so older demo reservations never become plans.
+        int designated = !linkBlissRates ? 0 : handle.createUpdate("""
                 UPDATE merchant_mews_connections
                 SET bliss_monthly_rate_id = :monthly,
                     bliss_biweekly_rate_id = :biweekly,
