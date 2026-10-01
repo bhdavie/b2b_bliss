@@ -177,7 +177,8 @@ public class PublicPlansPortalResource {
                  PAYMENT_IN_FLIGHT -> 409;
             case NO_CARD_ON_FILE, INVALID_INPUT -> 400;
             case CARD_DECLINED, CARD_REQUIRES_ACTION -> 402;
-            case STRIPE_ERROR -> 502;
+            case STRIPE_ERROR, PMS_ERROR -> 502;
+            case RAIL_UNAVAILABLE -> 503;
         };
         log.info("Portal request rejected code={} message={}", code, e.getMessage());
         return Response.status(status).entity(Map.of(

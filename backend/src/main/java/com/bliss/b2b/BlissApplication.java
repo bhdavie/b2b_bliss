@@ -208,7 +208,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 jdbi.onDemand(com.bliss.b2b.persistence.MerchantMewsConnectionDao.class),
                 merchantDao, customerDao, emailService);
         PlanPortalService planPortalService = new PlanPortalService(
-                jdbi, stripePaymentsService, stripeConnectResolver, cancellationService, clock);
+                jdbi, stripePaymentsService, stripeConnectResolver, mewsAdapterFactory,
+                cancellationService, clock);
         // Property onboarding + per-property Mews connection. The factory both
         // validates connections and resolves each property's charge credentials.
         com.bliss.b2b.persistence.MerchantMewsConnectionDao mewsConnectionDao =

@@ -12,13 +12,18 @@ import com.bliss.b2b.domain.ScheduleKind;
 import com.bliss.b2b.integration.StripeConnectResolver;
 import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.integration.StripePaymentsService.CardSummary;
+import com.bliss.b2b.integration.pms.PmsAdapterException;
+import com.bliss.b2b.integration.pms.PmsChargeResult;
 import com.bliss.b2b.payments.PropertyLocale;
 import com.bliss.b2b.persistence.BookingDao;
 import com.bliss.b2b.persistence.CustomerCardDao;
 import com.bliss.b2b.persistence.CustomerDao;
 import com.bliss.b2b.persistence.MerchantDao;
 import com.bliss.b2b.persistence.PaymentPlanDao;
+import com.bliss.b2b.persistence.PaymentPlanDao.ChargeRoute;
 import com.bliss.b2b.persistence.PaymentScheduleDao;
+import com.bliss.b2b.service.InstallmentChargeService.ChargeContext;
+import com.bliss.b2b.service.InstallmentChargeService.ChargeContextResolver;
 import com.stripe.exception.CardException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
@@ -39,9 +44,13 @@ import org.slf4j.LoggerFactory;
 /**
  * Backs the customer plan portal at {@code /plan/{bookingToken}}. Read path
  * bundles every row the portal renders; write paths advance the schedule
- * (pay early) or vault a replacement card. All Stripe work sits inside a
- * single {@code !stripeService.isConfigured()} branch per method — demo
- * mode persists the same shape with synthesized {@code *_demo_*} ids.
+ * (pay early) or vault a replacement card.
+ *
+ * <p>Guest payments (pay early, pay off) charge through the plan's own rail:
+ * a Stripe plan through a Stripe PaymentIntent, a Mews plan through the
+ * property's Mews {@code creditCards/charge} on the card Mews holds. Demo
+ * plans (Stripe not configured, or a demo Mews property's synthetic card)
+ * persist the same shape with synthesized {@code *_demo_*} ids.
  */
 public class PlanPortalService {
 
@@ -50,6 +59,7 @@ public class PlanPortalService {
     private final Jdbi jdbi;
     private final StripePaymentsService stripeService;
     private final StripeConnectResolver stripeConnectResolver;
+    private final ChargeContextResolver mewsResolver;
     private final CancellationService cancellationService;
     private final Clock clock;
 
@@ -57,11 +67,13 @@ public class PlanPortalService {
             Jdbi jdbi,
             StripePaymentsService stripeService,
             StripeConnectResolver stripeConnectResolver,
+            ChargeContextResolver mewsResolver,
             CancellationService cancellationService,
             Clock clock) {
         this.jdbi = jdbi;
         this.stripeService = stripeService;
         this.stripeConnectResolver = stripeConnectResolver;
+        this.mewsResolver = mewsResolver;
         this.cancellationService = cancellationService;
         this.clock = clock;
     }
@@ -114,14 +126,19 @@ public class PlanPortalService {
     }
 
     /**
-     * Customer-initiated pay-early on the next {@code scheduled} installment.
-     * Reuses the same off-session charge path the deposit went through; the
-     * single demo branch at the top mirrors that path without a Stripe call.
+     * Customer-initiated pay-early on the next {@code scheduled} installment,
+     * charged through the plan's rail (see {@link #routeOf}).
      */
     public PayResult payNextInstallment(String bookingToken) {
-        if (!stripeService.isConfigured()) {
-            return payNextInstallmentDemo(bookingToken);
-        }
+        return switch (routeFor(bookingToken)) {
+            case STRIPE -> payNextInstallmentStripe(bookingToken);
+            case MEWS -> payNextInstallmentMews(bookingToken);
+            case DEMO -> payNextInstallmentDemo(bookingToken);
+        };
+    }
+
+    /** Stripe rail: the same off-session charge path the deposit went through. */
+    private PayResult payNextInstallmentStripe(String bookingToken) {
         return jdbi.inTransaction(handle -> {
             Lookup look = resolveOrThrow(handle, bookingToken);
             if (look.plan.status() != PaymentPlanStatus.ACTIVE) {
@@ -187,6 +204,41 @@ public class PlanPortalService {
         });
     }
 
+    /**
+     * Mews rail: charges the card Mews holds for this plan, against the stay's
+     * reservation, through the property's own Mews connection. Charged marks
+     * the row paid; a charge Mews has not settled yet leaves the row
+     * processing with its Mews payment id, for the reconciliation pass to
+     * settle exactly as it does for scheduled charges. A decline writes
+     * nothing, so the installment stays scheduled.
+     */
+    private PayResult payNextInstallmentMews(String bookingToken) {
+        return jdbi.inTransaction(handle -> {
+            Lookup look = resolveOrThrow(handle, bookingToken);
+            if (look.plan.status() != PaymentPlanStatus.ACTIVE) {
+                throw new PortalException(PortalErrorCode.PLAN_NOT_ACTIVE,
+                        "plan is not active (status=" + look.plan.status().wire() + ")");
+            }
+            handle.attach(PaymentPlanDao.class).lockForUpdate(look.plan.id());
+            PaymentScheduleDao scheduleDao = handle.attach(PaymentScheduleDao.class);
+            PaymentScheduleEntry next = scheduleDao.findNextScheduled(look.plan.id()).orElseThrow(
+                    () -> new PortalException(PortalErrorCode.NO_NEXT_INSTALLMENT,
+                            "no scheduled installment remaining"));
+
+            MewsCharge charge = chargeMews(handle, look, next.amountCents(),
+                    "Bliss pay early, installment seq " + next.sequence());
+            Instant now = Instant.now(clock);
+            if (charge.status() == PaymentScheduleStatus.PAID) {
+                scheduleDao.markPaidMews(next.id(), charge.paymentId(), now);
+                maybeCompletePlan(handle, look.plan, next);
+                return new PayResult(charge.paymentId(), "succeeded");
+            }
+            scheduleDao.recordMewsProcessing(next.id(), charge.paymentId(),
+                    "mews state=" + charge.rawState(), now);
+            return new PayResult(charge.paymentId(), "processing");
+        });
+    }
+
     private PayResult payNextInstallmentDemo(String bookingToken) {
         return jdbi.inTransaction(handle -> {
             Lookup look = resolveOrThrow(handle, bookingToken);
@@ -225,9 +277,14 @@ public class PlanPortalService {
      * twice for the same installment.
      */
     public PayResult payRemainingBalance(String bookingToken) {
-        if (!stripeService.isConfigured()) {
-            return payRemainingBalanceDemo(bookingToken);
-        }
+        return switch (routeFor(bookingToken)) {
+            case STRIPE -> payRemainingBalanceStripe(bookingToken);
+            case MEWS -> payRemainingBalanceMews(bookingToken);
+            case DEMO -> payRemainingBalanceDemo(bookingToken);
+        };
+    }
+
+    private PayResult payRemainingBalanceStripe(String bookingToken) {
         return jdbi.inTransaction(handle -> {
             Lookup look = resolveOrThrow(handle, bookingToken);
             if (look.plan.status() != PaymentPlanStatus.ACTIVE) {
@@ -294,6 +351,46 @@ public class PlanPortalService {
             log.info("Plan {} paid off early: {} rows, {}c, intent {}",
                     look.plan.id(), unsettled.size(), amountCents, intent.getId());
             return new PayResult(intent.getId(), wireStatus);
+        });
+    }
+
+    /**
+     * Mews rail payoff: one Mews charge for the sum of the unsettled rows, the
+     * same all-or-nothing shape as the Stripe payoff. Charged marks every row
+     * paid under the one Mews payment id; unsettled leaves every row
+     * processing under it, and the reconciliation pass settles them together.
+     * A decline writes nothing.
+     */
+    private PayResult payRemainingBalanceMews(String bookingToken) {
+        return jdbi.inTransaction(handle -> {
+            Lookup look = resolveOrThrow(handle, bookingToken);
+            if (look.plan.status() != PaymentPlanStatus.ACTIVE) {
+                throw new PortalException(PortalErrorCode.PLAN_NOT_ACTIVE,
+                        "plan is not active (status=" + look.plan.status().wire() + ")");
+            }
+            handle.attach(PaymentPlanDao.class).lockForUpdate(look.plan.id());
+            PaymentScheduleDao scheduleDao = handle.attach(PaymentScheduleDao.class);
+            List<PaymentScheduleEntry> unsettled = requirePayableBalance(
+                    scheduleDao.listUnsettledForPlan(look.plan.id()));
+            long amountCents = sumAmounts(unsettled);
+
+            MewsCharge charge = chargeMews(handle, look, amountCents,
+                    "Bliss pay off, " + unsettled.size() + " payments");
+            Instant now = Instant.now(clock);
+            if (charge.status() == PaymentScheduleStatus.PAID) {
+                for (PaymentScheduleEntry row : unsettled) {
+                    scheduleDao.markPaidMews(row.id(), charge.paymentId(), now);
+                }
+                maybeCompletePlan(handle, look.plan, unsettled.get(unsettled.size() - 1));
+                log.info("Plan {} paid off early on Mews: {} rows, {} minor units, payment {}",
+                        look.plan.id(), unsettled.size(), amountCents, charge.paymentId());
+                return new PayResult(charge.paymentId(), "succeeded");
+            }
+            for (PaymentScheduleEntry row : unsettled) {
+                scheduleDao.recordMewsProcessing(row.id(), charge.paymentId(),
+                        "mews payoff state=" + charge.rawState(), now);
+            }
+            return new PayResult(charge.paymentId(), "processing");
         });
     }
 
@@ -456,6 +553,102 @@ public class PlanPortalService {
         });
     }
 
+    /** Where a guest payment on this plan goes. */
+    enum Route { STRIPE, MEWS, DEMO }
+
+    private Route routeFor(String bookingToken) {
+        return jdbi.withHandle(handle -> {
+            Lookup look = resolveOrThrow(handle, bookingToken);
+            ChargeRoute route = handle.attach(PaymentPlanDao.class).chargeRoute(look.plan.id())
+                    .orElseThrow(() -> new PortalException(PortalErrorCode.NOT_FOUND, "plan not found"));
+            return routeOf(route, stripeService.isConfigured());
+        });
+    }
+
+    /**
+     * The plan's rail decides, never whether Stripe happens to be configured:
+     * a Mews plan charged through Stripe would charge a placeholder card id on
+     * the wrong processor.
+     *
+     * <ul>
+     *   <li>{@code mews} with a Mews card: the property's Mews. With the
+     *       synthetic {@code pm_demo_} card a listed demo Mews property gets,
+     *       demo. With neither, there is nothing to charge.
+     *   <li>{@code stripe}: Stripe, or demo while Stripe is not configured.
+     *   <li>anything else (Cloudbeds, which has no card capture yet): refused.
+     * </ul>
+     */
+    static Route routeOf(ChargeRoute route, boolean stripeConfigured) {
+        String rail = route.paymentRail() == null ? "" : route.paymentRail();
+        return switch (rail) {
+            case "mews" -> {
+                if (notBlank(route.mewsCreditCardId()) && notBlank(route.mewsCustomerId())) {
+                    yield Route.MEWS;
+                }
+                if (route.cardKey() != null && route.cardKey().startsWith("pm_demo_")) {
+                    yield Route.DEMO;
+                }
+                throw new PortalException(PortalErrorCode.NO_CARD_ON_FILE,
+                        "no card the property can charge is on file for this plan");
+            }
+            case "stripe" -> stripeConfigured ? Route.STRIPE : Route.DEMO;
+            default -> throw new PortalException(PortalErrorCode.RAIL_UNAVAILABLE,
+                    "paying early is not available for this plan yet");
+        };
+    }
+
+    /**
+     * One Mews charge for {@code amountMinorUnits} of the booking's currency,
+     * after the same checks the scheduled pass makes: the property's own Mews
+     * connection, the same currency, and a stay still on in Mews. Returns the
+     * outcome as a schedule status (PAID or PROCESSING); a decline throws
+     * CARD_DECLINED before anything is written.
+     */
+    private MewsCharge chargeMews(
+            org.jdbi.v3.core.Handle handle, Lookup look, long amountMinorUnits, String notes) {
+        ChargeRoute route = handle.attach(PaymentPlanDao.class).chargeRoute(look.plan.id())
+                .orElseThrow(() -> new PortalException(PortalErrorCode.NOT_FOUND, "plan not found"));
+        ChargeContext ctx = mewsResolver.resolve(look.booking.merchantId())
+                .orElseThrow(() -> new PortalException(PortalErrorCode.RAIL_UNAVAILABLE,
+                        "the property cannot take payments right now; please try again later"));
+        String currency = look.booking.currency();
+        if (currency == null || !currency.equalsIgnoreCase(ctx.currency())) {
+            log.warn("Plan {} is in {} but its property now charges in {}; pay early refused",
+                    look.plan.id(), currency, ctx.currency());
+            throw new PortalException(PortalErrorCode.RAIL_UNAVAILABLE,
+                    "the property cannot take this payment right now; please contact them");
+        }
+        String reservationId = route.mewsReservationId();
+        try {
+            if (reservationId != null) {
+                Optional<String> state = ctx.adapter().getReservationState(reservationId);
+                if (state.isEmpty()
+                        || !InstallmentChargeService.CHARGEABLE_RESERVATION_STATES.contains(state.get())) {
+                    throw new PortalException(PortalErrorCode.PLAN_NOT_ACTIVE,
+                            "your stay is not confirmed with the property, so nothing was charged");
+                }
+            }
+            PmsChargeResult result = ctx.adapter().chargeStoredCard(
+                    route.mewsCustomerId(), route.mewsCreditCardId(), amountMinorUnits,
+                    currency, reservationId, notes);
+            PaymentScheduleStatus mapped = InstallmentChargeService.mapChargeStatus(result.status());
+            if (mapped == PaymentScheduleStatus.FAILED) {
+                log.info("Mews pay early on plan {} declined (state {})", look.plan.id(), result.rawState());
+                throw new PortalException(PortalErrorCode.CARD_DECLINED, "your card was declined");
+            }
+            return new MewsCharge(result.paymentId(), mapped, result.rawState());
+        } catch (PmsAdapterException e) {
+            log.warn("Mews error in pay early on plan {}: {}", look.plan.id(), e.getMessage());
+            throw new PortalException(PortalErrorCode.PMS_ERROR, "payment processor error");
+        }
+    }
+
+    private record MewsCharge(String paymentId, PaymentScheduleStatus status, String rawState) {}
+
+    private static boolean notBlank(String s) {
+        return s != null && !s.isBlank();
+    }
+
     private void maybeCompletePlan(
             org.jdbi.v3.core.Handle handle,
             PaymentPlan plan,
@@ -507,6 +700,10 @@ public class PlanPortalService {
         SETUP_INTENT_NOT_AVAILABLE_IN_DEMO,
         /** A charge on this plan is already in flight with the rail. */
         PAYMENT_IN_FLIGHT,
+        /** The plan's rail cannot take a guest payment now (no connection, currency changed, unsupported rail). */
+        RAIL_UNAVAILABLE,
+        /** The PMS failed for a reason other than the card (transport, 5xx). */
+        PMS_ERROR,
     }
 
     public static class PortalException extends RuntimeException {

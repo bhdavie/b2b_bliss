@@ -606,9 +606,10 @@
      * an unambiguous mark off the scraped price (never a bare "$" or "¥"),
      * and this outranks the sniff. Deliberately no default: with nothing to
      * go on, amounts render as plain numbers and the console says so once.
+     * The Ayres pilot prices in US dollars.
      * @type {string|null}
      */
-    currencyFallback: null,
+    currencyFallback: "USD",
 
     /**
      * BCP 47 locale for amounts and dates, e.g. "en-US". null uses the page's
@@ -622,10 +623,11 @@
      * datein=04/05/2026 ("MDY" or "DMY"). ISO dates and dates with a part
      * over 12 never need it. null derives it from the locale: MDY for en-US,
      * DMY otherwise. A US property whose page has no lang="en-US" should set
-     * "MDY" here.
+     * "MDY" here. The Ayres pilot is a US property, so its iHotelier dates
+     * are month first.
      * @type {"MDY"|"DMY"|null}
      */
-    dateOrder: null,
+    dateOrder: "MDY",
 
     /**
      * CHECKOUT STEP — the "Your Reservation" panel on
