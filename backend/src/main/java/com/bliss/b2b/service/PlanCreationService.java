@@ -24,6 +24,7 @@ import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.payments.PlanEligibilityService;
 import com.bliss.b2b.payments.PlanFrequency;
 import com.bliss.b2b.payments.PlanOption;
+import com.bliss.b2b.payments.PropertyLocale;
 import com.bliss.b2b.persistence.BookingDao;
 import com.bliss.b2b.persistence.CustomerCardDao;
 import com.bliss.b2b.persistence.CustomerDao;
@@ -145,10 +146,12 @@ public class PlanCreationService {
     /**
      * Layer the Bliss fee onto the customer schedule. With a deposit the fee
      * rides the deposit and the installments stay clean ((discountedTotal -
-     * deposit)/N). With no deposit the fee-inclusive total is split evenly across
-     * the installments (the final one absorbs the rounding remainder), matching
-     * {@code calcInstallmentPlan} on the frontend and the /pay estimate. Either
-     * way SUM(schedule) == discountedTotal + feeCents.
+     * deposit)/N). With no deposit the fee-inclusive total is split the same way
+     * eligibility splits everything: floor division in minor units, the final
+     * installment taking the remainder, so it is never smaller than the others.
+     * The frontend mirrors ({@code splitInstallments}) use the
+     * same rule. Either way SUM(schedule) == discountedTotal + feeCents, in
+     * whatever minor unit the booking's currency has.
      */
     // Package-private, not private: PlanCreationFeeRateTest drives it directly
     // to prove SUM(schedule) == discountedTotal + feeCents still holds at a 0%
@@ -181,11 +184,10 @@ public class PlanCreationService {
             }
         } else {
             long totalWithFee = discountedTotal + feeCents;
-            long perPayment = Math.round((double) totalWithFee / installmentCount);
+            long perPayment = totalWithFee / installmentCount;
+            long finalPayment = totalWithFee - perPayment * (installmentCount - 1);
             for (int i = 0; i < installmentCount; i++) {
-                long amount = (i == installmentCount - 1)
-                        ? totalWithFee - perPayment * (installmentCount - 1)
-                        : perPayment;
+                long amount = (i == installmentCount - 1) ? finalPayment : perPayment;
                 scheduleDao.insert(planId, seq, option.dueDates().get(i), amount,
                         PaymentScheduleStatus.SCHEDULED.wire(), ScheduleKind.INSTALLMENT.wire());
                 seq++;
@@ -268,10 +270,6 @@ public class PlanCreationService {
         if (input.appointmentDate() == null) {
             throw new PlanCreationException(Reason.INVALID_INPUT, "appointmentDate (checkin) required");
         }
-        if (input.appointmentDate().isBefore(LocalDate.now(clock))) {
-            throw new PlanCreationException(Reason.INVALID_INPUT,
-                    "appointmentDate must be in the future");
-        }
         if (input.checkoutDate() != null && input.checkoutDate().isBefore(input.appointmentDate())) {
             throw new PlanCreationException(Reason.INVALID_INPUT,
                     "checkoutDate must be on or after appointmentDate");
@@ -285,6 +283,20 @@ public class PlanCreationService {
             throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
                     "This property takes payment plans through its own booking page. "
                             + "Book your stay there to choose a plan.");
+        }
+        if (preMerchant.propertyLocale().isEmpty()) {
+            throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
+                    "This property has not set its currency yet. Contact the property to book.");
+        }
+        if (input.currency() != null && !input.currency().isBlank()
+                && !input.currency().trim().equalsIgnoreCase(preMerchant.currency())) {
+            throw new PlanCreationException(Reason.INVALID_INPUT,
+                    "This checkout is priced in " + input.currency().trim().toUpperCase(java.util.Locale.ROOT)
+                            + " but the property takes payment in " + preMerchant.currency() + ".");
+        }
+        if (input.appointmentDate().isBefore(PropertyLocale.today(clock, preMerchant.timeZone()))) {
+            throw new PlanCreationException(Reason.INVALID_INPUT,
+                    "appointmentDate must be in the future");
         }
         long totalAmountCents = input.totalAmountCents();
         if (totalAmountCents <= 0) {
@@ -302,7 +314,7 @@ public class PlanCreationService {
             String serviceName = input.description() != null && !input.description().isBlank()
                     ? input.description().trim()
                     : "Booking from checkout link";
-            bookingDao.insert(
+            int inserted = bookingDao.insert(
                     merchant.id(),
                     token,
                     serviceName,
@@ -315,6 +327,10 @@ public class PlanCreationService {
                     trimToNull(input.customerEmail()),
                     trimToNull(input.customerPhone()),
                     BookingSource.CUSTOMER_INITIATED.wire());
+            if (inserted == 0) {
+                throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
+                        "This property has not set its currency yet. Contact the property to book.");
+            }
             Booking booking = bookingDao.findByToken(token)
                     .orElseThrow(() -> new IllegalStateException("booking insert disappeared"));
 
@@ -410,7 +426,9 @@ public class PlanCreationService {
                 .findByMerchantId(merchant.id())
                 .orElse(MerchantPlanRules.DEFAULTS);
 
-        LocalDate today = LocalDate.now(clock);
+        // Calendar days are the property's: a guest booking at 23:00 in Los
+        // Angeles is still on that day, not the next UTC one.
+        LocalDate today = propertyLocaleOf(booking).today(clock);
         // Prefer the booking's pre-discount price when present so a
         // re-evaluation of an already-discounted booking row doesn't double-
         // discount. For freshly-created bookings, total_amount_cents is the
@@ -519,6 +537,7 @@ public class PlanCreationService {
         try {
             firstIntent = stripeService.firePaymentOffSession(
                     first.amountCents(),
+                    booking.currency(),
                     stripeCustomerId,
                     pm.getId(),
                     first.id().toString(),
@@ -597,7 +616,9 @@ public class PlanCreationService {
                 .findByMerchantId(merchant.id())
                 .orElse(MerchantPlanRules.DEFAULTS);
 
-        LocalDate today = LocalDate.now(clock);
+        // Calendar days are the property's: a guest booking at 23:00 in Los
+        // Angeles is still on that day, not the next UTC one.
+        LocalDate today = propertyLocaleOf(booking).today(clock);
         long evaluateInput = booking.originalTotalAmountCents() != null
                 ? booking.originalTotalAmountCents()
                 : booking.totalAmountCents();
@@ -743,7 +764,9 @@ public class PlanCreationService {
                     .orElse(MerchantPlanRules.DEFAULTS);
             BigDecimal feeRate = resolveFeeRate(handle, merchant.id(), clock.instant());
 
-            LocalDate today = LocalDate.now(clock);
+            // The property's own today: lead time, anchors and weekend rolls are
+            // all property-local calendar days.
+            LocalDate today = PropertyLocale.today(clock, merchant.timeZone());
             EligibilityResult eligibility = eligibilityService.evaluate(
                     today, stay.checkin(), stay.checkout(), stay.totalCents(), rules);
             if (!eligibility.eligible()) {
@@ -772,11 +795,20 @@ public class PlanCreationService {
             BookingDao bookingDao = handle.attach(BookingDao.class);
             String token = mintBookingToken(bookingDao);
             String guestName = joinName(stay.customerFirstName(), stay.customerLastName());
-            bookingDao.insert(
+            if (bookingDao.insert(
                     merchant.id(), token, stay.serviceName(), stay.serviceDescription(),
                     stay.totalCents(), stay.checkin(), stay.checkout(),
                     null, guestName, stay.customerEmail().trim().toLowerCase(), null,
-                    BookingSource.MEWS_IMPORT.wire());
+                    BookingSource.MEWS_IMPORT.wire()) == 0) {
+                throw new PlanCreationException(Reason.MERCHANT_NOT_READY, "property has no currency");
+            }
+            if (!merchant.propertyLocale().map(PropertyLocale::currency).orElse("").equals(stay.currency())) {
+                // The amounts read from Mews are minor units of stay.currency();
+                // a plan in any other currency would charge the wrong amounts.
+                throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
+                        "reservation is in " + stay.currency() + " but the property trades in "
+                                + merchant.currency());
+            }
             Booking booking = bookingDao.findByToken(token)
                     .orElseThrow(() -> new IllegalStateException("booking insert disappeared"));
             MewsLinkingDao linkingDao = handle.attach(MewsLinkingDao.class);
@@ -858,6 +890,8 @@ public class PlanCreationService {
             String serviceName,
             String serviceDescription,
             long totalCents,
+            // The currency totalCents and depositCents are minor units of.
+            String currency,
             long depositCents,
             String depositPaymentId,
             Instant depositPaidAt,
@@ -870,6 +904,15 @@ public class PlanCreationService {
             int cardExpMonth,
             int cardExpYear,
             String cardBrand) {
+    }
+
+    /** The booking's currency, zone and locale; a booking with no currency cannot take a plan. */
+    private static PropertyLocale propertyLocaleOf(Booking booking) {
+        if (booking.currency() == null || booking.currency().isBlank()) {
+            throw new PlanCreationException(Reason.MERCHANT_NOT_READY,
+                    "This booking has no currency. Contact the property to book.");
+        }
+        return booking.propertyLocale();
     }
 
     private static String joinName(String first, String last) {
@@ -1058,6 +1101,9 @@ public class PlanCreationService {
     public record CustomerCheckoutInput(
             String merchantSlug,
             long totalAmountCents,
+            // The cart's currency, when the checkout link says; null trusts the
+            // property's own currency.
+            String currency,
             LocalDate appointmentDate,
             LocalDate checkoutDate,
             String description,

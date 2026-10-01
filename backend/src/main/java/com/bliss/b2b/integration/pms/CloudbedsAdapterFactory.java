@@ -37,7 +37,6 @@ public class CloudbedsAdapterFactory implements ChargeContextResolver {
 
     private static final Logger log = LoggerFactory.getLogger(CloudbedsAdapterFactory.class);
 
-    private static final String DEFAULT_CURRENCY = "USD";
     /** Refresh when the access token is within this window of expiry. */
     private static final Duration REFRESH_SKEW = Duration.ofMinutes(5);
 
@@ -110,11 +109,11 @@ public class CloudbedsAdapterFactory implements ChargeContextResolver {
 
     @Override
     public Optional<ChargeContext> resolve(UUID merchantId) {
+        // No currency, no charge context: the row stays scheduled and the pass
+        // logs it, as the Mews resolver does. Never a default currency.
         return freshConnection(merchantId)
-                .map(conn -> new ChargeContext(
-                        adapterFor(conn),
-                        conn.currency() == null || conn.currency().isBlank()
-                                ? DEFAULT_CURRENCY : conn.currency()));
+                .filter(conn -> conn.currency() != null && !conn.currency().isBlank())
+                .map(conn -> new ChargeContext(adapterFor(conn), conn.currency()));
     }
 
     private CloudbedsAdapter adapterFor(CloudbedsConnection conn) {

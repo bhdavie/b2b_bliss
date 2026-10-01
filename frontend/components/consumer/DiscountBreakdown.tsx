@@ -1,4 +1,4 @@
-import { formatDollarsCompact } from "@/lib/publicApi";
+import { formatMoneyCompact, type MoneyContext } from "@/lib/money";
 
 /**
  * Renders the savings callout + Subtotal / Plan discount / Total breakdown on
@@ -9,10 +9,12 @@ export function DiscountBreakdown({
   originalTotalCents,
   discountedTotalCents,
   variant = "card",
+  money,
 }: {
   originalTotalCents: number;
   discountedTotalCents: number;
   variant?: "card" | "rows";
+  money: MoneyContext;
 }) {
   const savings = originalTotalCents - discountedTotalCents;
   if (savings <= 0 || originalTotalCents <= 0) return null;
@@ -26,15 +28,15 @@ export function DiscountBreakdown({
       <>
         <div className="text-[11px] text-ink-muted">Subtotal</div>
         <div className="text-right text-[11px] text-ink-muted line-through tabular-nums">
-          {formatDollarsCompact(originalTotalCents)}
+          {formatMoneyCompact(originalTotalCents, money)}
         </div>
         <div className="text-[11px] text-emerald-700">Plan discount ({percent}%)</div>
         <div className="text-right text-[11px] text-emerald-700 tabular-nums">
-          -{formatDollarsCompact(savings)}
+          -{formatMoneyCompact(savings, money)}
         </div>
         <div className="text-[15px] font-bold text-ink">Total</div>
         <div className="text-right text-[15px] font-bold text-ink tabular-nums">
-          {formatDollarsCompact(discountedTotalCents)}
+          {formatMoneyCompact(discountedTotalCents, money)}
         </div>
       </>
     );
@@ -44,20 +46,20 @@ export function DiscountBreakdown({
     <section className="mt-6 overflow-hidden rounded-card border border-emerald-200 bg-emerald-50">
       <div className="flex items-center gap-2 px-4 py-3 text-[13px] font-medium text-emerald-800">
         <SavingsIcon />
-        Save {formatDollarsCompact(savings)} ({percent}%) with this plan
+        Save {formatMoneyCompact(savings, money)} ({percent}%) with this plan
       </div>
       <dl className="grid grid-cols-2 gap-y-1 border-t border-emerald-200 bg-white px-4 py-3">
         <dt className="text-[12px] text-ink-muted">Subtotal</dt>
         <dd className="text-right text-[12px] text-ink-muted line-through tabular-nums">
-          {formatDollarsCompact(originalTotalCents)}
+          {formatMoneyCompact(originalTotalCents, money)}
         </dd>
         <dt className="text-[12px] text-emerald-700">Plan discount ({percent}%)</dt>
         <dd className="text-right text-[12px] text-emerald-700 tabular-nums">
-          -{formatDollarsCompact(savings)}
+          -{formatMoneyCompact(savings, money)}
         </dd>
         <dt className="mt-1 text-[18px] font-bold text-ink">Total</dt>
         <dd className="mt-1 text-right text-[18px] font-bold text-ink tabular-nums">
-          {formatDollarsCompact(discountedTotalCents)}
+          {formatMoneyCompact(discountedTotalCents, money)}
         </dd>
       </dl>
     </section>

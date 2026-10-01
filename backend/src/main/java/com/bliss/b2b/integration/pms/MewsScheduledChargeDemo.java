@@ -73,7 +73,12 @@ public final class MewsScheduledChargeDemo {
 
         // 1. Resolve the property currency and the demo customer + a vaulted card.
         PmsPropertyConfiguration cfg = adapter.getPropertyConfiguration();
-        String currency = cfg.defaultCurrency() == null ? "GBP" : cfg.defaultCurrency();
+        // No fallback: a property without a default currency is a setup
+        // problem, and charging in a guessed currency would hide it.
+        String currency = cfg.defaultCurrency();
+        if (currency == null || currency.isBlank()) {
+            throw new IllegalStateException("Mews configuration/get returned no default currency");
+        }
         PmsCustomer customer = adapter.findOrCreateCustomer(
                 new PmsCustomerRef(DEMO_EMAIL, "Bliss", "Demo"));
         List<PmsStoredCard> cards = adapter.getStoredCards(customer.id());
@@ -81,16 +86,22 @@ public final class MewsScheduledChargeDemo {
         System.out.println("currency       = " + currency);
         System.out.println("vaulted cards  = " + cards.size());
 
-        if (cards.isEmpty()) {
+        // creditCards/charge only takes Gateway cards, and Disabled or other
+        // states (Mews also returns undocumented ones such as "2") are skipped
+        // rather than charged and declined.
+        Optional<PmsStoredCard> chargeable = cards.stream()
+                .filter(c -> c.active() && "Enabled".equals(c.state()) && "Gateway".equals(c.kind()))
+                .findFirst();
+        if (chargeable.isEmpty()) {
             System.out.println();
-            System.out.println("No vaulted card on the demo customer, so there is nothing to charge.");
+            System.out.println("No Enabled Gateway card on the demo customer, so there is nothing to charge.");
             System.out.println("Vault one first: run MewsAdapterDemo, open the served helper page,");
             System.out.println("enter a Mews demo test card, then rerun this demo.");
             System.out.println();
             System.out.println("== done (awaiting card entry) ==");
             return;
         }
-        PmsStoredCard card = cards.get(0);
+        PmsStoredCard card = chargeable.get();
         System.out.println("mewsCreditCard = " + card.id() + " (" + card.obfuscatedNumber() + ")");
 
         // 2. Connect + migrate (ensures V16 columns exist).
@@ -111,8 +122,10 @@ public final class MewsScheduledChargeDemo {
         // 3. Seed a Mews-rail plan with one installment due today, and store the
         //    property's own Mews connection (here the global demo tokens) so the
         //    charge pass resolves credentials per-property, not from a global.
-        LocalDate today = LocalDate.now();
-        UUID scheduleId = seedMewsRailPlan(jdbi, customer, card, currency, today);
+        // Due today at the property, in the property's own zone.
+        String timeZone = cfg.timeZoneIdentifier();
+        LocalDate today = com.bliss.b2b.payments.PropertyLocale.today(Clock.systemUTC(), timeZone);
+        UUID scheduleId = seedMewsRailPlan(jdbi, customer, card, currency, timeZone, today);
         seedMewsConnection(jdbi, cipher, config, cfg, currency);
         System.out.println();
         System.out.println("Seeded Mews-rail plan + property connection; installment due " + today);
@@ -123,7 +136,7 @@ public final class MewsScheduledChargeDemo {
         MewsAdapterFactory factory = new MewsAdapterFactory(jdbi, cipher, 0);
         InstallmentChargeService service = new InstallmentChargeService(
                 new JdbiLedger(jdbi), factory, Clock.systemUTC());
-        PassResult result = service.runDuePass(today);
+        PassResult result = service.runDuePass(Clock.systemUTC().instant());
 
         // 5. Show the recorded outcome.
         System.out.println();
@@ -138,21 +151,25 @@ public final class MewsScheduledChargeDemo {
      * installment plan on the Mews rail, returning the schedule row id.
      */
     private static UUID seedMewsRailPlan(
-            Jdbi jdbi, PmsCustomer customer, PmsStoredCard card, String currency, LocalDate today) {
+            Jdbi jdbi, PmsCustomer customer, PmsStoredCard card, String currency, String timeZone,
+            LocalDate today) {
         return jdbi.inTransaction(h -> {
             // Merchant + booking (fixed ids, created once).
             h.createUpdate("""
-                    INSERT INTO merchants (id, slug, business_name, email)
-                    VALUES (:id, 'bliss-mews-demo', 'Bliss Mews Demo', 'mews-demo-merchant@bliss.test')
-                    ON CONFLICT (id) DO NOTHING
-                    """).bind("id", MERCHANT_ID).execute();
+                    INSERT INTO merchants (id, slug, business_name, email, currency, time_zone)
+                    VALUES (:id, 'bliss-mews-demo', 'Bliss Mews Demo', 'mews-demo-merchant@bliss.test',
+                            :currency, :timeZone)
+                    ON CONFLICT (id) DO UPDATE SET currency = EXCLUDED.currency, time_zone = EXCLUDED.time_zone
+                    """).bind("id", MERCHANT_ID).bind("currency", currency).bind("timeZone", timeZone).execute();
             h.createUpdate("""
                     INSERT INTO bookings (id, merchant_id, booking_token, service_name,
-                                          total_amount_cents, appointment_date)
+                                          total_amount_cents, appointment_date, currency, time_zone)
                     VALUES (:id, :merchantId, 'mews-demo-token', 'Mews rail demo booking',
-                            :total, :appt)
-                    ON CONFLICT (id) DO NOTHING
+                            :total, :appt, :currency, :timeZone)
+                    ON CONFLICT (id) DO UPDATE SET currency = EXCLUDED.currency, time_zone = EXCLUDED.time_zone
                     """)
+                    .bind("currency", currency)
+                    .bind("timeZone", timeZone)
                     .bind("id", BOOKING_ID)
                     .bind("merchantId", MERCHANT_ID)
                     .bind("total", INSTALLMENT_CENTS * 2)

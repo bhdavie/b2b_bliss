@@ -11,7 +11,8 @@ class MerchantGuestFacingNameTest {
     private static Merchant merchant(String businessName, PmsType pms, String enterpriseName) {
         return new Merchant(UUID.randomUUID(), "slug", "a@b.test", businessName, "hotel", null,
                 null, null, null, null, null, null, null, null, MerchantStatus.ACTIVE, pms,
-                OnboardingState.ACTIVE, Instant.EPOCH, Instant.EPOCH, Instant.EPOCH, null, enterpriseName);
+                OnboardingState.ACTIVE, Instant.EPOCH, Instant.EPOCH, Instant.EPOCH, null, enterpriseName,
+                null, null, null);
     }
 
     @Test

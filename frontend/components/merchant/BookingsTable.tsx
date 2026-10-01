@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { formatCents } from "@/lib/eligibility";
+import { formatInstant, formatMoney, todayIn } from "@/lib/money";
 import { Panel } from "@/components/ui/primitives";
 import type { Booking, DerivedBookingStatus } from "@/lib/api";
 
@@ -125,10 +125,8 @@ export function BookingsTable({
       if (dateRange !== "all") {
         const created = new Date(b.createdAt);
         if (dateRange === "month") {
-          if (
-            created.getFullYear() !== now.getFullYear() ||
-            created.getMonth() !== now.getMonth()
-          ) {
+          // "This month" at the property: both instants read in its zone.
+          if (todayIn(b.timeZone, created).slice(0, 7) !== todayIn(b.timeZone, now).slice(0, 7)) {
             return false;
           }
         } else if (cutoff && created < cutoff) {
@@ -225,19 +223,19 @@ function BookingRow({ booking }: { booking: Booking }) {
         )}
       </div>
       <div className="text-[14px] text-ink-900">
-        {formatBookingDate(booking.createdAt)}
+        {formatBookingDate(booking)}
       </div>
       <div className="text-right text-[14px] tabular-nums text-ink-900">
         {booking.originalTotalAmountCents != null &&
         booking.originalTotalAmountCents > booking.totalAmountCents ? (
           <div className="flex flex-col items-end leading-[1.4]">
-            <span>{formatCents(booking.totalAmountCents)}</span>
+            <span>{formatMoney(booking.totalAmountCents, booking)}</span>
             <span className="text-[13px] text-ink-500 line-through">
-              {formatCents(booking.originalTotalAmountCents)}
+              {formatMoney(booking.originalTotalAmountCents, booking)}
             </span>
           </div>
         ) : (
-          <span>{formatCents(booking.totalAmountCents)}</span>
+          <span>{formatMoney(booking.totalAmountCents, booking)}</span>
         )}
       </div>
       <div>
@@ -340,7 +338,11 @@ function daysAgo(now: Date, n: number): Date {
   return d;
 }
 
-function formatBookingDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+/** When the booking was created, as a date at the property, in its locale. */
+function formatBookingDate(booking: Booking): string {
+  return formatInstant(booking.createdAt, booking.locale, booking.timeZone, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }

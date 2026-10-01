@@ -28,8 +28,22 @@ public record Merchant(
         String logoUrl,
         // The connected Mews enterprise's name. Only the id/slug lookups
         // (MerchantDao.findById, findBySlug) join it in; elsewhere it is null.
-        String mewsEnterpriseName
+        String mewsEnterpriseName,
+        // What the property trades in (V36), copied onto each new booking.
+        // Filled from Mews configuration/get, Cloudbeds, or the Stripe account;
+        // null until one of those is connected or the property sets them.
+        String currency,
+        String timeZone,
+        String localeTag
 ) {
+    /** The property's currency, zone and locale, or empty when it has no currency yet. */
+    public java.util.Optional<com.bliss.b2b.payments.PropertyLocale> propertyLocale() {
+        if (currency == null || currency.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(new com.bliss.b2b.payments.PropertyLocale(currency, timeZone, localeTag));
+    }
+
     /**
      * The name a guest sees: the property's own business name, or for a Mews
      * property that has not filled in its profile yet, the name of its Mews

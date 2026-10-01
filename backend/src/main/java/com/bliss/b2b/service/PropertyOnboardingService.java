@@ -12,6 +12,7 @@ import com.bliss.b2b.integration.pms.MewsCatalog;
 import com.bliss.b2b.integration.pms.MewsPlatform;
 import com.bliss.b2b.integration.pms.PmsAdapterException;
 import com.bliss.b2b.integration.pms.PmsPropertyConfiguration;
+import com.bliss.b2b.payments.Money;
 import com.bliss.b2b.persistence.MerchantCloudbedsConnectionDao;
 import com.bliss.b2b.persistence.MerchantDao;
 import com.bliss.b2b.persistence.MerchantMewsConnectionDao;
@@ -104,7 +105,35 @@ public class PropertyOnboardingService {
      * successful code exchange + property identification. Also (re)asserts
      * pms_type=cloudbeds, mirroring {@link #connectMews}. Idempotent.
      */
-    public void markCloudbedsConnected(UUID merchantId) {
+    /**
+     * Records a Stripe-rail property's currency and time zone from its
+     * connected account ({@code default_currency}, {@code
+     * settings.dashboard.timezone}). Stripe has no language setting, so the
+     * locale is left as it is. An account that does not report a currency yet
+     * (early in onboarding) changes nothing.
+     */
+    public void recordStripeAccountLocale(UUID merchantId, com.stripe.model.Account account) {
+        recordStripeAccountLocale(merchantDao, merchantId, account);
+    }
+
+    /** Static form for resources that hold only a {@link MerchantDao}. */
+    public static void recordStripeAccountLocale(
+            MerchantDao merchantDao, UUID merchantId, com.stripe.model.Account account) {
+        if (account == null || account.getDefaultCurrency() == null || account.getDefaultCurrency().isBlank()) {
+            return;
+        }
+        String timeZone = account.getSettings() != null && account.getSettings().getDashboard() != null
+                ? blankToNull(account.getSettings().getDashboard().getTimezone())
+                : null;
+        try {
+            merchantDao.updatePropertyLocale(merchantId, Money.code(account.getDefaultCurrency()), timeZone, null);
+        } catch (IllegalArgumentException e) {
+            log.warn("Stripe account {} for merchant {} reports unusable currency '{}'",
+                    account.getId(), merchantId, account.getDefaultCurrency());
+        }
+    }
+
+    public void markCloudbedsConnected(UUID merchantId, PmsPropertyConfiguration property) {
         Merchant merchant = reload(merchantId);
         boolean connected = cloudbedsConnectionDao.findByMerchant(merchantId)
                 .filter(CloudbedsConnection::isConnected)
@@ -113,6 +142,15 @@ public class PropertyOnboardingService {
             return;
         }
         merchantDao.updatePmsType(merchantId, PmsType.CLOUDBEDS.wire());
+        // Currency straight from Cloudbeds, never defaulted. A property that
+        // reports none stays connected but cannot take bookings until it does.
+        try {
+            merchantDao.updatePropertyLocale(merchantId, Money.code(property.defaultCurrency()),
+                    blankToNull(property.timeZoneIdentifier()), blankToNull(property.languageCode()));
+        } catch (IllegalArgumentException e) {
+            log.warn("Cloudbeds property for merchant {} reported no usable currency ({})",
+                    merchantId, property.defaultCurrency());
+        }
         advanceTo(merchant, OnboardingState.PMS_CONNECTED);
         log.info("Property {} connected Cloudbeds", merchantId);
     }
@@ -204,26 +242,30 @@ public class PropertyOnboardingService {
                     "Could not connect to Mews with those tokens. " + e.getMessage());
         }
 
+        // The property's currency is whatever Mews says it is, and nothing
+        // else: no fallback. An enterprise with no usable default currency
+        // cannot be priced, so it is not connected.
+        String currency;
+        try {
+            currency = Money.code(cfg.defaultCurrency());
+        } catch (IllegalArgumentException e) {
+            throw new PropertyOnboardingException("no_currency",
+                    "Mews did not report a default currency for your property.");
+        }
+        PmsPropertyConfiguration validated = new PmsPropertyConfiguration(
+                cfg.enterpriseId(), cfg.name(), currency, cfg.countryCode(), cfg.pricing(),
+                cfg.timeZoneIdentifier(), cfg.languageCode());
         mewsFactory.saveValidatedConnection(
                 merchant.id(), effectiveUrl, clientToken.trim(), accessToken.trim(),
-                cfg, Instant.now(clock));
+                validated, Instant.now(clock));
         merchantDao.updatePmsType(merchant.id(), PmsType.MEWS.wire());
+        merchantDao.updatePropertyLocale(merchant.id(), currency,
+                blankToNull(cfg.timeZoneIdentifier()), blankToNull(cfg.languageCode()));
         advanceTo(merchant, OnboardingState.PMS_CONNECTED);
 
-        // Report what was STORED, not what the enterprise said. upsertValidated
-        // deliberately preserves an existing currency, so on a re-connect those
-        // two can differ — echoing the enterprise value would tell the property
-        // it is charging in a currency it is not.
-        String storedCurrency = connectionDao.findByMerchant(merchant.id())
-                .map(MewsConnection::currency)
-                .orElse(cfg.defaultCurrency());
-        if (storedCurrency != null && !storedCurrency.equals(cfg.defaultCurrency())) {
-            log.info("Property {} keeps stored currency {}; Mews enterprise reports {}",
-                    merchant.id(), storedCurrency, cfg.defaultCurrency());
-        }
-        log.info("Property {} connected Mews enterprise '{}' ({})",
-                merchant.id(), cfg.name(), storedCurrency);
-        return new MewsConnectResult(cfg.name(), storedCurrency);
+        log.info("Property {} connected Mews enterprise '{}' ({}, {}, {})",
+                merchant.id(), cfg.name(), currency, cfg.timeZoneIdentifier(), cfg.languageCode());
+        return new MewsConnectResult(cfg.name(), currency);
     }
 
     /**
@@ -307,6 +349,7 @@ public class PropertyOnboardingService {
             }
             linkingDao.updateBlissRates(merchant.id(), serviceId, monthly, biweekly,
                     monthlyBps, biweeklyBps, timeZone, clock.instant());
+            merchantDao.updateTimeZone(merchant.id(), timeZone);
             log.info("Property {} Bliss rates on service {}: monthly {} ({}), biweekly {} ({}){}",
                     merchant.id(), serviceId, monthly, monthlyName, biweekly, biweeklyName,
                     warnings.isEmpty() ? "" : " warnings=" + warnings);

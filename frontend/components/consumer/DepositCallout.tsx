@@ -1,13 +1,15 @@
-import { formatDollarsCompact } from "@/lib/publicApi";
+import { formatMoneyCompact, type MoneyContext } from "@/lib/money";
 
 export function DepositCallout({
   todayCents,
   remainingCents,
   depositRate,
+  money,
 }: {
   todayCents: number;
   remainingCents: number;
   depositRate: number;
+  money: MoneyContext;
 }) {
   const percent = Math.round(depositRate * 100);
 
@@ -24,12 +26,12 @@ export function DepositCallout({
       </div>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="text-[28px] font-medium tabular-nums leading-none text-brand-violet-deep">
-          {formatDollarsCompact(todayCents)}
+          {formatMoneyCompact(todayCents, money)}
         </span>
         <span className="text-[12px] text-ink-500">deposit secures this booking</span>
       </div>
       <div className="mt-3 text-[12px] text-ink-500">
-        Remaining {formatDollarsCompact(remainingCents)} divides into the
+        Remaining {formatMoneyCompact(remainingCents, money)} divides into the
         installments below.
       </div>
     </section>

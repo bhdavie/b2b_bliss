@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { PlanRules } from "@/lib/api";
+import type { MoneyContext } from "@/lib/money";
 import { Panel } from "@/components/ui/primitives";
 import { PlanRulesCard } from "./PlanRulesCard";
 import { BlackoutDatesCard } from "./BlackoutDatesCard";
@@ -38,11 +39,19 @@ type TabKey = (typeof TABS)[number]["key"];
 export function PaymentSettingsTabs({
   planRules,
   isMews = false,
+  currency,
+  locale,
+  timeZone,
 }: {
   planRules: PlanRules;
   /** Hides plan-rule settings that do not apply to a Mews property. */
   isMews?: boolean;
+  /** The property's currency from /me; null until it has one. */
+  currency: string | null;
+  locale: string | null;
+  timeZone: string | null;
 }) {
+  const money: MoneyContext | null = currency ? { currency, locale } : null;
   const [tab, setTab] = useState<TabKey>("rules");
 
   return (
@@ -84,16 +93,20 @@ export function PaymentSettingsTabs({
       </div>
 
       <div className="pt-4">
-        {tab === "rules" ? <PlanRulesCard initial={planRules} hideDeposit={isMews} /> : null}
-        {tab === "blackout" ? <BlackoutDatesCard initial={planRules} /> : null}
+        {tab === "rules" ? (
+          <PlanRulesCard initial={planRules} hideDeposit={isMews} money={money} />
+        ) : null}
+        {tab === "blackout" ? (
+          <BlackoutDatesCard initial={planRules} locale={locale} timeZone={timeZone} />
+        ) : null}
         {tab === "cancellation" ? (
-          <PoliciesCard initial={planRules} section="cancellation" />
+          <PoliciesCard initial={planRules} section="cancellation" money={money} />
         ) : null}
         {tab === "deadline" ? (
-          <PoliciesCard initial={planRules} section="deadline" />
+          <PoliciesCard initial={planRules} section="deadline" money={money} />
         ) : null}
         {tab === "failed" ? (
-          <PoliciesCard initial={planRules} section="failed" />
+          <PoliciesCard initial={planRules} section="failed" money={money} />
         ) : null}
       </div>
     </Panel>

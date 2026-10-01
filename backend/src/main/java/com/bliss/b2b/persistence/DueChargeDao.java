@@ -1,6 +1,6 @@
 package com.bliss.b2b.persistence;
 
-import java.time.LocalDate;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jdbi.v3.core.mapper.reflect.ColumnName;
@@ -19,7 +19,10 @@ import org.jdbi.v3.sqlobject.statement.SqlQuery;
 public interface DueChargeDao {
 
     /**
-     * Installments that are due to charge on or before {@code asOf}: status is
+     * Installments due to charge as of {@code now}: the due date has begun in
+     * the booking's own time zone, so a Los Angeles property's installment
+     * charges from midnight Los Angeles time, not midnight UTC (a booking from
+     * before V36 with no zone keeps the old UTC reading). Status is
      * {@code scheduled} or {@code retrying} (so {@code processing}/{@code paid}/
      * {@code failed} rows are excluded — critically, an in-flight
      * {@code processing} Mews charge is never re-selected and so never
@@ -32,6 +35,7 @@ public interface DueChargeDao {
                    b.merchant_id         AS merchant_id,
                    ps.sequence           AS sequence,
                    ps.amount_cents       AS amount_cents,
+                   b.currency            AS currency,
                    ps.kind               AS kind,
                    pp.payment_rail       AS payment_rail,
                    c.mews_customer_id    AS mews_customer_id,
@@ -43,12 +47,12 @@ public interface DueChargeDao {
             JOIN customers        c ON c.id  = pp.customer_id
             JOIN customer_cards  cc ON cc.id = pp.customer_card_id
             WHERE ps.status IN ('scheduled', 'retrying')
-              AND ps.due_date <= :asOf
+              AND ps.due_date <= (CAST(:now AS timestamptz) AT TIME ZONE COALESCE(b.time_zone, 'UTC'))::date
               AND pp.status = 'active'
             ORDER BY ps.due_date ASC, ps.sequence ASC
             """)
     @RegisterConstructorMapper(DueInstallment.class)
-    List<DueInstallment> findDueForCharge(@Bind("asOf") LocalDate asOf);
+    List<DueInstallment> findDueForCharge(@Bind("now") Instant now);
 
     /**
      * Installments recorded as {@code processing} with a Mews payment id: charges
@@ -93,6 +97,8 @@ public interface DueChargeDao {
             @ColumnName("merchant_id") UUID merchantId,
             @ColumnName("sequence") int sequence,
             @ColumnName("amount_cents") long amountCents,
+            // The booking's currency: amountCents is minor units of it.
+            @ColumnName("currency") String currency,
             @ColumnName("kind") String kind,
             @ColumnName("payment_rail") String paymentRail,
             @ColumnName("mews_customer_id") String mewsCustomerId,

@@ -69,8 +69,7 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
     // Gross UK rather than the Net Pricing demo because only Gross UK's Mews
     // Payments gateway charges stored cards online; on Net Pricing every
     // online charge fails, so Marbrook's checkout could never complete. The
-    // cost is GBP: the connection is GBP so Mews quotes are accepted, while
-    // the frontend still formats amounts with "$".
+    // property therefore trades in GBP, and its bookings are priced in pence.
     private static final String MEWS_DEMO_CLIENT_TOKEN =
             "E0D439EE522F44368DC78E1BFB03710C-D24FB11DBE31D4621C4817E028D9E1D";
     private static final String MEWS_DEMO_ACCESS_TOKEN =
@@ -78,6 +77,8 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
     private static final String MEWS_DEMO_ENTERPRISE_ID = "851df8c8-90f2-4c4a-8e01-a4fc46b25178";
     private static final String MEWS_DEMO_ENTERPRISE_NAME = "API Hotel Gross Pricing (DO NOT CHANGE THE NAME)";
     private static final String MEWS_DEMO_CURRENCY = "GBP";
+    /** Gross UK's DefaultLanguageCode, as configuration/get reports it. */
+    private static final String MEWS_DEMO_LOCALE = "en-GB";
     /** The Net Pricing demo enterprise an earlier version of this seed pointed at. */
     private static final String NET_PRICING_ENTERPRISE_ID = "c65ea6e9-2340-42f4-9136-ab3a00b6da22";
     // Booking setup on Gross UK: the "API HOTEL" service (check-in 15:00,
@@ -131,6 +132,7 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
             Counts before = Counts.read(handle);
             execute(handle, script);
             seedPmsConnections(handle, cipher);
+            seedPropertyLocales(handle);
             Counts after = Counts.read(handle);
 
             if (after.equals(before)) {
@@ -163,6 +165,51 @@ public class SeedDemoCommand extends ConfiguredCommand<BlissConfiguration> {
      * their tokens are sealed with the application's key (V30). Same rules as
      * the script: ON CONFLICT DO NOTHING, so an existing row is left alone.
      */
+    /**
+     * What each demo property trades in (V36). Marbrook House is on the Gross UK
+     * Mews demo, so it takes that enterprise's GBP, Budapest zone and en-GB
+     * language (as configuration/get reports them). The other demo properties
+     * are US inns in Hudson, NY. Fills only what is unset, then gives each
+     * demo booking without a currency its property's values.
+     */
+    private static void seedPropertyLocales(Handle handle) {
+        handle.createUpdate("""
+                UPDATE merchants m
+                SET currency = mc.currency, time_zone = mc.time_zone,
+                    locale = COALESCE(mc.locale, :mewsLocale)
+                FROM merchant_mews_connections mc
+                WHERE mc.merchant_id = m.id AND m.id = :marbrookHouse AND m.currency IS NULL
+                """)
+                .bind("marbrookHouse", MARBROOK_HOUSE_ID)
+                .bind("mewsLocale", MEWS_DEMO_LOCALE)
+                .execute();
+        handle.createUpdate("""
+                UPDATE merchant_mews_connections SET locale = :mewsLocale
+                WHERE merchant_id = :marbrookHouse AND locale IS NULL
+                """)
+                .bind("marbrookHouse", MARBROOK_HOUSE_ID)
+                .bind("mewsLocale", MEWS_DEMO_LOCALE)
+                .execute();
+        handle.createUpdate("""
+                UPDATE merchants
+                SET currency = 'USD', time_zone = 'America/New_York', locale = 'en-US'
+                WHERE id IN (
+                    SELECT DISTINCT merchant_id FROM bookings
+                    UNION SELECT :marbrookGrand
+                ) AND id <> :marbrookHouse AND currency IS NULL
+                  AND address_city = 'Hudson' AND address_state = 'NY'
+                """)
+                .bind("marbrookHouse", MARBROOK_HOUSE_ID)
+                .bind("marbrookGrand", MARBROOK_GRAND_ID)
+                .execute();
+        handle.createUpdate("""
+                UPDATE bookings b
+                SET currency = m.currency, time_zone = m.time_zone, locale = m.locale
+                FROM merchants m
+                WHERE m.id = b.merchant_id AND b.currency IS NULL AND m.currency IS NOT NULL
+                """).execute();
+    }
+
     private static void seedPmsConnections(Handle handle, TokenCipher cipher) {
         String clientToken = cipher.encrypt(Field.MEWS_CLIENT_TOKEN, MARBROOK_HOUSE_ID, MEWS_DEMO_CLIENT_TOKEN);
         String accessToken = cipher.encrypt(Field.MEWS_ACCESS_TOKEN, MARBROOK_HOUSE_ID, MEWS_DEMO_ACCESS_TOKEN);

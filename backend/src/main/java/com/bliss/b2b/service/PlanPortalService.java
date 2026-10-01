@@ -12,6 +12,7 @@ import com.bliss.b2b.domain.ScheduleKind;
 import com.bliss.b2b.integration.StripeConnectResolver;
 import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.integration.StripePaymentsService.CardSummary;
+import com.bliss.b2b.payments.PropertyLocale;
 import com.bliss.b2b.persistence.BookingDao;
 import com.bliss.b2b.persistence.CustomerCardDao;
 import com.bliss.b2b.persistence.CustomerDao;
@@ -104,7 +105,7 @@ public class PlanPortalService {
                                     e.dueDate(), e.amountCents(), e.status().wire()))
                             .toList(),
                     plan.totalAmountCents() + plan.processingFeeCents(),
-                    LocalDate.now(clock),
+                    PropertyLocale.today(clock, booking.timeZone()),
                     plan.status().wire());
             return Optional.of(new PortalSnapshot(
                     merchant, booking, plan, schedule, customer, card,
@@ -145,6 +146,7 @@ public class PlanPortalService {
             try {
                 intent = stripeService.firePaymentOffSession(
                         next.amountCents(),
+                        look.booking.currency(),
                         look.customer.stripeCustomerId(),
                         card.stripePaymentMethodId(),
                         next.id().toString(),
@@ -250,6 +252,7 @@ public class PlanPortalService {
             try {
                 intent = stripeService.firePaymentOffSession(
                         amountCents,
+                        look.booking.currency(),
                         look.customer.stripeCustomerId(),
                         card.stripePaymentMethodId(),
                         // The row id is no longer a unique key for this charge —

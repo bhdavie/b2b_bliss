@@ -14,7 +14,6 @@ import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentScheduleDao;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -86,10 +85,11 @@ public class InstallmentChargeService {
     }
 
     /**
-     * Charges every Mews-rail installment due on or before {@code asOf}. Stripe
+     * Charges every installment due as of {@code now}, where "due" means its due
+     * date has begun in the booking's own time zone. Stripe
      * rows are counted and skipped. Returns a tally of what happened.
      */
-    public PassResult runDuePass(LocalDate asOf) {
+    public PassResult runDuePass(Instant asOf) {
         List<DueInstallment> due = ledger.findDue(asOf);
         int charged = 0, processing = 0, failed = 0, skippedStripe = 0, errors = 0, held = 0;
 
@@ -162,6 +162,15 @@ public class InstallmentChargeService {
                 continue;
             }
             ChargeContext ctx = ctxMaybe.get();
+            // The plan's amounts are minor units of the booking's currency. If
+            // the property's Mews currency no longer matches, charging would
+            // take the wrong amount, so leave the row for someone to look at.
+            if (d.currency() == null || !d.currency().equalsIgnoreCase(ctx.currency())) {
+                log.warn("Mews-rail schedule {} is in {} but the property now charges in {}; leaving scheduled",
+                        d.scheduleId(), d.currency(), ctx.currency());
+                errors++;
+                continue;
+            }
 
             Instant now = Instant.now(clock);
             // The stay must still be on in Mews. A reservation the hotel
@@ -194,7 +203,7 @@ public class InstallmentChargeService {
                         d.mewsCustomerId(),
                         d.mewsCreditCardId(),
                         d.amountCents(),
-                        ctx.currency(),
+                        d.currency(),
                         reservationId,
                         "Bliss installment seq " + d.sequence());
                 PaymentScheduleStatus mapped = mapChargeStatus(result.status());
@@ -298,7 +307,7 @@ public class InstallmentChargeService {
 
     /** Persistence boundary, kept narrow so it is trivial to fake in tests. */
     public interface Ledger {
-        List<DueInstallment> findDue(LocalDate asOf);
+        List<DueInstallment> findDue(Instant now);
 
         void markPaid(UUID scheduleId, String mewsPaymentId, Instant now);
 
@@ -335,7 +344,7 @@ public class InstallmentChargeService {
         }
 
         @Override
-        public List<DueInstallment> findDue(LocalDate asOf) {
+        public List<DueInstallment> findDue(Instant asOf) {
             return jdbi.withHandle(h -> h.attach(DueChargeDao.class).findDueForCharge(asOf));
         }
 

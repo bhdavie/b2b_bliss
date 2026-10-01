@@ -16,20 +16,30 @@ import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 @RegisterRowMapper(BookingRowMapper.class)
 public interface BookingDao {
 
+    /**
+     * Inserts a booking priced in its property's currency, snapshotting the
+     * property's currency, time zone and locale onto the row. Returns 0, and
+     * inserts nothing, when the property has no currency yet: the price would
+     * have no unit.
+     */
     @SqlUpdate("""
             INSERT INTO bookings (
                 merchant_id, booking_token, service_name, service_description,
                 total_amount_cents, appointment_date, checkout_date,
                 cancellation_policy, customer_name_hint, customer_email_hint,
-                customer_phone_hint, status, booking_source
-            ) VALUES (
+                customer_phone_hint, status, booking_source,
+                currency, time_zone, locale
+            )
+            SELECT
                 :merchantId, :bookingToken, :serviceName, :serviceDescription,
                 :totalAmountCents, :appointmentDate, :checkoutDate,
                 :cancellationPolicy, :customerNameHint, :customerEmailHint,
-                :customerPhoneHint, 'sent', :bookingSource
-            )
+                :customerPhoneHint, 'sent', :bookingSource,
+                m.currency, m.time_zone, m.locale
+            FROM merchants m
+            WHERE m.id = :merchantId AND m.currency IS NOT NULL
             """)
-    void insert(
+    int insert(
             @Bind("merchantId") UUID merchantId,
             @Bind("bookingToken") String bookingToken,
             @Bind("serviceName") String serviceName,

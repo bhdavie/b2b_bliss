@@ -66,7 +66,7 @@ public class MewsAdapterFactory implements ChargeContextResolver {
                 cipher.encrypt(Field.MEWS_CLIENT_TOKEN, merchantId, clientToken),
                 cipher.encrypt(Field.MEWS_ACCESS_TOKEN, merchantId, accessToken),
                 enterprise.enterpriseId(), enterprise.name(), enterprise.defaultCurrency(),
-                validatedAt);
+                enterprise.timeZoneIdentifier(), enterprise.languageCode(), validatedAt);
     }
 
     /**

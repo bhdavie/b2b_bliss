@@ -412,7 +412,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 environment.lifecycle().scheduledExecutorService("mews-charge-pass").threads(1).build();
         chargeScheduler.scheduleAtFixedRate(() -> {
             try {
-                installmentChargeService.runDuePass(java.time.LocalDate.now(clock));
+                installmentChargeService.runDuePass(clock.instant());
             } catch (RuntimeException e) {
                 log.warn("Installment charge pass failed: {}", e.getMessage());
             }

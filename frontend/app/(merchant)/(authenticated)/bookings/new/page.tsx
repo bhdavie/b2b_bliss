@@ -3,12 +3,17 @@ import { redirect } from "next/navigation";
 import { NewBookingForm } from "@/components/merchant/NewBookingForm";
 import { DEFAULT_PLAN_RULES } from "@/lib/api";
 import { SectionHeading } from "@/components/ui/primitives";
-import { fetchOnboardingServer, fetchPlanRulesServer } from "@/lib/auth";
+import {
+  fetchMerchantSession,
+  fetchOnboardingServer,
+  fetchPlanRulesServer,
+} from "@/lib/auth";
 
 export default async function NewBookingPage() {
-  const [onboarding, planRules] = await Promise.all([
+  const [onboarding, planRules, session] = await Promise.all([
     fetchOnboardingServer(),
     fetchPlanRulesServer(),
+    fetchMerchantSession(),
   ]);
   // Same swap as the bookings list: the reachability of this form follows the
   // PMS connection, not a Stripe Connect account the property can no longer
@@ -24,6 +29,10 @@ export default async function NewBookingPage() {
   return (
     <NewBookingForm
       planRules={planRules ?? DEFAULT_PLAN_RULES}
+      // New bookings are priced in the property's own currency, from /me.
+      currency={session?.currency ?? null}
+      locale={session?.locale ?? null}
+      timeZone={session?.timeZone ?? null}
       head={
         // Back link, title and helper, all inside the form's card. They were
         // the last loose head in the merchant app: a violet back link, a 44px

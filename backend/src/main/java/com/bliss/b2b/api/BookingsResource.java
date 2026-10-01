@@ -10,6 +10,7 @@ import com.bliss.b2b.payments.EligibilityResult;
 import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.payments.PlanEligibilityService;
 import com.bliss.b2b.payments.PlanOption;
+import com.bliss.b2b.payments.PropertyLocale;
 import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentPlanDao.BookingStatusInputs;
 import com.bliss.b2b.service.BookingModificationService;
@@ -94,7 +95,14 @@ public class BookingsResource {
             return badRequest("totalAmountCents must be positive");
         }
         if (req.appointmentDate() == null) return badRequest("appointmentDate required");
-        if (!req.appointmentDate().isAfter(LocalDate.now(clock))) {
+        if (merchant.propertyLocale().isEmpty()) {
+            // The price would have no unit. Connecting a PMS or Stripe, or
+            // setting it in Settings, gives the property its currency.
+            return Response.status(409).entity(Map.of(
+                    "error", "property_currency_missing",
+                    "message", "Set your property's currency before creating bookings.")).build();
+        }
+        if (!req.appointmentDate().isAfter(PropertyLocale.today(clock, merchant.timeZone()))) {
             return badRequest("appointmentDate must be in the future");
         }
         Response gate = enforceStripeGate(merchant);
@@ -126,7 +134,7 @@ public class BookingsResource {
         long total = bookingService.count(merchant.id());
         // Derive each booking's table status from its latest plan + schedule,
         // as-of today (single query for the whole merchant).
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = PropertyLocale.today(clock, merchant.timeZone());
         Map<UUID, String> statusByBooking = paymentPlanDao
                 .statusInputsForMerchant(merchant.id(), today).stream()
                 .collect(java.util.stream.Collectors.toMap(
@@ -223,7 +231,7 @@ public class BookingsResource {
                 ? booking.originalTotalAmountCents()
                 : booking.totalAmountCents();
         EligibilityResult eligibility = eligibilityService.evaluate(
-                LocalDate.now(clock), booking.appointmentDate(), booking.checkoutDate(),
+                PropertyLocale.today(clock, booking.timeZone()), booking.appointmentDate(), booking.checkoutDate(),
                 evaluateInput, rules);
         List<BookingView.PlanOptionView> options = eligibility.options().stream()
                 .map(BookingsResource::toOptionView)

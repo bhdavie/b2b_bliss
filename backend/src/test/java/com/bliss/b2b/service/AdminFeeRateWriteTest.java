@@ -122,16 +122,19 @@ class AdminFeeRateWriteTest {
     @Test
     void derivedRateUsesThePlanTotalAndRefusesToGuess() {
         // A real 5% plan.
-        assertThat(AdminMerchantsService.derivedRate(99_415L, 4_971L))
+        assertThat(AdminMerchantsService.derivedRate(99_415L, 4_971L, "USD"))
                 .isEqualByComparingTo("0.05000");
         // The pre-V13 flat $20: implies 0.01111, which nobody ever configured.
-        assertThat(AdminMerchantsService.derivedRate(180_000L, 2_000L)).isNull();
+        assertThat(AdminMerchantsService.derivedRate(180_000L, 2_000L, "USD")).isNull();
+        // 2000 minor units in any other currency is not that legacy fee: 5% of 400.00.
+        assertThat(AdminMerchantsService.derivedRate(40_000L, 2_000L, "GBP"))
+                .isEqualByComparingTo("0.05000");
         // Missing plan.
-        assertThat(AdminMerchantsService.derivedRate(null, null)).isNull();
+        assertThat(AdminMerchantsService.derivedRate(null, null, "USD")).isNull();
         // Zero total cannot imply a rate.
-        assertThat(AdminMerchantsService.derivedRate(0L, 100L)).isNull();
+        assertThat(AdminMerchantsService.derivedRate(0L, 100L, "USD")).isNull();
         // A zero-rate plan is a real answer, not an absent one.
-        assertThat(AdminMerchantsService.derivedRate(99_415L, 0L))
+        assertThat(AdminMerchantsService.derivedRate(99_415L, 0L, "USD"))
                 .isEqualByComparingTo("0.00000");
     }
 

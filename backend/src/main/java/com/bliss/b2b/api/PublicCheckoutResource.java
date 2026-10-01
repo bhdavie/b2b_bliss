@@ -81,6 +81,7 @@ public class PublicCheckoutResource {
                     new CustomerCheckoutInput(
                             req.merchantSlug(),
                             req.totalAmountCents() == null ? 0L : req.totalAmountCents(),
+                            req.currency(),
                             checkin,
                             checkout,
                             req.description(),
@@ -149,7 +150,10 @@ public class PublicCheckoutResource {
                 result.plan().depositAmountCents(),
                 schedule,
                 result.firstChargeIntentId(),
-                result.firstChargeStatus());
+                result.firstChargeStatus(),
+                result.booking().currency(),
+                result.booking().localeTag(),
+                result.booking().timeZone());
     }
 
     private static DemoCard toDemoCard(CheckoutRequest req) {
@@ -164,6 +168,10 @@ public class PublicCheckoutResource {
     public record CheckoutRequest(
             @JsonProperty("merchantSlug") String merchantSlug,
             @JsonProperty("totalAmountCents") Long totalAmountCents,
+            // ISO code the cart total is in. Optional; when sent it must match
+            // the property's currency, so a cart priced in one currency is
+            // never charged as minor units of another.
+            @JsonProperty("currency") String currency,
             @JsonProperty("appointmentDate") String appointmentDate,
             @JsonProperty("checkoutDate") String checkoutDate,
             @JsonProperty("description") String description,
@@ -191,7 +199,10 @@ public class PublicCheckoutResource {
             long depositAmountCents,
             List<ScheduleEntryView> schedule,
             String firstChargeIntentId,
-            String firstChargeStatus
+            String firstChargeStatus,
+            String currency,
+            String locale,
+            String timeZone
     ) {}
 
     public record ScheduleEntryView(

@@ -1,11 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import {
-  formatDollars,
-  payNextInstallment,
-  payRemainingBalance,
-} from "@/lib/publicApi";
+import { payNextInstallment, payRemainingBalance } from "@/lib/publicApi";
+import { formatMoney, type MoneyContext } from "@/lib/money";
 
 /**
  * Early-payment actions on the Next payment card. Closed it is a single
@@ -21,6 +18,7 @@ export function PayEarlyButton({
   token,
   amount,
   remaining,
+  money,
   onPaid,
 }: {
   token: string;
@@ -28,6 +26,8 @@ export function PayEarlyButton({
   amount: number;
   /** The whole outstanding balance, from portal.remainingCents. */
   remaining: number;
+  /** The booking's currency and locale. */
+  money: MoneyContext;
   onPaid: () => void | Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
@@ -82,7 +82,7 @@ export function PayEarlyButton({
           disabled={busy}
           className="rounded-full bg-brand-violet p-[19px] text-center text-[14px] tracking-[-0.01em] text-white transition-colors hover:bg-brand-violet-deep disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {busy ? "Charging…" : `Charge ${formatDollars(amount)}`}
+          {busy ? "Charging…" : `Charge ${formatMoney(amount, money)}`}
         </button>
         <button
           type="button"
@@ -90,7 +90,7 @@ export function PayEarlyButton({
           disabled={busy}
           className="rounded-full border border-sand-500 p-[17px] text-center text-[14px] tracking-[-0.01em] text-brand-violet transition-colors hover:bg-sand-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Pay full balance {formatDollars(remaining)}
+          Pay full balance {formatMoney(remaining, money)}
         </button>
         <button
           type="button"

@@ -1,6 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { fetchAccountPlans, formatDollars } from "@/lib/publicApi";
+import { fetchAccountPlans } from "@/lib/publicApi";
+import { formatMoney } from "@/lib/money";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { Panel } from "@/components/ui/primitives";
 import { PlansList } from "@/components/account/PlansList";
@@ -24,7 +25,14 @@ export default async function AccountHistoryPage({
   const canceledToken = params.canceled ?? null;
   // Set when a Mews stay was cancelled: the credit toward a future stay.
   const creditCents = Number.parseInt(params.credit ?? "", 10);
+  // The credit is minor units of the cancelled plan's own currency; without
+  // that plan on the account there is no currency to read it in, so the
+  // amount is left out rather than guessed.
+  const canceledPlan = data.plans.find((p) => p.bookingToken === canceledToken);
   const hasCredit = Number.isFinite(creditCents) && creditCents > 0;
+  const creditLabel = hasCredit && canceledPlan
+    ? formatMoney(creditCents, { currency: canceledPlan.currency, locale: canceledPlan.locale })
+    : null;
 
   // Pin the just-cancelled plan to the top; everything else is most recent
   // stay first. Descending rather than /account's ascending: these stays have
@@ -53,7 +61,7 @@ export default async function AccountHistoryPage({
             </p>
             {hasCredit ? (
               <p className="text-[14px] text-ink-500">
-                {formatDollars(creditCents)} is now credit toward a future stay with the
+                {creditLabel ?? "What you paid"} is now credit toward a future stay with the
                 property. They&apos;ll apply it when you book with them again.
               </p>
             ) : null}

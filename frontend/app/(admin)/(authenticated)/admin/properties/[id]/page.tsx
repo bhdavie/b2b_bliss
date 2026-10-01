@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { FeeRateForm } from "@/components/admin/FeeRateForm";
 import { Panel, RecordTitle, SectionHeading } from "@/components/ui/primitives";
 import { fetchAdminMerchantDetail } from "@/lib/auth";
-import { formatCents } from "@/lib/eligibility";
+import { formatMoney } from "@/lib/money";
 import {
   formatDate,
   formatDateTime,
@@ -178,6 +178,9 @@ export default async function AdminPropertyDetailPage({
 }
 
 function BookingRow({ booking }: { booking: AdminRecentBooking }) {
+  // Amounts are minor units of the booking's own currency; one property's
+  // rows can differ if its currency changed between bookings.
+  const money = { currency: booking.currency, locale: booking.locale };
   return (
     <div
       className={`${BOOKING_COLS} items-start border-b border-sand-100 py-4 last:border-b-0`}
@@ -187,11 +190,11 @@ function BookingRow({ booking }: { booking: AdminRecentBooking }) {
           {booking.serviceName}
         </span>
         <span className="text-[13px] text-ink-500">
-          Check-out {formatPlainDate(booking.checkoutDate)}
+          Check-out {formatPlainDate(booking.checkoutDate, booking.locale)}
         </span>
       </div>
       <span className="text-right text-[14px] tabular-nums text-ink-900">
-        {formatCents(booking.totalAmountCents)}
+        {formatMoney(booking.totalAmountCents, money)}
       </span>
       <div className="flex flex-col gap-0.5">
         <span className="text-[13px] text-ink-500">
@@ -218,7 +221,7 @@ function BookingRow({ booking }: { booking: AdminRecentBooking }) {
         <span className="text-[14px] tabular-nums text-ink-900">
           {booking.processingFeeCents === null
             ? "–"
-            : formatCents(booking.processingFeeCents)}
+            : formatMoney(booking.processingFeeCents, money)}
         </span>
         <span className="text-[13px] text-ink-500">
           {booking.numPayments === null ? "–" : `${booking.numPayments}×`}

@@ -35,7 +35,10 @@ public class MerchantRowMapper implements RowMapper<Merchant> {
                 toInstant(rs.getTimestamp("created_at")),
                 toInstant(rs.getTimestamp("updated_at")),
                 rs.getString("logo_url"),
-                optionalString(rs, "mews_enterprise_name")
+                optionalString(rs, "mews_enterprise_name"),
+                rs.getString("currency"),
+                rs.getString("time_zone"),
+                rs.getString("locale")
         );
     }
 

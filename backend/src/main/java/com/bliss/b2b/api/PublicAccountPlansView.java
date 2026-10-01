@@ -58,7 +58,13 @@ public record PublicAccountPlansView(
             LocalDate nextDueDate,
             Long nextDueAmountCents,
             boolean refunded,
-            Long refundAmountCents
+            Long refundAmountCents,
+            // The booking's currency (amounts on this card are minor units of
+            // it), and the locale and zone to format them in. Plans at
+            // different properties can differ.
+            String currency,
+            String locale,
+            String timeZone
     ) {
         static PlanCardView from(
                 PaymentPlanListItem item,
@@ -96,7 +102,10 @@ public record PublicAccountPlansView(
                     nextDate,
                     nextAmount,
                     item.refundedAt() != null,
-                    item.refundAmountCents());
+                    item.refundAmountCents(),
+                    item.currency(),
+                    item.localeTag(),
+                    item.timeZone());
         }
     }
 }

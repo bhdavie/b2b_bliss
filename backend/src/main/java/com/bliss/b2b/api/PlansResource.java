@@ -233,7 +233,11 @@ public class PlansResource {
             String status,
             String customerHint,
             List<ScheduleEntryDetail> schedule,
-            FailedInstallmentInfo failedInstallment
+            FailedInstallmentInfo failedInstallment,
+            // The booking's currency, locale and zone.
+            String currency,
+            String locale,
+            String timeZone
     ) {
         public static PlanDetailView from(PaymentPlan plan, Booking booking, List<PaymentScheduleEntry> schedule) {
             List<ScheduleEntryDetail> entries = schedule.stream()
@@ -262,7 +266,10 @@ public class PlansResource {
                     plan.status().wire(),
                     customerHint,
                     entries,
-                    failed
+                    failed,
+                    booking.currency(),
+                    booking.localeTag(),
+                    booking.timeZone()
             );
         }
     }

@@ -2,34 +2,23 @@
 
 import { useMemo, useState } from "react";
 import { updatePlanRules, type PlanRules } from "@/lib/api";
+import {
+  addDaysIso,
+  firstDayOfWeek,
+  formatPlainDate,
+  plainDateToUtc,
+  todayIn,
+  utcToPlainDate,
+} from "@/lib/money";
 
 // Rolling window the merchant can pick from: today through today + 365 days.
 const WINDOW_DAYS = 365;
 // Mirrors MAX_BLACKOUT_DATES in PlanRulesResource.
 const MAX_BLACKOUT_DATES = 400;
 
-// Local-noon-safe date handling, same approach as lib/eligibility and the
-// funnels: build Dates from y/m/d parts so nothing shifts under UTC, and format
-// back by parts rather than through toISOString.
-function parseIso(iso: string): Date {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1);
-}
-function toIso(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-function addDays(date: Date, days: number): Date {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-function startOfToday(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
+// Calendar dates are YYYY-MM-DD strings throughout, with arithmetic and
+// weekday reads on UTC midnights (lib/money), so neither the browser's zone nor
+// a DST change can move a day. "Today" is the property's today.
 
 type MonthGrid = {
   key: string;
@@ -39,42 +28,65 @@ type MonthGrid = {
   days: { iso: string; day: number; selectable: boolean }[];
 };
 
-function buildMonths(from: Date, to: Date): MonthGrid[] {
+function buildMonths(
+  from: string,
+  to: string,
+  locale: string | null,
+  firstDay: number,
+): MonthGrid[] {
   const months: MonthGrid[] = [];
-  const cursor = new Date(from.getFullYear(), from.getMonth(), 1);
-  while (cursor <= to) {
-    const year = cursor.getFullYear();
-    const month = cursor.getMonth();
-    const first = new Date(year, month, 1);
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const start = plainDateToUtc(from);
+  if (!start) return months;
+  let year = start.getUTCFullYear();
+  let month = start.getUTCMonth();
+  for (;;) {
+    const firstIso = utcToPlainDate(new Date(Date.UTC(year, month, 1)));
+    if (firstIso > to) break;
+    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
     const days: MonthGrid["days"] = [];
     for (let d = 1; d <= daysInMonth; d++) {
-      const date = new Date(year, month, d);
-      days.push({
-        iso: toIso(date),
-        day: d,
-        selectable: date >= from && date <= to,
-      });
+      const iso = utcToPlainDate(new Date(Date.UTC(year, month, d)));
+      days.push({ iso, day: d, selectable: iso >= from && iso <= to });
     }
+    // ISO weekday of the 1st (1 = Monday ... 7 = Sunday), offset by the
+    // locale's first day of the week.
+    const isoWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay() || 7;
     months.push({
       key: `${year}-${month}`,
-      label: first.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
-      lead: first.getDay(),
+      label: formatPlainDate(firstIso, locale, { month: "long", year: "numeric" }),
+      lead: (isoWeekday - firstDay + 7) % 7,
       days,
     });
-    cursor.setMonth(cursor.getMonth() + 1);
+    month += 1;
+    if (month > 11) {
+      month = 0;
+      year += 1;
+    }
   }
   return months;
 }
 
-const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
+/** Narrow weekday initials in the locale, starting on its first day of the week. */
+function weekdayHeaders(locale: string | null, firstDay: number): string[] {
+  const fmt = new Intl.DateTimeFormat(locale || "en", { weekday: "narrow", timeZone: "UTC" });
+  // 2024-01-01 was a Monday (ISO weekday 1).
+  return Array.from({ length: 7 }, (_, i) => {
+    const isoWeekday = ((firstDay - 1 + i) % 7) + 1;
+    return fmt.format(new Date(Date.UTC(2024, 0, isoWeekday)));
+  });
+}
 
 export function BlackoutDatesCard({
   initial,
   saveButtonClassName = "btn-primary-merchant",
+  locale,
+  timeZone,
 }: {
   initial: PlanRules;
   saveButtonClassName?: string;
+  /** The property's locale (month names, week start) and zone (its today). */
+  locale: string | null;
+  timeZone: string | null;
 }) {
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(initial.blackoutDates ?? []),
@@ -85,9 +97,14 @@ export function BlackoutDatesCard({
   // Anchor for shift-click range selection.
   const [lastClicked, setLastClicked] = useState<string | null>(null);
 
-  const today = useMemo(startOfToday, []);
-  const windowEnd = useMemo(() => addDays(today, WINDOW_DAYS), [today]);
-  const months = useMemo(() => buildMonths(today, windowEnd), [today, windowEnd]);
+  const today = useMemo(() => todayIn(timeZone), [timeZone]);
+  const windowEnd = useMemo(() => addDaysIso(today, WINDOW_DAYS), [today]);
+  const firstDay = useMemo(() => firstDayOfWeek(locale), [locale]);
+  const months = useMemo(
+    () => buildMonths(today, windowEnd, locale, firstDay),
+    [today, windowEnd, locale, firstDay],
+  );
+  const weekdays = useMemo(() => weekdayHeaders(locale, firstDay), [locale, firstDay]);
 
   function toggle(iso: string, shiftKey: boolean) {
     setSavedAt(null);
@@ -97,16 +114,13 @@ export function BlackoutDatesCard({
         // Fill the run between the anchor and this day, inclusive. The anchor's
         // resulting state decides whether the run is added or cleared, so a
         // shift-click reads as "extend what I just did".
-        const a = parseIso(lastClicked);
-        const b = parseIso(iso);
-        const from = a <= b ? a : b;
-        const to = a <= b ? b : a;
+        const from = lastClicked <= iso ? lastClicked : iso;
+        const to = lastClicked <= iso ? iso : lastClicked;
         const adding = !prev.has(iso);
-        for (let d = new Date(from); d <= to; d = addDays(d, 1)) {
-          const key = toIso(d);
+        for (let d = from; d <= to; d = addDaysIso(d, 1)) {
           if (d < today || d > windowEnd) continue;
-          if (adding) next.add(key);
-          else next.delete(key);
+          if (adding) next.add(d);
+          else next.delete(d);
         }
       } else if (next.has(iso)) {
         next.delete(iso);
@@ -129,7 +143,7 @@ export function BlackoutDatesCard({
     }
     const seen = new Set<string>();
     for (const iso of dates) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || Number.isNaN(parseIso(iso).getTime())) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || plainDateToUtc(iso) === null) {
         setError(`${iso} is not a valid date.`);
         return;
       }
@@ -191,7 +205,7 @@ export function BlackoutDatesCard({
                   {month.label}
                 </div>
                 <div className="mt-2 grid grid-cols-7 gap-1">
-                  {WEEKDAYS.map((w, i) => (
+                  {weekdays.map((w, i) => (
                     <div
                       key={`${month.key}-wd-${i}`}
                       className="text-center text-[10px] text-ink-500"
@@ -210,7 +224,12 @@ export function BlackoutDatesCard({
                         type="button"
                         disabled={!d.selectable}
                         aria-pressed={isSelected}
-                        aria-label={d.iso}
+                        aria-label={formatPlainDate(d.iso, locale, {
+                          weekday: "long",
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        })}
                         onClick={(ev) => toggle(d.iso, ev.shiftKey)}
                         className={`h-7 rounded text-[13px] tabular-nums transition ${
                           !d.selectable

@@ -390,8 +390,9 @@ class MewsLinkServiceTest {
         UUID id = UUID.randomUUID();
         jdbi.useHandle(h -> {
             h.createUpdate("""
-                    INSERT INTO merchants (id, slug, business_name, email, pms_type)
-                    VALUES (:id, :slug, 'Test Inn', :email, 'mews')""")
+                    INSERT INTO merchants (id, slug, business_name, email, pms_type,
+                                           currency, time_zone, locale)
+                    VALUES (:id, :slug, 'Test Inn', :email, 'mews', 'GBP', 'Europe/Budapest', 'en-GB')""")
                     .bind("id", id).bind("slug", "t" + id.toString().substring(0, 7))
                     .bind("email", ownerEmail(id)).execute();
             h.createUpdate("""

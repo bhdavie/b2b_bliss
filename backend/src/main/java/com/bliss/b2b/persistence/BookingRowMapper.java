@@ -38,7 +38,10 @@ public class BookingRowMapper implements RowMapper<Booking> {
                 rs.getString("mews_reservation_id"),
                 rs.getString("mews_resource_category_id"),
                 rs.getString("mews_rate_id"),
-                (Integer) rs.getObject("adult_count")
+                (Integer) rs.getObject("adult_count"),
+                rs.getString("currency"),
+                rs.getString("time_zone"),
+                rs.getString("locale")
         );
     }
 

@@ -11,6 +11,13 @@ import {
   type RefundPolicy,
 } from "@/lib/api";
 import { Input } from "@/components/ui/Input";
+import { type MoneyContext } from "@/lib/money";
+import {
+  CurrencyMissingNote,
+  MoneyInput,
+  minorToFieldText,
+  parseOptionalMoney,
+} from "./MoneyInput";
 // No Panel here: PaymentSettingsTabs draws the card and supplies the padding.
 // Each of these three sections is one tab of that card, so a Panel of its own
 // would nest a white card inside a white card.
@@ -91,12 +98,20 @@ export function PoliciesCard({
   initial,
   saveButtonClassName = "btn-primary-merchant",
   section,
+  money,
 }: {
   initial: PlanRules;
   saveButtonClassName?: string;
   section?: PoliciesSection;
+  /**
+   * The property's currency and locale from /me; fixed fees are minor units of
+   * it. Null until the property has a currency: fixed-fee fields are then
+   * disabled and a stored fixed fee is saved unchanged.
+   */
+  money: MoneyContext | null;
 }) {
-  const [form, setForm] = useState<FormState>(toForm(initial));
+  const currency = money?.currency ?? null;
+  const [form, setForm] = useState<FormState>(toForm(initial, currency));
   const [saving, setSaving] = useState(false);
   // Every panel when no section is named (the onboarding funnel still mounts it
   // that way), or only the named one (the tabbed Payment settings screen).
@@ -137,10 +152,17 @@ export function PoliciesCard({
           return;
         }
         cancellationFeeValue = v;
+      } else if (!currency) {
+        cancellationFeeValue =
+          initial.cancellationFeeType === "fixed" ? initial.cancellationFeeValue : null;
+        if (cancellationFeeValue === null) {
+          setError("Set your currency before using a fixed cancellation fee.");
+          return;
+        }
       } else {
-        const cents = parseDollarsOrNull(form.cancellationFeeDollars);
+        const cents = parseOptionalMoney(form.cancellationFeeDollars, currency);
         if (cents === undefined || cents === null) {
-          setError("Cancellation fee amount must be a positive dollar value.");
+          setError(`Cancellation fee amount must be a positive amount in ${currency}.`);
           return;
         }
         cancellationFeeValue = cents;
@@ -186,10 +208,16 @@ export function PoliciesCard({
           return;
         }
         lateFeeValue = v;
+      } else if (!currency) {
+        lateFeeValue = initial.lateFeeType === "fixed" ? initial.lateFeeValue : null;
+        if (lateFeeValue === null) {
+          setError("Set your currency before using a fixed late fee.");
+          return;
+        }
       } else {
-        const cents = parseDollarsOrNull(form.lateFeeDollars);
+        const cents = parseOptionalMoney(form.lateFeeDollars, currency);
         if (cents === undefined || cents === null) {
-          setError("Late fee amount must be a positive dollar value.");
+          setError(`Late fee amount must be a positive amount in ${currency}.`);
           return;
         }
         lateFeeValue = cents;
@@ -219,7 +247,7 @@ export function PoliciesCard({
         afterRetriesAction: form.afterRetriesAction,
       };
       const saved = await updatePlanRules(payload);
-      setForm(toForm(saved));
+      setForm(toForm(saved, currency));
       setSavedAt(Date.now());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save policies.");
@@ -230,6 +258,10 @@ export function PoliciesCard({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-8">
+      {/* Fixed fees need a currency; the deadline tab has no amounts. */}
+      {money === null && (show("cancellation") || show("failed")) ? (
+        <CurrencyMissingNote />
+      ) : null}
       {show("cancellation") ? (
       <div className="flex flex-col gap-6">
       {/* No heading: the tab row above IS this card's head, and the active tab
@@ -292,11 +324,13 @@ export function PoliciesCard({
                       placeholder="10"
                     />
                   ) : (
-                    <DollarInput
+                    <MoneyInput
                       label="Cancellation fee"
                       value={form.cancellationFeeDollars}
                       onChange={(v) => update("cancellationFeeDollars", v)}
                       placeholder="50"
+                      money={money}
+                      labelClassName="text-[13px] text-ink-500"
                     />
                   )}
                   <NumberInput
@@ -404,11 +438,13 @@ export function PoliciesCard({
                       placeholder="5"
                     />
                   ) : (
-                    <DollarInput
+                    <MoneyInput
                       label="Late fee"
                       value={form.lateFeeDollars}
                       onChange={(v) => update("lateFeeDollars", v)}
                       placeholder="25"
+                      money={money}
+                      labelClassName="text-[13px] text-ink-500"
                     />
                   )}
                   <label className="block">
@@ -465,7 +501,7 @@ export function PoliciesCard({
   );
 }
 
-function toForm(rules: PlanRules): FormState {
+function toForm(rules: PlanRules, currency: string | null): FormState {
   return {
     refundPolicy: rules.refundPolicy,
     refundSlidingThresholdPercent: rules.refundSlidingThresholdPercent?.toString() ?? "",
@@ -477,7 +513,7 @@ function toForm(rules: PlanRules): FormState {
         : "",
     cancellationFeeDollars:
       rules.cancellationFeeType === "fixed" && rules.cancellationFeeValue != null
-        ? centsToDollars(rules.cancellationFeeValue)
+        ? minorToFieldText(rules.cancellationFeeValue, currency)
         : "",
     cancellationFeeThresholdPercent: rules.cancellationFeeThresholdPercent?.toString() ?? "",
     paymentDuePolicy: rules.paymentDuePolicy,
@@ -492,28 +528,12 @@ function toForm(rules: PlanRules): FormState {
         : "",
     lateFeeDollars:
       rules.lateFeeType === "fixed" && rules.lateFeeValue != null
-        ? centsToDollars(rules.lateFeeValue)
+        ? minorToFieldText(rules.lateFeeValue, currency)
         : "",
     lateFeeScope: rules.lateFeeScope ?? "per_failure",
     afterRetriesAction: rules.afterRetriesAction,
   };
 }
-
-function centsToDollars(cents: number): string {
-  if (cents % 100 === 0) return String(cents / 100);
-  return (cents / 100).toFixed(2);
-}
-
-function parseDollarsOrNull(input: string): number | null | undefined {
-  const trimmed = input.trim();
-  if (trimmed === "") return null;
-  if (!/^\d+(\.\d{0,2})?$/.test(trimmed)) return undefined;
-  const [whole, fraction = ""] = trimmed.split(".");
-  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  if (!Number.isFinite(cents) || cents <= 0) return undefined;
-  return cents;
-}
-
 
 function Row({
   label,
@@ -687,40 +707,6 @@ function PercentInput({
         >
           %
         </span>
-      </div>
-    </label>
-  );
-}
-
-function DollarInput({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="text-[13px] text-ink-500">{label}</span>
-      <div className="relative mt-1.5">
-        <span
-          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[13px] text-ink-500"
-          aria-hidden="true"
-        >
-          $
-        </span>
-        <Input
-          type="text"
-          inputMode="decimal"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="pl-7"
-          placeholder={placeholder}
-        />
       </div>
     </label>
   );

@@ -107,6 +107,7 @@ public class JdbiStripeInstallmentCharger implements StripeInstallmentCharger {
         try {
             intent = stripeService.firePaymentOffSession(
                     due.amountCents(),
+                    due.currency(),
                     ctx.stripeCustomerId(),
                     ctx.paymentMethodId(),
                     // Idempotency key = schedule row id: a retry on the same row

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { cancelPlan, formatDollars, type PublicRail } from "@/lib/publicApi";
+import { cancelPlan, type PublicRail } from "@/lib/publicApi";
+import { formatMoney, plainDateToUtc, type MoneyContext } from "@/lib/money";
 import { Button } from "@/components/ui/Button";
 
 // Policy-gated cancel. Refundability is derived from the rate name in the
@@ -19,10 +20,39 @@ function deriveRefundability(serviceName: string): Refundability {
     : "flexible";
 }
 
-function moreThan48hAway(appointmentDateIso: string): boolean {
-  const [y, m, d] = appointmentDateIso.split("-").map(Number);
-  const arrival = new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1).getTime();
-  return arrival - Date.now() > 48 * 60 * 60 * 1000;
+/**
+ * True when it is more than 48 hours until midnight at the start of the
+ * arrival date, measured at the property: both ends are read as wall-clock
+ * time in the property's zone (UTC when it has none), so the guest's own
+ * browser zone does not move the window. A DST change inside the window can
+ * shift it by the hour the clocks move, which is acceptable for this notice.
+ */
+function moreThan48hAway(appointmentDateIso: string, timeZone: string | null): boolean {
+  const arrival = plainDateToUtc(appointmentDateIso);
+  if (!arrival) return false;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: timeZone || "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date())
+      .map((p) => [p.type, p.value]),
+  );
+  const nowAtProperty = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second),
+  );
+  return arrival.getTime() - nowAtProperty > 48 * 60 * 60 * 1000;
 }
 
 export function CancelPlanSection({
@@ -32,6 +62,8 @@ export function CancelPlanSection({
   paidCents,
   processingFeeCents,
   rail,
+  money,
+  timeZone,
 }: {
   token: string;
   serviceName: string;
@@ -39,6 +71,10 @@ export function CancelPlanSection({
   paidCents: number;
   processingFeeCents: number;
   rail?: PublicRail;
+  // The booking's currency and locale, and the property's zone for the 48
+  // hour window.
+  money: MoneyContext;
+  timeZone: string | null;
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -46,7 +82,7 @@ export function CancelPlanSection({
   const [error, setError] = useState<string | null>(null);
 
   const refundability = deriveRefundability(serviceName);
-  const inWindow = moreThan48hAway(appointmentDate);
+  const inWindow = moreThan48hAway(appointmentDate, timeZone);
   // A Mews stay is cancelled in the hotel's system and credited toward a
   // future stay there, never refunded in cash. The amount follows the hotel's
   // cancellation policy and is settled by the server, so it is shown after.
@@ -181,7 +217,7 @@ export function CancelPlanSection({
           Refund {inWindow ? "(includes the Bliss fee)" : "(per the hotel policy)"}
         </div>
         <div className="mt-1 text-2xl font-semibold tabular-nums text-ink-900">
-          {formatDollars(refundCents)}
+          {formatMoney(refundCents, money)}
         </div>
       </div>
       <p className="text-[13px] text-ink-500">

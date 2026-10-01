@@ -10,6 +10,7 @@ import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.payments.PlanEligibilityService;
 import com.bliss.b2b.payments.PlanFrequency;
 import com.bliss.b2b.payments.PlanOption;
+import com.bliss.b2b.payments.PropertyLocale;
 import com.bliss.b2b.persistence.BookingDao;
 import com.bliss.b2b.persistence.MerchantPlanRulesDao;
 import com.bliss.b2b.persistence.PaymentPlanDao;
@@ -87,7 +88,7 @@ public class BookingModificationService {
                     "only an active plan can be modified (plan is " + plan.status().wire() + ")");
         }
 
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = PropertyLocale.today(clock, booking.timeZone());
         List<PaymentScheduleEntry> schedule = handle.attach(PaymentScheduleDao.class).listForPlan(plan.id());
 
         // --- validate the requested changes -------------------------------
@@ -144,7 +145,7 @@ public class BookingModificationService {
         PlanOption option = eligibilityService.installmentPlanFor(
                 today, appointment, remaining, plan.frequency(), rules.paymentDueOffsetDays(), true);
         if (option == null) {
-            throw new ModificationException(Code.DEADLINE_IMPOSSIBLE, deadlineMessage(
+            throw new ModificationException(Code.DEADLINE_IMPOSSIBLE, deadlineMessage(booking.propertyLocale(),
                     today, appointment, plan.frequency(), rules.paymentDueOffsetDays(), remaining));
         }
 
@@ -219,8 +220,8 @@ public class BookingModificationService {
                 PaymentPlanStatus.REFUND_DUE.wire(), price, numPayments,
                 collected, remaining, overpaid, resulting,
                 "New total is below the "
-                        + dollars(collected) + " already collected; "
-                        + dollars(overpaid) + " is refund-due. Remaining charges canceled; "
+                        + booking.propertyLocale().format(collected) + " already collected; "
+                        + booking.propertyLocale().format(overpaid) + " is refund-due. Remaining charges canceled; "
                         + "handle the refund manually.");
     }
 
@@ -233,19 +234,16 @@ public class BookingModificationService {
     }
 
     private static String deadlineMessage(
-            LocalDate today, LocalDate appointment, PlanFrequency frequency,
+            PropertyLocale pl, LocalDate today, LocalDate appointment, PlanFrequency frequency,
             int dueOffsetDays, long remaining) {
         int buffer = Math.max(PlanEligibilityService.MIN_FINAL_PAYMENT_BUFFER_DAYS, dueOffsetDays);
         LocalDate earliest = today.plusDays((long) frequency.days() + buffer);
         String cadence = frequency == PlanFrequency.BIWEEKLY ? "bi-weekly (14-day)" : "monthly";
-        return "The new check-in date " + appointment + " leaves no room to schedule the "
-                + dollars(remaining) + " balance before the payment deadline ("
+        return "The new check-in date " + pl.mediumDate(appointment) + " leaves no room to schedule the "
+                + pl.format(remaining) + " balance before the payment deadline ("
                 + buffer + " days before check-in) on this " + cadence + " plan. "
-                + "Move check-in to on or after " + earliest + ", or collect the balance outside a plan.";
-    }
-
-    private static String dollars(long cents) {
-        return "$" + String.format("%,.2f", cents / 100.0);
+                + "Move check-in to on or after " + pl.mediumDate(earliest)
+                + ", or collect the balance outside a plan.";
     }
 
     // --- types ------------------------------------------------------------

@@ -127,8 +127,21 @@ public class MewsLinkService {
         if (conn == null || !conn.isLinkingReady()) {
             return PassResult.EMPTY;
         }
-        MewsAdapter adapter = mewsFactory.adapterForConnection(conn);
+        // Without its currency and zone a property's reservations cannot be
+        // priced or dated, and guessing either would build a wrong plan. Skip
+        // it until onboarding records them; nothing is marked as seen, so the
+        // reservations are picked up once it does.
+        if (conn.currency() == null || conn.currency().isBlank()) {
+            log.warn("Mews property {} has no currency; not linking reservations", merchantId);
+            return PassResult.EMPTY;
+        }
         ZoneId zone = zoneOf(conn);
+        if (zone == null) {
+            log.warn("Mews property {} has no valid time zone ({}); not linking reservations",
+                    merchantId, conn.timeZone());
+            return PassResult.EMPTY;
+        }
+        MewsAdapter adapter = mewsFactory.adapterForConnection(conn);
 
         Instant now = clock.instant();
         Instant mark = conn.linkedThroughUtc() != null ? conn.linkedThroughUtc() : now.minus(FIRST_LOOKBACK);
@@ -311,7 +324,7 @@ public class MewsLinkService {
                     checkin, checkout, r.startUtc(), r.endUtc(), bookedOn,
                     "Stay, " + nights + (nights == 1 ? " night" : " nights"),
                     "Mews reservation " + (r.number() != null ? r.number() : r.id()),
-                    total.totalMinorUnits(), deposit, first.id(),
+                    total.totalMinorUnits(), currency, deposit, first.id(),
                     first.createdUtc() != null ? first.createdUtc() : now,
                     r.accountId(), guest.email(), guest.firstName(), guest.lastName(),
                     cardId, lastFour(card.obfuscatedNumber()),
@@ -414,11 +427,15 @@ public class MewsLinkService {
 
     // --- helpers ---------------------------------------------------------------
 
+    /** The property's zone, or null when it has none or an invalid one. */
     private static ZoneId zoneOf(MewsConnection conn) {
+        if (conn.timeZone() == null || conn.timeZone().isBlank()) {
+            return null;
+        }
         try {
-            return conn.timeZone() == null ? ZoneId.of("UTC") : ZoneId.of(conn.timeZone());
+            return ZoneId.of(conn.timeZone());
         } catch (java.time.DateTimeException e) {
-            return ZoneId.of("UTC");
+            return null;
         }
     }
 

@@ -157,10 +157,13 @@ public class CancellationService {
      * on the plan, and the hotel is emailed only when this call issued it.
      */
     private void issueCredit(PaymentPlan plan, Booking booking, long creditCents, String reason) {
-        String currency = mewsConnectionDao.findByMerchant(booking.merchantId())
-                .map(c -> c.currency())
-                .filter(c -> c != null && !c.isBlank())
-                .orElse("USD");
+        // The credit is in what the guest paid: the booking's currency.
+        String currency = booking.currency();
+        if (currency == null || currency.isBlank()) {
+            log.error("Plan {} canceled but booking {} has no currency; credit of {} minor units not issued",
+                    plan.id(), booking.id(), creditCents);
+            return;
+        }
         int issued = creditDao.issue(booking.merchantId(), plan.customerId(), plan.id(), creditCents, currency,
                 "Mews reservation " + booking.mewsReservationId() + " canceled (" + reason + ")");
         if (issued != 1) {

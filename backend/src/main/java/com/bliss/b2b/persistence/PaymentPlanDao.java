@@ -179,7 +179,10 @@ public interface PaymentPlanDao {
                 b.service_name AS serviceName,
                 b.appointment_date AS appointmentDate,
                 b.checkout_date AS checkoutDate,
-                b.original_total_cents AS originalTotalCents
+                b.original_total_cents AS originalTotalCents,
+                b.currency AS currency,
+                b.time_zone AS timeZone,
+                b.locale AS localeTag
             FROM payment_plans pp
             JOIN bookings  b ON b.id = pp.booking_id
             JOIN merchants m ON m.id = b.merchant_id
@@ -303,7 +306,11 @@ public interface PaymentPlanDao {
             String serviceName,
             LocalDate appointmentDate,
             LocalDate checkoutDate,
-            Long originalTotalCents
+            Long originalTotalCents,
+            // The booking's snapshot (V36): amounts above are minor units of currency.
+            String currency,
+            String timeZone,
+            String localeTag
     ) {}
 
     record PlanScheduleSummary(

@@ -6,6 +6,7 @@ import com.bliss.b2b.domain.Merchant;
 import com.bliss.b2b.integration.EmailService;
 import com.bliss.b2b.integration.EmailTemplates;
 import com.bliss.b2b.integration.StripeConnectService;
+import com.bliss.b2b.payments.Money;
 import com.bliss.b2b.persistence.MerchantDao;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.stripe.exception.StripeException;
@@ -14,6 +15,7 @@ import io.dropwizard.auth.Auth;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PATCH;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
@@ -72,6 +74,51 @@ public class MerchantsResource {
         return Response.ok(MerchantView.from(updated)).build();
     }
 
+    /**
+     * Sets the property's currency, time zone and locale by hand. Only for a
+     * property with nothing to read them from: no PMS chosen, or a Stripe
+     * property while Stripe is not configured (the demo). A Mews, Cloudbeds or
+     * live Stripe property takes them from that system, so a hand-set value
+     * would only drift from what is actually charged.
+     */
+    @PUT
+    @Path("/me/property-locale")
+    public Response setPropertyLocale(@Auth MerchantPrincipal principal, PropertyLocaleRequest req) {
+        Merchant merchant = principal.merchant();
+        boolean sourced = switch (merchant.pmsType()) {
+            case MEWS, CLOUDBEDS -> true;
+            case STRIPE -> stripe.isConfigured();
+            case NONE -> false;
+        };
+        if (sourced) {
+            return Response.status(409).entity(Map.of(
+                    "error", "property_locale_sourced",
+                    "message", "Your currency and time zone come from your connected system.")).build();
+        }
+        if (req == null) {
+            return Response.status(400).entity(Map.of("error", "body required")).build();
+        }
+        String currency;
+        String timeZone = emptyToNull(req.timeZone());
+        String locale = emptyToNull(req.locale());
+        try {
+            currency = Money.code(req.currency());
+            if (timeZone == null) {
+                throw new IllegalArgumentException("timeZone required");
+            }
+            java.time.ZoneId.of(timeZone);
+            if (locale != null && java.util.Locale.forLanguageTag(locale).getLanguage().isEmpty()) {
+                throw new IllegalArgumentException("unknown locale '" + locale + "'");
+            }
+        } catch (IllegalArgumentException | java.time.DateTimeException e) {
+            return Response.status(400).entity(Map.of(
+                    "error", "invalid_property_locale", "message", e.getMessage())).build();
+        }
+        merchantDao.updatePropertyLocale(merchant.id(), currency, timeZone, locale);
+        Merchant updated = merchantDao.findById(merchant.id()).orElseThrow();
+        return Response.ok(MerchantView.from(updated)).build();
+    }
+
     @GET
     @Path("/me/stripe-status")
     public StripeStatusView stripeStatus(@Auth MerchantPrincipal principal) {
@@ -89,6 +136,8 @@ public class MerchantsResource {
         }
         try {
             Account account = stripe.fetchAccount(stripeAccountId);
+            com.bliss.b2b.service.PropertyOnboardingService.recordStripeAccountLocale(
+                    merchantDao, merchant.id(), account);
             ConnectStatus newStatus = StripeConnectService.fromAccount(account);
             ConnectStatus oldStatus = ConnectStatus.fromWire(merchant.stripeConnectStatus());
             if (newStatus != oldStatus) {
@@ -122,6 +171,12 @@ public class MerchantsResource {
     private static String emptyToNull(String s) {
         return (s == null || s.isBlank()) ? null : s.trim();
     }
+
+    public record PropertyLocaleRequest(
+            @JsonProperty("currency") String currency,
+            @JsonProperty("timeZone") String timeZone,
+            @JsonProperty("locale") String locale
+    ) {}
 
     public record UpdateMerchantRequest(
             @JsonProperty("businessName") String businessName,

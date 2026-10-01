@@ -8,22 +8,15 @@ import com.bliss.b2b.domain.PaymentScheduleEntry;
 import com.bliss.b2b.domain.PaymentScheduleStatus;
 import com.bliss.b2b.domain.ReferralMessages;
 import com.bliss.b2b.domain.ScheduleKind;
+import com.bliss.b2b.payments.Money;
+import com.bliss.b2b.payments.PropertyLocale;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 
 public final class EmailTemplates {
-
-    private static final DateTimeFormatter LONG_DATE =
-            DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", Locale.US);
-    private static final DateTimeFormatter SHORT_DATE =
-            DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US);
-    /** "August 2, 2026" — the timeline's own date format on the plan page. */
-    private static final DateTimeFormatter TIMELINE_DATE =
-            DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US);
 
     private EmailTemplates() {}
 
@@ -134,7 +127,7 @@ public final class EmailTemplates {
 
                 Booking: %s
                 Appointment: %s
-                Total: $%s
+                Total: %s
                 Plan: %d %s payments
                 Customer: %s
 
@@ -142,8 +135,8 @@ public final class EmailTemplates {
                 fee once the final payment clears.
                 """.formatted(
                 booking.serviceName(),
-                LONG_DATE.format(booking.appointmentDate()),
-                formatDollars(plan.totalAmountCents()),
+                booking.propertyLocale().longDate(booking.appointmentDate()),
+                booking.propertyLocale().format(plan.totalAmountCents()),
                 plan.numPayments(),
                 plan.frequency().wire(),
                 customer.email()
@@ -199,17 +192,17 @@ public final class EmailTemplates {
                 Mews reservation: %s
                 Guest: %s
 
-                Future-stay credit: %s %s
+                Future-stay credit: %s (%s)
 
                 The guest was not refunded in cash. Please apply this credit when they
                 book with you again. The payments they made remain on the cancelled
                 reservation's bill in Mews.
                 """.formatted(
                 booking.serviceName(),
-                LONG_DATE.format(booking.appointmentDate()),
+                booking.propertyLocale().longDate(booking.appointmentDate()),
                 booking.mewsReservationId(),
                 guestEmail == null ? "unknown" : guestEmail,
-                formatDollars(creditCents),
+                Money.format(creditCents, currency, booking.localeTag()),
                 currency
         );
         return new EmailMessage(merchant.email(),
@@ -270,9 +263,6 @@ public final class EmailTemplates {
     private static final String SANS =
             "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
-    private static String dollars(long cents) {
-        return "$" + formatDollars(cents);
-    }
 
     static String senderName(Merchant merchant) {
         return propertyName(merchant) + " via Bliss";
@@ -428,7 +418,7 @@ public final class EmailTemplates {
      * paid/next/upcoming distinction survives because it is carried by colour
      * and the ring's border, not by the shape.
      */
-    private static String scheduleTimeline(List<PaymentScheduleEntry> schedule) {
+    private static String scheduleTimeline(List<PaymentScheduleEntry> schedule, PropertyLocale pl) {
         int installmentCount = 0;
         for (PaymentScheduleEntry e : schedule) {
             if (e.kind() != ScheduleKind.DEPOSIT) installmentCount++;
@@ -457,9 +447,9 @@ public final class EmailTemplates {
                 default -> "Scheduled";
             };
             String meta = "next".equals(state)
-                    ? "Automatic on " + TIMELINE_DATE.format(e.dueDate())
+                    ? "Automatic on " + pl.date(e.dueDate())
                         + " · Next payment · " + statusWord
-                    : "Due " + TIMELINE_DATE.format(e.dueDate()) + " · " + statusWord;
+                    : "Due " + pl.date(e.dueDate()) + " · " + statusWord;
 
             String labelColour = "canceled".equals(state) ? INK_400 : INK;
             String amountColour = "canceled".equals(state) ? INK_400 : MUTED;
@@ -489,7 +479,7 @@ public final class EmailTemplates {
                 .append(esc(label)).append("</td>")
                 .append("<td align=\"right\" style=\"font-family:").append(SANS)
                 .append(";font-size:16px;color:").append(amountColour).append(";\">")
-                .append(dollars(e.amountCents())).append("</td>")
+                .append(pl.format(e.amountCents())).append("</td>")
                 .append("</tr>")
                 .append("<tr><td colspan=\"2\" style=\"padding-top:3px;font-family:").append(SANS)
                 .append(";font-size:13px;line-height:1.5;color:").append(INK_400).append(";\">")
@@ -537,7 +527,7 @@ public final class EmailTemplates {
      * marker as the HTML, column aligned so it holds shape in a monospace
      * client.
      */
-    private static String scheduleTextRows(List<PaymentScheduleEntry> schedule) {
+    private static String scheduleTextRows(List<PaymentScheduleEntry> schedule, PropertyLocale pl) {
         int installmentCount = 0;
         for (PaymentScheduleEntry e : schedule) {
             if (e.kind() != ScheduleKind.DEPOSIT) installmentCount++;
@@ -562,9 +552,9 @@ public final class EmailTemplates {
                 default -> "Scheduled";
             };
             String marker = "next".equals(state) ? "->" : "  ";
-            sb.append(String.format(Locale.US, "%s %-22s %10s   %s%s%n",
-                    marker, label, dollars(e.amountCents()),
-                    TIMELINE_DATE.format(e.dueDate()),
+            sb.append(String.format(Locale.ROOT, "%s %-22s %14s   %s%s%n",
+                    marker, label, pl.format(e.amountCents()),
+                    pl.date(e.dueDate()),
                     "next".equals(state) ? " · Next payment · " + statusWord : " · " + statusWord));
         }
         return sb.toString();
@@ -591,10 +581,12 @@ public final class EmailTemplates {
             List<PaymentScheduleEntry> schedule, String consumerBaseUrl) {
         String url = portalUrl(consumerBaseUrl, booking);
         String property = propertyName(merchant);
+        // Amounts and dates as the property writes them, in the booking's currency.
+        PropertyLocale pl = booking.propertyLocale();
         String stay = booking.checkoutDate() != null
-                ? SHORT_DATE.format(booking.appointmentDate()) + " to "
-                    + SHORT_DATE.format(booking.checkoutDate())
-                : SHORT_DATE.format(booking.appointmentDate());
+                ? pl.mediumDate(booking.appointmentDate()) + " to "
+                    + pl.mediumDate(booking.checkoutDate())
+                : pl.mediumDate(booking.appointmentDate());
 
         // What the guest actually pays: the plan total PLUS the processing fee.
         // The headline used plan.totalAmountCents() alone, which is the
@@ -606,26 +598,26 @@ public final class EmailTemplates {
         long totalWithFee = plan.totalAmountCents() + plan.processingFeeCents();
 
         String rows = heading("Your payment plan is set")
-                + keyFact(dollars(totalWithFee),
+                + keyFact(pl.format(totalWithFee),
                     plan.numPayments() + " " + plan.frequency().wire() + " payments to " + property)
                 + detailTable(new String[][] {
                     {"Booking", booking.serviceName()},
                     {"Stay", stay},
                 })
-                + scheduleTimeline(schedule)
+                + scheduleTimeline(schedule, pl)
                 + para("Each payment is charged automatically to the card you saved. "
                     + "We will email you a receipt every time.")
                 + button(url, "View your plan");
 
         StringBuilder text = new StringBuilder();
         text.append("Your payment plan is set.\n\n")
-            .append(dollars(totalWithFee)).append(" to ").append(property)
+            .append(pl.format(totalWithFee)).append(" to ").append(property)
             .append(" over ").append(plan.numPayments()).append(' ')
             .append(plan.frequency().wire()).append(" payments.\n\n")
             .append("Booking: ").append(booking.serviceName()).append('\n')
             .append("Stay:    ").append(stay).append("\n\n")
             .append("Schedule\n")
-            .append(scheduleTextRows(schedule))
+            .append(scheduleTextRows(schedule, pl))
             .append("\nEach payment is charged automatically to the card you saved. ")
             .append("We will email you a receipt every time.\n\n")
             .append("View your plan: ").append(url).append('\n');
@@ -640,36 +632,38 @@ public final class EmailTemplates {
             String consumerBaseUrl) {
         String url = portalUrl(consumerBaseUrl, booking);
         String property = propertyName(merchant);
+        // Amounts and dates as the property writes them, in the booking's currency.
+        PropertyLocale pl = booking.propertyLocale();
         boolean settled = remainingCents <= 0;
         String nextLine = settled
                 ? "This was your final payment. Nothing remains."
                 : nextDueDate != null
                     ? "Next payment "
-                        + (nextAmountCents != null ? dollars(nextAmountCents) + " " : "")
-                        + "on " + SHORT_DATE.format(nextDueDate) + "."
+                        + (nextAmountCents != null ? pl.format(nextAmountCents) + " " : "")
+                        + "on " + pl.mediumDate(nextDueDate) + "."
                     : "";
 
         String rows = heading("Payment received")
-                + keyFact(dollars(amountCents), "charged to your card by " + property)
+                + keyFact(pl.format(amountCents), "charged to your card by " + property)
                 + detailTable(new String[][] {
                     {"Booking", booking.serviceName()},
-                    {"Remaining balance", settled ? "$0.00" : dollars(remainingCents)},
+                    {"Remaining balance", settled ? pl.format(0) : pl.format(remainingCents)},
                     {"Next payment", settled ? "None" :
-                        (nextDueDate != null ? SHORT_DATE.format(nextDueDate) : "")},
+                        (nextDueDate != null ? pl.mediumDate(nextDueDate) : "")},
                 })
                 + (nextLine.isBlank() ? "" : para(nextLine))
                 + button(url, "View your plan");
 
         String text = "Payment received.\n\n"
-                + dollars(amountCents) + " charged to your card by " + property + ".\n\n"
+                + pl.format(amountCents) + " charged to your card by " + property + ".\n\n"
                 + "Booking:           " + booking.serviceName() + "\n"
-                + "Remaining balance: " + (settled ? "$0.00" : dollars(remainingCents)) + "\n"
+                + "Remaining balance: " + (settled ? pl.format(0) : pl.format(remainingCents)) + "\n"
                 + (settled ? "" : nextDueDate != null
-                    ? "Next payment:      " + SHORT_DATE.format(nextDueDate) + "\n" : "")
+                    ? "Next payment:      " + pl.mediumDate(nextDueDate) + "\n" : "")
                 + "\n" + nextLine + "\n\n"
                 + "View your plan: " + url + "\n";
 
-        return guest(to, "Receipt: " + dollars(amountCents) + " payment to " + property,
+        return guest(to, "Receipt: " + pl.format(amountCents) + " payment to " + property,
                 merchant, text, rows, url);
     }
 
@@ -678,9 +672,11 @@ public final class EmailTemplates {
             String to, Merchant merchant, Booking booking, long totalPaidCents, String consumerBaseUrl) {
         String url = portalUrl(consumerBaseUrl, booking);
         String property = propertyName(merchant);
+        // Amounts and dates as the property writes them, in the booking's currency.
+        PropertyLocale pl = booking.propertyLocale();
 
         String rows = heading("You are all paid up")
-                + keyFact(dollars(totalPaidCents), "paid in full to " + property)
+                + keyFact(pl.format(totalPaidCents), "paid in full to " + property)
                 + detailTable(new String[][] {
                     {"Booking", booking.serviceName()},
                     {"Status", "Paid in full"},
@@ -690,7 +686,7 @@ public final class EmailTemplates {
                 + button(url, "View your plan");
 
         String text = "You are all paid up.\n\n"
-                + dollars(totalPaidCents) + " paid in full to " + property + ".\n\n"
+                + pl.format(totalPaidCents) + " paid in full to " + property + ".\n\n"
                 + "Booking: " + booking.serviceName() + "\n"
                 + "Status:  Paid in full\n\n"
                 + "Nothing further is owed and no more payments will be taken. "
@@ -707,6 +703,8 @@ public final class EmailTemplates {
             int retryAttempts, int retrySpacingDays, String consumerBaseUrl) {
         String url = portalUrl(consumerBaseUrl, booking);
         String property = propertyName(merchant);
+        // Amounts and dates as the property writes them, in the booking's currency.
+        PropertyLocale pl = booking.propertyLocale();
         String retryLine = retryAttempts <= 1
                 ? "We will try once more."
                 : "We will retry up to " + retryAttempts + " times, "
@@ -716,18 +714,18 @@ public final class EmailTemplates {
         // is also the first thing a dark-mode recolour makes unreadable. The
         // urgency is carried by the heading and the button label instead.
         String rows = heading("We could not take your payment")
-                + keyFact(dollars(amountCents), "declined by your card for " + property)
+                + keyFact(pl.format(amountCents), "declined by your card for " + property)
                 + detailTable(new String[][] {
                     {"Booking", booking.serviceName()},
-                    {"Amount due", dollars(amountCents)},
+                    {"Amount due", pl.format(amountCents)},
                 })
                 + para(retryLine + " Updating your card now is the quickest way to keep the plan on track.")
                 + button(url, "Update your card");
 
         String text = "We could not take your payment.\n\n"
-                + dollars(amountCents) + " was declined by your card for " + property + ".\n\n"
+                + pl.format(amountCents) + " was declined by your card for " + property + ".\n\n"
                 + "Booking:    " + booking.serviceName() + "\n"
-                + "Amount due: " + dollars(amountCents) + "\n\n"
+                + "Amount due: " + pl.format(amountCents) + "\n\n"
                 + retryLine + " Updating your card now is the quickest way to keep the plan on track.\n\n"
                 + "Update your card: " + url + "\n";
 
@@ -735,11 +733,6 @@ public final class EmailTemplates {
                 merchant, text, rows, url);
     }
 
-    private static String formatDollars(long cents) {
-        long whole = cents / 100;
-        long fraction = Math.abs(cents % 100);
-        return String.format(Locale.US, "%,d.%02d", whole, fraction);
-    }
 
     public static EmailMessage stripeOnboardingComplete(Merchant merchant) {
         String name = merchant.businessName() != null ? merchant.businessName() : "there";

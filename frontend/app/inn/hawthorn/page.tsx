@@ -8,9 +8,9 @@ import {
   deriveDisplayAmounts,
   distributeInstallments,
   fetchPublicMerchant,
-  formatDollarsCompact,
   type PublicMerchant,
 } from "@/lib/publicApi";
+import { formatMoneyCompact } from "@/lib/money";
 import { DEFAULT_PLAN_RULES, type PlanRules } from "@/lib/api";
 import { previewEligibility, type PlanFrequency } from "@/lib/eligibility";
 import { useFeeRate } from "@/lib/useFeeRate";
@@ -18,6 +18,9 @@ import { useFeeRate } from "@/lib/useFeeRate";
 // This demo inn is a real merchant row; the slug keys both the policy lookup
 // and the fee-rate lookup, so it is named once rather than repeated.
 const HAWTHORN_SLUG = "hawthorn-camden";
+
+// Demo US inn: prices are USD by design.
+const DEMO_US_MONEY = { currency: "USD", locale: "en-US" } as const;
 
 // Combined lodging tax + resort fees. Single rate so the displayed "Taxes & fees"
 // line is one number — Maine state lodging tax is ~9%, the rest is house fees.
@@ -295,7 +298,7 @@ export default function HawthornInnPage() {
           {planEstimate ? (
             <div className="mt-4 rounded-md bg-brand-purple px-4 py-3 text-white">
               <div className="font-serif text-4xl leading-none">
-                {formatDollarsCompact(planEstimate.perPaymentCents)}
+                {formatMoneyCompact(planEstimate.perPaymentCents, DEMO_US_MONEY)}
                 <span className="ml-1 font-sans text-base text-white/80">
                   {planEstimate.frequency === "monthly" ? "/month" : " every 2 weeks"}
                 </span>

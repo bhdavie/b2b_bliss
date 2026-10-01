@@ -46,6 +46,19 @@ export default async function CheckoutPage(props: {
     );
   }
 
+  // Amounts on this page are minor units of the property's currency. A
+  // property with none cannot take a checkout (the backend refuses it too).
+  if (!merchant.currency) {
+    return (
+      <PageChrome>
+        <InactiveLink
+          title="This property isn't taking payment plans yet"
+          body={`${capitalize(hostName(merchant.merchant))} hasn't finished setting up payment plans. Contact the property to book.`}
+        />
+      </PageChrome>
+    );
+  }
+
   const parsed = parseCart(raw);
   if (parsed.kind === "missing") {
     return (
@@ -70,6 +83,17 @@ export default async function CheckoutPage(props: {
     );
   }
 
+  if (parsed.cart.currency && parsed.cart.currency !== merchant.currency) {
+    return (
+      <PageChrome>
+        <InactiveLink
+          title="This checkout link is malformed"
+          body={`The link is priced in ${parsed.cart.currency}, but ${hostName(merchant.merchant)} takes payment in ${merchant.currency}. Contact ${merchant.merchant.businessName} for a fresh link.`}
+        />
+      </PageChrome>
+    );
+  }
+
   const returnUrl = firstOf(raw.return_url) ?? null;
 
   return (
@@ -79,6 +103,7 @@ export default async function CheckoutPage(props: {
         cart={parsed.cart}
         returnUrl={returnUrl}
         feeRate={feeRate}
+        money={{ currency: merchant.currency, locale: merchant.locale }}
       />
     </PageChrome>
   );
@@ -99,7 +124,14 @@ function parseCart(p: SearchParams): Parsed {
 
   const totalCents = Number.parseInt(total!, 10);
   if (!Number.isFinite(totalCents) || totalCents <= 0) {
-    return { kind: "invalid", reason: "total must be a positive integer (cents)" };
+    return {
+      kind: "invalid",
+      reason: "total must be a positive whole number in the currency's minor units (cents for USD)",
+    };
+  }
+  const currencyParam = firstOf(p.currency)?.trim().toUpperCase();
+  if (currencyParam && !/^[A-Z]{3}$/.test(currencyParam)) {
+    return { kind: "invalid", reason: "currency must be a three letter ISO 4217 code" };
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(checkin!)) {
     return { kind: "invalid", reason: "checkin must be yyyy-MM-dd" };
@@ -113,6 +145,7 @@ function parseCart(p: SearchParams): Parsed {
     kind: "ok",
     cart: {
       totalCents,
+      currency: currencyParam ?? null,
       checkin: checkin!,
       checkout: checkout ?? null,
       description: firstOf(p.description) ?? null,

@@ -4,6 +4,7 @@ import com.bliss.b2b.auth.CookieOptions;
 import com.bliss.b2b.auth.DemoPassword;
 import com.bliss.b2b.auth.SessionCookies;
 import com.bliss.b2b.domain.Customer;
+import com.bliss.b2b.payments.PropertyLocale;
 import com.bliss.b2b.persistence.CustomerDao;
 import com.bliss.b2b.persistence.PaymentPlanDao;
 import com.bliss.b2b.persistence.PaymentPlanDao.PaymentPlanListItem;
@@ -264,8 +265,10 @@ public class PublicAccountResource {
                             .add(new PlanProgress.Row(
                                     r.dueDate(), r.amountCents(), r.status()));
                 }
-                LocalDate today = LocalDate.now(clock);
                 for (PaymentPlanListItem item : items) {
+                    // Each plan's own property day: plans at properties in
+                    // different zones roll over at different moments.
+                    LocalDate today = PropertyLocale.today(clock, item.timeZone());
                     long totalWithFee = item.totalAmountCents() + item.processingFeeCents();
                     progressByPlan.put(
                             item.id(),

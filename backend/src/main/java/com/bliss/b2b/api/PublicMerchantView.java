@@ -10,7 +10,12 @@ public record PublicMerchantView(
         MerchantContext merchant,
         Policies policies,
         Stripe stripe,
-        String rail
+        String rail,
+        // The property's currency for amounts on the checkout page (null when
+        // it has none, and then checkout is refused), and its locale and zone.
+        String currency,
+        String locale,
+        String timeZone
 ) {
     public record MerchantContext(
             String slug,

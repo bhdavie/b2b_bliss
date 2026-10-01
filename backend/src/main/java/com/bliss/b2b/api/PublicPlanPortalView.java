@@ -32,7 +32,12 @@ public record PublicPlanPortalView(
         Long nextDueAmountCents,
         boolean complete,
         StripeStateView stripe,
-        String rail
+        String rail,
+        // The booking's currency (every amount here is minor units of it),
+        // and the locale and zone to format amounts and dates in.
+        String currency,
+        String locale,
+        String timeZone
 ) {
 
     public static PublicPlanPortalView from(
@@ -61,7 +66,10 @@ public record PublicPlanPortalView(
                 progress.nextDueAmountCents(),
                 progress.complete(),
                 new StripeStateView(stripeConfigured, stripeService.publishableKey(), connectedAccountId),
-                rail);
+                rail,
+                s.booking().currency(),
+                s.booking().localeTag(),
+                s.booking().timeZone());
     }
 
     public record MerchantView(

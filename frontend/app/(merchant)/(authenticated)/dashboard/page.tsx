@@ -1,5 +1,9 @@
 import { AccountSettings } from "@/components/merchant/AccountSettings";
-import { fetchMerchantSession, fetchOnboardingServer } from "@/lib/auth";
+import {
+  fetchMerchantSession,
+  fetchOnboardingServer,
+  fetchStripeStatusServer,
+} from "@/lib/auth";
 
 // URL stays /dashboard (lower-risk for the demo), but the tab is now
 // "Account settings" - property details + tool connections. Connection status
@@ -15,6 +19,10 @@ export default async function AccountSettingsPage() {
     fetchOnboardingServer(),
   ]);
   if (!session) return null;
+  // Only a Stripe property needs this: whether Bliss has Stripe configured
+  // decides if Stripe is the source of its currency and zone.
+  const stripeStatus =
+    session.pmsType === "stripe" ? await fetchStripeStatusServer() : null;
 
   return (
     <AccountSettings
@@ -34,6 +42,13 @@ export default async function AccountSettingsPage() {
         mews: onboarding?.mews ?? null,
         cloudbeds: onboarding?.cloudbeds ?? null,
         stripeConnectStatus: session.stripeConnectStatus,
+      }}
+      propertyLocale={{
+        currency: session.currency,
+        timeZone: session.timeZone,
+        locale: session.locale,
+        pmsType: session.pmsType,
+        stripeConfigured: stripeStatus ? stripeStatus.configured : null,
       }}
     />
   );

@@ -147,6 +147,16 @@ ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
 
+-- V36: the property trades in USD on New York time, and its bookings carry
+-- that snapshot. Only fills what is unset, so re-running changes nothing.
+UPDATE merchants m
+SET currency = 'USD', time_zone = 'America/New_York', locale = 'en-US'
+WHERE m.currency IS NULL AND m.id = (SELECT id FROM merchants WHERE slug = 'hawthorn-camden');
+UPDATE bookings b
+SET currency = m.currency, time_zone = m.time_zone, locale = m.locale
+FROM merchants m
+WHERE m.id = b.merchant_id AND b.currency IS NULL AND m.id = (SELECT id FROM merchants WHERE slug = 'hawthorn-camden');
+
 -- To reset:
 --   DELETE FROM payment_schedule WHERE payment_plan_id = 'bbbbbbbb-4444-4444-4444-444444444444';
 --   DELETE FROM payment_plans WHERE id = 'bbbbbbbb-4444-4444-4444-444444444444';

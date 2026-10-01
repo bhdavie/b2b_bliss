@@ -31,7 +31,7 @@ public class BookingService {
         for (int attempt = 0; attempt < TOKEN_INSERT_RETRIES; attempt++) {
             String token = generateToken();
             if (bookingDao.findByToken(token).isPresent()) continue;
-            bookingDao.insert(
+            if (bookingDao.insert(
                     input.merchantId(),
                     token,
                     input.serviceName(),
@@ -44,7 +44,10 @@ public class BookingService {
                     input.customerEmailHint(),
                     null, // customerPhoneHint — not collected in merchant form
                     BookingSource.MERCHANT_INITIATED.wire()
-            );
+            ) == 0) {
+                throw new IllegalStateException(
+                        "property " + input.merchantId() + " has no currency; booking not created");
+            }
             return bookingDao.findByToken(token).orElseThrow();
         }
         throw new IllegalStateException("Could not generate a unique booking token");

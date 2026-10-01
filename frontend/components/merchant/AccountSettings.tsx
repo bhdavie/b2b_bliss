@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CheckIcon,
   PMS_PROVIDERS,
@@ -10,6 +10,7 @@ import {
 import {
   cloudbedsOAuthStartUrl,
   disconnectMews,
+  setPropertyLocale,
   type OnboardingCloudbeds,
   type OnboardingMews,
   type OnboardingStateWire,
@@ -37,16 +38,39 @@ export type AccountConnections = {
   stripeConnectStatus: string | null;
 };
 
+/** The property's currency, zone and locale from /me, and where they come from. */
+export type AccountPropertyLocale = {
+  currency: string | null;
+  timeZone: string | null;
+  locale: string | null;
+  pmsType: PmsType;
+  /**
+   * Whether Bliss has Stripe configured, for a Stripe property: then Stripe is
+   * the source and the values are read-only. Null when not known.
+   */
+  stripeConfigured: boolean | null;
+};
+
 export function AccountSettings({
   initial,
   connections,
+  propertyLocale,
 }: {
   initial: AccountInitial;
   connections: AccountConnections;
+  propertyLocale: AccountPropertyLocale;
 }) {
   return (
     <div className="flex flex-col">
       <AccountInformation initial={initial} />
+
+      <StackedSection
+        id="currency"
+        title="Currency and time zone"
+        helper="Bookings are priced in this currency, and payment dates follow this time zone."
+      >
+        <PropertyLocaleSection initial={propertyLocale} />
+      </StackedSection>
 
       <StackedSection
         title="Property management connection"
@@ -178,11 +202,14 @@ function AccountInformation({ initial }: { initial: AccountInitial }) {
 // sections: one card, opening with its own heading and optional helper line,
 // then the section's content. Single column, no two-column header.
 function StackedSection({
+  id,
   title,
   helper,
   children,
   dense = false,
 }: {
+  /** Anchor so other screens can link straight to this section. */
+  id?: string;
   title: string;
   /**
    * Optional. "Account information" dropped its helper because the helper
@@ -207,7 +234,7 @@ function StackedSection({
   // its own heading now, so the tier is a tighter body padding under a normal
   // head rather than a panel that starts flush with a ruled row.
   return (
-    <section className="mb-3 flex flex-col">
+    <section id={id} className="mb-3 flex scroll-mt-6 flex-col">
       <Panel variant="filled" className="p-5">
         <div className={`flex flex-col gap-1 ${helper ? "mb-4" : "mb-4"}`}>
           <SectionHeading>{title}</SectionHeading>
@@ -404,6 +431,234 @@ function LockIcon({ className = "" }: { className?: string }) {
       <rect x="5" y="11" width="14" height="9" rx="1.5" />
       <path d="M8 11V7a4 4 0 0 1 8 0v4" />
     </svg>
+  );
+}
+
+// Common ISO 4217 codes offered when a property sets its currency by hand.
+const CURRENCY_CODES = [
+  "USD", "EUR", "GBP", "CAD", "AUD", "NZD", "JPY", "CHF", "SEK",
+  "NOK", "DKK", "MXN", "BRL", "SGD", "HKD", "AED", "ZAR", "INR",
+] as const;
+
+// Locales offered for formatting amounts and dates. Optional: none formats in
+// plain English.
+const LOCALE_TAGS = [
+  "en-US", "en-GB", "en-AU", "en-CA", "fr-FR", "de-DE",
+  "es-ES", "it-IT", "nl-NL", "pt-BR", "ja-JP",
+] as const;
+
+function displayName(type: "currency" | "language", code: string): string {
+  try {
+    return new Intl.DisplayNames(["en"], { type }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+function browserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+function supportedTimeZones(): string[] {
+  try {
+    const intl = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] };
+    const zones = intl.supportedValuesOf?.("timeZone");
+    if (zones && zones.length > 0) return zones.includes("UTC") ? zones : ["UTC", ...zones];
+  } catch {
+    /* fall through */
+  }
+  return ["UTC"];
+}
+
+// The property's currency, time zone and locale. A property with a connected
+// system (Mews, Cloudbeds, or Stripe when Bliss has it configured) reads them
+// from that system, so they show read-only here. A property with nothing to
+// read them from sets them itself.
+function PropertyLocaleSection({ initial }: { initial: AccountPropertyLocale }) {
+  const router = useRouter();
+  const sourced =
+    initial.pmsType === "mews" ||
+    initial.pmsType === "cloudbeds" ||
+    (initial.pmsType === "stripe" && initial.stripeConfigured === true);
+  const source =
+    initial.pmsType === "mews"
+      ? "Mews"
+      : initial.pmsType === "cloudbeds"
+        ? "Cloudbeds"
+        : "Stripe";
+
+  const zones = useMemo(supportedTimeZones, []);
+  const [currency, setCurrency] = useState(initial.currency ?? "");
+  // The browser's zone is only the first suggestion; nothing is saved until
+  // the property saves.
+  const [timeZone, setTimeZone] = useState(initial.timeZone ?? browserTimeZone());
+  const [locale, setLocale] = useState(initial.locale ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const currencyOptions = useMemo(() => {
+    const codes: string[] = [...CURRENCY_CODES];
+    if (initial.currency && !codes.includes(initial.currency)) codes.unshift(initial.currency);
+    return codes;
+  }, [initial.currency]);
+  const zoneOptions = useMemo(
+    () => (zones.includes(timeZone) ? zones : [timeZone, ...zones]),
+    [zones, timeZone],
+  );
+
+  if (sourced) {
+    return (
+      <div>
+        <ReadOnlyLine
+          label="Currency"
+          value={
+            initial.currency
+              ? `${initial.currency} · ${displayName("currency", initial.currency)}`
+              : ""
+          }
+        />
+        <ReadOnlyLine label="Time zone" value={initial.timeZone ?? ""} />
+        <ReadOnlyLine
+          label="Locale"
+          value={initial.locale ? `${initial.locale} · ${displayName("language", initial.locale)}` : ""}
+          last
+        />
+        <p className="mt-4 text-[13px] text-ink-500">
+          These come from your {source} connection.
+          {initial.currency ? "" : ` They fill in once ${source} reports them.`}
+        </p>
+      </div>
+    );
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!currency) {
+      setError("Choose a currency.");
+      return;
+    }
+    if (!timeZone) {
+      setError("Choose a time zone.");
+      return;
+    }
+    setError(null);
+    setSaved(false);
+    setSaving(true);
+    const res = await setPropertyLocale({
+      currency,
+      timeZone,
+      locale: locale || null,
+    });
+    setSaving(false);
+    if (res.ok) {
+      setSaved(true);
+      router.refresh();
+      return;
+    }
+    setError(
+      res.error === "property_locale_sourced"
+        ? "Your currency and time zone come from your connected system, so they can't be changed here."
+        : res.message,
+    );
+  }
+
+  return (
+    <form onSubmit={handleSave} className="flex flex-col gap-4">
+      {initial.currency === null ? (
+        <p className="text-[13px] text-ink-500">
+          Your property has no currency yet. Set one to start creating bookings.
+        </p>
+      ) : null}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <label className="block">
+          <FieldLabel>Currency</FieldLabel>
+          <select
+            value={currency}
+            onChange={(e) => {
+              setCurrency(e.target.value);
+              setSaved(false);
+            }}
+            className="input mt-1.5"
+            required
+          >
+            <option value="" disabled>
+              Choose a currency
+            </option>
+            {currencyOptions.map((code) => (
+              <option key={code} value={code}>
+                {code} · {displayName("currency", code)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <FieldLabel>Time zone</FieldLabel>
+          <select
+            value={timeZone}
+            onChange={(e) => {
+              setTimeZone(e.target.value);
+              setSaved(false);
+            }}
+            className="input mt-1.5"
+            required
+          >
+            {zoneOptions.map((z) => (
+              <option key={z} value={z}>
+                {z.replace(/_/g, " ")}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <FieldLabel>Locale (optional)</FieldLabel>
+          <select
+            value={locale}
+            onChange={(e) => {
+              setLocale(e.target.value);
+              setSaved(false);
+            }}
+            className="input mt-1.5"
+          >
+            <option value="">Plain English</option>
+            {(initial.locale && !(LOCALE_TAGS as readonly string[]).includes(initial.locale)
+              ? [initial.locale, ...LOCALE_TAGS]
+              : [...LOCALE_TAGS]
+            ).map((tag) => (
+              <option key={tag} value={tag}>
+                {tag} · {displayName("language", tag)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {error ? (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-[13px] text-red-700" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className="flex items-center gap-4">
+        <Button type="submit" variant="merchant" disabled={saving}>
+          {saving ? "Saving" : "Save"}
+        </Button>
+        {saved ? <span className="text-[13px] text-ink-500">Saved</span> : null}
+      </div>
+    </form>
+  );
+}
+
+function ReadOnlyLine({ label, value, last = false }: { label: string; value: string; last?: boolean }) {
+  return (
+    <div className={`flex flex-col gap-2 py-4 first:pt-0 ${last ? "" : "border-b border-sand-100"}`}>
+      <FieldLabel>{label}</FieldLabel>
+      <div className="text-[14px] text-ink-900">
+        {value !== "" ? value : <span className="text-ink-300">Not set</span>}
+      </div>
+    </div>
   );
 }
 

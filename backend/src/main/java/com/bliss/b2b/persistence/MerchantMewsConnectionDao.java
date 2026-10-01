@@ -30,10 +30,10 @@ public interface MerchantMewsConnectionDao {
     @SqlUpdate("""
             INSERT INTO merchant_mews_connections (
                 merchant_id, platform_url, client_token, access_token,
-                enterprise_id, enterprise_name, currency, validated_at
+                enterprise_id, enterprise_name, currency, time_zone, locale, validated_at
             ) VALUES (
                 :merchantId, :platformUrl, :encryptedClientToken, :encryptedAccessToken,
-                :enterpriseId, :enterpriseName, :currency, :validatedAt
+                :enterpriseId, :enterpriseName, :currency, :timeZone, :locale, :validatedAt
             )
             ON CONFLICT (merchant_id) DO UPDATE SET
                 platform_url = EXCLUDED.platform_url,
@@ -41,16 +41,14 @@ public interface MerchantMewsConnectionDao {
                 access_token = EXCLUDED.access_token,
                 enterprise_id = EXCLUDED.enterprise_id,
                 enterprise_name = EXCLUDED.enterprise_name,
-                -- Currency is the one field a re-connect does NOT overwrite.
-                -- It is set once, from the enterprise, on first connect; after
-                -- that an operator override survives. Re-running onboarding
-                -- used to silently revert a deliberate choice back to whatever
-                -- the enterprise reported, which on the shared Mews demo
-                -- property means GBP against dollar-denominated amounts.
-                -- NULLIF so a blank is treated as unset and still gets filled.
-                currency = COALESCE(
-                    NULLIF(merchant_mews_connections.currency, ''),
-                    EXCLUDED.currency),
+                -- Currency, zone and language always come from the enterprise
+                -- (configuration/get). Bookings snapshot their currency, so a
+                -- property whose Mews currency changes keeps its old plans in
+                -- the old currency, and the charge pass holds any whose
+                -- currency no longer matches rather than charging them.
+                currency = EXCLUDED.currency,
+                time_zone = COALESCE(EXCLUDED.time_zone, merchant_mews_connections.time_zone),
+                locale = EXCLUDED.locale,
                 validated_at = EXCLUDED.validated_at
             """)
     void upsertValidated(
@@ -61,6 +59,8 @@ public interface MerchantMewsConnectionDao {
             @Bind("enterpriseId") String enterpriseId,
             @Bind("enterpriseName") String enterpriseName,
             @Bind("currency") String currency,
+            @Bind("timeZone") String timeZone,
+            @Bind("locale") String locale,
             @Bind("validatedAt") Instant validatedAt
     );
 

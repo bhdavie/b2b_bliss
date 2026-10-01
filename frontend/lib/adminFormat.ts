@@ -6,6 +6,8 @@
  * as a decimal fraction and is only ever rendered.
  */
 
+import { formatInstant, formatPlainDate as formatCalendarDate } from "./money";
+
 /** A property with no business name yet is identified by its slug. */
 export function propertyName(row: {
   businessName: string | null;
@@ -46,39 +48,56 @@ export function formatDerivedRate(rate: number | null): string {
   return formatPercent(rate);
 }
 
+/**
+ * Admin dates. Rows that belong to a booking pass the booking's locale (and
+ * zone, for instants) so they read the way the property reads them. Rows with
+ * no property context (a merchant's join date, a fee-rate change, a referral)
+ * leave both undefined and render in the admin's own browser locale and zone,
+ * which is who is reading them.
+ */
+
+const ADMIN_DATE: Intl.DateTimeFormatOptions = {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+};
+
 /** "2 Sep 2026" from an ISO instant. */
-export function formatDate(iso: string | null): string {
+export function formatDate(
+  iso: string | null,
+  locale?: string | null,
+  timeZone?: string | null,
+): string {
   if (!iso) return "–";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "–";
-  return d.toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  if (locale === undefined && timeZone === undefined) {
+    return d.toLocaleDateString(undefined, ADMIN_DATE);
+  }
+  return formatInstant(iso, locale, timeZone, ADMIN_DATE);
 }
 
-/** "2 Sep 2026, 14:26" — used where the time of day is the point, as on rates. */
-export function formatDateTime(iso: string | null): string {
+/** "2 Sep 2026, 14:26": used where the time of day is the point, as on rates. */
+export function formatDateTime(
+  iso: string | null,
+  locale?: string | null,
+  timeZone?: string | null,
+): string {
   if (!iso) return "–";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "–";
-  return `${formatDate(iso)}, ${d.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
+  const time: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
+  if (locale === undefined && timeZone === undefined) {
+    return `${formatDate(iso)}, ${d.toLocaleTimeString(undefined, time)}`;
+  }
+  return `${formatDate(iso, locale, timeZone)}, ${formatInstant(iso, locale, timeZone, time)}`;
 }
 
-/** A bare YYYY-MM-DD, parsed as a calendar date rather than an instant. */
-export function formatPlainDate(ymd: string | null): string {
+/** A bare YYYY-MM-DD, formatted as a calendar date so it never shifts a day. */
+export function formatPlainDate(ymd: string | null, locale?: string | null): string {
   if (!ymd) return "–";
-  const [y, m, d] = ymd.split("-").map(Number);
-  if (!y || !m || !d) return "–";
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  if (!/^\d{4}-\d{2}-\d{2}/.test(ymd)) return "–";
+  return formatCalendarDate(ymd, locale === undefined ? undefined : locale, ADMIN_DATE);
 }
 
 /** snake_case wire values read as words without inventing a badge palette. */

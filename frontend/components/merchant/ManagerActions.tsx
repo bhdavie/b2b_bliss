@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { cancelPlan, refundPlan } from "@/lib/api";
-import { formatDollars } from "@/lib/publicApi";
+import { formatMoney, type MoneyContext } from "@/lib/money";
 import { Button } from "@/components/ui/Button";
 import { Panel, SectionHeading } from "@/components/ui/primitives";
 
@@ -18,12 +18,15 @@ export function ManagerActions({
   refunded,
   refundAmountCents,
   paidCents,
+  money,
 }: {
   planId: string;
   planStatus: string;
   refunded: boolean;
   refundAmountCents: number | null;
   paidCents: number;
+  // The booking's currency and locale.
+  money: MoneyContext;
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState<Kind | null>(null);
@@ -70,7 +73,7 @@ export function ManagerActions({
           disabled={cancelled || refunded}
           className="inline-flex items-center justify-center rounded-md border border-brand-purple px-4 py-2.5 text-[13px] text-brand-purple transition-colors hover:bg-brand-lavender/15 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {refunded ? `Refunded ${formatDollars(refundAmountCents ?? 0)}` : "Refund"}
+          {refunded ? `Refunded ${formatMoney(refundAmountCents ?? 0, money)}` : "Refund"}
         </button>
       </div>
 
@@ -84,6 +87,7 @@ export function ManagerActions({
         <ConfirmDialog
           kind={confirming}
           amount={paidCents}
+          money={money}
           busy={busy}
           onConfirm={() => run(confirming)}
           onClose={() => (busy ? undefined : setConfirming(null))}
@@ -96,12 +100,14 @@ export function ManagerActions({
 function ConfirmDialog({
   kind,
   amount,
+  money,
   busy,
   onConfirm,
   onClose,
 }: {
   kind: Kind;
   amount: number;
+  money: MoneyContext;
   busy: boolean;
   onConfirm: () => void;
   onClose: () => void;
@@ -114,9 +120,9 @@ function ConfirmDialog({
           confirm: "Yes, cancel booking",
         }
       : {
-          title: `Refund ${formatDollars(amount)} to the guest?`,
+          title: `Refund ${formatMoney(amount, money)} to the guest?`,
           body: "This records a full refund of everything paid so far and overrides the refund policy. It's simulated for the demo (no real charge is reversed) and shows on the guest's plan immediately.",
-          confirm: `Yes, refund ${formatDollars(amount)}`,
+          confirm: `Yes, refund ${formatMoney(amount, money)}`,
         };
 
   return (

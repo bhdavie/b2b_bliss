@@ -7,6 +7,7 @@ import com.bliss.b2b.integration.StripePaymentsService;
 import com.bliss.b2b.payments.EligibilityResult;
 import com.bliss.b2b.payments.MerchantPlanRules;
 import com.bliss.b2b.payments.PlanEligibilityService;
+import com.bliss.b2b.payments.PropertyLocale;
 import com.bliss.b2b.persistence.BookingDao;
 import com.bliss.b2b.persistence.MerchantDao;
 import com.bliss.b2b.service.MerchantPlanRulesService;
@@ -71,7 +72,7 @@ public class PublicBookingsResource {
                 ? booking.originalTotalAmountCents()
                 : booking.totalAmountCents();
         EligibilityResult eligibility = eligibilityService.evaluate(
-                LocalDate.now(clock), booking.appointmentDate(), booking.checkoutDate(),
+                PropertyLocale.today(clock, booking.timeZone()), booking.appointmentDate(), booking.checkoutDate(),
                 evaluateInput, rules);
         PublicBookingView view = PublicBookingView.build(
                 merchant, booking, eligibility, rules,

@@ -99,6 +99,28 @@ public interface MerchantDao {
             """)
     int updatePmsType(@Bind("id") UUID id, @Bind("pmsType") String pmsType);
 
+    /**
+     * Records what the property trades in, as read from its PMS or Stripe
+     * account. New bookings snapshot these; existing bookings keep theirs. A
+     * null zone or locale leaves the stored one alone; currency is required.
+     */
+    @SqlUpdate("""
+            UPDATE merchants
+            SET currency  = :currency,
+                time_zone = COALESCE(:timeZone, time_zone),
+                locale    = COALESCE(:locale, locale)
+            WHERE id = :id
+            """)
+    int updatePropertyLocale(
+            @Bind("id") UUID id,
+            @Bind("currency") String currency,
+            @Bind("timeZone") String timeZone,
+            @Bind("locale") String locale);
+
+    /** Records the property's time zone only, e.g. once Mews booking setup reads it. */
+    @SqlUpdate("UPDATE merchants SET time_zone = :timeZone WHERE id = :id")
+    int updateTimeZone(@Bind("id") UUID id, @Bind("timeZone") String timeZone);
+
     @SqlUpdate("""
             UPDATE merchants
             SET onboarding_state = :state
