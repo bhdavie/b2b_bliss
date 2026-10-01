@@ -263,8 +263,10 @@ public class StripePaymentsService {
      * Hold mode, D9: Bliss never gives its fee back, so when a refund leaves
      * less than the fee the property funds the rest. An account debit: a
      * transfer made on the property's Express account to the platform. Stripe
-     * draws it from the account's balance, which needs funds there (or
-     * negative-balance debits allowed on the platform).
+     * draws it from the account's balance; Bliss's Express accounts have
+     * {@code debit_negative_balances} on, so a balance it takes below zero is
+     * pulled from the hotel's bank. If Stripe still refuses, ReleaseService
+     * logs it for an admin to collect by hand.
      */
     public Transfer debitPropertyAccount(String accountId, long amountMinor, String currency, String idempotencyKey)
             throws StripeException {

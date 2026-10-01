@@ -54,7 +54,8 @@ public class BlissSettingsResource {
         } catch (SettingsException e) {
             // Not ready for hold mode is a conflict with the property's state, not a bad request.
             int status = java.util.Set.of("hold_mode_unavailable", "express_onboarding_required",
-                    "hold_mode_us_only").contains(e.code()) ? 409 : 400;
+                    "hold_mode_us_only").contains(e.code()) ? 409
+                    : "stripe_setup_failed".equals(e.code()) ? 502 : 400;
             return Response.status(status).entity(Map.of("error", e.code(), "message", e.getMessage())).build();
         }
     }

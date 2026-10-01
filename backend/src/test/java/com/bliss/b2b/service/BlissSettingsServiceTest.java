@@ -220,6 +220,22 @@ class BlissSettingsServiceTest {
     }
 
     @Test
+    void switchingToHoldModeSetsStripeToDebitNegativeBalances_andRefusesIfStripeCannot() {
+        Merchant merchant = holdReadyMerchant();
+        java.util.List<String> prepared = new java.util.ArrayList<>();
+
+        assertThatThrownBy(() -> service(true).withHoldAccountSetup(acct -> {
+                    throw new IllegalStateException("stripe down");
+                }).update(merchant, "hold", null, null))
+                .extracting(e -> ((SettingsException) e).code()).isEqualTo("stripe_setup_failed");
+        assertThat(setting(service(true).view(merchant), "payoutMode").value()).isEqualTo("pay_as_you_go");
+
+        service(true).withHoldAccountSetup(prepared::add).update(merchant, "hold", null, null);
+        assertThat(prepared).containsExactly(merchant.stripeConnectAccountId());
+        assertThat(setting(service(true).view(merchant), "payoutMode").value()).isEqualTo("hold");
+    }
+
+    @Test
     void theLedgerPaymentTypeIsAHotelSettingThatStartsUnchosen() {
         Merchant merchant = newMerchant("mews");
 

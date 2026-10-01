@@ -131,7 +131,11 @@ platform balance; the hotel's balance is never touched.
   released at once (`cancellation`), an excess is pulled back by transfer
   reversal, newest first, before the guest is refunded from the platform
   balance. When the refund leaves less than the Bliss fee, the property funds
-  the rest by an account debit (`fee_debit`), per D9.
+  the rest by an account debit (`fee_debit`), per D9. Express accounts have
+  `debit_negative_balances` on (set at creation, and on older accounts when
+  the property switches to hold mode, which is refused if Stripe can't set it),
+  so Stripe pulls a balance the debit takes negative from the hotel's bank. A
+  debit Stripe refuses is logged and left on its row for an admin to collect.
 - **Mews folio.** A release on a linked stay posts a ledger payment for the
   property's share and one for the fee (D15's recommendation), with
   `payments/addExternal`, searched by identifier first so it never posts twice.

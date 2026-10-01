@@ -47,7 +47,19 @@ public class StripeConnectService {
      */
     public String createConnectAccount(Merchant merchant) throws StripeException {
         requireConfigured();
-        AccountCreateParams params = AccountCreateParams.builder()
+        Account account = Account.create(createParams(merchant));
+        log.info("Created Stripe Connect Express account {} for merchant {}", account.getId(), merchant.id());
+        return account.getId();
+    }
+
+    /**
+     * The Express account Bliss creates. {@code debit_negative_balances} lets
+     * Stripe pull a negative balance from the hotel's bank: in hold mode, a
+     * refund can leave the hotel owing the Bliss fee (D9), taken by an account
+     * debit that may take its balance below zero.
+     */
+    static AccountCreateParams createParams(Merchant merchant) {
+        return AccountCreateParams.builder()
                 .setType(AccountCreateParams.Type.EXPRESS)
                 .setEmail(merchant.email())
                 .setBusinessProfile(AccountCreateParams.BusinessProfile.builder()
@@ -59,13 +71,34 @@ public class StripeConnectService {
                         .setTransfers(AccountCreateParams.Capabilities.Transfers.builder()
                                 .setRequested(true).build())
                         .build())
+                .setSettings(AccountCreateParams.Settings.builder()
+                        .setPayouts(AccountCreateParams.Settings.Payouts.builder()
+                                .setDebitNegativeBalances(true).build())
+                        .build())
                 .setMetadata(java.util.Map.of(
                         "bliss_merchant_id", merchant.id().toString(),
                         "bliss_slug", merchant.slug()))
                 .build();
-        Account account = Account.create(params);
-        log.info("Created Stripe Connect Express account {} for merchant {}", account.getId(), merchant.id());
-        return account.getId();
+    }
+
+    /**
+     * Turns on {@code debit_negative_balances} for an existing Express account
+     * (one created before Bliss set it at creation), so a negative balance is
+     * pulled from the hotel's bank. Required before a property holds payments.
+     */
+    public void enableNegativeBalanceDebits(String accountId) throws StripeException {
+        requireConfigured();
+        Account.retrieve(accountId).update(negativeBalanceParams());
+        log.info("Enabled debit_negative_balances on {}", accountId);
+    }
+
+    static com.stripe.param.AccountUpdateParams negativeBalanceParams() {
+        return com.stripe.param.AccountUpdateParams.builder()
+                .setSettings(com.stripe.param.AccountUpdateParams.Settings.builder()
+                        .setPayouts(com.stripe.param.AccountUpdateParams.Settings.Payouts.builder()
+                                .setDebitNegativeBalances(true).build())
+                        .build())
+                .build();
     }
 
     /**

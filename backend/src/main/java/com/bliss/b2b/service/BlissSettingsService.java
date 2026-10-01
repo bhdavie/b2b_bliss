@@ -131,6 +131,14 @@ public class BlissSettingsService {
                 throw new SettingsException("hold_mode_us_only",
                         "Holding payments is available for properties paid in US dollars for now.");
             }
+            // So a refund that leaves the hotel owing the Bliss fee (D9) can be
+            // recovered from its bank. Without it the switch doesn't happen.
+            try {
+                holdAccountSetup.prepare(merchant.stripeConnectAccountId());
+            } catch (Exception e) {
+                throw new SettingsException("stripe_setup_failed",
+                        "Stripe couldn't finish setting up your account for held payments. Please try again.");
+            }
         }
         settingsDao.insertDefaults(merchant.id());
         settingsDao.update(merchant.id(), mode.wire(), policy.wire(), buffer);
@@ -141,6 +149,22 @@ public class BlissSettingsService {
                     pick(feeAccountingCategoryId, current.feeAccountingCategoryId()));
         }
         return view(merchant);
+    }
+
+    /**
+     * What a property's Express account needs before it holds payments: Stripe
+     * set to pull a negative balance from its bank. A no-op where Stripe isn't
+     * wired (tests, demo).
+     */
+    public interface HoldAccountSetup {
+        void prepare(String expressAccountId) throws Exception;
+    }
+
+    private HoldAccountSetup holdAccountSetup = accountId -> { };
+
+    public BlissSettingsService withHoldAccountSetup(HoldAccountSetup setup) {
+        this.holdAccountSetup = setup;
+        return this;
     }
 
     /**

@@ -393,7 +393,13 @@ public class BlissApplication extends Application<BlissConfiguration> {
                         jdbi.onDemand(com.bliss.b2b.persistence.MerchantFeeRateDao.class),
                         jdbi.onDemand(com.bliss.b2b.persistence.MerchantMewsConnectionDao.class),
                         jdbi.onDemand(com.bliss.b2b.persistence.BlissRateDao.class),
-                        config.getFeatures(), clock)));
+                        config.getFeatures(), clock)
+                        // Demo accounts (and no Stripe) have nothing to set up.
+                        .withHoldAccountSetup(accountId -> {
+                            if (stripeService.isConfigured() && !accountId.startsWith("acct_demo_")) {
+                                stripeService.enableNegativeBalanceDebits(accountId);
+                            }
+                        })));
         environment.jersey().register(new com.bliss.b2b.api.MewsSyncResource(mewsSyncService,
                 jdbi.onDemand(com.bliss.b2b.persistence.BlissRateDao.class),
                 jdbi.onDemand(com.bliss.b2b.persistence.MewsSyncRunDao.class)));
