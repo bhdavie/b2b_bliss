@@ -44,7 +44,14 @@ import {
 // which is now the settled violet pill — the same class the old local constant
 // pointed at, so no button changes appearance by dropping the override.
 
-export default async function OnboardingPlanRulesPage() {
+export default async function OnboardingPlanRulesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ return?: string }>;
+}) {
+  // A Mews property comes here from the Bliss setup's "Change" and goes back to
+  // it; Bliss setup is where its onboarding finishes.
+  const backToBliss = (await searchParams).return === "bliss";
   const session = await fetchMerchantSession();
   if (!session) {
     redirect("/login");
@@ -104,7 +111,11 @@ export default async function OnboardingPlanRulesPage() {
           <p className="text-[17px] text-ink-400">
             You can change any of this later in Payment settings.
           </p>
-          <Button href="/home">Finish setup</Button>
+          {backToBliss ? (
+            <Button href="/onboarding/bliss?step=3">Back to Bliss setup</Button>
+          ) : (
+            <Button href="/home">Finish setup</Button>
+          )}
         </div>
       </div>
     </main>

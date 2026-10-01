@@ -25,9 +25,17 @@ import java.util.Map;
 public class BlissSettingsResource {
 
     private final BlissSettingsService settings;
+    /** "Switch Bliss on" at the end of setup; null falls back to just enabling. */
+    private final com.bliss.b2b.service.BlissOnboardingService onboarding;
 
     public BlissSettingsResource(BlissSettingsService settings) {
+        this(settings, null);
+    }
+
+    public BlissSettingsResource(BlissSettingsService settings,
+            com.bliss.b2b.service.BlissOnboardingService onboarding) {
         this.settings = settings;
+        this.onboarding = onboarding;
     }
 
     @GET
@@ -62,8 +70,18 @@ public class BlissSettingsResource {
 
     @POST
     @Path("/bliss/enable")
-    public BlissSettingsService.SettingsView enable(@Auth MerchantPrincipal principal) {
-        return settings.enable(principal.merchant());
+    public Response enable(@Auth MerchantPrincipal principal) {
+        if (onboarding == null) {
+            return Response.ok(settings.enable(principal.merchant())).build();
+        }
+        try {
+            return Response.ok(onboarding.switchOn(principal.merchant())).build();
+        } catch (SettingsException e) {
+            return Response.status(409).entity(Map.of("error", e.code(), "message", e.getMessage())).build();
+        } catch (com.bliss.b2b.service.PropertyOnboardingException e) {
+            return Response.status(409).entity(Map.of("error", "setup_incomplete",
+                    "message", e.getMessage())).build();
+        }
     }
 
     public record UpdateRequest(

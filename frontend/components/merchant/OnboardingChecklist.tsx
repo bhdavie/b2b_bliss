@@ -54,7 +54,10 @@ export function OnboardingChecklist({ status }: { status: OnboardingStatus }) {
             ? `${status.mews.enterpriseName ?? "Connected"} · ${status.mews.currency ?? ""}`
             : "Enter your credentials",
     },
-    { key: "policy_set", label: "Set your payment policies", href: "/onboarding/plan-rules", hint: "Refunds, retries, deposits" },
+    // A Mews property reviews its Bliss setup instead; switching Bliss on finishes setup.
+    status.pmsType === "mews"
+      ? { key: "policy_set", label: "Set up Bliss", href: "/onboarding/bliss", hint: "Rates, payouts, your booking page" }
+      : { key: "policy_set", label: "Set your payment policies", href: "/onboarding/plan-rules", hint: "Refunds, retries, deposits" },
   ];
 
   // First not-done step is the one we nudge.

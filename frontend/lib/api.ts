@@ -1274,6 +1274,48 @@ export async function resyncMews(): Promise<{ ok: true } | ApiFailure> {
   return res.ok ? { ok: true } : failure(res, `Could not sync (${res.status}).`);
 }
 
+/** The property's Bliss settings, read in the browser (the setup screens). */
+export async function fetchBlissSettings(): Promise<BlissSettingsView> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/bliss-settings`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Could not read your Bliss settings (${res.status}).`);
+  return (await res.json()) as BlissSettingsView;
+}
+
+/** The settings a property can change itself. Leave a field out to keep it. */
+export type BlissSettingsUpdate = {
+  payoutMode?: string;
+  releasePolicy?: string;
+  chargebackBufferDays?: number;
+  feeTaxCode?: string;
+  ledgerPaymentType?: string;
+};
+
+export async function updateBlissSettings(
+  update: BlissSettingsUpdate,
+): Promise<{ ok: true; view: BlissSettingsView } | ApiFailure> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/bliss-settings`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(update),
+  });
+  return res.ok
+    ? { ok: true, view: (await res.json()) as BlissSettingsView }
+    : failure(res, `Could not save (${res.status}).`);
+}
+
+/** "Switch Bliss on": the last setup screen. Finishes setup and emails the property. */
+export async function switchBlissOn(): Promise<{ ok: true } | ApiFailure> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/bliss/enable`, {
+    method: "POST",
+    credentials: "include",
+  });
+  return res.ok ? { ok: true } : failure(res, `Could not switch Bliss on (${res.status}).`);
+}
+
 /** Sets a Bliss rate's booking type; null goes back to following Mews. */
 export async function setBlissRateBookingType(
   rateId: string,

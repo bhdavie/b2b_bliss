@@ -646,6 +646,20 @@ The existing install step (pop-up snippet).
 (read-only, last synced time, "Resync now"), "Your Bliss choices" (editable),
 and "Payouts" (hold mode only: upcoming releases, recent payouts).
 
+**Built (phase 6, 2026-10-01).** A Mews property goes from "Mews connected" to
+`/onboarding/bliss`, the five screens above, which replace the booking setup
+and plan rules steps for Mews (the checklist's last item becomes "Set up
+Bliss"; plan rules stay reachable from screen 4's "Change" and return to it).
+Rates named like "Bliss" are preselected; saving them runs a sync so each
+rate's terms show. "Switch Bliss on" (`POST /merchants/me/bliss/enable`) needs a
+Bliss rate, runs the first sync, enables Bliss, finishes onboarding and sends
+"Bliss is on" once. Choosing hold mode on screen 3 offers "Set up Stripe
+payouts" when the Express account isn't ready. Settings groups into "Synced
+from Mews" and "Your Bliss choices" (payout mode, release point, buffer, fee tax
+code and ledger payment type edited in place; plan settings in the tabs below),
+plus "Your payouts" in hold mode. Cloudbeds and Stripe-only properties keep the
+plan rules step.
+
 ### 10.2 Emails to the hotel
 
 | Email | When | Gist |
@@ -657,6 +671,13 @@ and "Payouts" (hold mode only: upcoming releases, recent payouts).
 | "Payout sent" or "Payout failed" (hold) | Stripe payout events | Arrival date, or what to fix |
 | Weekly summary | Mondays | New plans, payments collected, upcoming releases, any flags |
 | Existing flags | Today's triggers | Unchanged |
+
+As built: "Bliss is on" (once per property), "A Bliss rate was switched off"
+(split out of the change email), "Your Bliss payments are on their way" (each
+release pass, per property; no reservation number yet), "Payout sent" and
+"Payout failed" (once per payout and status) and "Your week with Bliss" (Mondays
+in the property's zone, skipped in a week with nothing to report). The pop-up
+line in 10.3 is not built; the portal's is.
 
 ### 10.3 What guests see
 

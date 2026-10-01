@@ -359,7 +359,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new StripeConnectResource(
                 stripeService, merchantDao, emailService, config.getApp(),
                 stripeConnectionDao, onboardingService, clock)
-                .withPayouts(jdbi.onDemand(com.bliss.b2b.persistence.PayoutReleaseDao.class)));
+                .withPayouts(jdbi.onDemand(com.bliss.b2b.persistence.PayoutReleaseDao.class),
+                        jdbi.onDemand(com.bliss.b2b.persistence.EmailLogDao.class)));
         environment.jersey().register(new com.bliss.b2b.api.PayoutsResource(
                 jdbi.onDemand(com.bliss.b2b.persistence.PayoutReleaseDao.class), bookingDao));
         environment.jersey().register(new StripeStandardConnectResource(
@@ -386,7 +387,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 paymentPlanDao, customerDao, clock, cookieOptions,
                 sessionTtlMinutes, demoPassword));
         environment.jersey().register(new PlanRulesResource(planRulesService, onboardingService));
-        environment.jersey().register(new com.bliss.b2b.api.BlissSettingsResource(
+        com.bliss.b2b.service.BlissSettingsService blissSettingsService =
                 new com.bliss.b2b.service.BlissSettingsService(
                         jdbi.onDemand(com.bliss.b2b.persistence.BlissSettingsDao.class),
                         jdbi.onDemand(com.bliss.b2b.persistence.MerchantPlanRulesDao.class),
@@ -399,7 +400,14 @@ public class BlissApplication extends Application<BlissConfiguration> {
                             if (stripeService.isConfigured() && !accountId.startsWith("acct_demo_")) {
                                 stripeService.enableNegativeBalanceDebits(accountId);
                             }
-                        })));
+                        });
+        environment.jersey().register(new com.bliss.b2b.api.BlissSettingsResource(blissSettingsService,
+                new com.bliss.b2b.service.BlissOnboardingService(blissSettingsService, onboardingService,
+                        mewsSyncService, merchantDao,
+                        jdbi.onDemand(com.bliss.b2b.persistence.MerchantMewsConnectionDao.class),
+                        jdbi.onDemand(com.bliss.b2b.persistence.BlissRateDao.class),
+                        jdbi.onDemand(com.bliss.b2b.persistence.EmailLogDao.class), emailService,
+                        config.getApp().getMerchantBaseUrl())));
         environment.jersey().register(new com.bliss.b2b.api.MewsSyncResource(mewsSyncService,
                 jdbi.onDemand(com.bliss.b2b.persistence.BlissRateDao.class),
                 jdbi.onDemand(com.bliss.b2b.persistence.MewsSyncRunDao.class)));
@@ -489,6 +497,18 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 log.warn("Mews setup sync failed: {}", e.getMessage());
             }
         }, 300, 86_400, java.util.concurrent.TimeUnit.SECONDS);
+        // The hotel's Monday summary: checked hourly, sent once per Monday in
+        // each property's own zone.
+        com.bliss.b2b.service.WeeklySummaryService weeklySummaryService =
+                new com.bliss.b2b.service.WeeklySummaryService(
+                        jdbi, emailService, config.getApp().getMerchantBaseUrl(), clock);
+        chargeScheduler.scheduleAtFixedRate(() -> {
+            try {
+                weeklySummaryService.runIfDue();
+            } catch (RuntimeException e) {
+                log.warn("Weekly summary pass failed: {}", e.getMessage());
+            }
+        }, 600, 3_600, java.util.concurrent.TimeUnit.SECONDS);
         // Hold mode releases, every five minutes on the same thread, so a
         // release never runs while that plan is being charged or linked.
         chargeScheduler.scheduleAtFixedRate(() -> {

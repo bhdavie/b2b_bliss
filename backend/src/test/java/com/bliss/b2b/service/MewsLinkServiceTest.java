@@ -363,8 +363,11 @@ class MewsLinkServiceTest {
 
         syncService.sync(merchantId);
 
-        assertThat(emails).singleElement().satisfies(m ->
-                assertThat(m.body()).contains("can no longer be booked in Mews"));
+        assertThat(emails).singleElement().satisfies(m -> {
+            assertThat(m.subject()).isEqualTo("A Bliss rate was switched off");
+            assertThat(m.body()).contains("Your Bliss rate \"Monthly Bliss\" was switched off in Mews.")
+                    .contains("Plans already under way carry on as they are.").doesNotContain("\u2014");
+        });
         java.util.Optional<com.bliss.b2b.domain.BlissRate> rate = jdbi.withExtension(
                 com.bliss.b2b.persistence.BlissRateDao.class, d -> d.find(merchantId, MONTHLY_RATE));
         assertThat(rate).hasValueSatisfying(r -> assertThat(r.active()).isFalse());

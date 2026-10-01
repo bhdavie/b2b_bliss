@@ -17,7 +17,21 @@ import { Label } from "@/components/ui/Label";
 // builds the plan for the rest from the reservation. The lists are read live
 // from the property's Mews; the server checks the choice again on save.
 
-export function MewsBookingSetup() {
+/**
+ * With no rate chosen yet, preselect the rates named like "Bliss" (spec 10.1):
+ * one mentioning weeks or a fortnight for the every 2 weeks plan, any other
+ * for the monthly plan.
+ */
+function suggestedRates(rates: MewsRate[]): { monthly: string; biweekly: string } {
+  const bliss = rates.filter((r) => /bliss/i.test(r.name));
+  const isBiweekly = (r: MewsRate) => /week|fortnight/i.test(r.name);
+  return {
+    monthly: bliss.find((r) => !isBiweekly(r))?.id ?? "",
+    biweekly: bliss.find(isBiweekly)?.id ?? "",
+  };
+}
+
+export function MewsBookingSetup({ onSaved }: { onSaved?: () => void } = {}) {
   const [options, setOptions] = useState<MewsSetupOptions | null>(null);
   const [serviceId, setServiceId] = useState("");
   const [monthlyRateId, setMonthlyRateId] = useState("");
@@ -38,8 +52,12 @@ export function MewsBookingSetup() {
       const known = (id: string | null) => (id && next.rates.some((r) => r.id === id) ? id : "");
       setOptions(next);
       setServiceId(next.selectedServiceId ?? "");
-      setMonthlyRateId(known(next.selectedMonthlyRateId));
-      setBiweeklyRateId(known(next.selectedBiweeklyRateId));
+      const chosenMonthly = known(next.selectedMonthlyRateId);
+      const chosenBiweekly = known(next.selectedBiweeklyRateId);
+      const suggested =
+        chosenMonthly || chosenBiweekly ? { monthly: "", biweekly: "" } : suggestedRates(next.rates);
+      setMonthlyRateId(chosenMonthly || suggested.monthly);
+      setBiweeklyRateId(chosenBiweekly || suggested.biweekly);
       setMonthlyDeposit(bpsToPercent(next.monthlyDepositBps));
       setBiweeklyDeposit(bpsToPercent(next.biweeklyDepositBps));
     } catch (err) {
@@ -67,6 +85,7 @@ export function MewsBookingSetup() {
           percentToBps(biweeklyDeposit),
         ),
       );
+      onSaved?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save your booking setup.");
     } finally {

@@ -210,8 +210,18 @@ public class MewsSyncService {
         try {
             Merchant merchant = jdbi.withExtension(MerchantDao.class, d -> d.findById(merchantId)).orElse(null);
             if (merchant != null && merchant.email() != null) {
-                emailService.send(EmailTemplates.mewsSetupChanged(
-                        merchant, changes.stream().map(MewsSyncService::describe).toList()));
+                // A rate switched off gets its own email (spec 10.2); the rest
+                // are one "We noticed a change in Mews".
+                List<String> off = changes.stream().filter(c -> "rate_unavailable".equals(c.kind()))
+                        .map(Change::rateName).toList();
+                List<String> other = changes.stream().filter(c -> !"rate_unavailable".equals(c.kind()))
+                        .map(MewsSyncService::describe).toList();
+                if (!off.isEmpty()) {
+                    emailService.send(EmailTemplates.blissRateSwitchedOff(merchant, off));
+                }
+                if (!other.isEmpty()) {
+                    emailService.send(EmailTemplates.mewsSetupChanged(merchant, other));
+                }
             }
         } catch (RuntimeException e) {
             log.warn("Could not email merchant {} about Mews changes: {}", merchantId, e.getMessage());

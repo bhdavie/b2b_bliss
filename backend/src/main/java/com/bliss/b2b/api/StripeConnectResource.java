@@ -47,6 +47,8 @@ public class StripeConnectResource {
     private final java.time.Clock clock;
     /** Hold mode: where payout.* events are recorded. Null leaves them acknowledged only. */
     private com.bliss.b2b.persistence.PayoutReleaseDao payouts;
+    /** Sends each payout email once. Null sends none. */
+    private com.bliss.b2b.persistence.EmailLogDao emailLog;
 
     public StripeConnectResource(
             StripeConnectService stripe,
@@ -186,6 +188,14 @@ public class StripeConnectResource {
         return this;
     }
 
+    /** As above, and emails the hotel when a payout is paid or fails, once each. */
+    public StripeConnectResource withPayouts(com.bliss.b2b.persistence.PayoutReleaseDao payouts,
+            com.bliss.b2b.persistence.EmailLogDao emailLog) {
+        this.payouts = payouts;
+        this.emailLog = emailLog;
+        return this;
+    }
+
     /**
      * A payout from a property's connected account to its bank (hold mode).
      * Read from the event's raw JSON, like account.updated, so the event's API
@@ -208,10 +218,18 @@ public class StripeConnectResource {
                     ? java.time.Instant.ofEpochSecond(p.get("arrival_date").asLong())
                             .atZone(java.time.ZoneOffset.UTC).toLocalDate()
                     : null;
+            String status = p.path("status").asText(event.getType().substring("payout.".length()));
+            String currency = p.path("currency").asText("").toUpperCase(java.util.Locale.ROOT);
+            String failure = p.hasNonNull("failure_message") ? p.get("failure_message").asText() : null;
             payouts.upsertPayout(merchant.get().id(), p.get("id").asText(), p.path("amount").asLong(),
-                    p.path("currency").asText("").toUpperCase(java.util.Locale.ROOT),
-                    p.path("status").asText(event.getType().substring("payout.".length())), arrival,
-                    p.hasNonNull("failure_message") ? p.get("failure_message").asText() : null);
+                    currency, status, arrival, failure);
+            boolean failed = "failed".equals(status);
+            if (emailLog != null && ("paid".equals(status) || failed) && merchant.get().email() != null
+                    && emailLog.claim("payout:" + p.get("id").asText() + ":" + status, "payout_" + status,
+                            merchant.get().email()) == 1) {
+                emailService.send(com.bliss.b2b.integration.EmailTemplates.payoutUpdate(merchant.get(),
+                        p.path("amount").asLong(), currency, arrival, failed, failure));
+            }
             log.info("Recorded {} {} for merchant {}", event.getType(), p.get("id").asText(), merchant.get().id());
         } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException e) {
             log.warn("Could not record {} {}: {}", event.getType(), event.getId(), e.toString());

@@ -188,6 +188,89 @@ public final class EmailTemplates {
         return new EmailMessage(merchant.email(), "We noticed a change in Mews", body.toString());
     }
 
+    /** A Bliss rate in {@link #blissIsOn}: its name, schedule and terms in plain words. */
+    public record RateLine(String name, String schedule, String terms) {
+    }
+
+    /** To the hotel when it switches Bliss on (spec 10.2). */
+    public static EmailMessage blissIsOn(Merchant merchant, List<RateLine> rates, String payoutLabel,
+            String settingsUrl) {
+        StringBuilder body = new StringBuilder(
+                "Bliss is on. Your guests can now pay for their stay over time, interest free.\n\n");
+        if (rates.isEmpty()) {
+            body.append("Guests choose a plan on your booking page.\n");
+        } else {
+            body.append("Guests choose a plan by booking one of your Bliss rates:\n");
+            for (RateLine r : rates) {
+                body.append("- ").append(r.name()).append(", ").append(r.schedule());
+                if (r.terms() != null) {
+                    body.append(". ").append(r.terms());
+                }
+                body.append('\n');
+            }
+            body.append("\nTheir cancellation terms come from Mews, so if you change them there, Bliss follows.\n");
+        }
+        body.append("\nHow you get paid: ").append(payoutLabel).append(".\n\n");
+        body.append("You can see and change everything in your settings: ").append(settingsUrl).append('\n');
+        return new EmailMessage(merchant.email(), "Bliss is on", body.toString());
+    }
+
+    /** To the hotel when a Bliss rate can no longer be booked in Mews (spec 10.2). */
+    public static EmailMessage blissRateSwitchedOff(Merchant merchant, List<String> rateNames) {
+        String names = String.join(", ", rateNames.stream().map(n -> "\"" + n + "\"").toList());
+        String body = (rateNames.size() == 1 ? "Your Bliss rate " + names + " was switched off in Mews."
+                : "Your Bliss rates " + names + " were switched off in Mews.")
+                + "\n\nGuests can't book " + (rateNames.size() == 1 ? "it" : "them")
+                + " now, so Bliss won't start new plans on " + (rateNames.size() == 1 ? "it" : "them")
+                + ". Plans already under way carry on as they are.\n\n"
+                + "If this wasn't intended, switch it back on in Mews and Bliss will pick it up on its next sync.\n";
+        return new EmailMessage(merchant.email(), "A Bliss rate was switched off", body);
+    }
+
+    /** To the hotel when Stripe pays held money into its bank, or the payout fails (spec 10.2). */
+    public static EmailMessage payoutUpdate(Merchant merchant, long amountMinor, String currency,
+            java.time.LocalDate arrival, boolean failed, String failureMessage) {
+        PropertyLocale pl = new PropertyLocale(currency, null, merchant.localeTag());
+        if (failed) {
+            String body = "A payout of " + pl.format(amountMinor) + " to your bank didn't go through."
+                    + (failureMessage == null ? "" : "\n\nStripe says: " + failureMessage)
+                    + "\n\nPlease check your bank details in your Stripe account. Stripe tries again once "
+                    + "they're updated, and the money stays safe in your Stripe balance until then.\n";
+            return new EmailMessage(merchant.email(), "Payout failed", body);
+        }
+        String body = pl.format(amountMinor) + " from your Bliss bookings has been paid into your bank"
+                + (arrival == null ? "." : ", arriving " + pl.date(arrival) + ".") + "\n";
+        return new EmailMessage(merchant.email(), "Payout sent", body);
+    }
+
+    /** What {@link #weeklySummary} reports, amounts per currency. */
+    public record WeeklySummary(int newPlans, java.util.Map<String, Long> collected,
+            java.util.Map<String, Long> releasingSoon, int openFlags) {
+    }
+
+    /** To the hotel on Mondays (spec 10.2). */
+    public static EmailMessage weeklySummary(Merchant merchant, WeeklySummary w, String dashboardUrl) {
+        StringBuilder body = new StringBuilder("Here's your week with Bliss.\n\n");
+        body.append("- New plans: ").append(w.newPlans()).append('\n');
+        body.append("- Payments collected: ").append(amounts(merchant, w.collected())).append('\n');
+        if (!w.releasingSoon().isEmpty()) {
+            body.append("- Coming to you this week: ").append(amounts(merchant, w.releasingSoon())).append('\n');
+        }
+        if (w.openFlags() > 0) {
+            body.append("- Bookings that need a look: ").append(w.openFlags()).append('\n');
+        }
+        body.append("\nSee the details on your dashboard: ").append(dashboardUrl).append('\n');
+        return new EmailMessage(merchant.email(), "Your week with Bliss", body.toString());
+    }
+
+    private static String amounts(Merchant merchant, java.util.Map<String, Long> byCurrency) {
+        if (byCurrency.isEmpty()) {
+            return "none";
+        }
+        return String.join(", ", byCurrency.entrySet().stream()
+                .map(e -> new PropertyLocale(e.getKey(), null, merchant.localeTag()).format(e.getValue())).toList());
+    }
+
     /** One released payment in {@link #holdReleased}. */
     public record ReleasedLine(String stay, java.time.LocalDate checkIn, long amountMinor, String currency,
             String localeTag) {

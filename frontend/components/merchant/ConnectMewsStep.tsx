@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Panel } from "@/components/ui/primitives";
-import { MewsBookingSetup } from "./MewsBookingSetup";
 
 // Property enters its Mews Connector tokens; we validate them against Mews
 // (Get configuration) before storing. On success we show the enterprise we
@@ -75,10 +74,10 @@ export function ConnectMewsStep({ alreadyConnected }: { alreadyConnected?: MewsC
           Linked to <span className="font-medium text-ink-900">{result.enterpriseName}</span>
           {result.currency ? ` · charging in ${result.currency}` : ""}.
         </p>
-        <div className="mt-2 w-full border-t border-sand-100 pt-6">
-          <MewsBookingSetup />
-        </div>
-        <Button href="/onboarding/plan-rules" variant="merchant" className="mt-2">
+        <p className="max-w-[560px] text-base leading-[1.5] text-ink-500">
+          Next, review what Bliss read from Mews and switch Bliss on.
+        </p>
+        <Button href="/onboarding/bliss" variant="merchant" className="mt-2">
           Continue
         </Button>
       </Panel>

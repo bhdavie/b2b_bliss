@@ -236,4 +236,31 @@ class StripeAccountUpdatedWebhookTest {
                     assertThat(p.arrivalDate()).isEqualTo(java.time.LocalDate.of(2026, 9, 26));
                 });
     }
+
+    @Test
+    void thePropertyHearsOnceWhenAPayoutArrivesOrFails() {
+        String account = id("acct_");
+        insertMerchant("none", account);
+        java.util.List<com.bliss.b2b.integration.EmailMessage> sent = new java.util.ArrayList<>();
+        MerchantDao merchants = jdbi.onDemand(MerchantDao.class);
+        MerchantStripeConnectionDao connections = jdbi.onDemand(MerchantStripeConnectionDao.class);
+        StripeConnectResource resource = new StripeConnectResource(new FakeStripe(), merchants, sent::add,
+                new AppConfig(), connections, null, Clock.systemUTC())
+                .withPayouts(jdbi.onDemand(com.bliss.b2b.persistence.PayoutReleaseDao.class),
+                        jdbi.onDemand(com.bliss.b2b.persistence.EmailLogDao.class));
+
+        for (String status : new String[] {"paid", "paid", "failed"}) {
+            resource.recordPayout(ApiResource.GSON.fromJson("""
+                    {"id": "evt_%s", "object": "event", "type": "payout.%s", "account": "%s",
+                     "data": {"object": {"id": "po_%s", "object": "payout", "amount": 58200, "currency": "usd",
+                                         "status": "%s", "arrival_date": 1790380800,
+                                         "failure_message": "The bank account has been closed."}}}
+                    """.formatted(status, status, account, account, status), Event.class));
+        }
+
+        assertThat(sent).extracting(com.bliss.b2b.integration.EmailMessage::subject)
+                .containsExactly("Payout sent", "Payout failed");
+        assertThat(sent.get(0).body()).contains("$582.00").contains("arriving");
+        assertThat(sent.get(1).body()).contains("The bank account has been closed.");
+    }
 }
