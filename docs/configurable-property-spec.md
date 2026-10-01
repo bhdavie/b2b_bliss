@@ -31,6 +31,9 @@ Decided and not reopened here:
   checkout page.
 - Hold-mode charges are made `on_behalf_of` the hotel (D2), on Express connected
   accounts (D6).
+- The card reaches Stripe by forwarding the card Mews already holds (D1 option
+  A, the target), with a card step on the Mews confirmation page (option C) as
+  the fallback if A proves impossible.
 - The Bliss fee is a labeled folio fee line, not a tax.
 
 Decisions needed from Brad are collected in [Open decisions](#open-decisions)
@@ -84,8 +87,8 @@ sees ledger entries.
 1. **The card has to reach Stripe.** Payments are charged by Stripe, so the
    guest's card must be vaulted there, and the Bliss rate in Mews must not take
    a Mews Payments charge. The guest still checks out in the Mews booking
-   engine as normal, so how the card gets to Stripe is the open question **D1**
-   (options in 2.5).
+   engine as normal. D1 is decided: forward the card Mews holds (option A),
+   falling back to a card step on the confirmation page (option C). See 2.5.
 2. **Charges on the platform, on behalf of the hotel.** Each payment (deposit
    and installments) is a Stripe PaymentIntent on the Bliss platform account
    with `on_behalf_of` the hotel's connected account and a `transfer_group` of
@@ -148,7 +151,13 @@ These do not change the decided architecture, but each one shapes it:
 - **ACH means US banks.** Hold mode starts US only. Properties elsewhere use pay
   as you go until local payout rails are added.
 
-### 2.5 Getting the card to Stripe without a Bliss checkout (D1 options)
+### 2.5 Getting the card to Stripe without a Bliss checkout (D1)
+
+**Decision:** option A is the target. Option C is the fallback, built only if
+Mews will not grant card access or Stripe will not accept the forwarded card.
+Option B is not pursued; option D remains a recovery path for a guest who
+leaves the confirmation step without adding a card under C. The options as
+weighed:
 
 The constraint: the pop-up only picks a plan, and the guest completes checkout
 in the Mews booking engine as normal. Whatever card the guest gives Mews stays
@@ -606,9 +615,10 @@ Each phase ships on its own and leaves production consistent.
 **Phase 0: prerequisites**
 - Done: `account.updated` is applied, and Stripe-rail cancellations refund
   (`f9f4b1c`).
-- Answer D1 and D3 (hold mode cannot start without them). For D1 option A, ask
-  Mews about card access and Stripe about card forwarding first, since that
-  decides whether A is possible at all.
+- Answer D3 (hold mode cannot start without it).
+- D1 option A: ask Mews for card access for our integration (PCI Proxy
+  tokenization) and Stripe whether it accepts the card forwarded vault to vault.
+  If either says no, Phase 5a builds option C instead.
 - Confirm the new Mews calls exist and are available to our integration (D8,
   D11, D13, D16).
 
@@ -633,7 +643,8 @@ Each phase ships on its own and leaves production consistent.
 - Stripe rail refunds execute (today they are only computed).
 
 **Phase 5: hold mode**
-- 5a: Express onboarding for hold-mode properties; the card path chosen in D1;
+- 5a: Express onboarding for hold-mode properties; the card path from D1
+  (option A, or option C if A is not available);
   platform charges `on_behalf_of` the hotel with `transfer_group`; plan rail
   `stripe_hold`.
 - 5b: release schedule, `ReleaseService`, transfers, `payments/addExternal`
@@ -649,21 +660,22 @@ Each phase ships on its own and leaves production consistent.
   email; weekly summary.
 
 Phases 1 and 2 can start immediately. Phase 3 needs D13 and D14. Phase 5 needs
-D1, D3, D4, D5 and D10.
+the D1 answers from Mews and Stripe, plus D3, D4, D5 and D10.
 
 ---
 
 ## 12. Open decisions
 
-Decided: **D2**, hold-mode charges are made `on_behalf_of` the hotel, so the
-hotel is the merchant of record. **D6**, hold-mode properties use Express
+Decided: **D1**, forward the card Mews holds to Stripe (option A), with the
+confirmation-page card step (option C) as the fallback (section 2.5). **D2**,
+hold-mode charges are made `on_behalf_of` the hotel, so the hotel is the
+merchant of record. **D6**, hold-mode properties use Express
 connected accounts; Standard stays for the existing Stripe rail.
 
 Still open:
 
 | # | Decision | Options | Recommendation |
 |---|---|---|---|
-| **D1** | How the guest's card reaches Stripe in hold mode, given the settled UX (pop-up picks the plan, checkout in Mews, no Bliss checkout page) | A. forward the card Mews holds to Stripe; B. card field in the pop-up at plan pick; C. card step on the Mews confirmation page; D. activation link (fallback) | Brad to decide; options and trade-offs in 2.5 |
 | **D3** | How long Stripe allows held funds to stay in the platform balance before release | Stripe's limit for separate charges and transfers | Confirm the maximum with Stripe; stays can be booked a year out. Held funds stay in the platform balance with Bliss's own payouts set so they are not swept |
 | **D4** | Chargeback buffer before "on collection" releases | 0, 3, 7 days | 3 days |
 | **D5** | Refunds past the card refund window | Bank transfer; future-stay credit; disallow long holds | Credit, with a hotel-approved manual refund path |
