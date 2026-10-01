@@ -81,6 +81,16 @@ app:
   # through its own booking engine.
   demoMewsSlugs: ${BLISS_DEMO_MEWS_SLUGS:-}
 
+# Configurable-property features waiting on an open decision
+# (docs/configurable-property-spec.md, section 12). All off by default.
+features:
+  # Hold mode: Stripe holds guest money until release. TODO(D3) Stripe's max hold period.
+  holdMode: ${BLISS_FEATURE_HOLD_MODE:-false}
+  # Hold mode card path A: forward the card Mews holds. TODO(D1) Mews card access.
+  mewsCardForwarding: ${BLISS_FEATURE_MEWS_CARD_FORWARDING:-false}
+  # "Bliss service fee" folio line. TODO(D14) the fee's tax treatment.
+  feeFolioLine: ${BLISS_FEATURE_FEE_FOLIO_LINE:-false}
+
 database:
   # DATABASE_URL, when the platform sets it, overrides all three of these at
   # startup — see DatabaseUrlResolver. These are the local-dev fallback.

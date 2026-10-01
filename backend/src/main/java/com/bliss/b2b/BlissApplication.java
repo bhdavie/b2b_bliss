@@ -371,6 +371,13 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 paymentPlanDao, customerDao, clock, cookieOptions,
                 sessionTtlMinutes, demoPassword));
         environment.jersey().register(new PlanRulesResource(planRulesService, onboardingService));
+        environment.jersey().register(new com.bliss.b2b.api.BlissSettingsResource(
+                new com.bliss.b2b.service.BlissSettingsService(
+                        jdbi.onDemand(com.bliss.b2b.persistence.BlissSettingsDao.class),
+                        jdbi.onDemand(com.bliss.b2b.persistence.MerchantPlanRulesDao.class),
+                        jdbi.onDemand(com.bliss.b2b.persistence.MerchantFeeRateDao.class),
+                        jdbi.onDemand(com.bliss.b2b.persistence.MerchantMewsConnectionDao.class),
+                        config.getFeatures(), clock)));
         environment.jersey().register(new PropertyOnboardingResource(onboardingService));
         environment.jersey().register(new com.bliss.b2b.api.CloudbedsOAuthResource(
                 cloudbedsOAuthClient, cloudbedsAdapterFactory, onboardingService, config.getApp(), clock));

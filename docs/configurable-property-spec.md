@@ -433,8 +433,9 @@ booking snapshots)
 **`mews_sync_runs`**: merchant, started and finished times, what changed
 (jsonb), error. This feeds the "Last synced" display and change emails.
 
-**`bookings`** (add): `booking_type`, `payout_mode`, `cancellation_policy`
-(jsonb snapshot), `free_cancellation_until` (timestamptz, property zone
+**`bookings`** (add): `booking_type`, `payout_mode`, `cancellation_terms`
+(jsonb snapshot; the existing `cancellation_policy` column is a merchant's free
+text and is kept), `free_cancellation_until` (timestamptz, property zone
 resolved).
 
 **`payment_plans.payment_rail`**: allow `stripe_hold` (CHECK constraint update).

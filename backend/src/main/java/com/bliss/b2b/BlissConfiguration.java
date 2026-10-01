@@ -106,6 +106,10 @@ public class BlissConfiguration extends Configuration {
     @NotNull
     private PmsConfig pms = new PmsConfig();
 
+    @Valid
+    @NotNull
+    private FeaturesConfig features = new FeaturesConfig();
+
     @JsonProperty public String getEnv() { return env; }
     @JsonProperty public void setEnv(String env) { this.env = env; }
     @JsonProperty public boolean isDemoLogin() { return demoLogin; }
@@ -128,6 +132,8 @@ public class BlissConfiguration extends Configuration {
     @JsonProperty public void setDemoLoginEmails(String demoLoginEmails) {
         this.demoLoginEmails = demoLoginEmails == null ? "" : demoLoginEmails;
     }
+    @JsonProperty public FeaturesConfig getFeatures() { return features; }
+    @JsonProperty public void setFeatures(FeaturesConfig features) { this.features = features; }
     @JsonProperty public AppConfig getApp() { return app; }
     @JsonProperty public void setApp(AppConfig app) { this.app = app; }
     @JsonProperty public DatabaseConfig getDatabase() { return database; }
@@ -158,6 +164,38 @@ public class BlissConfiguration extends Configuration {
      * decides which value builds it. Local dev points both at the one Next dev
      * server, where every route is served from a single origin.
      */
+    /**
+     * Configurable-property features that wait on an open decision
+     * (docs/configurable-property-spec.md, section 12). Each defaults off, so
+     * nothing below changes behaviour until it is decided and switched on.
+     */
+    public static class FeaturesConfig {
+        /**
+         * Hold mode (spec section 2.2). TODO(D3): confirm Stripe's maximum hold
+         * period for separate charges and transfers before switching on.
+         */
+        private boolean holdMode = false;
+        /**
+         * Hold mode card path option A: forward the card Mews holds to Stripe.
+         * TODO(D1): needs Mews card access for our integration and Stripe's
+         * acceptance of the forwarded card; off means option C (card step on
+         * the Mews confirmation page).
+         */
+        private boolean mewsCardForwarding = false;
+        /**
+         * The "Bliss service fee" folio line (spec section 6). TODO(D14): the
+         * fee's tax treatment per market; off until a tax code is agreed.
+         */
+        private boolean feeFolioLine = false;
+
+        @JsonProperty public boolean isHoldMode() { return holdMode; }
+        @JsonProperty public void setHoldMode(boolean holdMode) { this.holdMode = holdMode; }
+        @JsonProperty public boolean isMewsCardForwarding() { return mewsCardForwarding; }
+        @JsonProperty public void setMewsCardForwarding(boolean v) { this.mewsCardForwarding = v; }
+        @JsonProperty public boolean isFeeFolioLine() { return feeFolioLine; }
+        @JsonProperty public void setFeeFolioLine(boolean feeFolioLine) { this.feeFolioLine = feeFolioLine; }
+    }
+
     public static class AppConfig {
         @NotBlank
         private String merchantBaseUrl = "http://localhost:3000";

@@ -28,14 +28,16 @@ public interface BookingDao {
                 total_amount_cents, appointment_date, checkout_date,
                 cancellation_policy, customer_name_hint, customer_email_hint,
                 customer_phone_hint, status, booking_source,
-                currency, time_zone, locale
+                currency, time_zone, locale, payout_mode
             )
             SELECT
                 :merchantId, :bookingToken, :serviceName, :serviceDescription,
                 :totalAmountCents, :appointmentDate, :checkoutDate,
                 :cancellationPolicy, :customerNameHint, :customerEmailHint,
                 :customerPhoneHint, 'sent', :bookingSource,
-                m.currency, m.time_zone, m.locale
+                m.currency, m.time_zone, m.locale,
+                COALESCE((SELECT s.payout_mode FROM property_bliss_settings s WHERE s.merchant_id = m.id),
+                         'pay_as_you_go')
             FROM merchants m
             WHERE m.id = :merchantId AND m.currency IS NOT NULL
             """)

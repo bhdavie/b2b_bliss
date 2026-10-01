@@ -1188,3 +1188,34 @@ export async function devMarkPlanFailed(
   }
   return (await res.json()) as { planStatus: PaymentPlanStatus; afterRetriesAction: string };
 }
+
+// ---------------------------------------------------------------------------
+// Bliss settings (configurable-property spec, phase 1): every setting that
+// governs how Bliss runs for the property, with where its value comes from.
+
+export type BlissSettingSource = "default" | "hotel" | "mews" | "cloudbeds" | "stripe" | "bliss";
+
+export type BlissSettingOption = {
+  value: string;
+  label: string;
+  available: boolean;
+  note: string | null;
+};
+
+export type BlissSetting = {
+  key: string;
+  group: "payouts" | "synced" | "plans" | "fees" | "emails";
+  label: string;
+  help: string;
+  value: unknown;
+  display: string;
+  source: BlissSettingSource;
+  editable: boolean;
+  options: BlissSettingOption[] | null;
+};
+
+export type BlissSettingsView = {
+  enabled: boolean;
+  enabledAt: string | null;
+  settings: BlissSetting[];
+};

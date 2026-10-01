@@ -11,6 +11,7 @@ import {
   type AdminReferralStatus,
   type AdminView,
   type AttentionResponse,
+  type BlissSettingsView,
   type Booking,
   type BookingListResponse,
   type MerchantView,
@@ -214,6 +215,20 @@ export async function fetchPlanRulesServer(): Promise<PlanRules | null> {
     throw new Error(`fetchPlanRulesServer failed: ${res.status}`);
   }
   return (await res.json()) as PlanRules;
+}
+
+export async function fetchBlissSettingsServer(): Promise<BlissSettingsView | null> {
+  const headers = await sessionHeader();
+  if (!headers) return null;
+  const res = await fetch(`${API_BASE_URL}/api/v1/merchants/me/bliss-settings`, {
+    headers,
+    cache: "no-store",
+  });
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    throw new Error(`fetchBlissSettingsServer failed: ${res.status}`);
+  }
+  return (await res.json()) as BlissSettingsView;
 }
 
 export async function fetchAttentionPlansServer(): Promise<AttentionResponse | null> {
