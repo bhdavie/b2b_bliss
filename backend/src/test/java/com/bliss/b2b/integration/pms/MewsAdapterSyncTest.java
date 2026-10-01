@@ -104,4 +104,55 @@ class MewsAdapterSyncTest {
         assertThat(http.requests.get(0)).contains("\"TaxCodes\":[\"UK-2022-20%\"]")
                 .contains("\"AccountingCategoryId\":\"cat-fees\"");
     }
+
+    @Test
+    void aNetPricingPropertyGetsTheAmountAsANetValue() {
+        // On the Net Pricing demo a taxed GrossValue is refused ("Invalid
+        // NetValue"); a NetValue is taken and Mews adds the tax on top.
+        FakeHttp http = new FakeHttp().then(200, "{\"OrderId\":\"o-net\"}");
+
+        adapter(http).addOrderItem("svc-bliss", "cust-1", "res-1", "Bliss service fee", 11_421, "USD",
+                "US-DC-2023-6%", null, "fee_line:plan-3", null, true);
+
+        assertThat(http.requests.get(0)).contains("\"NetValue\":114.21").doesNotContain("GrossValue")
+                .contains("\"TaxCodes\":[\"US-DC-2023-6%\"]");
+    }
+
+    @Test
+    void aGrossPricingPropertyGetsTheAmountAsAGrossValue() {
+        FakeHttp http = new FakeHttp().then(200, "{\"OrderId\":\"o-gross\"}");
+
+        adapter(http).addOrderItem("svc-bliss", "cust-1", "res-1", "Bliss service fee", 11_421, "GBP",
+                null, null, "fee_line:plan-4", null, false);
+
+        assertThat(http.requests.get(0)).contains("\"GrossValue\":114.21").doesNotContain("NetValue");
+    }
+
+    @Test
+    void anEarlierFeeLineIsFoundByItsExternalIdentifier_ignoringCanceledOnes() {
+        FakeHttp http = new FakeHttp().then(200, """
+                {"OrderItems":[
+                  {"Id":"i1","ServiceOrderId":"other-order","ExternalIdentifier":"fee_line:plan-9","CanceledUtc":null},
+                  {"Id":"i2","ServiceOrderId":"canceled-order","ExternalIdentifier":"fee_line:plan-1",
+                   "CanceledUtc":"2026-10-01T22:30:00Z"},
+                  {"Id":"i3","ServiceOrderId":"2648b297","ExternalIdentifier":"fee_line:plan-1","CanceledUtc":null}
+                ],"Cursor":null}
+                """);
+
+        java.util.Optional<String> found = adapter(http).findOrderByExternalIdentifier("svc-bliss",
+                java.time.Instant.parse("2026-10-01T22:00:00Z"), java.time.Instant.parse("2026-10-01T23:00:00Z"),
+                "fee_line:plan-1");
+
+        assertThat(found).contains("2648b297");
+        assertThat(http.requests.get(0)).contains("\"ServiceIds\":[\"svc-bliss\"]")
+                .contains("\"StartUtc\":\"2026-10-01T22:00:00Z\"").contains("\"EndUtc\":\"2026-10-01T23:00:00Z\"");
+    }
+
+    @Test
+    void noEarlierFeeLineMeansNothingFound() {
+        FakeHttp http = new FakeHttp().then(200, "{\"OrderItems\":[],\"Cursor\":null}");
+
+        assertThat(adapter(http).findOrderByExternalIdentifier("svc-bliss", java.time.Instant.EPOCH,
+                java.time.Instant.parse("2026-10-01T23:00:00Z"), "fee_line:plan-1")).isEmpty();
+    }
 }

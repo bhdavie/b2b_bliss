@@ -11,7 +11,7 @@ class MewsConnectionAllowlistTest {
     private static MewsConnection withAllowlist(List<String> allowlist) {
         return new MewsConnection(UUID.randomUUID(), "https://api.mews-demo.com", "v1:ct", "v1:at",
                 "ent", "Demo", "GBP", null, null, null, null, null, null, "Europe/Budapest",
-                null, null, null, null, null, allowlist);
+                null, null, null, null, null, allowlist, null);
     }
 
     @Test

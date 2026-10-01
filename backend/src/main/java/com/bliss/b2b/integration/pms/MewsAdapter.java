@@ -425,9 +425,23 @@ public class MewsAdapter implements PmsAdapter {
     public String addOrderItem(String serviceId, String accountId, String reservationId, String name,
             long amountMinor, String currency, String taxCode, String accountingCategoryId,
             String externalIdentifier, String notes) {
+        return addOrderItem(serviceId, accountId, reservationId, name, amountMinor, currency, taxCode,
+                accountingCategoryId, externalIdentifier, notes, false);
+    }
+
+    /**
+     * As above, sending the amount as the property prices: a gross value
+     * (tax included) on a gross-pricing property, a net value (tax added on
+     * top by Mews) on a net-pricing one. Mews refuses a taxed gross value on a
+     * net-pricing property ("Invalid NetValue", verified on the Net Pricing
+     * demo). Untaxed, the two are the same amount.
+     */
+    public String addOrderItem(String serviceId, String accountId, String reservationId, String name,
+            long amountMinor, String currency, String taxCode, String accountingCategoryId,
+            String externalIdentifier, String notes, boolean netPricing) {
         Map<String, Object> unitAmount = new LinkedHashMap<>();
         unitAmount.put("Currency", currency);
-        unitAmount.put("GrossValue", toGrossValue(amountMinor, currency));
+        unitAmount.put(netPricing ? "NetValue" : "GrossValue", toGrossValue(amountMinor, currency));
         if (taxCode != null && !taxCode.isBlank()) {
             unitAmount.put("TaxCodes", List.of(taxCode));
         }
@@ -602,6 +616,28 @@ public class MewsAdapter implements PmsAdapter {
             throw new PmsAdapterException("Reservation " + reservationId + " has no order items");
         }
         return new StayPrice(toMinorUnits(sum, currency), currency);
+    }
+
+    /**
+     * The order an item with this {@code ExternalIdentifier} belongs to, if
+     * Mews already has one (not canceled) on {@code serviceId} created in the
+     * window. Bliss marks every folio line it posts with its own identifier,
+     * so this finds a line that was posted even if Bliss never recorded the
+     * reply. Mews returns order items linked to a reservation as their own
+     * orders, so the search is by service and creation time, not reservation.
+     */
+    public Optional<String> findOrderByExternalIdentifier(String serviceId, Instant createdFrom,
+            Instant createdTo, String externalIdentifier) {
+        Map<String, Object> body = auth();
+        body.put("ServiceIds", List.of(serviceId));
+        body.put("CreatedUtc", Map.of("StartUtc", createdFrom.toString(), "EndUtc", createdTo.toString()));
+        for (JsonNode item : getAllPaged(ORDER_ITEMS_GET_ALL, body, "OrderItems")) {
+            if (externalIdentifier.equals(textOrNull(item, "ExternalIdentifier"))
+                    && textOrNull(item, "CanceledUtc") == null) {
+                return Optional.ofNullable(textOrNull(item, "ServiceOrderId"));
+            }
+        }
+        return Optional.empty();
     }
 
     /** A Mews customer by id, or empty. */

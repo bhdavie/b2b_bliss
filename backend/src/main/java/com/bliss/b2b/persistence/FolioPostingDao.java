@@ -53,6 +53,7 @@ public interface FolioPostingDao {
             @org.jdbi.v3.core.mapper.reflect.ColumnName("currency") String currency,
             @org.jdbi.v3.core.mapper.reflect.ColumnName("status") String status,
             @org.jdbi.v3.core.mapper.reflect.ColumnName("mews_id") String mewsId,
-            @org.jdbi.v3.core.mapper.reflect.ColumnName("attempts") int attempts) {
+            @org.jdbi.v3.core.mapper.reflect.ColumnName("attempts") int attempts,
+            @org.jdbi.v3.core.mapper.reflect.ColumnName("created_at") java.time.Instant createdAt) {
     }
 }

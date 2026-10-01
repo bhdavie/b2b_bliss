@@ -31,7 +31,8 @@ public class MewsConnectionRowMapper implements RowMapper<MewsConnection> {
                 toInstant(rs.getTimestamp("linked_through_utc")),
                 (Integer) rs.getObject("bliss_monthly_deposit_bps"),
                 (Integer) rs.getObject("bliss_biweekly_deposit_bps"),
-                allowlist(rs.getArray("link_guest_allowlist"))
+                allowlist(rs.getArray("link_guest_allowlist")),
+                rs.getString("pricing")
         );
     }
 

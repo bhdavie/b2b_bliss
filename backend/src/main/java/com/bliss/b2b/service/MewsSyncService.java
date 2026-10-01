@@ -87,6 +87,11 @@ public class MewsSyncService {
         Instant started = clock.instant();
         try {
             MewsAdapter adapter = mewsFactory.adapterForConnection(conn);
+            // Pricing mode decides how folio amounts are sent (net or gross).
+            String pricing = MewsAdapterFactory.pricingOf(adapter.getPropertyConfiguration());
+            if (pricing != null && !pricing.equals(conn.pricing())) {
+                jdbi.useExtension(MerchantMewsConnectionDao.class, d -> d.updatePricing(merchantId, pricing));
+            }
             List<Change> changes = syncRates(merchantId, conn, adapter);
             changes.addAll(pickFeeService(merchantId, adapter));
             record(merchantId, started, changes, null);

@@ -10,7 +10,9 @@ import com.bliss.b2b.persistence.FolioPostingDao;
 import com.bliss.b2b.persistence.FolioPostingDao.Posting;
 import com.bliss.b2b.persistence.MerchantMewsConnectionDao;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
@@ -32,6 +34,8 @@ public class FeeLineService {
 
     private static final Logger log = LoggerFactory.getLogger(FeeLineService.class);
     static final String LINE_NAME = "Bliss service fee";
+    /** Slack around a posting's lifetime when searching Mews for an earlier attempt. */
+    private static final java.time.Duration SEARCH_MARGIN = java.time.Duration.ofHours(1);
 
     private final Jdbi jdbi;
     private final MewsAdapterFactory mewsFactory;
@@ -100,9 +104,23 @@ public class FeeLineService {
             MewsConnection conn = jdbi.withExtension(MerchantMewsConnectionDao.class,
                     d -> d.findByMerchant(merchantId)).orElseThrow();
             MewsAdapter adapter = mewsFactory.adapterForConnection(conn);
+
+            // Never twice: if Mews already has this line (an earlier attempt
+            // posted it but Bliss never recorded the reply), record that one.
+            Instant now = clock.instant();
+            Optional<String> existing = adapter.findOrderByExternalIdentifier(settings.feeServiceId(),
+                    posting.createdAt().minus(SEARCH_MARGIN), now.plus(SEARCH_MARGIN), posting.idempotencyKey());
+            if (existing.isPresent()) {
+                jdbi.useExtension(FolioPostingDao.class, d -> d.markPosted(posting.id(), existing.get(), now));
+                log.info("Bliss fee line {} was already on the folio (order {}); recorded it, posted nothing",
+                        posting.idempotencyKey(), existing.get());
+                return true;
+            }
+
+            boolean net = netPricing(merchantId, conn, adapter);
             String orderId = adapter.addOrderItem(settings.feeServiceId(), customerId, reservationId, LINE_NAME,
                     posting.amountMinor(), posting.currency(), settings.feeTaxCode(),
-                    settings.feeAccountingCategoryId(), posting.idempotencyKey(), "Bliss payment plan fee");
+                    settings.feeAccountingCategoryId(), posting.idempotencyKey(), "Bliss payment plan fee", net);
             jdbi.useExtension(FolioPostingDao.class, d -> d.markPosted(posting.id(), orderId, clock.instant()));
             log.info("Posted Bliss fee line {} {} to Mews reservation {} (order {})",
                     posting.amountMinor(), posting.currency(), reservationId, orderId);
@@ -112,6 +130,22 @@ public class FeeLineService {
             jdbi.useExtension(FolioPostingDao.class, d -> d.recordFailure(posting.id(), truncate(e.getMessage())));
             return false;
         }
+    }
+
+    /**
+     * The property's pricing mode: stored on the connection, or read from
+     * Mews and stored the first time it is needed. A property Mews reports
+     * neither for is treated as gross, as Bliss posted before V40.
+     */
+    private boolean netPricing(UUID merchantId, MewsConnection conn, MewsAdapter adapter) {
+        if (conn.pricing() != null) {
+            return conn.netPricing();
+        }
+        String pricing = MewsAdapterFactory.pricingOf(adapter.getPropertyConfiguration());
+        if (pricing != null) {
+            jdbi.useExtension(MerchantMewsConnectionDao.class, d -> d.updatePricing(merchantId, pricing));
+        }
+        return "Net".equals(pricing);
     }
 
     private static String truncate(String s) {

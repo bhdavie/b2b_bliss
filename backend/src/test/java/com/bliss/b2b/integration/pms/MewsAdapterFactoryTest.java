@@ -41,7 +41,7 @@ class MewsAdapterFactoryTest {
             @Override
             public void upsertValidated(UUID merchantId, String platformUrl, String encryptedClientToken,
                     String encryptedAccessToken, String enterpriseId, String enterpriseName,
-                    String currency, String timeZone, String locale, Instant validatedAt) {
+                    String currency, String timeZone, String locale, String pricing, Instant validatedAt) {
                 stored[0] = encryptedClientToken;
                 stored[1] = encryptedAccessToken;
             }
@@ -49,6 +49,11 @@ class MewsAdapterFactoryTest {
             @Override
             public int updateBookingSetup(UUID merchantId, String serviceId, String blissRateId,
                     String adultAgeCategoryId, String timeZone) {
+                return 0;
+            }
+
+            @Override
+            public int updatePricing(UUID merchantId, String pricing) {
                 return 0;
             }
 
@@ -74,7 +79,7 @@ class MewsAdapterFactoryTest {
                 CIPHER.encrypt(Field.MEWS_CLIENT_TOKEN, MERCHANT, "ct"),
                 CIPHER.encrypt(Field.MEWS_ACCESS_TOKEN, MERCHANT, "at"),
                 "ent", "Cranberry", currency, now, now, now, null, null, null, null,
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     private static MerchantMewsConnectionDao daoReturning(MewsConnection conn) {
@@ -87,7 +92,7 @@ class MewsAdapterFactoryTest {
             @Override
             public void upsertValidated(UUID merchantId, String platformUrl, String encryptedClientToken,
                     String encryptedAccessToken, String enterpriseId, String enterpriseName,
-                    String currency, String timeZone, String locale, Instant validatedAt) {
+                    String currency, String timeZone, String locale, String pricing, Instant validatedAt) {
                 throw new UnsupportedOperationException();
             }
 
@@ -95,6 +100,11 @@ class MewsAdapterFactoryTest {
             public int updateBookingSetup(UUID merchantId, String serviceId, String blissRateId,
                     String adultAgeCategoryId, String timeZone) {
                 throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public int updatePricing(UUID merchantId, String pricing) {
+                return 0;
             }
 
             @Override

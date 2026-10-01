@@ -66,7 +66,15 @@ public class MewsAdapterFactory implements ChargeContextResolver {
                 cipher.encrypt(Field.MEWS_CLIENT_TOKEN, merchantId, clientToken),
                 cipher.encrypt(Field.MEWS_ACCESS_TOKEN, merchantId, accessToken),
                 enterprise.enterpriseId(), enterprise.name(), enterprise.defaultCurrency(),
-                enterprise.timeZoneIdentifier(), enterprise.languageCode(), validatedAt);
+                enterprise.timeZoneIdentifier(), enterprise.languageCode(), pricingOf(enterprise), validatedAt);
+    }
+
+    /** "Gross" or "Net" as Mews reports it, or null when it reports neither. */
+    public static String pricingOf(PmsPropertyConfiguration enterprise) {
+        String p = enterprise.pricing();
+        if ("Gross".equalsIgnoreCase(p)) return "Gross";
+        if ("Net".equalsIgnoreCase(p)) return "Net";
+        return null;
     }
 
     /**

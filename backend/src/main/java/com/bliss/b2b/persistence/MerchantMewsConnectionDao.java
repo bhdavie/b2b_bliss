@@ -30,10 +30,10 @@ public interface MerchantMewsConnectionDao {
     @SqlUpdate("""
             INSERT INTO merchant_mews_connections (
                 merchant_id, platform_url, client_token, access_token,
-                enterprise_id, enterprise_name, currency, time_zone, locale, validated_at
+                enterprise_id, enterprise_name, currency, time_zone, locale, pricing, validated_at
             ) VALUES (
                 :merchantId, :platformUrl, :encryptedClientToken, :encryptedAccessToken,
-                :enterpriseId, :enterpriseName, :currency, :timeZone, :locale, :validatedAt
+                :enterpriseId, :enterpriseName, :currency, :timeZone, :locale, :pricing, :validatedAt
             )
             ON CONFLICT (merchant_id) DO UPDATE SET
                 platform_url = EXCLUDED.platform_url,
@@ -49,6 +49,7 @@ public interface MerchantMewsConnectionDao {
                 currency = EXCLUDED.currency,
                 time_zone = COALESCE(EXCLUDED.time_zone, merchant_mews_connections.time_zone),
                 locale = EXCLUDED.locale,
+                pricing = COALESCE(EXCLUDED.pricing, merchant_mews_connections.pricing),
                 validated_at = EXCLUDED.validated_at
             """)
     void upsertValidated(
@@ -61,8 +62,13 @@ public interface MerchantMewsConnectionDao {
             @Bind("currency") String currency,
             @Bind("timeZone") String timeZone,
             @Bind("locale") String locale,
+            @Bind("pricing") String pricing,
             @Bind("validatedAt") Instant validatedAt
     );
+
+    /** Records the property's pricing mode as last read from Mews. */
+    @SqlUpdate("UPDATE merchant_mews_connections SET pricing = :pricing WHERE merchant_id = :merchantId")
+    int updatePricing(@Bind("merchantId") UUID merchantId, @Bind("pricing") String pricing);
 
     /**
      * Stores what Bliss books for this property: the stay service, the Bliss

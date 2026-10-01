@@ -41,8 +41,16 @@ public record MewsConnection(
         Integer blissBiweeklyDepositBps,
         // Guests this connection may link (V37). Null links every guest; set,
         // only guests on it. Entries are full emails or "+tag" plus tags.
-        java.util.List<String> linkGuestAllowlist
+        java.util.List<String> linkGuestAllowlist,
+        // "Gross" or "Net" (V40): how the property prices, so folio amounts are
+        // sent as the matching value. Null until read from Mews.
+        String pricing
 ) {
+    /** True for a net-pricing property: tax is added on top of the amounts Bliss posts. */
+    public boolean netPricing() {
+        return "Net".equalsIgnoreCase(pricing);
+    }
+
     /**
      * Whether the link pass may build a plan for this guest. With no
      * allowlist, any guest; with one, only an email on it (exact, or whose

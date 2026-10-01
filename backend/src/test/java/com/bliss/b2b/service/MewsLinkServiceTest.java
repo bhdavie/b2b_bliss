@@ -270,6 +270,56 @@ class MewsLinkServiceTest {
     }
 
     @Test
+    void aFeeLineMewsTookButBlissNeverRecordedIsNotPostedAgain() {
+        mews.additionalServices.add(new com.bliss.b2b.integration.pms.MewsCatalog.AdditionalService(
+                "svc-bliss", "Bliss", true));
+        mews.acceptThenLoseReply = true;
+        String res = mews.book("r1", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        mews.charge(res, "pay-1", "Charged", 4_240, "card-1");
+
+        fullService.runForMerchant(merchantId);
+        assertThat(mews.orders).as("Mews has the line").hasSize(1);
+        assertThat(feePostings()).as("but Bliss never heard back")
+                .singleElement().satisfies(p -> assertThat(p).containsEntry("status", "pending"));
+
+        mews.acceptThenLoseReply = false;
+        fullService.runForMerchant(merchantId);
+        fullService.runForMerchant(merchantId);
+
+        assertThat(mews.orders).as("never posted a second time").hasSize(1);
+        assertThat(feePostings()).singleElement().satisfies(p -> {
+            assertThat(p).containsEntry("status", "posted").containsEntry("mews_id", "order-1");
+        });
+    }
+
+    @Test
+    void aNetPricingPropertyGetsTheFeeAsANetValue_andItsModeIsStored() {
+        mews.pricing = "Net";
+        mews.additionalServices.add(new com.bliss.b2b.integration.pms.MewsCatalog.AdditionalService(
+                "svc-bliss", "Bliss", true));
+        String res = mews.book("r1", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        mews.charge(res, "pay-1", "Charged", 4_240, "card-1");
+
+        fullService.runForMerchant(merchantId);
+
+        assertThat(mews.orders).singleElement().satisfies(o -> assertThat(o.net()).isTrue());
+        assertThat(count("SELECT count(*) FROM merchant_mews_connections WHERE merchant_id = :m AND pricing = 'Net'"))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void aGrossPricingPropertyGetsTheFeeAsAGrossValue() {
+        mews.additionalServices.add(new com.bliss.b2b.integration.pms.MewsCatalog.AdditionalService(
+                "svc-bliss", "Bliss", true));
+        String res = mews.book("r1", MONTHLY_RATE, "2026-12-14", "2026-12-16", "Confirmed", 21_200);
+        mews.charge(res, "pay-1", "Charged", 4_240, "card-1");
+
+        fullService.runForMerchant(merchantId);
+
+        assertThat(mews.orders).singleElement().satisfies(o -> assertThat(o.net()).isFalse());
+    }
+
+    @Test
     void theSyncEmailsTheHotelWhenARatesTermsChangeInMews() {
         syncService.sync(merchantId);
         assertThat(emails).as("the first sync is not a change").isEmpty();
@@ -686,10 +736,30 @@ class MewsLinkServiceTest {
         final java.util.Set<String> inactiveRates = new java.util.HashSet<>();
         final List<Order> orders = new ArrayList<>();
         boolean failOrders;
+        /** Mews takes the order but the reply never reaches Bliss (a crash or timeout). */
+        boolean acceptThenLoseReply;
+        String pricing = "Gross";
         private int nextNumber = 1001;
 
         record Order(String serviceId, String accountId, String reservationId, String name, long amountMinor,
-                String currency, String taxCode) {
+                String currency, String taxCode, String externalIdentifier, boolean net) {
+        }
+
+        @Override
+        public com.bliss.b2b.integration.pms.PmsPropertyConfiguration getPropertyConfiguration() {
+            return new com.bliss.b2b.integration.pms.PmsPropertyConfiguration("ent", "Test Inn", "GBP", "GB",
+                    pricing, "Europe/Budapest", "en-GB");
+        }
+
+        @Override
+        public java.util.Optional<String> findOrderByExternalIdentifier(String serviceId, Instant from,
+                Instant to, String externalIdentifier) {
+            for (int i = 0; i < orders.size(); i++) {
+                if (orders.get(i).externalIdentifier().equals(externalIdentifier)) {
+                    return java.util.Optional.of("order-" + (i + 1));
+                }
+            }
+            return java.util.Optional.empty();
         }
 
         @Override
@@ -719,11 +789,15 @@ class MewsLinkServiceTest {
         @Override
         public String addOrderItem(String serviceId, String accountId, String reservationId, String name,
                 long amountMinor, String currency, String taxCode, String accountingCategoryId,
-                String externalIdentifier, String notes) {
+                String externalIdentifier, String notes, boolean net) {
             if (failOrders) {
                 throw new com.bliss.b2b.integration.pms.PmsAdapterException("Mews HTTP 503");
             }
-            orders.add(new Order(serviceId, accountId, reservationId, name, amountMinor, currency, taxCode));
+            orders.add(new Order(serviceId, accountId, reservationId, name, amountMinor, currency, taxCode,
+                    externalIdentifier, net));
+            if (acceptThenLoseReply) {
+                throw new com.bliss.b2b.integration.pms.PmsAdapterException("read timed out");
+            }
             return "order-" + orders.size();
         }
 
