@@ -207,7 +207,11 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 new com.bliss.b2b.service.MewsStayCanceller(mewsAdapterFactory),
                 jdbi.onDemand(com.bliss.b2b.persistence.GuestCreditDao.class),
                 jdbi.onDemand(com.bliss.b2b.persistence.MerchantMewsConnectionDao.class),
-                merchantDao, customerDao, emailService);
+                merchantDao, customerDao, emailService,
+                stripePaymentsService.isConfigured()
+                        ? (intentId, amount, key) -> stripePaymentsService
+                                .refundPaymentIntent(intentId, amount, key).getAmount()
+                        : null);
         PlanPortalService planPortalService = new PlanPortalService(
                 jdbi, stripePaymentsService, stripeConnectResolver, mewsAdapterFactory,
                 cancellationService, planNotificationService, clock);

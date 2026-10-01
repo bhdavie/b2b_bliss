@@ -134,6 +134,7 @@ public class PlansResource {
                 "refundCents", outcome.assessment().refundCents(),
                 "feeCents", outcome.assessment().feeCents(),
                 "netRefundCents", outcome.assessment().netRefundCents(),
+                "refundedCents", outcome.assessment().refundedCents(),
                 "creditCents", outcome.assessment().creditCents()
         )).build();
     }

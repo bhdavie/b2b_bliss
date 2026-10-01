@@ -27,10 +27,12 @@ import org.slf4j.LoggerFactory;
  * cancellations and the retries-exhausted dunning path route through here so
  * the merchant's Refund policy + Cancellation fee evaluate identically.
  *
- * <p>For Phase 12 the refund and fee amounts are <em>computed and logged</em>
- * but not yet posted to Stripe — execution lands in a later phase. Storing
- * the assessment now means the eventual refund runner can replay from the
- * audit log without re-deriving the numbers.
+ * <p>A Stripe plan's net refund is executed: it is refunded in Stripe across
+ * the plan's paid PaymentIntents, newest first, each under an idempotency key
+ * of the plan and the intent, so cancelling twice never refunds twice. What
+ * was actually refunded is recorded on the plan ({@code refunded_at},
+ * {@code refund_amount_cents}). Synthetic demo intents ({@code pi_demo_*})
+ * settle without a Stripe call, as demo charges do.
  *
  * <p><b>Mews stays.</b> A booking with a Mews reservation is cancelled in Mews
  * first; if Mews refuses or cannot be reached, nothing changes here and the
@@ -56,6 +58,18 @@ public class CancellationService {
     private final MerchantDao merchantDao;
     private final CustomerDao customerDao;
     private final EmailService emailService;
+    /** Refunds Stripe PaymentIntents; null when Stripe is not configured. */
+    private final StripeRefunder stripeRefunder;
+
+    /**
+     * Refunds up to {@code amountMinor} of one PaymentIntent and returns the
+     * amount actually refunded. The production one is
+     * {@link com.bliss.b2b.integration.StripePaymentsService#refundPaymentIntent}.
+     */
+    @FunctionalInterface
+    public interface StripeRefunder {
+        long refund(String paymentIntentId, long amountMinor, String idempotencyKey) throws Exception;
+    }
 
     public CancellationService(
             PaymentPlanDao planDao,
@@ -67,7 +81,8 @@ public class CancellationService {
             MerchantMewsConnectionDao mewsConnectionDao,
             MerchantDao merchantDao,
             CustomerDao customerDao,
-            EmailService emailService
+            EmailService emailService,
+            StripeRefunder stripeRefunder
     ) {
         this.planDao = planDao;
         this.scheduleDao = scheduleDao;
@@ -79,6 +94,7 @@ public class CancellationService {
         this.merchantDao = merchantDao;
         this.customerDao = customerDao;
         this.emailService = emailService;
+        this.stripeRefunder = stripeRefunder;
     }
 
     /**
@@ -125,21 +141,86 @@ public class CancellationService {
             bookingDao.markCanceled(booking.id());
             issueCredit(plan, booking, creditCents, reason);
         }
+        long refundedCents = mewsStay || netRefundCents <= 0
+                ? 0L
+                : executeRefund(plan, schedule, netRefundCents, at);
 
         Assessment assessment = new Assessment(
                 paidCents, paidInstallments, progressPercent,
                 refundCents, feeCents, netRefundCents,
-                rules.refundPolicy(), rules.cancellationFeeEnabled(), creditCents);
+                rules.refundPolicy(), rules.cancellationFeeEnabled(), creditCents, refundedCents);
 
         audit.info(
                 "plan.canceled plan={} reason='{}' at={} paid={} progress={}% policy={} refund={} fee={} net={} credit={}",
                 plan.id(), reason, at,
                 paidCents, progressPercent, rules.refundPolicy().wire(),
                 refundCents, feeCents, netRefundCents, creditCents);
-        log.info("Plan {} canceled — refund {}c, fee {}c (net {}c)",
-                plan.id(), refundCents, feeCents, netRefundCents);
+        log.info("Plan {} canceled: refund {}c, fee {}c (net {}c, refunded {}c)",
+                plan.id(), refundCents, feeCents, netRefundCents, refundedCents);
 
         return new CancellationOutcome(plan.id(), at, reason, assessment);
+    }
+
+    /**
+     * Refunds {@code netRefundCents} through Stripe and records what was
+     * refunded. A failed intent is logged and skipped, the rest still go; the
+     * shortfall is logged so it can be finished by hand. Returns the amount
+     * actually refunded.
+     */
+    private long executeRefund(PaymentPlan plan, List<PaymentScheduleEntry> schedule,
+            long netRefundCents, Instant at) {
+        long refunded = 0L;
+        for (java.util.Map.Entry<String, Long> part : allocateRefund(schedule, netRefundCents).entrySet()) {
+            String intentId = part.getKey();
+            long amount = part.getValue();
+            if (intentId.startsWith("pi_demo_")) {
+                refunded += amount;
+                continue;
+            }
+            if (stripeRefunder == null) {
+                log.warn("Plan {}: Stripe is not configured; refund of {} on {} not executed",
+                        plan.id(), amount, intentId);
+                continue;
+            }
+            try {
+                refunded += stripeRefunder.refund(intentId, amount, "cancel-refund:" + plan.id() + ":" + intentId);
+            } catch (Exception e) {
+                log.error("Plan {}: refund of {} on {} failed: {}", plan.id(), amount, intentId, e.getMessage());
+            }
+        }
+        if (refunded < netRefundCents) {
+            log.warn("Plan {}: refunded {} of the {} owed; the rest needs a manual refund",
+                    plan.id(), refunded, netRefundCents);
+        }
+        if (refunded > 0) {
+            planDao.markRefunded(plan.id(), at, refunded);
+        }
+        return refunded;
+    }
+
+    /**
+     * Splits a refund across the PaymentIntents that collected the plan's paid
+     * rows, newest first, never more from an intent than its rows collected
+     * (a pay off's rows share one intent and are summed). Rows with no intent
+     * on record cannot be refunded in Stripe and are skipped.
+     */
+    static java.util.LinkedHashMap<String, Long> allocateRefund(
+            List<PaymentScheduleEntry> schedule, long amount) {
+        java.util.LinkedHashMap<String, Long> collectedByIntent = new java.util.LinkedHashMap<>();
+        schedule.stream()
+                .filter(e -> e.status() == PaymentScheduleStatus.PAID)
+                .filter(e -> e.stripePaymentIntentId() != null && !e.stripePaymentIntentId().isBlank())
+                .sorted(java.util.Comparator.comparingInt(PaymentScheduleEntry::sequence).reversed())
+                .forEach(e -> collectedByIntent.merge(e.stripePaymentIntentId(), e.amountCents(), Long::sum));
+        java.util.LinkedHashMap<String, Long> allocation = new java.util.LinkedHashMap<>();
+        long remaining = amount;
+        for (java.util.Map.Entry<String, Long> intent : collectedByIntent.entrySet()) {
+            if (remaining <= 0) break;
+            long take = Math.min(remaining, intent.getValue());
+            allocation.put(intent.getKey(), take);
+            remaining -= take;
+        }
+        return allocation;
     }
 
     /**
@@ -240,6 +321,9 @@ public class CancellationService {
             RefundPolicy policy,
             boolean cancellationFeeEnabled,
             // Mews stays only: future-stay credit issued instead of a cash refund.
-            long creditCents
+            long creditCents,
+            // Stripe plans: what was actually refunded, which can be less than
+            // netRefundCents when an intent failed or has no id on record.
+            long refundedCents
     ) {}
 }

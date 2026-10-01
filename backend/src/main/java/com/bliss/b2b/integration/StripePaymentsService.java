@@ -5,11 +5,13 @@ import com.bliss.b2b.domain.Customer;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.PaymentMethod;
+import com.stripe.model.Refund;
 import com.stripe.net.RequestOptions;
 import com.stripe.model.SetupIntent;
 import com.stripe.param.CustomerCreateParams;
 import com.stripe.param.PaymentIntentCreateParams;
 import com.stripe.param.PaymentMethodAttachParams;
+import com.stripe.param.RefundCreateParams;
 import com.stripe.param.SetupIntentCreateParams;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -257,4 +259,31 @@ public class StripePaymentsService {
     }
 
     public record CardSummary(String lastFour, int expMonth, int expYear, String brand) {}
+
+    /**
+     * Refunds up to {@code amountMinor} of a PaymentIntent, in its own
+     * currency's minor units, never more than the intent actually collected
+     * (the demo charge cap can collect less than the schedule row says).
+     * A destination charge also takes the money back from the property's
+     * connected account and returns Bliss's application fee in proportion, so
+     * the guest's refund is not funded by the platform alone.
+     *
+     * <p>{@code idempotencyKey} makes a repeated cancellation return the same
+     * refund instead of refunding twice. Returns the refund Stripe created.
+     */
+    public Refund refundPaymentIntent(String paymentIntentId, long amountMinor, String idempotencyKey)
+            throws StripeException {
+        requireConfigured();
+        PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
+        long collected = intent.getAmountReceived() == null ? 0L : intent.getAmountReceived();
+        long amount = Math.min(amountMinor, collected);
+        RefundCreateParams.Builder params = RefundCreateParams.builder()
+                .setPaymentIntent(paymentIntentId)
+                .setAmount(amount)
+                .putMetadata("bliss_source", "plan_cancellation");
+        if (intent.getTransferData() != null) {
+            params.setReverseTransfer(true).setRefundApplicationFee(true);
+        }
+        return Refund.create(params.build(), RequestOptions.builder().setIdempotencyKey(idempotencyKey).build());
+    }
 }

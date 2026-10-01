@@ -151,18 +151,55 @@ public class StripeConnectResource {
         }
         log.info("Received Stripe webhook event id={} type={}", event.getId(), event.getType());
         if ("account.updated".equals(event.getType())) {
-            handleAccountUpdated(event);
+            String accountId = accountIdOf(event);
+            if (accountId == null) {
+                log.warn("account.updated event {} carries no account id; ignored", event.getId());
+                return Response.ok(Map.of("received", true)).build();
+            }
+            // Apply the live account, not the event's copy. The event's object
+            // only deserializes when its API version matches the library's
+            // pinned one, and it did not for events sent under the account's
+            // own version: those were acknowledged and never applied. Reading
+            // the account back also means a late or out-of-order event can
+            // never write stale state.
+            Account account;
+            try {
+                account = stripe.fetchAccount(accountId);
+            } catch (StripeException e) {
+                log.warn("Could not read Stripe account {} for event {}: {}; asking Stripe to retry",
+                        accountId, event.getId(), e.getMessage());
+                return Response.status(500).entity(Map.of("error", "account_unavailable")).build();
+            }
+            handleAccountUpdated(account);
         }
         return Response.ok(Map.of("received", true)).build();
     }
 
-    private void handleAccountUpdated(Event event) {
-        var deserializer = event.getDataObjectDeserializer();
-        Optional<com.stripe.model.StripeObject> obj = deserializer.getObject();
-        if (obj.isEmpty() || !(obj.get() instanceof Account account)) {
-            log.warn("account.updated webhook missing or unexpected object on event {}", event.getId());
-            return;
+    /**
+     * The id of the account an {@code account.updated} event is about, read
+     * from the event's raw JSON so it works whatever API version Stripe sent
+     * the event under. Null when the event has no object id.
+     */
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
+    static String accountIdOf(Event event) {
+        if (event.getData() == null || event.getDataObjectDeserializer() == null) {
+            return null;
         }
+        String raw = event.getDataObjectDeserializer().getRawJson();
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode id = JSON.readTree(raw).get("id");
+            return id == null || id.isNull() ? null : id.asText();
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return null;
+        }
+    }
+
+    private void handleAccountUpdated(Account account) {
         Optional<Merchant> maybeMerchant = merchantDao.findByStripeAccountId(account.getId());
         if (maybeMerchant.isEmpty()) {
             // Not an Express account on a merchant row; it may be a per-property
