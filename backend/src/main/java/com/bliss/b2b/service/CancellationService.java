@@ -32,7 +32,9 @@ import org.slf4j.LoggerFactory;
  * of the plan and the intent, so cancelling twice never refunds twice. What
  * was actually refunded is recorded on the plan ({@code refunded_at},
  * {@code refund_amount_cents}). Synthetic demo intents ({@code pi_demo_*})
- * settle without a Stripe call, as demo charges do.
+ * settle without a Stripe call, as demo charges do. Bliss keeps its fee: a
+ * destination charge's refund reverses the transfer but not the application
+ * fee.
  *
  * <p><b>Mews stays.</b> A booking with a Mews reservation is cancelled in Mews
  * first; if Mews refuses or cannot be reached, nothing changes here and the

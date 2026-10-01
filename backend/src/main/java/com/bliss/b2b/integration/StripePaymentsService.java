@@ -264,9 +264,12 @@ public class StripePaymentsService {
      * Refunds up to {@code amountMinor} of a PaymentIntent, in its own
      * currency's minor units, never more than the intent actually collected
      * (the demo charge cap can collect less than the schedule row says).
-     * A destination charge also takes the money back from the property's
-     * connected account and returns Bliss's application fee in proportion, so
-     * the guest's refund is not funded by the platform alone.
+     *
+     * <p>Bliss keeps its fee on refunds. On a destination charge the refund
+     * reverses the transfer, taking the refunded amount back from the
+     * property's connected account, and does not refund Bliss's application
+     * fee; so the property, not Bliss, funds the part of the refund that was
+     * Bliss's fee.
      *
      * <p>{@code idempotencyKey} makes a repeated cancellation return the same
      * refund instead of refunding twice. Returns the refund Stripe created.
@@ -276,14 +279,21 @@ public class StripePaymentsService {
         requireConfigured();
         PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
         long collected = intent.getAmountReceived() == null ? 0L : intent.getAmountReceived();
-        long amount = Math.min(amountMinor, collected);
+        RefundCreateParams params = refundParams(
+                paymentIntentId, amountMinor, collected, intent.getTransferData() != null);
+        return Refund.create(params, RequestOptions.builder().setIdempotencyKey(idempotencyKey).build());
+    }
+
+    /** The refund request {@link #refundPaymentIntent} sends; separate so its terms are testable. */
+    static RefundCreateParams refundParams(
+            String paymentIntentId, long amountMinor, long collectedMinor, boolean destinationCharge) {
         RefundCreateParams.Builder params = RefundCreateParams.builder()
                 .setPaymentIntent(paymentIntentId)
-                .setAmount(amount)
+                .setAmount(Math.min(amountMinor, collectedMinor))
                 .putMetadata("bliss_source", "plan_cancellation");
-        if (intent.getTransferData() != null) {
-            params.setReverseTransfer(true).setRefundApplicationFee(true);
+        if (destinationCharge) {
+            params.setReverseTransfer(true).setRefundApplicationFee(false);
         }
-        return Refund.create(params.build(), RequestOptions.builder().setIdempotencyKey(idempotencyKey).build());
+        return params.build();
     }
 }
