@@ -219,10 +219,12 @@ ON CONFLICT (id) DO NOTHING;
 -- Plan 1 (active):    77,175 x 4 = 308,700  (294,000 plus the 14,700 fee: with
 --                     no deposit the fee is spread across the installments,
 --                     as PlanCreationService builds it)
--- Plan 2 (late):      57,750 x 4 = 231,000
--- Plan 3 (paid):      65,333 + 65,333 + 65,334 = 196,000  (remainder on the last)
--- Plan 4 (cancelled): 78,750 x 4 = 315,000
--- Plan 5 (trip):      63,000 x 4 = 252,000
+-- Plan 2 (late):      60,637 x 3 + 60,639 = 242,550  (231,000 + 11,550 fee)
+-- Plan 3 (paid):      68,600 x 3          = 205,800  (196,000 +  9,800 fee)
+-- Plan 4 (cancelled): 82,687 x 3 + 82,689 = 330,750  (315,000 + 15,750 fee)
+-- Plan 5 (trip):      66,150 x 4          = 264,600  (252,000 + 12,600 fee)
+-- Each plan's rows sum to its total plus its processing fee, split the way
+-- the app splits: floor division, the remainder on the last installment.
 INSERT INTO payment_schedule (
     id, payment_plan_id, sequence, due_date, amount_cents, status, kind, paid_at
 ) VALUES
@@ -238,41 +240,41 @@ INSERT INTO payment_schedule (
 
     -- Plan 2: installment 1 paid; installment 2 is past due and still scheduled.
     ('55555555-0000-4000-8000-000000000201', '44444444-0000-4000-8000-000000000002',
-     1, DATE '2026-05-29', 57750, 'paid',      'installment', TIMESTAMPTZ '2026-05-29 08:00:00-04'),
+     1, DATE '2026-05-29', 60637, 'paid',      'installment', TIMESTAMPTZ '2026-05-29 08:00:00-04'),
     ('55555555-0000-4000-8000-000000000202', '44444444-0000-4000-8000-000000000002',
-     2, DATE '2026-06-12', 57750, 'scheduled', 'installment', NULL),
+     2, DATE '2026-06-12', 60637, 'scheduled', 'installment', NULL),
     ('55555555-0000-4000-8000-000000000203', '44444444-0000-4000-8000-000000000002',
-     3, DATE '2026-09-12', 57750, 'scheduled', 'installment', NULL),
+     3, DATE '2026-09-12', 60637, 'scheduled', 'installment', NULL),
     ('55555555-0000-4000-8000-000000000204', '44444444-0000-4000-8000-000000000002',
-     4, DATE '2026-10-02', 57750, 'scheduled', 'installment', NULL),
+     4, DATE '2026-10-02', 60639, 'scheduled', 'installment', NULL),
 
     -- Plan 3: fully paid.
     ('55555555-0000-4000-8000-000000000301', '44444444-0000-4000-8000-000000000003',
-     1, DATE '2026-04-02', 65333, 'paid', 'installment', TIMESTAMPTZ '2026-04-02 08:00:00-04'),
+     1, DATE '2026-04-02', 68600, 'paid', 'installment', TIMESTAMPTZ '2026-04-02 08:00:00-04'),
     ('55555555-0000-4000-8000-000000000302', '44444444-0000-4000-8000-000000000003',
-     2, DATE '2026-05-02', 65333, 'paid', 'installment', TIMESTAMPTZ '2026-05-02 08:00:00-04'),
+     2, DATE '2026-05-02', 68600, 'paid', 'installment', TIMESTAMPTZ '2026-05-02 08:00:00-04'),
     ('55555555-0000-4000-8000-000000000303', '44444444-0000-4000-8000-000000000003',
-     3, DATE '2026-06-02', 65334, 'paid', 'installment', TIMESTAMPTZ '2026-06-02 08:00:00-04'),
+     3, DATE '2026-06-02', 68600, 'paid', 'installment', TIMESTAMPTZ '2026-06-02 08:00:00-04'),
 
     -- Plan 4: installment 1 paid, the rest canceled with the plan.
     ('55555555-0000-4000-8000-000000000401', '44444444-0000-4000-8000-000000000004',
-     1, DATE '2026-05-02', 78750, 'paid',     'installment', TIMESTAMPTZ '2026-05-02 08:00:00-04'),
+     1, DATE '2026-05-02', 82687, 'paid',     'installment', TIMESTAMPTZ '2026-05-02 08:00:00-04'),
     ('55555555-0000-4000-8000-000000000402', '44444444-0000-4000-8000-000000000004',
-     2, DATE '2026-06-02', 78750, 'canceled', 'installment', NULL),
+     2, DATE '2026-06-02', 82687, 'canceled', 'installment', NULL),
     ('55555555-0000-4000-8000-000000000403', '44444444-0000-4000-8000-000000000004',
-     3, DATE '2026-07-02', 78750, 'canceled', 'installment', NULL),
+     3, DATE '2026-07-02', 82687, 'canceled', 'installment', NULL),
     ('55555555-0000-4000-8000-000000000404', '44444444-0000-4000-8000-000000000004',
-     4, DATE '2026-08-02', 78750, 'canceled', 'installment', NULL),
+     4, DATE '2026-08-02', 82689, 'canceled', 'installment', NULL),
 
     -- Plan 5: fully paid, stay already taken.
     ('55555555-0000-4000-8000-000000000501', '44444444-0000-4000-8000-000000000005',
-     1, DATE '2026-02-15', 63000, 'paid', 'installment', TIMESTAMPTZ '2026-02-15 07:00:00-05'),
+     1, DATE '2026-02-15', 66150, 'paid', 'installment', TIMESTAMPTZ '2026-02-15 07:00:00-05'),
     ('55555555-0000-4000-8000-000000000502', '44444444-0000-4000-8000-000000000005',
-     2, DATE '2026-03-15', 63000, 'paid', 'installment', TIMESTAMPTZ '2026-03-15 08:00:00-04'),
+     2, DATE '2026-03-15', 66150, 'paid', 'installment', TIMESTAMPTZ '2026-03-15 08:00:00-04'),
     ('55555555-0000-4000-8000-000000000503', '44444444-0000-4000-8000-000000000005',
-     3, DATE '2026-04-15', 63000, 'paid', 'installment', TIMESTAMPTZ '2026-04-15 08:00:00-04'),
+     3, DATE '2026-04-15', 66150, 'paid', 'installment', TIMESTAMPTZ '2026-04-15 08:00:00-04'),
     ('55555555-0000-4000-8000-000000000504', '44444444-0000-4000-8000-000000000005',
-     4, DATE '2026-05-02', 63000, 'paid', 'installment', TIMESTAMPTZ '2026-05-02 08:00:00-04')
+     4, DATE '2026-05-02', 66150, 'paid', 'installment', TIMESTAMPTZ '2026-05-02 08:00:00-04')
 ON CONFLICT (payment_plan_id, sequence) DO NOTHING;
 
 -- ===========================================================================
@@ -290,7 +292,7 @@ ON CONFLICT (payment_plan_id, sequence) DO NOTHING;
 -- Idempotent like the rest of this file: inserts key on slug / merchant_id,
 -- and the one UPDATE below is a no-op once it has run.
 
--- seed-active-001 fee correction ------------------------------------------
+-- Fixture fee corrections ---------------------------------------------------
 -- Its schedule used to leave out the 14,700 processing fee (73,500 x 4 =
 -- 294,000), so the portal's remaining balance, which includes the fee, never
 -- matched what was scheduled. ON CONFLICT DO NOTHING cannot fix rows already
@@ -300,6 +302,30 @@ UPDATE payment_schedule
    SET amount_cents = 77175
  WHERE payment_plan_id = '44444444-0000-4000-8000-000000000001'
    AND amount_cents = 73500;
+
+-- The other four fixtures had the same gap; same correction, row by row,
+-- only where a row still carries its old fee-less amount.
+UPDATE payment_schedule ps
+   SET amount_cents = fix.new_amount
+  FROM (VALUES
+        ('55555555-0000-4000-8000-000000000201'::uuid, 57750, 60637),
+        ('55555555-0000-4000-8000-000000000202'::uuid, 57750, 60637),
+        ('55555555-0000-4000-8000-000000000203'::uuid, 57750, 60637),
+        ('55555555-0000-4000-8000-000000000204'::uuid, 57750, 60639),
+        ('55555555-0000-4000-8000-000000000301'::uuid, 65333, 68600),
+        ('55555555-0000-4000-8000-000000000302'::uuid, 65333, 68600),
+        ('55555555-0000-4000-8000-000000000303'::uuid, 65334, 68600),
+        ('55555555-0000-4000-8000-000000000401'::uuid, 78750, 82687),
+        ('55555555-0000-4000-8000-000000000402'::uuid, 78750, 82687),
+        ('55555555-0000-4000-8000-000000000403'::uuid, 78750, 82687),
+        ('55555555-0000-4000-8000-000000000404'::uuid, 78750, 82689),
+        ('55555555-0000-4000-8000-000000000501'::uuid, 63000, 66150),
+        ('55555555-0000-4000-8000-000000000502'::uuid, 63000, 66150),
+        ('55555555-0000-4000-8000-000000000503'::uuid, 63000, 66150),
+        ('55555555-0000-4000-8000-000000000504'::uuid, 63000, 66150)
+       ) AS fix(id, old_amount, new_amount)
+ WHERE ps.id = fix.id
+   AND ps.amount_cents = fix.old_amount;
 
 -- Marbrook House correction ------------------------------------------------
 -- The merchant INSERT above predates V17 and sets neither pms_type nor
