@@ -110,6 +110,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
         ));
         // Run explicitly via `java -jar <jar> seed-demo <config.yml>`; never on boot.
         bootstrap.addCommand(new SeedDemoCommand());
+        bootstrap.addCommand(new com.bliss.b2b.cli.MigrateCommand());
     }
 
     @Override

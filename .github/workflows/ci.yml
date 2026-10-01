@@ -12,6 +12,25 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # The database tests (charge rails, the installment lock, receipts, Mews
+    # linking, fee rates, referrals) skip without Postgres, so CI provides one.
+    # Same database name and credentials as the local-dev defaults in config.yml.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: bliss
+          POSTGRES_USER: bliss
+          POSTGRES_PASSWORD: bliss_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bliss -d bliss"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      BLISS_TEST_DB_URL: jdbc:postgresql://localhost:5432/bliss?user=bliss&password=bliss_dev
     steps:
       - uses: actions/checkout@v4
 
@@ -22,8 +41,25 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Compile and test
+      - name: Build
+        run: mvn -B -ntp -DskipTests package
+
+      # Some database tests run against the bliss database as a migrated dev
+      # database would be; the app's own migrate command brings the empty
+      # service database there (V30 is a Java migration, so Flyway's CLI can't).
+      - name: Migrate the test database
+        run: java -jar target/bliss-b2b-backend.jar migrate src/main/resources/config.yml
+
+      - name: Test
         run: mvn -B -ntp verify
+
+      # A database test that cannot reach Postgres skips rather than fails, so
+      # a broken service would otherwise pass silently. Fail on any skip.
+      - name: No skipped tests
+        run: |
+          skipped=$(grep -ho 'skipped="[0-9]*"' target/surefire-reports/TEST-*.xml | grep -o '[0-9]*' | paste -sd+ - | bc)
+          echo "Skipped tests: ${skipped}"
+          test "${skipped}" -eq 0
 
   frontend:
     name: Frontend (Next.js 15)
