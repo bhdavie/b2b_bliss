@@ -122,9 +122,18 @@ public class PlanPortalService {
                     plan.totalAmountCents() + plan.processingFeeCents(),
                     PropertyLocale.today(clock, booking.timeZone()),
                     plan.status().wire());
+            // What cancelling now would do, so the guest sees it before deciding.
+            CancellationService.Assessment cancellation =
+                    cancellationService != null && plan.status() == PaymentPlanStatus.ACTIVE
+                            ? CancellationService.assess(plan, booking,
+                                    handle.attach(com.bliss.b2b.persistence.MerchantPlanRulesDao.class)
+                                            .findByMerchantId(merchant.id())
+                                            .orElse(com.bliss.b2b.payments.MerchantPlanRules.DEFAULTS),
+                                    schedule, Instant.now(clock))
+                            : null;
             return Optional.of(new PortalSnapshot(
                     merchant, booking, plan, schedule, customer, card,
-                    plan.processingFeeCents(), progress));
+                    plan.processingFeeCents(), progress, cancellation));
         });
     }
 
@@ -720,7 +729,9 @@ public class PlanPortalService {
             Customer customer,
             CustomerCard card,
             long processingFeeCents,
-            PlanProgress.Snapshot progress
+            PlanProgress.Snapshot progress,
+            // What cancelling now would do; null once the plan is no longer active.
+            CancellationService.Assessment cancellation
     ) {}
 
     public record PayResult(String paymentIntentId, String status) {}

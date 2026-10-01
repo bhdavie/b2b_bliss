@@ -273,6 +273,18 @@ gets a full refund, and kept otherwise. In hold mode it is retained from the
 penalty that is released; in pay as you go mode it is part of what the hotel's
 policy keeps.
 
+**Built (pay as you go, 2026-10-01).** A booking that kept its booking type
+and terms (phase 2 snapshot) cancels by this table: `CancellationOutcome` picks
+the row, `CancellationTerms.penaltyAt` prices the penalty from the snapshotted
+Mews steps (largest applying step; relative fees on the stay price, capped at
+`FeeMaximumTimeUnits` nights; absolute fees in the stay's currency). The Bliss
+fee is kept within the penalty, as D9 proposes. On Stripe the rest is refunded;
+on a Mews stay it becomes future-stay credit, since a Mews refund (D8) is not
+built. Bookings without a booking type keep the plan-rules cancellation. The
+guest portal shows the terms and the outcome before the guest confirms
+(`CancellationService.preview`). Hold mode, defaults and hotel cancellations
+come with phase 4.
+
 **Future-stay credit** (V32) stays available in both modes as a hotel choice:
 "Instead of refunds, give guests credit toward a future stay". In hold mode,
 choosing credit means the would-be refund is released to the hotel, and the

@@ -2,15 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { cancelPlan, type PublicRail } from "@/lib/publicApi";
+import { cancelPlan, type PortalCancellation, type PublicRail } from "@/lib/publicApi";
 import { formatMoney, plainDateToUtc, type MoneyContext } from "@/lib/money";
 import { Button } from "@/components/ui/Button";
 
-// Policy-gated cancel. Refundability is derived from the rate name in the
-// booking's service name (advance/non-refundable vs flexible) for now; the
-// refund figure is COMPUTED and DISPLAYED only. No Stripe refund is executed.
-// Confirming calls the backend cancel endpoint, which transitions the plan to
-// cancelled and stops the remaining installments.
+// Cancel a plan. When the server sends `cancellation` (every active plan), the
+// guest sees the booking's terms and exactly what cancelling now does, worked
+// out server-side from the terms the booking was made under; confirming calls
+// the cancel endpoint, which stops the remaining payments and refunds or
+// credits what is due. The fallback below, for a response without it, keeps the
+// older estimate from the rate name.
 
 type Refundability = "flexible" | "nonrefundable";
 
@@ -64,6 +65,7 @@ export function CancelPlanSection({
   rail,
   money,
   timeZone,
+  cancellation = null,
 }: {
   token: string;
   serviceName: string;
@@ -75,6 +77,7 @@ export function CancelPlanSection({
   // hour window.
   money: MoneyContext;
   timeZone: string | null;
+  cancellation?: PortalCancellation | null;
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -112,6 +115,65 @@ export function CancelPlanSection({
     // 502: the hotel's system couldn't be reached. Nothing changed, and the
     // server's message says so.
     setError(res.status === 502 ? res.error.message : "We could not cancel your stay. Please try again.");
+  }
+
+  async function confirmCancel() {
+    setBusy(true);
+    setError(null);
+    let res;
+    try {
+      res = await cancelPlan(token);
+    } catch {
+      // Genuine network failure unrelated to the plan state.
+      setBusy(false);
+      setError("Something went wrong. Please check your connection and try again.");
+      return;
+    }
+    // A 404 (plan no longer active) or 409 means the plan is already cancelled.
+    // Treat that as success and route to history the same way, so the guest
+    // never sees a raw "plan not found" string.
+    const alreadyCancelled =
+      !res.ok && (res.status === 404 || res.status === 409);
+    if (res.ok || alreadyCancelled) {
+      // Keep busy true so the buttons stay disabled through navigation.
+      router.push(`/account/history?canceled=${encodeURIComponent(token)}`);
+      return;
+    }
+    setBusy(false);
+    setError("We could not cancel this plan. Please try again.");
+  }
+
+  if (cancellation) {
+    return (
+      <div className="space-y-3">
+        {cancellation.terms ? (
+          <p className="text-[13px] text-ink-900">{cancellation.terms}</p>
+        ) : null}
+        <p className="text-[13px] text-ink-500">
+          Cancelling stops every remaining payment. {cancellation.message}
+        </p>
+        {error ? <p className="text-[13px] text-danger">{error}</p> : null}
+        {confirming ? (
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              onClick={isMewsStay ? confirmMewsCancel : confirmCancel}
+              disabled={busy}
+              variant="primary"
+            >
+              {busy ? "Cancelling" : "Confirm cancellation"}
+            </Button>
+            <Button type="button" onClick={() => setConfirming(false)} disabled={busy} variant="ghost">
+              {isMewsStay ? "Keep my stay" : "Keep my plan"}
+            </Button>
+          </div>
+        ) : (
+          <Button type="button" onClick={() => setConfirming(true)} variant="ghost">
+            {isMewsStay ? "Cancel stay" : "Cancel plan"}
+          </Button>
+        )}
+      </div>
+    );
   }
 
   if (isMewsStay) {
@@ -164,32 +226,6 @@ export function CancelPlanSection({
   const refundCents = inWindow
     ? paidCents
     : Math.max(0, paidCents - processingFeeCents);
-
-  async function confirmCancel() {
-    setBusy(true);
-    setError(null);
-    let res;
-    try {
-      res = await cancelPlan(token);
-    } catch {
-      // Genuine network failure unrelated to the plan state.
-      setBusy(false);
-      setError("Something went wrong. Please check your connection and try again.");
-      return;
-    }
-    // A 404 (plan no longer active) or 409 means the plan is already cancelled.
-    // Treat that as success and route to history the same way, so the guest
-    // never sees a raw "plan not found" string.
-    const alreadyCancelled =
-      !res.ok && (res.status === 404 || res.status === 409);
-    if (res.ok || alreadyCancelled) {
-      // Keep busy true so the buttons stay disabled through navigation.
-      router.push(`/account/history?canceled=${encodeURIComponent(token)}`);
-      return;
-    }
-    setBusy(false);
-    setError("We could not cancel this plan. Please try again.");
-  }
 
   if (!confirming) {
     return (

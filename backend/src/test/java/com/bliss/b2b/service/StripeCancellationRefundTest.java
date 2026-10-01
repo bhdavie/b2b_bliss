@@ -264,4 +264,140 @@ class StripeCancellationRefundTest {
                 amount, PaymentScheduleStatus.PAID, ScheduleKind.INSTALLMENT, intent, null, null, 0, null,
                 null, null, null);
     }
+
+    // --- Booking types: the configurable-property outcome table ------------------
+
+    /** Gives the plan's booking the terms a synced Bliss rate would have snapshotted. */
+    private void snapshot(PaymentPlan plan, String bookingType, String termsJson, Instant freeUntil, long blissFee) {
+        jdbi.useHandle(h -> {
+            h.createUpdate("""
+                    UPDATE bookings SET booking_type = :t, cancellation_terms = CAST(:j AS jsonb),
+                                        free_cancellation_until = :u, created_at = :created
+                    WHERE id = :b""")
+                    .bind("t", bookingType).bind("j", termsJson).bind("u", freeUntil)
+                    .bind("created", NOW.minusSeconds(30 * 86_400L))
+                    .bind("b", plan.bookingId()).execute();
+            h.createUpdate("UPDATE payment_plans SET processing_fee_cents = :f WHERE id = :p")
+                    .bind("f", blissFee).bind("p", plan.id()).execute();
+        });
+    }
+
+    private static final Instant NOW = Instant.parse("2026-10-01T12:00:00Z");
+    /** 25% of the stay from booking: refundable, with no free window left. */
+    private static final String QUARTER_FROM_BOOKING = """
+            [{"applicability":"Creation","applicabilityOffset":"P0M0DT0H0M0S","feeExtent":"TimeUnits",
+              "relativeFee":0.25}]""";
+
+    private PaymentPlan reload(PaymentPlan plan) {
+        return jdbi.onDemand(PaymentPlanDao.class).findById(plan.id()).orElseThrow();
+    }
+
+    @Test
+    void aRefundableBookingCancelledBeforeItsDeadlineRefundsEverything() {
+        PaymentPlan plan = stripePlan("pi_a" + UUID.randomUUID(), "pi_b" + UUID.randomUUID());
+        snapshot(plan, "refundable", "[]", NOW.plusSeconds(86_400), 2_000);
+        FakeRefunder refunder = new FakeRefunder(Set.of());
+
+        CancellationService.Assessment a = service(refunder).cancel(reload(plan), NOW, "guest").assessment();
+
+        assertThat(a.outcome()).isEqualTo("full_refund");
+        assertThat(a.netRefundCents()).isEqualTo(60_000);
+        assertThat(refunder.calls.stream().mapToLong(c -> Long.parseLong(c[1])).sum()).isEqualTo(60_000);
+        assertThat(statuses(plan.id())).containsExactly("paid", "paid", "canceled", "canceled");
+    }
+
+    @Test
+    void aRefundableBookingCancelledAfterItsDeadlineKeepsThePolicyFee_theBlissFeeWithinIt() {
+        PaymentPlan plan = stripePlan("pi_a" + UUID.randomUUID(), "pi_b" + UUID.randomUUID());
+        snapshot(plan, "refundable", QUARTER_FROM_BOOKING, NOW.minusSeconds(60), 2_000);
+        FakeRefunder refunder = new FakeRefunder(Set.of());
+
+        CancellationService.Assessment a = service(refunder).cancel(reload(plan), NOW, "guest").assessment();
+
+        // 25% of the 1,200.00 stay is 300.00, the 20.00 Bliss fee within it.
+        assertThat(a.outcome()).isEqualTo("penalty");
+        assertThat(a.feeCents()).isEqualTo(30_000);
+        assertThat(a.keptBlissFeeCents()).isEqualTo(2_000);
+        assertThat(a.netRefundCents()).isEqualTo(30_000);
+        assertThat(refunder.calls.stream().mapToLong(c -> Long.parseLong(c[1])).sum()).isEqualTo(30_000);
+    }
+
+    @Test
+    void aNonRefundableBookingStopsItsPaymentsAndRefundsNothing() {
+        PaymentPlan plan = stripePlan("pi_a" + UUID.randomUUID(), "pi_b" + UUID.randomUUID());
+        snapshot(plan, "non_refundable", """
+                [{"applicability":"Creation","applicabilityOffset":"P0M0DT0H0M0S","feeExtent":"TimeUnits",
+                  "relativeFee":1}]""", null, 2_000);
+        FakeRefunder refunder = new FakeRefunder(Set.of());
+
+        CancellationService.Assessment a = service(refunder).cancel(reload(plan), NOW, "guest").assessment();
+
+        assertThat(a.outcome()).isEqualTo("forfeit");
+        assertThat(a.netRefundCents()).isZero();
+        assertThat(refunder.calls).isEmpty();
+        assertThat(planRow(plan.id())).containsEntry("status", "canceled");
+        assertThat(statuses(plan.id())).containsExactly("paid", "paid", "canceled", "canceled");
+    }
+
+    @Test
+    void thePreviewMatchesWhatCancellingDoes_andChangesNothing() {
+        PaymentPlan plan = stripePlan("pi_a" + UUID.randomUUID(), "pi_b" + UUID.randomUUID());
+        snapshot(plan, "refundable", QUARTER_FROM_BOOKING, NOW.minusSeconds(60), 2_000);
+        FakeRefunder refunder = new FakeRefunder(Set.of());
+        CancellationService service = service(refunder);
+
+        CancellationService.Assessment preview = service.preview(reload(plan), NOW);
+
+        assertThat(refunder.calls).isEmpty();
+        assertThat(planRow(plan.id())).containsEntry("status", "active");
+        CancellationService.Assessment done = service.cancel(reload(plan), NOW, "guest").assessment();
+        assertThat(preview.netRefundCents()).isEqualTo(done.netRefundCents());
+        assertThat(preview.outcome()).isEqualTo(done.outcome());
+    }
+
+    @Test
+    void theGuestReadsTheOutcomeBeforeConfirming() {
+        PaymentPlan plan = stripePlan("pi_a" + UUID.randomUUID(), "pi_b" + UUID.randomUUID());
+        snapshot(plan, "refundable", QUARTER_FROM_BOOKING, NOW.minusSeconds(60), 2_000);
+        com.bliss.b2b.domain.Booking booking = jdbi.onDemand(BookingDao.class).findById(plan.bookingId()).orElseThrow();
+        com.bliss.b2b.domain.Merchant merchant = jdbi.onDemand(MerchantDao.class).findById(booking.merchantId())
+                .orElseThrow();
+
+        com.bliss.b2b.api.PublicPlanPortalView.CancellationView view =
+                com.bliss.b2b.api.PublicPlanPortalView.CancellationView.from(merchant, booking,
+                        service(new FakeRefunder(Set.of())).preview(reload(plan), NOW));
+
+        assertThat(view.message()).isEqualTo("You'll get $300.00 back. $300.00 is kept under Test Lodge's "
+                + "cancellation policy, including the Bliss fee of $20.00.");
+        assertThat(view.asCredit()).isFalse();
+        assertThat(view.message()).doesNotContain("\u2014");
+    }
+
+    @Test
+    void aBookingWithoutABookingTypeFollowsThePlanRulesAsBefore() {
+        PaymentPlan plan = stripePlan("pi_a" + UUID.randomUUID(), "pi_b" + UUID.randomUUID());
+
+        CancellationService.Assessment a = service(new FakeRefunder(Set.of())).preview(reload(plan), NOW);
+
+        assertThat(a.outcome()).isNull();
+        assertThat(a.netRefundCents()).isEqualTo(60_000);
+    }
+
+    @Test
+    void onAMewsStayWhatWouldGoBackBecomesCredit_andNonRefundableGivesNone() {
+        PaymentPlan plan = stripePlan("pi_a" + UUID.randomUUID(), "pi_b" + UUID.randomUUID());
+        snapshot(plan, "refundable", "[]", NOW.plusSeconds(86_400), 2_000);
+        jdbi.useHandle(h -> h.createUpdate("UPDATE bookings SET mews_reservation_id = 'res-1' WHERE id = :b")
+                .bind("b", plan.bookingId()).execute());
+        CancellationService service = service(new FakeRefunder(Set.of()));
+
+        CancellationService.Assessment refundable = service.preview(reload(plan), NOW);
+        assertThat(refundable.creditCents()).isEqualTo(60_000);
+        assertThat(refundable.netRefundCents()).isZero();
+
+        snapshot(plan, "non_refundable", "[]", null, 2_000);
+        CancellationService.Assessment nonRefundable = service.preview(reload(plan), NOW);
+        assertThat(nonRefundable.creditCents()).isZero();
+        assertThat(nonRefundable.outcome()).isEqualTo("forfeit");
+    }
 }

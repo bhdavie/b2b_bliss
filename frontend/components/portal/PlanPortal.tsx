@@ -349,6 +349,7 @@ export function PlanPortal({
             <div className="max-w-[560px]">
               <CancelPlanSection
                 token={token}
+                cancellation={portal.cancellation}
                 serviceName={portal.booking.serviceName}
                 appointmentDate={portal.booking.appointmentDate}
                 paidCents={portal.paidCents}

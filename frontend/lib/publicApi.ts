@@ -366,6 +366,22 @@ export function formatScheduleDatePill(iso: string, locale: string | null | unde
 // Customer plan portal (/plan/[token])
 // ---------------------------------------------------------------------------
 
+/**
+ * A booking's cancellation terms and what cancelling now would do, computed by
+ * the server from the terms the booking was made under.
+ */
+export type PortalCancellation = {
+  bookingType: "refundable" | "non_refundable" | null;
+  freeCancellationUntil: string | null;
+  terms: string | null;
+  outcome: "full_refund" | "penalty" | "forfeit" | null;
+  returnCents: number;
+  asCredit: boolean;
+  keptByPropertyCents: number;
+  keptBlissFeeCents: number;
+  message: string;
+};
+
 export type PublicPlanPortal = {
   merchant: {
     slug: string;
@@ -428,6 +444,7 @@ export type PublicPlanPortal = {
   currency: string;
   locale: string | null;
   timeZone: string | null;
+  cancellation: PortalCancellation | null;
 };
 
 export async function fetchPlanPortal(token: string): Promise<PublicPlanPortal | null> {

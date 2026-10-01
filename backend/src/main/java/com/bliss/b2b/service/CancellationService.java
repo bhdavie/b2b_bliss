@@ -110,24 +110,15 @@ public class CancellationService {
                 .orElseThrow(() -> new IllegalStateException("booking missing for plan " + plan.id()));
         MerchantPlanRules rules = rulesService.forMerchant(booking.merchantId());
         List<PaymentScheduleEntry> schedule = scheduleDao.listForPlan(plan.id());
-
-        long paidCents = schedule.stream()
-                .filter(e -> e.status() == PaymentScheduleStatus.PAID)
-                .mapToLong(PaymentScheduleEntry::amountCents)
-                .sum();
-        int paidInstallments = (int) schedule.stream()
-                .filter(e -> e.status() == PaymentScheduleStatus.PAID)
-                .count();
-        int progressPercent = plan.totalAmountCents() == 0
-                ? 0
-                : (int) ((paidCents * 100L) / plan.totalAmountCents());
-
-        long refundCents = computeRefundCents(rules, schedule, paidCents, progressPercent);
-        long feeCents = computeCancellationFeeCents(rules, plan, progressPercent);
+        Assessment a = assess(plan, booking, rules, schedule, at);
+        long paidCents = a.paidCents();
+        int paidInstallments = a.paidInstallments();
+        int progressPercent = a.progressPercent();
+        long refundCents = a.refundCents();
+        long feeCents = a.feeCents();
+        long creditCents = a.creditCents();
+        long netRefundCents = a.netRefundCents();
         boolean mewsStay = booking.mewsReservationId() != null;
-        // A Mews stay is never refunded in cash; the would-be refund is credit.
-        long creditCents = mewsStay ? creditFor(rules, paidCents, refundCents, feeCents) : 0L;
-        long netRefundCents = mewsStay ? 0L : Math.max(0L, refundCents - feeCents);
 
         if (mewsStay) {
             // Before any Bliss change: a failure here must leave the plan as it was.
@@ -150,7 +141,8 @@ public class CancellationService {
         Assessment assessment = new Assessment(
                 paidCents, paidInstallments, progressPercent,
                 refundCents, feeCents, netRefundCents,
-                rules.refundPolicy(), rules.cancellationFeeEnabled(), creditCents, refundedCents);
+                rules.refundPolicy(), rules.cancellationFeeEnabled(), creditCents, refundedCents,
+                a.outcome(), a.keptBlissFeeCents());
 
         audit.info(
                 "plan.canceled plan={} reason='{}' at={} paid={} progress={}% policy={} refund={} fee={} net={} credit={}",
@@ -161,6 +153,74 @@ public class CancellationService {
                 plan.id(), refundCents, feeCents, netRefundCents, refundedCents);
 
         return new CancellationOutcome(plan.id(), at, reason, assessment);
+    }
+
+    /**
+     * What cancelling now would do, without doing it: for the guest portal to
+     * show before the guest confirms.
+     */
+    public Assessment preview(PaymentPlan plan, Instant at) {
+        Booking booking = bookingDao.findById(plan.bookingId())
+                .orElseThrow(() -> new IllegalStateException("booking missing for plan " + plan.id()));
+        return assess(plan, booking, rulesService.forMerchant(booking.merchantId()),
+                scheduleDao.listForPlan(plan.id()), at);
+    }
+
+    /**
+     * The money side of cancelling at {@code at}. A booking that kept its
+     * booking type and Mews cancellation terms follows them (the
+     * configurable-property outcome table, {@link
+     * com.bliss.b2b.payments.CancellationOutcome}); an older booking follows
+     * the property's plan rules as before. On a Mews stay what would go back
+     * becomes future-stay credit; on Stripe it is refunded.
+     */
+    static Assessment assess(PaymentPlan plan, Booking booking, MerchantPlanRules rules,
+            List<PaymentScheduleEntry> schedule, Instant at) {
+        long paidCents = schedule.stream()
+                .filter(e -> e.status() == PaymentScheduleStatus.PAID)
+                .mapToLong(PaymentScheduleEntry::amountCents)
+                .sum();
+        int paidInstallments = (int) schedule.stream()
+                .filter(e -> e.status() == PaymentScheduleStatus.PAID)
+                .count();
+        int progressPercent = plan.totalAmountCents() == 0
+                ? 0
+                : (int) ((paidCents * 100L) / plan.totalAmountCents());
+        boolean mewsStay = booking.mewsReservationId() != null;
+
+        if (booking.bookingType() != null) {
+            com.bliss.b2b.payments.CancellationTerms terms =
+                    com.bliss.b2b.persistence.BlissRateDao.parseTerms(booking.cancellationTermsJson());
+            java.time.ZoneId zone = booking.propertyLocale().zone();
+            Instant start = booking.mewsStartUtc() != null ? booking.mewsStartUtc()
+                    : booking.appointmentDate().atStartOfDay(zone).toInstant();
+            Instant created = booking.createdAt() != null ? booking.createdAt() : at;
+            long nights = booking.checkoutDate() == null ? 1L
+                    : Math.max(1L, java.time.temporal.ChronoUnit.DAYS.between(
+                            booking.appointmentDate(), booking.checkoutDate()));
+            boolean beforeDeadline = booking.freeCancellationUntil() != null
+                    && at.isBefore(booking.freeCancellationUntil());
+            long penalty = terms.penaltyAt(at, created, start, zone, plan.totalAmountCents(), nights,
+                    booking.currency());
+            com.bliss.b2b.payments.CancellationOutcome outcome = com.bliss.b2b.payments.CancellationOutcome.of(
+                    com.bliss.b2b.payments.BookingType.fromWire(booking.bookingType()), beforeDeadline,
+                    paidCents, plan.processingFeeCents(), penalty);
+            long back = outcome.returnedMinor();
+            long keptCents = outcome.keptByPropertyMinor() + outcome.keptBlissFeeMinor();
+            return new Assessment(paidCents, paidInstallments, progressPercent,
+                    paidCents - keptCents, keptCents,
+                    mewsStay ? 0L : back, rules.refundPolicy(), rules.cancellationFeeEnabled(),
+                    mewsStay ? back : 0L, 0L, outcome.kind().name().toLowerCase(java.util.Locale.ROOT),
+                    outcome.keptBlissFeeMinor());
+        }
+
+        long refundCents = computeRefundCents(rules, schedule, paidCents, progressPercent);
+        long feeCents = computeCancellationFeeCents(rules, plan, progressPercent);
+        // A Mews stay is never refunded in cash; the would-be refund is credit.
+        long creditCents = mewsStay ? creditFor(rules, paidCents, refundCents, feeCents) : 0L;
+        long netRefundCents = mewsStay ? 0L : Math.max(0L, refundCents - feeCents);
+        return new Assessment(paidCents, paidInstallments, progressPercent, refundCents, feeCents,
+                netRefundCents, rules.refundPolicy(), rules.cancellationFeeEnabled(), creditCents, 0L, null, 0L);
     }
 
     /**
@@ -266,7 +326,7 @@ public class CancellationService {
         }
     }
 
-    private static long computeRefundCents(
+    static long computeRefundCents(
             MerchantPlanRules rules,
             List<PaymentScheduleEntry> schedule,
             long paidCents,
@@ -288,7 +348,7 @@ public class CancellationService {
         };
     }
 
-    private static long computeCancellationFeeCents(
+    static long computeCancellationFeeCents(
             MerchantPlanRules rules,
             PaymentPlan plan,
             int progressPercent
@@ -326,6 +386,11 @@ public class CancellationService {
             long creditCents,
             // Stripe plans: what was actually refunded, which can be less than
             // netRefundCents when an intent failed or has no id on record.
-            long refundedCents
+            long refundedCents,
+            // full_refund, penalty or forfeit for a booking that kept its
+            // booking type (the outcome table); null for plan-rules bookings.
+            String outcome,
+            // The Bliss fee's share of feeCents (kept within the penalty, never on top).
+            long keptBlissFeeCents
     ) {}
 }

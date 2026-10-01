@@ -69,6 +69,39 @@ public record CancellationTerms(List<Step> steps) {
     }
 
     /**
+     * The fee the hotel's policy charges for cancelling at {@code at}, in the
+     * stay's currency's minor units: across the steps that apply by then, the
+     * largest of each step's relative fee and absolute fee. The relative fee is
+     * a fraction of the stay total, limited to {@code feeMaximumTimeUnits}
+     * nights when set; a step on products only charges nothing here, since
+     * Bliss prices the stay. Zero when no step applies yet.
+     */
+    public long penaltyAt(Instant at, Instant createdUtc, Instant startUtc, ZoneId zone,
+            long stayTotalMinor, long nights, String currency) {
+        long penalty = 0L;
+        for (Step s : steps) {
+            Instant from = appliesFrom(s, createdUtc, startUtc, zone);
+            if (from == null || at.isBefore(from)) {
+                continue;
+            }
+            long relative = 0L;
+            if (s.relativeFee() != null
+                    && ("TimeUnits".equals(s.feeExtent()) || "Everything".equals(s.feeExtent()))) {
+                BigDecimal base = BigDecimal.valueOf(stayTotalMinor);
+                if (s.feeMaximumTimeUnits() != null && nights > 0 && s.feeMaximumTimeUnits() < nights) {
+                    base = base.multiply(BigDecimal.valueOf(s.feeMaximumTimeUnits()))
+                            .divide(BigDecimal.valueOf(nights), 0, java.math.RoundingMode.HALF_UP);
+                }
+                relative = base.multiply(s.relativeFee()).setScale(0, java.math.RoundingMode.HALF_UP).longValueExact();
+            }
+            long absolute = s.absoluteFeeMinor() != null && currency != null
+                    && currency.equalsIgnoreCase(s.absoluteFeeCurrency()) ? s.absoluteFeeMinor() : 0L;
+            penalty = Math.max(penalty, Math.max(relative, absolute));
+        }
+        return Math.min(penalty, stayTotalMinor);
+    }
+
+    /**
      * The terms in a line a hotel or guest reads: "Free cancellation until
      * arrival", "Free cancellation until 14 days before arrival",
      * "Free cancellation for 2 days after booking", "A cancellation fee applies

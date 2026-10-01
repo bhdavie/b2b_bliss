@@ -102,4 +102,40 @@ class CancellationTermsTest {
                 .isEqualTo(Instant.parse("2026-10-03T10:00:00Z"));
         assertThat(terms.describe()).isEqualTo("Free cancellation for 2 days after booking");
     }
+
+    @Test
+    void noPenaltyBeforeAStepApplies_thePolicyFeeAfter() {
+        // 50% of the stay from 7 days before arrival.
+        CancellationTerms t = new CancellationTerms(List.of(step("Start", "P0M7DT0H0M0S", "TimeUnits", "0.5", null)));
+
+        assertThat(t.penaltyAt(Instant.parse("2027-03-01T00:00:00Z"), CREATED, START, LONDON, 120_000, 3, "GBP"))
+                .isZero();
+        assertThat(t.penaltyAt(Instant.parse("2027-03-10T00:00:00Z"), CREATED, START, LONDON, 120_000, 3, "GBP"))
+                .isEqualTo(60_000);
+    }
+
+    @Test
+    void aFeeCappedAtOneNightChargesOneNightsShareOfTheStay() {
+        CancellationTerms t = new CancellationTerms(List.of(step("Start", "P0M2DT0H0M0S", "TimeUnits", "1", 1)));
+
+        assertThat(t.penaltyAt(Instant.parse("2027-03-14T12:00:00Z"), CREATED, START, LONDON, 120_000, 3, "GBP"))
+                .isEqualTo(40_000);
+    }
+
+    @Test
+    void theLargestApplyingStepWins_andAnAbsoluteFeeCountsInItsOwnCurrency() {
+        CancellationTerms t = new CancellationTerms(List.of(
+                step("Creation", "P0M0DT0H0M0S", "TimeUnits", "0.1", null),
+                new CancellationTerms.Step("Creation", "P0M0DT0H0M0S", "Nothing", null, 25_000L, "GBP", null),
+                new CancellationTerms.Step("Creation", "P0M0DT0H0M0S", "Nothing", null, 99_000L, "EUR", null)));
+
+        assertThat(t.penaltyAt(Instant.parse("2026-10-02T00:00:00Z"), CREATED, START, LONDON, 120_000, 3, "GBP"))
+                .isEqualTo(25_000);
+    }
+
+    @Test
+    void noPolicyNeverCharges() {
+        assertThat(CancellationTerms.freeUntilArrival().penaltyAt(START.plusSeconds(3600), CREATED, START, LONDON,
+                120_000, 3, "GBP")).isZero();
+    }
 }

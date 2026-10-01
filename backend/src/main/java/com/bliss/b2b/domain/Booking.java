@@ -34,7 +34,16 @@ public record Booking(
         // property never had one.
         String currency,
         String timeZone,
-        String localeTag
+        String localeTag,
+        // Snapshots from configurable properties (V38, filled from phase 2):
+        // the payout mode, booking type and Mews cancellation terms (JSON) the
+        // booking was made under, its free cancellation deadline, and the Mews
+        // stay start. Null on bookings that predate them.
+        String payoutMode,
+        String bookingType,
+        String cancellationTermsJson,
+        Instant freeCancellationUntil,
+        Instant mewsStartUtc
 ) {
     /** The booking's currency, zone and locale. Throws when it has no currency. */
     public com.bliss.b2b.payments.PropertyLocale propertyLocale() {

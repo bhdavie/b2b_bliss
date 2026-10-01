@@ -37,7 +37,9 @@ public record PublicPlanPortalView(
         // and the locale and zone to format amounts and dates in.
         String currency,
         String locale,
-        String timeZone
+        String timeZone,
+        // The booking's cancellation terms and what cancelling now would do.
+        CancellationView cancellation
 ) {
 
     public static PublicPlanPortalView from(
@@ -69,7 +71,8 @@ public record PublicPlanPortalView(
                 rail,
                 s.booking().currency(),
                 s.booking().localeTag(),
-                s.booking().timeZone());
+                s.booking().timeZone(),
+                CancellationView.from(s.merchant(), s.booking(), s.cancellation()));
     }
 
     public record MerchantView(
@@ -179,4 +182,63 @@ public record PublicPlanPortalView(
             String publishableKey,
             // Connected Standard account for direct charges (null = platform).
             String connectedAccountId) {}
+
+    /**
+     * A booking's cancellation terms, and the outcome of cancelling now in a
+     * sentence the guest reads before confirming (configurable-property spec,
+     * section 10.3). {@code bookingType} and {@code terms} are null for a
+     * booking made before booking types were synced.
+     */
+    public record CancellationView(
+            String bookingType,
+            Instant freeCancellationUntil,
+            String terms,
+            String outcome,
+            long returnCents,
+            boolean asCredit,
+            long keptByPropertyCents,
+            long keptBlissFeeCents,
+            String message) {
+
+        public static CancellationView from(Merchant m, Booking b,
+                com.bliss.b2b.service.CancellationService.Assessment a) {
+            if (a == null || b.currency() == null) {
+                return null;
+            }
+            com.bliss.b2b.payments.PropertyLocale pl = b.propertyLocale();
+            boolean credit = a.creditCents() > 0 || (a.netRefundCents() == 0 && b.mewsReservationId() != null);
+            long back = credit ? a.creditCents() : a.netRefundCents();
+            String property = m.guestFacingName() == null ? "the property" : m.guestFacingName();
+
+            String terms = null;
+            if (b.bookingType() != null) {
+                boolean nonRefundable = "non_refundable".equals(b.bookingType());
+                terms = nonRefundable ? "Non-refundable"
+                        : b.freeCancellationUntil() != null && Instant.now().isBefore(b.freeCancellationUntil())
+                        ? "Free cancellation until " + pl.date(b.freeCancellationUntil().atZone(pl.zone()).toLocalDate())
+                        : com.bliss.b2b.persistence.BlissRateDao.parseTerms(b.cancellationTermsJson()).describe();
+            }
+
+            String message;
+            if ("forfeit".equals(a.outcome())) {
+                message = "This booking is non-refundable, so the " + pl.format(a.paidCents())
+                        + " you've paid isn't refunded.";
+            } else if (back <= 0) {
+                message = "Nothing you've paid would be refunded.";
+            } else {
+                message = credit
+                        ? "Your " + pl.format(back) + " becomes credit for a future stay at " + property + "."
+                        : "You'll get " + pl.format(back) + " back.";
+                if ("penalty".equals(a.outcome()) && a.feeCents() > 0) {
+                    message += " " + pl.format(a.feeCents()) + " is kept under " + property
+                            + "'s cancellation policy"
+                            + (a.keptBlissFeeCents() > 0
+                                    ? ", including the Bliss fee of " + pl.format(a.keptBlissFeeCents()) + "."
+                                    : ".");
+                }
+            }
+            return new CancellationView(b.bookingType(), b.freeCancellationUntil(), terms, a.outcome(), back, credit,
+                    a.feeCents(), a.keptBlissFeeCents(), message);
+        }
+    }
 }

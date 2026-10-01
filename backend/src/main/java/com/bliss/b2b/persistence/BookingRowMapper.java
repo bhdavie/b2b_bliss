@@ -41,7 +41,12 @@ public class BookingRowMapper implements RowMapper<Booking> {
                 (Integer) rs.getObject("adult_count"),
                 rs.getString("currency"),
                 rs.getString("time_zone"),
-                rs.getString("locale")
+                rs.getString("locale"),
+                rs.getString("payout_mode"),
+                rs.getString("booking_type"),
+                rs.getString("cancellation_terms"),
+                toInstant(rs.getTimestamp("free_cancellation_until")),
+                toInstant(rs.getTimestamp("mews_start_utc"))
         );
     }
 
