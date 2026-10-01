@@ -389,8 +389,11 @@ public class ReleaseService {
             List<EmailTemplates.ReleasedLine> lines = new ArrayList<>();
             for (Release r : released) {
                 Booking b = jdbi.withExtension(BookingDao.class, d -> d.findById(r.bookingId())).orElseThrow();
+                String number = jdbi.withHandle(h -> h.createQuery(
+                                "SELECT mews_reservation_number FROM bookings WHERE id = :b")
+                        .bind("b", b.id()).mapTo(String.class).findOne()).orElse(null);
                 lines.add(new EmailTemplates.ReleasedLine(b.serviceName(), b.appointmentDate(), r.amountMinor(),
-                        r.currency(), b.localeTag()));
+                        r.currency(), b.localeTag(), number));
             }
             emailService.send(EmailTemplates.holdReleased(merchant, lines));
         } catch (RuntimeException e) {

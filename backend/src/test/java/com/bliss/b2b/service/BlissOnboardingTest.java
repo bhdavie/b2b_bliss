@@ -156,6 +156,35 @@ class BlissOnboardingTest {
         });
     }
 
+    @Test
+    void thePopUpGetsEachBlissRatesTermsInOneLine() {
+        Merchant m = mewsProperty(true);
+        jdbi.useHandle(h -> {
+            h.execute("UPDATE merchant_mews_connections SET bliss_biweekly_rate_id = 'rate-nr' WHERE merchant_id = ?",
+                    m.id());
+            h.createUpdate("""
+                    INSERT INTO merchant_bliss_rates (merchant_id, mews_rate_id, frequency, rate_name, active,
+                                                      cancellation_terms, derived_booking_type, synced_at)
+                    VALUES (:m, 'rate-nr', 'biweekly', 'Bliss every 2 weeks', TRUE,
+                            '[{"applicability":"Creation","applicabilityOffset":"P0M0DT0H0M0S",
+                               "feeExtent":"TimeUnits","relativeFee":1}]', 'non_refundable', now())""")
+                    .bind("m", m.id()).execute();
+        });
+        com.bliss.b2b.api.PublicMerchantsResource resource = new com.bliss.b2b.api.PublicMerchantsResource(
+                jdbi.onDemand(MerchantDao.class),
+                new MerchantPlanRulesService(jdbi.onDemand(MerchantPlanRulesDao.class)), null, null,
+                jdbi.onDemand(MerchantFeeRateDao.class), jdbi.onDemand(MerchantMewsConnectionDao.class),
+                Clock.fixed(MONDAY, ZoneOffset.UTC))
+                .withBlissRates(jdbi.onDemand(BlissRateDao.class));
+
+        com.bliss.b2b.api.PublicPlanRulesView view =
+                (com.bliss.b2b.api.PublicPlanRulesView) resource.planRules(m.slug(), null).getEntity();
+
+        assertThat(view.mewsBlissTerms())
+                .containsEntry("monthly", "Free cancellation until arrival")
+                .containsEntry("biweekly", "Non-refundable");
+    }
+
     // --- Weekly summary --------------------------------------------------------
 
     private WeeklySummaryService summaries(Instant now) {

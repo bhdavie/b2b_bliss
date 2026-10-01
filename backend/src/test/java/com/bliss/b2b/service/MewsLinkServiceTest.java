@@ -386,7 +386,8 @@ class MewsLinkServiceTest {
         Map<String, Object> booking = one("""
                 SELECT total_amount_cents, appointment_date::text AS checkin, checkout_date::text AS checkout,
                        booking_source AS source, mews_rate_id, mews_confirmed_at IS NOT NULL AS confirmed, status,
-                       customer_email_hint AS customer_email, service_name, service_description
+                       customer_email_hint AS customer_email, service_name, service_description,
+                       mews_reservation_number
                 FROM bookings WHERE mews_reservation_id = :r""", res);
         assertThat(booking).containsEntry("total_amount_cents", 21_200L)
                 .containsEntry("checkin", "2026-12-14")
@@ -397,7 +398,8 @@ class MewsLinkServiceTest {
                 .containsEntry("status", "accepted")
                 .containsEntry("customer_email", "guest-r1@example.com")
                 .containsEntry("service_name", "Stay, 2 nights")
-                .containsEntry("service_description", "Mews reservation 1001");
+                .containsEntry("service_description", "Mews reservation 1001")
+                .containsEntry("mews_reservation_number", "1001");
 
         Map<String, Object> plan = one("""
                 SELECT p.status, p.frequency, p.total_amount_cents, p.deposit_amount_cents,

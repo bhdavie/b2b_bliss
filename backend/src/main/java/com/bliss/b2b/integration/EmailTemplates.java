@@ -273,7 +273,7 @@ public final class EmailTemplates {
 
     /** One released payment in {@link #holdReleased}. */
     public record ReleasedLine(String stay, java.time.LocalDate checkIn, long amountMinor, String currency,
-            String localeTag) {
+            String localeTag, String reservationNumber) {
     }
 
     /**
@@ -287,7 +287,11 @@ public final class EmailTemplates {
         java.util.Map<String, Long> totals = new java.util.LinkedHashMap<>();
         for (ReleasedLine line : lines) {
             PropertyLocale pl = new PropertyLocale(line.currency(), null, line.localeTag());
-            body.append("- ").append(line.stay()).append(", check-in ").append(pl.date(line.checkIn()))
+            body.append("- ");
+            if (line.reservationNumber() != null) {
+                body.append("Reservation ").append(line.reservationNumber()).append(", ");
+            }
+            body.append(line.stay()).append(", check-in ").append(pl.date(line.checkIn()))
                     .append(": ").append(pl.format(line.amountMinor())).append('\n');
             totals.merge(line.currency(), line.amountMinor(), Long::sum);
         }

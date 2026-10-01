@@ -378,7 +378,8 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new PublicPlansResource(planCreationService));
         environment.jersey().register(new PublicMerchantsResource(
                 merchantDao, planRulesService, stripePaymentsService, stripeConnectResolver,
-                merchantFeeRateDao, mewsConnectionDao, clock));
+                merchantFeeRateDao, mewsConnectionDao, clock)
+                .withBlissRates(jdbi.onDemand(com.bliss.b2b.persistence.BlissRateDao.class)));
         environment.jersey().register(new PublicCheckoutResource(planCreationService));
         environment.jersey().register(new PublicPlansPortalResource(
                 planPortalService, stripePaymentsService, stripeConnectResolver));

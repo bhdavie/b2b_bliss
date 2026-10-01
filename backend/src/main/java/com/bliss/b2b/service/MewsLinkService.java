@@ -454,6 +454,12 @@ public class MewsLinkService {
                     rate == null ? null : rate.terms().freeCancellationUntil(r.createdUtc(), r.startUtc(), zone));
             try {
                 var result = planCreationService.createFromMewsReservation(stay);
+                if (r.number() != null) {
+                    // The number the hotel knows the stay by, for its emails.
+                    jdbi.useHandle(h -> h.createUpdate(
+                                    "UPDATE bookings SET mews_reservation_number = :n WHERE id = :b")
+                            .bind("n", r.number()).bind("b", result.booking().id()).execute());
+                }
                 if (feeLines != null) {
                     feeLines.postForPlan(merchantId, result.booking().id(), result.planId(),
                             result.plan().processingFeeCents(), currency);

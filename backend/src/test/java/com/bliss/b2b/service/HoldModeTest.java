@@ -243,6 +243,8 @@ class HoldModeTest {
     @Test
     void aRefundableBookingsPaymentsAreHeldUntilFreeCancellationEnds_thenReleasedOnceLessTheFee() {
         PaymentPlan plan = refundablePlan();
+        jdbi.useHandle(h -> h.execute("UPDATE bookings SET mews_reservation_number = '134557' WHERE id = ?",
+                plan.bookingId()));
 
         releases.run();
 
@@ -267,7 +269,8 @@ class HoldModeTest {
         assertThat(releaseRows(plan)).allSatisfy(r -> assertThat(r).containsEntry("status", "released"));
         assertThat(emails).singleElement().satisfies(m -> {
             assertThat(m.subject()).isEqualTo("Your Bliss payments are on their way");
-            assertThat(m.body()).contains("$582.00").doesNotContain("—");
+            assertThat(m.body()).contains("- Reservation 134557, Three nights, check-in")
+                    .contains("$582.00").doesNotContain("—");
         });
     }
 

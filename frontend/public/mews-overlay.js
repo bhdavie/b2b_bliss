@@ -778,6 +778,8 @@
     blissRates: {},
     /** Display deposit per schedule's Bliss rate, basis points, from the plan rules. */
     blissDepositBps: {},
+    /** {monthly, biweekly} cancellation terms lines, set at boot from the payload. */
+    blissTerms: {},
     /** The property's Bliss fee rate x 100000, from the plan rules. 0 until they load. */
     feeRateHundredThousandths: 0,
 
@@ -2454,6 +2456,9 @@
       lbl.firstChild.appendChild(
         doc.createTextNode(opt.frequency === "biweekly" ? "Every 2 weeks" : "Monthly")
       );
+      // The rate's cancellation terms from Mews, in one line (spec 10.3).
+      var terms = (CONFIG.blissTerms || {})[opt.frequency];
+      if (terms) lbl.appendChild(h("div", { class: "sub terms", text: terms }));
       if (opt.recommended) lbl.firstChild.appendChild(h("span", { class: "tag", text: "Recommended" }));
 
       body.appendChild(
@@ -3499,6 +3504,20 @@
     return out.monthly || out.biweekly ? out : null;
   }
 
+  /**
+   * {monthly, biweekly} cancellation terms in one line each, as synced from
+   * Mews ("Non-refundable", "Free cancellation until 14 days before arrival").
+   * Missing ones are left out and the row shows no terms line.
+   */
+  function blissTermsFromPayload(p) {
+    var raw = (p && p.mewsBlissTerms) || {};
+    var out = {};
+    ["monthly", "biweekly"].forEach(function (f) {
+      if (typeof raw[f] === "string" && raw[f].trim()) out[f] = raw[f].trim();
+    });
+    return out;
+  }
+
   /** {monthly, biweekly} display deposits in basis points; missing or invalid ones are 0. */
   function blissDepositBpsFromPayload(p) {
     var raw = (p && p.mewsBlissDepositBps) || {};
@@ -3565,6 +3584,7 @@
         CONFIG.rules = rules;
         CONFIG.blissRates = blissRates;
         CONFIG.blissDepositBps = blissDepositBpsFromPayload(payload);
+        CONFIG.blissTerms = blissTermsFromPayload(payload);
         var fr = Number(payload.feeRateHundredThousandths);
         CONFIG.feeRateHundredThousandths = isFinite(fr) && fr >= 0 ? Math.round(fr) : 0;
         start(install, url);

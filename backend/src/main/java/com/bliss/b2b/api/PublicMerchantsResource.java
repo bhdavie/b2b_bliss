@@ -39,6 +39,13 @@ public class PublicMerchantsResource {
     private final MerchantFeeRateDao feeRateDao;
     private final com.bliss.b2b.persistence.MerchantMewsConnectionDao mewsConnectionDao;
     private final Clock clock;
+    /** Each Bliss rate's synced cancellation terms, for the pop-up. Null leaves them out. */
+    private com.bliss.b2b.persistence.BlissRateDao blissRateDao;
+
+    public PublicMerchantsResource withBlissRates(com.bliss.b2b.persistence.BlissRateDao blissRateDao) {
+        this.blissRateDao = blissRateDao;
+        return this;
+    }
 
     public PublicMerchantsResource(
             MerchantDao merchantDao,
@@ -169,9 +176,17 @@ public class PublicMerchantsResource {
                 if (c.blissBiweeklyDepositBps() != null) depositBps.put("biweekly", c.blissBiweeklyDepositBps());
             });
         }
+        Map<String, String> terms = new java.util.LinkedHashMap<>();
+        if (blissRateDao != null) {
+            blissRates.forEach((frequency, rateId) -> blissRateDao.find(merchant.id(), rateId)
+                    .filter(r -> r.syncedAt() != null)
+                    .ifPresent(r -> terms.put(frequency,
+                            r.bookingType() == com.bliss.b2b.payments.BookingType.NON_REFUNDABLE
+                                    ? "Non-refundable" : r.terms().describe())));
+        }
         return Response.ok(PublicPlanRulesView.from(rules, merchant.pmsType(), blissRates, depositBps,
                 feeRateDao.effectiveRateFor(merchant.id(), clock.instant())
-                        .orElse(PlanCreationService.FALLBACK_FEE_RATE_PUBLIC))).build();
+                        .orElse(PlanCreationService.FALLBACK_FEE_RATE_PUBLIC), terms)).build();
     }
 
     /**

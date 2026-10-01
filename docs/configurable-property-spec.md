@@ -676,8 +676,12 @@ As built: "Bliss is on" (once per property), "A Bliss rate was switched off"
 (split out of the change email), "Your Bliss payments are on their way" (each
 release pass, per property; no reservation number yet), "Payout sent" and
 "Payout failed" (once per payout and status) and "Your week with Bliss" (Mondays
-in the property's zone, skipped in a week with nothing to report). The pop-up
-line in 10.3 is not built; the portal's is.
+in the property's zone, skipped in a week with nothing to report). The release
+email names each stay by its Mews reservation number (`bookings.mews_reservation_number`,
+V42, recorded at link time and backfilled). The pop-up shows each Bliss rate's
+terms under its plan option, from `mewsBlissTerms` on the public plan rules.
+V42 also switched on, quietly, every property that had already finished
+onboarding: enabled with defaults and its "Bliss is on" email marked as sent.
 
 ### 10.3 What guests see
 

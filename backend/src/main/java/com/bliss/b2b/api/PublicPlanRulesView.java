@@ -68,7 +68,14 @@ public record PublicPlanRulesView(
          * exact. The pop-up adds the fee to its preview exactly as a plan does
          * (total x rate, half up). Null when the caller did not resolve it.
          */
-        Integer feeRateHundredThousandths
+        Integer feeRateHundredThousandths,
+        /**
+         * Mews only: each Bliss rate's cancellation terms in one line for the
+         * pop-up ({@code monthly}, {@code biweekly}), synced from Mews, for
+         * example "Non-refundable" or "Free cancellation until 14 days before
+         * arrival" (spec 10.3). Absent for a rate not synced yet.
+         */
+        java.util.Map<String, String> mewsBlissTerms
 ) {
     public static PublicPlanRulesView from(MerchantPlanRules rules, PmsType pmsType) {
         return from(rules, pmsType, java.util.Map.of(), java.util.Map.of(), null);
@@ -78,6 +85,14 @@ public record PublicPlanRulesView(
             java.util.Map<String, String> mewsBlissRates,
             java.util.Map<String, Integer> mewsBlissDepositBps,
             java.math.BigDecimal feeRate) {
+        return from(rules, pmsType, mewsBlissRates, mewsBlissDepositBps, feeRate, java.util.Map.of());
+    }
+
+    public static PublicPlanRulesView from(MerchantPlanRules rules, PmsType pmsType,
+            java.util.Map<String, String> mewsBlissRates,
+            java.util.Map<String, Integer> mewsBlissDepositBps,
+            java.math.BigDecimal feeRate,
+            java.util.Map<String, String> mewsBlissTerms) {
         return new PublicPlanRulesView(
                 rules.minLeadTimeWeeks(),
                 rules.maxLeadTimeWeeks(),
@@ -96,6 +111,7 @@ public record PublicPlanRulesView(
                 pmsType == null ? null : pmsType.wire(),
                 mewsBlissRates,
                 mewsBlissDepositBps,
-                feeRate == null ? null : feeRate.movePointRight(5).intValueExact());
+                feeRate == null ? null : feeRate.movePointRight(5).intValueExact(),
+                mewsBlissTerms);
     }
 }
