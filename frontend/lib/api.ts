@@ -293,6 +293,7 @@ export type AdminMerchantDetail = {
   feeRateHistory: AdminFeeRateRow[];
   counts: AdminCounts;
   recentBookings: AdminRecentBooking[];
+  disputes?: AdminDispute[];
 };
 
 export type SetFeeRatePayload = {
@@ -1055,7 +1056,63 @@ export type PlanDetail = {
   currency: string;
   locale: string | null;
   timeZone: string | null;
+  // Card disputes on the plan's payments, oldest first.
+  disputes?: PlanDispute[];
 };
+
+/** A card dispute (chargeback) on one of a plan's payments. */
+export type PlanDispute = {
+  amountCents: number;
+  currency: string;
+  reason: string | null;
+  status: string;
+  open: boolean;
+  evidenceDueBy: string | null;
+  openedAt: string;
+  // Whether this dispute is holding the plan's automatic payments.
+  paymentsPaused: boolean;
+};
+
+/** A card dispute on one of a property's plans, as admin sees it. */
+export type AdminDispute = {
+  id: string;
+  stripeDisputeId: string;
+  planId: string | null;
+  amountMinor: number;
+  currency: string;
+  reason: string | null;
+  status: string;
+  evidenceDueBy: string | null;
+  livemode: boolean;
+  createdAt: string;
+  closedAt: string | null;
+  chargesResumedAt: string | null;
+};
+
+/** Whether an admin-visible dispute is holding its plan's payments. */
+export function disputePausesPayments(d: AdminDispute): boolean {
+  return d.planId != null && d.status !== "won" && d.status !== "warning_closed" && d.chargesResumedAt == null;
+}
+
+/** Lets a plan's payments resume although its dispute was lost or is still open. */
+export async function resumeDisputedPayments(disputeId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/admin/disputes/${disputeId}/resume-payments`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? `Could not resume payments (${res.status}).`);
+  }
+}
+
+/** "product_not_received" as "Product not received". */
+export function disputeLabel(code: string | null): string {
+  if (!code) return "Not given";
+  const words = code.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 export type AttentionResponse = { plans: PlanDetail[]; count: number };
 

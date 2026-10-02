@@ -188,6 +188,69 @@ public final class EmailTemplates {
         return new EmailMessage(merchant.email(), "We noticed a change in Mews", body.toString());
     }
 
+    /**
+     * To the hotel when a guest disputes a card payment on one of its plans:
+     * the same facts its plan page shows.
+     */
+    public static EmailMessage merchantDisputeOpened(Merchant merchant,
+            com.bliss.b2b.persistence.PlanDisputeDao.Dispute d, Booking booking) {
+        PropertyLocale pl = new PropertyLocale(d.currency(), booking == null ? null : booking.timeZone(),
+                booking == null ? merchant.localeTag() : booking.localeTag());
+        String reason = d.reason() == null ? "not given" : d.reason().replace('_', ' ');
+        StringBuilder body = new StringBuilder();
+        body.append("A guest disputed ").append(pl.format(d.amountMinor()))
+                .append(" with their card bank");
+        if (booking != null) {
+            body.append(", for ").append(booking.serviceName()).append(" (check-in ")
+                    .append(pl.date(booking.appointmentDate())).append(')');
+        }
+        body.append(".\n\nReason: ").append(reason).append('\n');
+        body.append("Status: ").append(d.status() == null ? "open" : d.status().replace('_', ' ')).append('\n');
+        body.append("\nThe plan's automatic payments are paused until the dispute closes. ");
+        body.append("Bliss has been told and will be in touch about any evidence the bank needs. "
+                + "You can see the plan in your dashboard.\n");
+        return new EmailMessage(merchant.email(), "A guest disputed a payment", body.toString());
+    }
+
+    /**
+     * To Bliss operations when a guest disputes a card payment. Plain internal
+     * copy: what was disputed, where, why, by when evidence is due, and where to
+     * respond in Stripe.
+     */
+    public static EmailMessage disputeOpened(String to, com.bliss.b2b.persistence.PlanDisputeDao.Dispute d,
+            Merchant merchant, Booking booking) {
+        PropertyLocale pl = new PropertyLocale(d.currency(), booking == null ? null : booking.timeZone(),
+                booking == null ? null : booking.localeTag());
+        StringBuilder body = new StringBuilder("A guest disputed a card payment.\n\n");
+        body.append("Amount: ").append(pl.format(d.amountMinor())).append('\n');
+        body.append("Reason: ").append(d.reason() == null ? "not given" : d.reason().replace('_', ' ')).append('\n');
+        body.append("Status: ").append(d.status() == null ? "unknown" : d.status().replace('_', ' ')).append('\n');
+        if (d.evidenceDueBy() != null) {
+            body.append("Evidence due by: ").append(d.evidenceDueBy()).append(" (UTC)\n");
+        }
+        if (merchant != null) {
+            body.append("Property: ").append(merchant.businessName() == null ? merchant.slug() : merchant.businessName())
+                    .append('\n');
+        }
+        if (booking != null) {
+            body.append("Stay: ").append(booking.serviceName()).append(", check-in ")
+                    .append(pl.date(booking.appointmentDate())).append('\n');
+        }
+        if (d.planId() != null) {
+            body.append("Plan: ").append(d.planId()).append('\n');
+            body.append("Automatic payments on this plan are paused until the dispute closes. If it is lost "
+                    + "they stay paused until you resume them on the property's admin page.\n");
+        } else {
+            body.append("Plan: not matched. The disputed charge isn't one Bliss recorded against a plan.\n");
+        }
+        body.append("\nStripe dispute: ").append(d.stripeDisputeId()).append('\n');
+        body.append("Respond in Stripe: https://dashboard.stripe.com/")
+                .append(d.livemode() ? "" : "test/").append("disputes/").append(d.stripeDisputeId()).append('\n');
+        return new EmailMessage(to, "Card dispute: " + pl.format(d.amountMinor())
+                + (merchant == null || merchant.businessName() == null ? "" : " at " + merchant.businessName()),
+                body.toString());
+    }
+
     /** A Bliss rate in {@link #blissIsOn}: its name, schedule and terms in plain words. */
     public record RateLine(String name, String schedule, String terms) {
     }

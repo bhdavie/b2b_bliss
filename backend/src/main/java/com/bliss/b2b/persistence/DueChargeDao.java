@@ -49,6 +49,9 @@ public interface DueChargeDao {
             WHERE ps.status IN ('scheduled', 'retrying')
               AND ps.due_date <= (CAST(:now AS timestamptz) AT TIME ZONE COALESCE(b.time_zone, 'UTC'))::date
               AND pp.status = 'active'
+              -- A card dispute pauses the plan's automatic payments (V45).
+              AND NOT (""" + PlanDisputeDao.PAUSES_PLAN_PP + """
+              )
             ORDER BY ps.due_date ASC, ps.sequence ASC
             """)
     @RegisterConstructorMapper(DueInstallment.class)
@@ -97,7 +100,10 @@ public interface DueChargeDao {
                 JOIN payment_plans pp ON pp.id = ps.payment_plan_id
                 WHERE ps.id = :scheduleId
                   AND ps.status IN ('scheduled', 'retrying')
-                  AND pp.status = 'active')
+                  AND pp.status = 'active'
+                  AND NOT (""" + PlanDisputeDao.PAUSES_PLAN_PP + """
+                  )
+            )
             """)
     boolean isStillChargeable(@Bind("scheduleId") UUID scheduleId);
 

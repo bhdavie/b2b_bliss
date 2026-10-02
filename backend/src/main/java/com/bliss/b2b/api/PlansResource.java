@@ -46,6 +46,13 @@ public class PlansResource {
     private final PaymentScheduleDao scheduleDao;
     private final BookingDao bookingDao;
     private final CancellationService cancellationService;
+    /** Card disputes; null leaves them out of the views. */
+    private com.bliss.b2b.persistence.PlanDisputeDao disputeDao;
+
+    public PlansResource withDisputes(com.bliss.b2b.persistence.PlanDisputeDao disputeDao) {
+        this.disputeDao = disputeDao;
+        return this;
+    }
 
     public PlansResource(
             PaymentPlanDao planDao,
@@ -203,7 +210,8 @@ public class PlansResource {
         Optional<Booking> booking = bookingDao.findByIdForMerchant(plan.bookingId(), merchantId);
         if (booking.isEmpty()) return Optional.empty();
         List<PaymentScheduleEntry> schedule = scheduleDao.listForPlan(plan.id());
-        return Optional.of(PlanDetailView.from(plan, booking.get(), schedule));
+        return Optional.of(PlanDetailView.from(plan, booking.get(), schedule,
+                disputeDao == null ? List.of() : disputeDao.forPlan(plan.id())));
     }
 
     private static UUID parseUuid(String s) {
@@ -238,9 +246,16 @@ public class PlansResource {
             // The booking's currency, locale and zone.
             String currency,
             String locale,
-            String timeZone
+            String timeZone,
+            // Card disputes on the plan's payments (V45), oldest first.
+            List<DisputeView> disputes
     ) {
         public static PlanDetailView from(PaymentPlan plan, Booking booking, List<PaymentScheduleEntry> schedule) {
+            return from(plan, booking, schedule, List.of());
+        }
+
+        public static PlanDetailView from(PaymentPlan plan, Booking booking, List<PaymentScheduleEntry> schedule,
+                List<com.bliss.b2b.persistence.PlanDisputeDao.Dispute> disputes) {
             List<ScheduleEntryDetail> entries = schedule.stream()
                     .map(ScheduleEntryDetail::from)
                     .toList();
@@ -270,8 +285,20 @@ public class PlansResource {
                     failed,
                     booking.currency(),
                     booking.localeTag(),
-                    booking.timeZone()
+                    booking.timeZone(),
+                    disputes.stream().map(DisputeView::from).toList()
             );
+        }
+    }
+
+    /** A card dispute on one of the plan's payments, as the hotel sees it. */
+    public record DisputeView(long amountCents, String currency, String reason, String status, boolean open,
+            java.time.Instant evidenceDueBy, java.time.Instant openedAt,
+            // Whether this dispute is holding the plan's automatic payments.
+            boolean paymentsPaused) {
+        static DisputeView from(com.bliss.b2b.persistence.PlanDisputeDao.Dispute d) {
+            return new DisputeView(d.amountMinor(), d.currency(), d.reason(), d.status(), d.open(),
+                    d.evidenceDueBy(), d.createdAt(), d.pausesPayments());
         }
     }
 

@@ -430,7 +430,12 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new com.bliss.b2b.api.CloudbedsOAuthResource(
                 cloudbedsOAuthClient, cloudbedsAdapterFactory, onboardingService, config.getApp(), clock));
         environment.jersey().register(new PlansResource(
-                paymentPlanDao, paymentScheduleDao, bookingDao, cancellationService));
+                paymentPlanDao, paymentScheduleDao, bookingDao, cancellationService)
+                .withDisputes(jdbi.onDemand(com.bliss.b2b.persistence.PlanDisputeDao.class)));
+        // Card disputes arrive on the platform endpoint, signed with its own
+        // secret (STRIPE_PLATFORM_WEBHOOK_SECRET); Bliss operations is emailed.
+        environment.jersey().register(new com.bliss.b2b.api.StripePlatformWebhookResource(stripeService,
+                new com.bliss.b2b.service.DisputeService(jdbi, emailService, config.getApp().getOpsEmail())));
         environment.jersey().register(new DevPlansResource(
                 devEndpointsEnabled, paymentPlanDao, paymentScheduleDao, planRulesDao,
                 bookingDao, cancellationService));

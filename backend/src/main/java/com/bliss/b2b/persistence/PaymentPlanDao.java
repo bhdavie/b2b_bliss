@@ -33,13 +33,17 @@ public interface PaymentPlanDao {
             SELECT pp.* FROM payment_plans pp
             JOIN bookings b ON b.id = pp.booking_id
             WHERE b.merchant_id = :merchantId
-              AND pp.status IN (
+              AND (pp.status IN (
                 'payment_failed_in_retry',
                 'payment_failed_exhausted',
                 'defaulted',
                 'balance_due',
                 'refund_due'
               )
+              -- A card dispute still open on the plan (V44).
+              OR EXISTS (SELECT 1 FROM plan_disputes d
+                         WHERE d.payment_plan_id = pp.id
+                           AND d.status NOT IN ('won', 'lost', 'warning_closed')))
             ORDER BY pp.updated_at DESC
             """)
     java.util.List<PaymentPlan> findAttentionForMerchant(

@@ -81,6 +81,24 @@ public class AdminMerchantsResource {
      * <p>A past effective_from is otherwise allowed — backdating to a date still
      * after the last row is a legitimate correction.
      */
+    /**
+     * Lets a plan's automatic payments resume although its card dispute was
+     * lost (or is still open). A dispute won resumes them on its own.
+     */
+    @POST
+    @Path("/disputes/{id}/resume-payments")
+    public Response resumeDisputedPayments(@Auth AdminPrincipal principal, @PathParam("id") String id) {
+        UUID disputeId = parseUuid(id);
+        if (disputeId == null) return notFound();
+        int changed = service.resumeDisputedPayments(disputeId, principal.admin().email(), clock.instant());
+        if (changed == 0) {
+            return Response.status(409).entity(java.util.Map.of("error", "not_paused",
+                    "message", "Payments on this plan aren't paused by this dispute.")).build();
+        }
+        log.info("Admin {} resumed payments held by dispute {}", principal.admin().email(), disputeId);
+        return Response.ok(java.util.Map.of("resumed", true)).build();
+    }
+
     @POST
     @Path("/merchants/{id}/fee-rate")
     public Response setFeeRate(

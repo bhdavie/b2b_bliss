@@ -143,6 +143,9 @@ stripe:
   publishableKey: ${STRIPE_PUBLISHABLE_KEY:-}
   # Webhook signing secret from `stripe listen --forward-to localhost:8080/api/v1/stripe/webhooks`
   webhookSecret: ${STRIPE_WEBHOOK_SECRET:-}
+  # Signing secret of the platform endpoint (charge.dispute.*), separate from the
+  # Connect endpoint's above. Blank leaves /stripe/platform-webhooks answering 503.
+  platformWebhookSecret: ${STRIPE_PLATFORM_WEBHOOK_SECRET:-}
 
 pms:
   # Cloudbeds OAuth app. clientId/clientSecret from the registered app; blank

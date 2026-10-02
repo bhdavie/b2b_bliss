@@ -336,6 +336,11 @@ public class BlissConfiguration extends Configuration {
         @JsonProperty public void setPublishableKey(String publishableKey) { this.publishableKey = publishableKey; }
         @JsonProperty public String getWebhookSecret() { return webhookSecret; }
         @JsonProperty public void setWebhookSecret(String webhookSecret) { this.webhookSecret = webhookSecret; }
+        // The platform endpoint's signing secret (charge.dispute.*), distinct
+        // from webhookSecret, which is the Connect endpoint's.
+        private String platformWebhookSecret = "";
+        @JsonProperty public String getPlatformWebhookSecret() { return platformWebhookSecret; }
+        @JsonProperty public void setPlatformWebhookSecret(String v) { this.platformWebhookSecret = v == null ? "" : v; }
 
         public boolean isConfigured() {
             return secretKey != null && !secretKey.isBlank();

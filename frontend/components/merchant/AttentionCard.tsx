@@ -61,7 +61,16 @@ export function AttentionCard({ plans }: { plans: PlanDetail[] }) {
                 <div className="mt-0.5 text-xs text-ink-muted">
                   {plan.customerHint ?? "Customer info pending"}
                 </div>
-                {plan.status === "balance_due" ? (
+                {(plan.disputes ?? []).some((d) => d.open) ? (
+                  <div className="mt-1 text-xs font-medium text-danger">
+                    Card dispute open:{" "}
+                    {formatMoneyCompact(
+                      (plan.disputes ?? []).filter((d) => d.open).reduce((t, d) => t + d.amountCents, 0),
+                      plan,
+                    )}
+                    {(plan.disputes ?? []).some((d) => d.paymentsPaused) ? ", payments paused" : ""}
+                  </div>
+                ) : plan.status === "balance_due" ? (
                   <div className="mt-1 text-xs font-medium text-brand-purple">
                     Balance due at check-in:{" "}
                     {formatMoneyCompact(balanceDue(plan), plan)}
