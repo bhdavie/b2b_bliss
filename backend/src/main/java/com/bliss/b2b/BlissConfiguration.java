@@ -227,10 +227,11 @@ public class BlissConfiguration extends Configuration {
         private String demoMewsSlugs = "";
 
         @JsonProperty public String getMerchantBaseUrl() { return merchantBaseUrl; }
-        // Where a new property signup is announced. Blank sends nothing.
-        private String signupAlertEmail = "";
-        @JsonProperty public String getSignupAlertEmail() { return signupAlertEmail; }
-        @JsonProperty public void setSignupAlertEmail(String v) { this.signupAlertEmail = v == null ? "" : v; }
+        // Where Bliss's own operational alerts go: new property signups (and
+        // card disputes, once built). Blank sends none.
+        private String opsEmail = "";
+        @JsonProperty public String getOpsEmail() { return opsEmail; }
+        @JsonProperty public void setOpsEmail(String v) { this.opsEmail = v == null ? "" : v; }
         @JsonProperty public void setMerchantBaseUrl(String merchantBaseUrl) { this.merchantBaseUrl = merchantBaseUrl; }
         @JsonProperty public String getConsumerBaseUrl() { return consumerBaseUrl; }
         @JsonProperty public void setConsumerBaseUrl(String consumerBaseUrl) { this.consumerBaseUrl = consumerBaseUrl; }

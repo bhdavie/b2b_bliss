@@ -69,8 +69,8 @@ app:
   # Merchant dashboard (property.bliss-payments.com in prod): magic-link sign-in
   # and the Stripe Connect return url.
   merchantBaseUrl: ${BLISS_MERCHANT_BASE_URL:-http://localhost:3000}
-  # New property signups are announced here. Blank sends nothing.
-  signupAlertEmail: ${BLISS_SIGNUP_ALERT_EMAIL:-}
+  # Bliss's own alerts (new property signups, card disputes) go here. Blank sends none.
+  opsEmail: ${BLISS_OPS_EMAIL:-}
   # Consumer portal and checkout (guest.bliss-payments.com in prod): hosted pay
   # links and the manage-your-plan link in confirmation email.
   consumerBaseUrl: ${BLISS_CONSUMER_BASE_URL:-http://localhost:3000}

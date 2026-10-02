@@ -172,7 +172,7 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 merchantDao, customerDao, tokenDao, emailService, config.getApp(), magicLinkTtl,
                 config.isDemoLogin())
                 // Each new property is announced here when its sign-up link is clicked.
-                .withSignupAlert(config.getApp().getSignupAlertEmail());
+                .withSignupAlert(config.getApp().getOpsEmail());
         StripeConnectService stripeService = new StripeConnectService(config.getStripe());
         // Demo charge cap threaded into both rails' execution points only.
         long chargeCapCents = config.getChargeCapCents();
