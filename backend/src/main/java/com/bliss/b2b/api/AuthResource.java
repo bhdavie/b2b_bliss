@@ -74,9 +74,37 @@ public class AuthResource {
         this.demoLoginEmails = demoLoginEmails;
     }
 
+    /** Sign-in link requests per client IP: the same budget as the referral form. */
+    private IpRateLimiter linkLimiter;
+
+    public AuthResource withLinkLimiter(IpRateLimiter limiter) {
+        this.linkLimiter = limiter;
+        return this;
+    }
+
+    public Response requestMagicLink(MagicLinkRequest req) {
+        return requestMagicLink(req, null);
+    }
+
+    /**
+     * Sends a sign-in link, or for a new address a sign-up link. Rate limited
+     * per client IP (429). A per-address cooldown and suspended accounts are
+     * handled in the service and answered with the same 204 as a sent link, so
+     * nothing about an address is visible from here.
+     */
     @POST
     @Path("/magic-link")
-    public Response requestMagicLink(MagicLinkRequest req) {
+    public Response requestMagicLink(MagicLinkRequest req,
+            @jakarta.ws.rs.core.Context jakarta.servlet.http.HttpServletRequest http) {
+        if (linkLimiter != null) {
+            IpRateLimiter.Decision byIp = linkLimiter.tryAcquire("ip:" + PublicReferralsResource.callerIp(http));
+            if (!byIp.allowed()) {
+                return Response.status(429).header("Retry-After", byIp.retryAfterSeconds())
+                        .entity(Map.of("error", "rate_limited",
+                                "message", "Too many sign-in requests. Try again in a few minutes."))
+                        .build();
+            }
+        }
         if (req == null || req.email() == null || req.email().isBlank()) {
             return Response.status(400).entity(Map.of("error", "email required")).build();
         }
@@ -161,6 +189,10 @@ public class AuthResource {
             return Response.status(404).entity(Map.of("error", "not_found")).build();
         }
         Merchant merchant = magicLinkService.devLogin(normalized);
+        if (merchant.status() == com.bliss.b2b.domain.MerchantStatus.SUSPENDED) {
+            log.warn("Dev-login refused for suspended merchant {}", merchant.id());
+            return Response.status(404).entity(Map.of("error", "not_found")).build();
+        }
         log.info("Dev-login bypass issued session for merchant {} ({})",
                 merchant.id(), merchant.email());
         String jwt = jwtService.issue(merchant.email(), merchant.id().toString());
@@ -219,6 +251,10 @@ public class AuthResource {
             return invalidCredentials();
         }
         Merchant m = merchant.get();
+        if (m.status() == com.bliss.b2b.domain.MerchantStatus.SUSPENDED) {
+            log.warn("Password-login refused for suspended merchant {}", m.id());
+            return invalidCredentials();
+        }
         log.warn("Demo password issued merchant session for {} ({}) — temporary, "
                 + "remove before real onboarding", m.id(), m.email());
         String jwt = jwtService.issue(m.email(), m.id().toString());

@@ -118,4 +118,31 @@ public interface MagicLinkTokenDao {
             WHERE token_hash = :tokenHash
             """)
     int deleteByHash(@Bind("tokenHash") String tokenHash);
+
+    /** A link for an email with no property yet; the property is created when it is clicked (V44). */
+    @SqlUpdate("""
+            INSERT INTO magic_link_tokens (subject_type, signup_email, token_hash, expires_at)
+            VALUES ('signup', :email, :tokenHash, :expiresAt)
+            """)
+    void insertForSignup(@Bind("email") String email, @Bind("tokenHash") String tokenHash,
+            @Bind("expiresAt") Instant expiresAt);
+
+    @SqlQuery("""
+            SELECT signup_email
+            FROM magic_link_tokens
+            WHERE token_hash = :tokenHash
+              AND subject_type = 'signup'
+              AND consumed_at IS NULL
+              AND expires_at > :now
+            """)
+    Optional<String> findActiveSignupEmail(@Bind("tokenHash") String tokenHash, @Bind("now") Instant now);
+
+    /** When the last merchant sign-in or sign-up link went to this address, if ever. */
+    @SqlQuery("""
+            SELECT max(t.created_at)
+            FROM magic_link_tokens t
+            LEFT JOIN merchants m ON m.id = t.merchant_id
+            WHERE t.signup_email = :email OR m.email = :email
+            """)
+    Optional<Instant> lastMerchantLinkAt(@Bind("email") String email);
 }

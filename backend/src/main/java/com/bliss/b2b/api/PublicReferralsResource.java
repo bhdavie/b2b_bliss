@@ -365,7 +365,7 @@ public class PublicReferralsResource {
      * another (a CDN in front of Heroku) moves the trustworthy entry and this
      * has to change with it.
      */
-    static String callerIp(HttpServletRequest http) {
+    public static String callerIp(HttpServletRequest http) {
         if (http == null) return null;
         String forwarded = http.getHeader("X-Forwarded-For");
         if (forwarded != null) {

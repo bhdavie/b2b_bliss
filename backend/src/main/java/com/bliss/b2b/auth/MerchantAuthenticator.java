@@ -39,7 +39,10 @@ public class MerchantAuthenticator implements Authenticator<String, MerchantPrin
             if (merchantIdStr == null) return Optional.empty();
             UUID merchantId = UUID.fromString(merchantIdStr);
             Optional<Merchant> merchant = merchantDao.findById(merchantId);
-            return merchant.map(MerchantPrincipal::new);
+            // A suspended account's sessions stop working at once, not at expiry.
+            return merchant
+                    .filter(m -> m.status() != com.bliss.b2b.domain.MerchantStatus.SUSPENDED)
+                    .map(MerchantPrincipal::new);
         } catch (Exception e) {
             log.debug("JWT verification failed: {}", e.getMessage());
             return Optional.empty();

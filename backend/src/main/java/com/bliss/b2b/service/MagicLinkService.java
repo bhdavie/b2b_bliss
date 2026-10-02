@@ -57,26 +57,53 @@ public class MagicLinkService {
         this.demoSignups = demoSignups;
     }
 
+    /** No second link to the same address within this long. */
+    static final Duration LINK_COOLDOWN = Duration.ofSeconds(60);
+
+    /** What {@link #requestLink} did. The caller answers the same way for all three. */
+    public enum LinkResult { SENT, COOLDOWN, SUSPENDED }
+
+    /** Where a new property is announced, once it is created. Blank sends nothing. */
+    private String signupAlertEmail = "";
+
+    public MagicLinkService withSignupAlert(String email) {
+        this.signupAlertEmail = email == null ? "" : email.trim();
+        return this;
+    }
+
     /**
-     * Idempotent on email: if no merchant exists for the email, one is created
-     * in pending_verification. Always issues a fresh magic link.
+     * Sends a sign-in link. An existing property gets a link to itself; an
+     * unknown address gets a sign-up link, and its property is only created
+     * when that link is clicked ({@link #verify}), so an address nobody
+     * confirms leaves nothing behind. A suspended property gets nothing, and
+     * no address gets a second link within {@link #LINK_COOLDOWN}. The caller
+     * answers the same in every case, so none of this is visible from outside.
      */
-    public void requestLink(String email) {
+    public LinkResult requestLink(String email) {
         String normalized = email.trim().toLowerCase();
-        Merchant merchant = merchantDao.findByEmail(normalized).orElseGet(() -> {
-            String slug = generateSlug();
-            merchantDao.insertPending(slug, normalized, demoSignups);
-            log.info("Created merchant slug={} email={} demo={}", slug, normalized, demoSignups);
-            return merchantDao.findByEmail(normalized).orElseThrow();
-        });
+        Optional<Merchant> existing = merchantDao.findByEmail(normalized);
+        if (existing.isPresent() && existing.get().status() == com.bliss.b2b.domain.MerchantStatus.SUSPENDED) {
+            log.warn("Sign-in link refused for suspended merchant {}", existing.get().id());
+            return LinkResult.SUSPENDED;
+        }
+        Optional<Instant> last = tokenDao.lastMerchantLinkAt(normalized);
+        if (last.isPresent() && last.get().isAfter(Instant.now().minus(LINK_COOLDOWN))) {
+            log.info("Sign-in link to {} skipped: one was sent under {}s ago", normalized,
+                    LINK_COOLDOWN.toSeconds());
+            return LinkResult.COOLDOWN;
+        }
         String rawToken = randomToken();
         String hash = sha256Hex(rawToken);
         Instant expiresAt = Instant.now().plus(linkTtl);
-        tokenDao.insert(merchant.id(), hash, expiresAt);
+        if (existing.isPresent()) {
+            tokenDao.insert(existing.get().id(), hash, expiresAt);
+        } else {
+            tokenDao.insertForSignup(normalized, hash, expiresAt);
+        }
         // /verify is a merchant-dashboard route, so this is the merchant host.
         String link = appConfig.getMerchantBaseUrl() + "/verify?token=" + rawToken;
         try {
-            emailService.send(EmailTemplates.magicLink(merchant.email(), link, linkTtl));
+            emailService.send(EmailTemplates.magicLink(normalized, link, linkTtl));
         } catch (Exception e) {
             // The token row was written before the send, so drop it rather than
             // leave a live credential nobody received. Best-effort: if the
@@ -85,11 +112,12 @@ public class MagicLinkService {
                 tokenDao.deleteByHash(hash);
             } catch (Exception cleanupFailure) {
                 log.warn("Could not delete undelivered magic-link token for {}: {}",
-                        merchant.email(), cleanupFailure.getMessage());
+                        normalized, cleanupFailure.getMessage());
             }
-            log.warn("Failed to send magic link to {}: {}", merchant.email(), e.getMessage());
-            throw new MagicLinkDeliveryException("Could not deliver magic link to " + merchant.email(), e);
+            log.warn("Failed to send magic link to {}: {}", normalized, e.getMessage());
+            throw new MagicLinkDeliveryException("Could not deliver magic link to " + normalized, e);
         }
+        return LinkResult.SENT;
     }
 
     /**
@@ -121,15 +149,63 @@ public class MagicLinkService {
         String hash = sha256Hex(rawToken);
         Instant now = Instant.now();
         Optional<UUID> merchantId = tokenDao.findActiveMerchantId(hash, now);
-        if (merchantId.isEmpty()) return Optional.empty();
+        if (merchantId.isEmpty()) {
+            return verifySignup(hash, now);
+        }
         int consumed = tokenDao.consume(hash, now);
         if (consumed == 0) return Optional.empty();
         Merchant merchant = merchantDao.findById(merchantId.get()).orElseThrow();
+        if (merchant.status() == com.bliss.b2b.domain.MerchantStatus.SUSPENDED) {
+            log.warn("Sign-in refused for suspended merchant {}", merchant.id());
+            return Optional.empty();
+        }
         if (merchant.emailVerifiedAt() == null) {
             merchantDao.markVerified(merchant.id(), now);
             return merchantDao.findById(merchant.id());
         }
         return Optional.of(merchant);
+    }
+
+    /**
+     * A sign-up link was clicked: the property is created now, already
+     * verified, and the signup alert goes out. If a property for the address
+     * appeared meanwhile (two links clicked), that one signs in instead.
+     */
+    private Optional<Merchant> verifySignup(String hash, Instant now) {
+        Optional<String> email = tokenDao.findActiveSignupEmail(hash, now);
+        if (email.isEmpty() || tokenDao.consume(hash, now) == 0) {
+            return Optional.empty();
+        }
+        Optional<Merchant> existing = merchantDao.findByEmail(email.get());
+        if (existing.isPresent()) {
+            Merchant m = existing.get();
+            if (m.status() == com.bliss.b2b.domain.MerchantStatus.SUSPENDED) {
+                return Optional.empty();
+            }
+            if (m.emailVerifiedAt() == null) {
+                merchantDao.markVerified(m.id(), now);
+            }
+            return merchantDao.findById(m.id());
+        }
+        String slug = generateSlug();
+        merchantDao.insertPending(slug, email.get(), demoSignups);
+        Merchant created = merchantDao.findByEmail(email.get()).orElseThrow();
+        merchantDao.markVerified(created.id(), now);
+        created = merchantDao.findById(created.id()).orElseThrow();
+        log.info("Created merchant slug={} email={} on sign-up link click", slug, email.get());
+        alertNewProperty(created);
+        return Optional.of(created);
+    }
+
+    private void alertNewProperty(Merchant merchant) {
+        if (signupAlertEmail.isEmpty()) {
+            return;
+        }
+        try {
+            emailService.send(EmailTemplates.newPropertySignup(signupAlertEmail, merchant));
+        } catch (RuntimeException e) {
+            log.warn("Signup alert for merchant {} not sent: {}", merchant.id(), e.toString());
+        }
     }
 
     // ---------------------------------------------------------------------

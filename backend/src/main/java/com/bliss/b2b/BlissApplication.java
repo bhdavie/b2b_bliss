@@ -170,7 +170,9 @@ public class BlissApplication extends Application<BlissConfiguration> {
                 jdbi.onDemand(com.bliss.b2b.persistence.CustomerDao.class);
         MagicLinkService magicLinkService = new MagicLinkService(
                 merchantDao, customerDao, tokenDao, emailService, config.getApp(), magicLinkTtl,
-                config.isDemoLogin());
+                config.isDemoLogin())
+                // Each new property is announced here when its sign-up link is clicked.
+                .withSignupAlert(config.getApp().getSignupAlertEmail());
         StripeConnectService stripeService = new StripeConnectService(config.getStripe());
         // Demo charge cap threaded into both rails' execution points only.
         long chargeCapCents = config.getChargeCapCents();
@@ -338,7 +340,10 @@ public class BlissApplication extends Application<BlissConfiguration> {
         environment.jersey().register(new AuthResource(
                 magicLinkService, jwtService, cookieOptions,
                 demoLoginEnabled, sessionTtlMinutes, merchantDao, adminUserDao,
-                demoPassword, demoLoginEmails));
+                demoPassword, demoLoginEmails)
+                // Sign-in link requests per client IP, the referral form's budget.
+                .withLinkLimiter(new IpRateLimiter(PublicReferralsResource.RATE_LIMIT_REQUESTS,
+                        PublicReferralsResource.RATE_LIMIT_WINDOW, clock)));
         // Bliss internal admin. Same cookie options and the same demo gate as
         // the merchant surface; the resource itself is what refuses to create
         // an admin, so BLISS_DEMO_LOGIN cannot mint one here the way it can

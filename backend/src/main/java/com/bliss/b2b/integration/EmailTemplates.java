@@ -271,6 +271,18 @@ public final class EmailTemplates {
                 .map(e -> new PropertyLocale(e.getKey(), null, merchant.localeTag()).format(e.getValue())).toList());
     }
 
+    /** To Bliss when a new property signs up (its sign-up link was clicked). */
+    public static EmailMessage newPropertySignup(String to, Merchant merchant) {
+        String name = merchant.businessName() == null || merchant.businessName().isBlank()
+                ? "Not entered yet" : merchant.businessName();
+        String body = "A new property signed up for Bliss.\n\n"
+                + "Name: " + name + "\n"
+                + "Email: " + merchant.email() + "\n"
+                + "Signed up: " + merchant.createdAt() + " (UTC)\n"
+                + "Onboarding step: " + merchant.onboardingState().wire().replace('_', ' ') + "\n";
+        return new EmailMessage(to, "New property signup: " + merchant.email(), body);
+    }
+
     /** One released payment in {@link #holdReleased}. */
     public record ReleasedLine(String stay, java.time.LocalDate checkIn, long amountMinor, String currency,
             String localeTag, String reservationNumber) {

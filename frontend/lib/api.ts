@@ -66,8 +66,10 @@ export async function requestMagicLink(email: string): Promise<void> {
     body: JSON.stringify({ email }),
   });
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to send sign-in link: ${res.status} ${text}`);
+    // 429 (too many requests from here) and 502 (email didn't send) carry a
+    // message written for the person signing in; show that, not the status.
+    const body = (await res.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? "We couldn't send your sign-in link. Please try again.");
   }
 }
 

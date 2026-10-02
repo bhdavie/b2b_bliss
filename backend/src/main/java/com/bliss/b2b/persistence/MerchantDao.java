@@ -46,7 +46,8 @@ public interface MerchantDao {
 
     @SqlUpdate("""
             UPDATE merchants
-            SET status = 'active', email_verified_at = :verifiedAt
+            SET status = CASE WHEN status = 'suspended' THEN status ELSE 'active' END,
+                email_verified_at = :verifiedAt
             WHERE id = :id
             """)
     void markVerified(@Bind("id") UUID id, @Bind("verifiedAt") Instant verifiedAt);
