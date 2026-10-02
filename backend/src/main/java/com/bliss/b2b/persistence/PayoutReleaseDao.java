@@ -73,10 +73,14 @@ public interface PayoutReleaseDao {
 
     /** Releases whose point has passed. A fee debit is not a release and is never picked up here. */
     @SqlQuery("""
-            SELECT * FROM payout_releases
-            WHERE status = 'scheduled' AND release_at <= :now AND step <> 'fee_debit'
+            SELECT * FROM payout_releases r
+            WHERE r.status = 'scheduled' AND r.release_at <= :now AND r.step <> 'fee_debit'
+              -- A payment with an open card dispute stays held until it closes (V45).
+              AND NOT EXISTS (SELECT 1 FROM plan_disputes d
+                              WHERE r.step = 'payment:' || d.payment_schedule_id
+                                AND d.status NOT IN ('won', 'lost', 'warning_closed'))
             -- Ties broken by creation, so releases due together go out in payment order.
-            ORDER BY release_at, created_at
+            ORDER BY r.release_at, r.created_at
             """)
     @RegisterConstructorMapper(Release.class)
     List<Release> due(@Bind("now") Instant now);

@@ -302,6 +302,29 @@ class HoldModeTest {
         assertThat(d.hasAccount()).as("no destination transfer").isFalse();
     }
 
+    @Test
+    void aDisputedPaymentStaysHeldUntilTheDisputeCloses() {
+        PaymentPlan plan = holdPlan("non_refundable", "[]", null);
+        UUID disputed = scheduleId(plan, 1);
+        String disputeId = "du_" + UUID.randomUUID().toString().substring(0, 12);
+        jdbi.useHandle(h -> h.createUpdate("""
+                        INSERT INTO plan_disputes (stripe_dispute_id, payment_plan_id, payment_schedule_id,
+                                                   amount_minor, currency, status)
+                        VALUES (:d, :p, :s, 30000, 'USD', 'needs_response')""")
+                .bind("d", disputeId).bind("p", plan.id()).bind("s", disputed).execute());
+
+        clock.now = PAID_2.plus(Duration.ofDays(4));
+        releases.run();
+        assertThat(stripe.transfers).as("only the undisputed payment goes out").hasSize(1);
+        assertThat(releaseRows(plan)).filteredOn(r -> ("payment:" + disputed).equals(r.get("step")))
+                .singleElement().satisfies(r -> assertThat(r).containsEntry("status", "scheduled"));
+
+        jdbi.useHandle(h -> h.execute("UPDATE plan_disputes SET status = 'won' WHERE stripe_dispute_id = ?",
+                disputeId));
+        releases.run();
+        assertThat(stripe.transfers).hasSize(2);
+    }
+
     // --- Cancelling ---------------------------------------------------------
 
     @Test

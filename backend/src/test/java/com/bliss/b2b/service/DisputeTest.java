@@ -179,8 +179,13 @@ class DisputeTest {
             });
         });
 
-        assertThat(emails).singleElement().satisfies(e -> {
-            assertThat(e.to()).isEqualTo("ops@bliss.test");
+        assertThat(emails).filteredOn(e -> e.to().equals(f.merchant().email())).singleElement().satisfies(e -> {
+            assertThat(e.subject()).isEqualTo("A guest disputed a payment");
+            assertThat(e.body()).contains("A guest disputed $300.00 with their card bank, for Two nights")
+                    .contains("Reason: product not received").contains("Bliss has been told")
+                    .doesNotContain("\u2014");
+        });
+        assertThat(emails).filteredOn(e -> e.to().equals("ops@bliss.test")).singleElement().satisfies(e -> {
             assertThat(e.subject()).isEqualTo("Card dispute: $300.00 at Cranberry Trail Inn");
             assertThat(e.body()).contains("Reason: product not received").contains("Stay: Two nights")
                     .contains("https://dashboard.stripe.com/disputes/" + disputeId).doesNotContain("—");
@@ -201,7 +206,7 @@ class DisputeTest {
         assertThat(d.status()).isEqualTo("won");
         assertThat(d.closedAt()).isNotNull();
         assertThat(plans().listAttention(new MerchantPrincipal(f.merchant())).plans()).isEmpty();
-        assertThat(emails).as("only the opening is emailed").hasSize(1);
+        assertThat(emails).as("only the opening is emailed, to Bliss and the hotel").hasSize(2);
     }
 
     @Test

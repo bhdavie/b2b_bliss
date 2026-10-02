@@ -189,6 +189,29 @@ public final class EmailTemplates {
     }
 
     /**
+     * To the hotel when a guest disputes a card payment on one of its plans:
+     * the same facts its plan page shows.
+     */
+    public static EmailMessage merchantDisputeOpened(Merchant merchant,
+            com.bliss.b2b.persistence.PlanDisputeDao.Dispute d, Booking booking) {
+        PropertyLocale pl = new PropertyLocale(d.currency(), booking == null ? null : booking.timeZone(),
+                booking == null ? merchant.localeTag() : booking.localeTag());
+        String reason = d.reason() == null ? "not given" : d.reason().replace('_', ' ');
+        StringBuilder body = new StringBuilder();
+        body.append("A guest disputed ").append(pl.format(d.amountMinor()))
+                .append(" with their card bank");
+        if (booking != null) {
+            body.append(", for ").append(booking.serviceName()).append(" (check-in ")
+                    .append(pl.date(booking.appointmentDate())).append(')');
+        }
+        body.append(".\n\nReason: ").append(reason).append('\n');
+        body.append("Status: ").append(d.status() == null ? "open" : d.status().replace('_', ' ')).append('\n');
+        body.append("\nBliss has been told and will be in touch about any evidence the bank needs. "
+                + "You can see the plan in your dashboard.\n");
+        return new EmailMessage(merchant.email(), "A guest disputed a payment", body.toString());
+    }
+
+    /**
      * To Bliss operations when a guest disputes a card payment. Plain internal
      * copy: what was disputed, where, why, by when evidence is due, and where to
      * respond in Stripe.

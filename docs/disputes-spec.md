@@ -43,6 +43,12 @@ On `charge.dispute.created`:
 5. **Email to Bliss operations**, once per dispute, to `BLISS_OPS_EMAIL`:
    amount, reason, status, evidence deadline, property, stay, plan, and the
    Stripe dashboard link. No email when the variable is blank (logged instead).
+6. **Email to the hotel**, once per dispute matched to one of its plans: the
+   same facts as its plan page (amount, stay, reason, status), and that Bliss
+   will be in touch about evidence.
+7. **Hold mode:** a payment with an open dispute is not released to the hotel
+   while the dispute is open; it goes out on the next release pass after the
+   dispute closes (`won`, `lost` or `warning_closed`), if it is still due.
 
 On `charge.dispute.updated` and `charge.dispute.closed`, the status, amount and
 deadline are refreshed. A closed dispute (`won`, `lost`, `warning_closed`) gets
@@ -73,17 +79,28 @@ answers 500 so Stripe retries. Without its secret the endpoint answers 503.
    `heroku config:set STRIPE_PLATFORM_WEBHOOK_SECRET=… BLISS_OPS_EMAIL=… -a bliss-b2b-api`.
    Setting it before the deploy is harmless; nothing reads it yet.
 
-## Not built (decisions for later)
+## Decided
+
+- **Hotel email:** yes, when a dispute opens, with the same facts as the plan
+  page (built, point 6).
+- **Hold mode:** a disputed payment's release stays held until the dispute
+  closes (built, point 7).
+- **Evidence:** submitted by hand in the Stripe dashboard for now.
+
+## Open
+
+- **Who bears a dispute in pay as you go.** Decided before Cranberry Trail Inn
+  goes live. See below.
+
+## Not built
 
 - **Who bears a dispute in pay as you go.** On a destination charge the
   platform's balance is debited for the disputed amount and Stripe's fee. Bliss
   could recover it from the hotel by reversing that payment's transfer. Not
   done automatically; for now operations decides per dispute.
-- **Evidence.** Submitted by hand in the Stripe dashboard; Bliss stores the
-  deadline but doesn't collect evidence.
-- **Hold mode.** A disputed payment that hasn't been released should probably
-  not be released while the dispute is open. Hold mode is off; to do with D3.
-- **Emailing the hotel.** Today the hotel sees the dispute in its dashboard
-  only. Its copy says Bliss will be in touch.
+- **Evidence collection.** Bliss stores the deadline but doesn't collect
+  evidence; it is submitted by hand in Stripe.
+- **Releases already made.** A dispute on a payment already released in hold
+  mode doesn't pull it back; that falls under who bears the dispute.
 - **`charge.dispute.funds_withdrawn` / `funds_reinstated`.** Not needed: the
   `updated` and `closed` events carry the status changes Bliss shows.

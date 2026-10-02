@@ -87,7 +87,9 @@ public class DisputeService {
         }
         log.warn("Card dispute {} opened: {} {} ({}) on plan {}", disputeId, amount, currency, reason,
                 match.planId());
-        emailOps(dao.find(disputeId).orElseThrow(), match);
+        PlanDisputeDao.Dispute recorded = dao.find(disputeId).orElseThrow();
+        emailOps(recorded, match);
+        emailHotel(recorded, match);
         return Outcome.RECORDED;
     }
 
@@ -113,7 +115,7 @@ public class DisputeService {
 
     private void emailOps(PlanDisputeDao.Dispute dispute, Match match) {
         if (opsEmail.isEmpty() || emailService == null) {
-            log.warn("Dispute {} not emailed: BLISS_OPS_EMAIL is not set", dispute.stripeDisputeId());
+            log.warn("Dispute {} not emailed to Bliss: BLISS_OPS_EMAIL is not set", dispute.stripeDisputeId());
             return;
         }
         try {
@@ -124,6 +126,25 @@ public class DisputeService {
             emailService.send(EmailTemplates.disputeOpened(opsEmail, dispute, merchant, booking));
         } catch (RuntimeException e) {
             log.warn("Dispute {} email not sent: {}", dispute.stripeDisputeId(), e.toString());
+        }
+    }
+
+    /** The hotel's own email, once, when the dispute is matched to one of its plans. */
+    private void emailHotel(PlanDisputeDao.Dispute dispute, Match match) {
+        if (match.merchantId() == null || emailService == null) {
+            return;
+        }
+        try {
+            Merchant merchant = jdbi.withExtension(MerchantDao.class, d -> d.findById(match.merchantId()))
+                    .orElse(null);
+            if (merchant == null || merchant.email() == null) {
+                return;
+            }
+            Booking booking = match.bookingId() == null ? null
+                    : jdbi.withExtension(BookingDao.class, d -> d.findById(match.bookingId())).orElse(null);
+            emailService.send(EmailTemplates.merchantDisputeOpened(merchant, dispute, booking));
+        } catch (RuntimeException e) {
+            log.warn("Dispute {} email to the hotel not sent: {}", dispute.stripeDisputeId(), e.toString());
         }
     }
 
