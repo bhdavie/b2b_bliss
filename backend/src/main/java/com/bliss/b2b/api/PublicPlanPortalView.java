@@ -68,7 +68,9 @@ public record PublicPlanPortalView(
                 progress.nextDueDate(),
                 progress.nextDueAmountCents(),
                 progress.complete(),
-                new StripeStateView(stripeConfigured, stripeService.publishableKey(), connectedAccountId),
+                // No key for a demo property: it never talks to Stripe.
+                new StripeStateView(stripeConfigured, stripeConfigured ? stripeService.publishableKey() : null,
+                        connectedAccountId),
                 rail,
                 s.booking().currency(),
                 s.booking().localeTag(),

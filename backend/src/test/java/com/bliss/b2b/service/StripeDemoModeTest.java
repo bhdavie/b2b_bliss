@@ -91,7 +91,10 @@ class StripeDemoModeTest {
                                                onboarding_state, stripe_connect_account_id, stripe_connect_status)
                         VALUES (:s, :e, 'Marbrook Lodge', 'stripe', 'USD', 'America/New_York', 'en-US', 'active',
                                 :a, 'charges_enabled') RETURNING id""")
-                .bind("s", slug).bind("e", email).bind("a", connectAccount).mapTo(UUID.class).one());
+                .bind("s", slug).bind("e", email)
+                // Unique per row: the column is unique and tests share the database.
+                .bind("a", connectAccount == null ? null : connectAccount + UUID.randomUUID().toString().substring(0, 6))
+                .mapTo(UUID.class).one());
         return jdbi.onDemand(MerchantDao.class).findById(id).orElseThrow();
     }
 
@@ -196,5 +199,27 @@ class StripeDemoModeTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> stripe.refundPaymentIntent("pi_demo_abc", 100, "key-4"))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void aDemoPropertysBookingPageGetsNoPublishableKey() {
+        Merchant demo = merchant(slug(), "e@lodge.test", "acct_demo_9c41e6d70b2a");
+        String token = "tok-" + UUID.randomUUID();
+        jdbi.useHandle(h -> h.createUpdate("""
+                        INSERT INTO bookings (merchant_id, booking_token, service_name, total_amount_cents,
+                                              appointment_date, status, booking_source, currency)
+                        VALUES (:m, :t, 'Two nights', 60000, :d, 'sent', 'merchant_initiated', 'USD')""")
+                .bind("m", demo.id()).bind("t", token).bind("d", LocalDate.of(2027, 3, 1)).execute());
+        com.bliss.b2b.api.PublicBookingsResource resource = new com.bliss.b2b.api.PublicBookingsResource(
+                jdbi.onDemand(com.bliss.b2b.persistence.BookingDao.class), jdbi.onDemand(MerchantDao.class),
+                new com.bliss.b2b.payments.PlanEligibilityService(),
+                new MerchantPlanRulesService(jdbi.onDemand(MerchantPlanRulesDao.class)), liveKeys(),
+                new StripeConnectResolver(jdbi), Clock.systemUTC());
+
+        com.bliss.b2b.api.PublicBookingView view =
+                (com.bliss.b2b.api.PublicBookingView) resource.get(demo.slug(), token).getEntity();
+
+        assertThat(view.stripe().configured()).isFalse();
+        assertThat(view.stripe().publishableKey()).isNull();
     }
 }
