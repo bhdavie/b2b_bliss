@@ -1,6 +1,7 @@
 # Card disputes
 
-Status: built and tested on the `disputes` branch, **not deployed** (awaiting review).
+Status: built and deployed (V45). Live once the platform endpoint exists in
+Stripe and `STRIPE_PLATFORM_WEBHOOK_SECRET` is set.
 
 ## Scope: which payments can be disputed here
 
@@ -122,8 +123,15 @@ it is one check in `PlanPortalService.refuseIfPaused`.
 
 ## Open
 
-- **Who bears a dispute in pay as you go.** Decided before Cranberry Trail Inn
-  goes live. See below.
+- **Who bears a dispute in pay as you go on the Stripe rail.** Stays open until
+  the first Stripe-rail property. See below.
+
+## Backlog
+
+- **Mews chargebacks.** Detect chargebacks on Mews-charged payments (pay as you
+  go on Mews) and treat them like Stripe disputes: record, pause, email. Not
+  built until Mews answers the certification question below. Approach under
+  "Mews chargebacks".
 
 ## Not built
 
@@ -138,7 +146,7 @@ it is one check in `PlanPortalService.refuseIfPaused`.
 - **`charge.dispute.funds_withdrawn` / `funds_reinstated`.** Not needed: the
   `updated` and `closed` events carry the status changes Bliss shows.
 
-## Mews chargebacks (research, not built)
+## Mews chargebacks (research, not built, in the backlog)
 
 The Mews Connector API does expose chargebacks, but only as payments:
 

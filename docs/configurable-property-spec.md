@@ -568,6 +568,11 @@ Certification: every new write call needs Mews partner approval for our
 integration; `payments/addExternal` and order posting should be raised with
 Mews early.
 
+Questions for Mews certification:
+- How does a chargeback on a Mews Payments payment appear via the Connector API
+  (sign, reservation, link to original payment)? (docs/disputes-spec.md,
+  "Mews chargebacks")
+
 ### 8.2 Stripe
 
 | Purpose | Object or event | Mode | New? |
