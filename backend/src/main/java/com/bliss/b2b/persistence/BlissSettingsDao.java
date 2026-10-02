@@ -14,7 +14,8 @@ public interface BlissSettingsDao {
 
     @SqlQuery("""
             SELECT merchant_id, payout_mode, release_policy, chargeback_buffer_days, bliss_enabled_at,
-                   fee_service_id, fee_tax_code, fee_accounting_category_id, ledger_payment_type
+                   fee_service_id, fee_tax_code, fee_accounting_category_id, ledger_payment_type,
+                   weekly_summary
             FROM property_bliss_settings WHERE merchant_id = :merchantId
             """)
     @org.jdbi.v3.sqlobject.config.RegisterRowMapper(BlissSettingsDao.Mapper.class)
@@ -64,6 +65,9 @@ public interface BlissSettingsDao {
     @SqlUpdate("UPDATE property_bliss_settings SET ledger_payment_type = :type WHERE merchant_id = :merchantId")
     int updateLedgerPaymentType(@Bind("merchantId") UUID merchantId, @Bind("type") String type);
 
+    @SqlUpdate("UPDATE property_bliss_settings SET weekly_summary = :on WHERE merchant_id = :merchantId")
+    int updateWeeklySummary(@Bind("merchantId") UUID merchantId, @Bind("on") boolean on);
+
     final class Mapper implements org.jdbi.v3.core.mapper.RowMapper<BlissSettings> {
         @Override
         public BlissSettings map(java.sql.ResultSet rs, org.jdbi.v3.core.statement.StatementContext ctx)
@@ -79,6 +83,7 @@ public interface BlissSettingsDao {
                     rs.getString("fee_tax_code"),
                     rs.getString("fee_accounting_category_id"),
                     rs.getString("ledger_payment_type"),
+                    rs.getBoolean("weekly_summary"),
                     true);
         }
     }

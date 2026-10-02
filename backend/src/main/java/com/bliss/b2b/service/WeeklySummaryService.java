@@ -48,7 +48,8 @@ public class WeeklySummaryService {
     public int runIfDue() {
         Instant now = clock.instant();
         List<UUID> enabled = jdbi.withHandle(h -> h.createQuery(
-                        "SELECT merchant_id FROM property_bliss_settings WHERE bliss_enabled_at IS NOT NULL")
+                        "SELECT merchant_id FROM property_bliss_settings "
+                                + "WHERE bliss_enabled_at IS NOT NULL AND weekly_summary")
                 .mapTo(UUID.class).list());
         int sent = 0;
         for (UUID id : enabled) {

@@ -258,6 +258,17 @@ class BlissOnboardingTest {
     }
 
     @Test
+    void aPropertyThatTurnedTheSummaryOffGetsNone() {
+        Merchant m = busyProperty();
+        jdbi.useHandle(h -> h.execute(
+                "UPDATE property_bliss_settings SET weekly_summary = FALSE WHERE merchant_id = ?", m.id()));
+
+        summaries(MONDAY).runIfDue();
+
+        assertThat(emails).noneSatisfy(e -> assertThat(e.to()).isEqualTo(m.email()));
+    }
+
+    @Test
     void mondayIsInThePropertysOwnZone() {
         Merchant m = busyProperty();
         // 01:00 UTC on Monday is still Sunday evening in Detroit.

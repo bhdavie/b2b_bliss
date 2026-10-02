@@ -24,13 +24,15 @@ public record BlissSettings(
         // Hold mode (V41): the Mews external payment type ledger payments post
         // as; null until agreed with the property's accounting (D16).
         String ledgerPaymentType,
+        // The Monday summary email (V43); on unless the property turns it off.
+        boolean weeklySummary,
         // False for a property with no row yet: every value above is a default.
         boolean stored
 ) {
     /** The defaults a property has before it changes anything (spec section 4). */
     public static BlissSettings defaults(UUID merchantId) {
         return new BlissSettings(merchantId, PayoutMode.PAY_AS_YOU_GO, ReleasePolicy.CANCELLATION_DEADLINE,
-                3, null, null, null, null, null, false);
+                3, null, null, null, null, null, true, false);
     }
 
     public boolean enabled() {

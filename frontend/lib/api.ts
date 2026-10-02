@@ -1291,6 +1291,7 @@ export type BlissSettingsUpdate = {
   chargebackBufferDays?: number;
   feeTaxCode?: string;
   ledgerPaymentType?: string;
+  weeklySummary?: "on" | "off";
 };
 
 export async function updateBlissSettings(

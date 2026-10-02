@@ -55,6 +55,12 @@ public class BlissSettingsResource {
             BlissSettingsService.SettingsView view = settings.update(principal.merchant(),
                     req.payoutMode(), req.releasePolicy(), req.chargebackBufferDays(),
                     req.feeServiceId(), req.feeTaxCode(), req.feeAccountingCategoryId());
+            if (req.weeklySummary() != null) {
+                if (!"on".equals(req.weeklySummary()) && !"off".equals(req.weeklySummary())) {
+                    throw new SettingsException("invalid_setting", "Choose on or off.");
+                }
+                view = settings.setWeeklySummary(principal.merchant(), "on".equals(req.weeklySummary()));
+            }
             if (req.ledgerPaymentType() != null) {
                 view = settings.setLedgerPaymentType(principal.merchant(), req.ledgerPaymentType());
             }
@@ -91,6 +97,7 @@ public class BlissSettingsResource {
             @JsonProperty("feeServiceId") String feeServiceId,
             @JsonProperty("feeTaxCode") String feeTaxCode,
             @JsonProperty("feeAccountingCategoryId") String feeAccountingCategoryId,
-            @JsonProperty("ledgerPaymentType") String ledgerPaymentType) {
+            @JsonProperty("ledgerPaymentType") String ledgerPaymentType,
+            @JsonProperty("weeklySummary") String weeklySummary) {
     }
 }

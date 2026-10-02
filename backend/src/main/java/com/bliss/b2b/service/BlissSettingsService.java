@@ -181,6 +181,13 @@ public class BlissSettingsService {
         return view(merchant);
     }
 
+    /** Turns the Monday summary email on or off. */
+    public SettingsView setWeeklySummary(Merchant merchant, boolean on) {
+        settingsDao.insertDefaults(merchant.id());
+        settingsDao.updateWeeklySummary(merchant.id(), on);
+        return view(merchant);
+    }
+
     /** Every setting, with its value, where it comes from, and whether it can be changed here. */
     public SettingsView view(Merchant merchant) {
         BlissSettings settings = settingsFor(merchant.id());
@@ -320,6 +327,11 @@ public class BlissSettingsService {
         out.add(new Setting("guestEmails", "emails", "Guest emails",
                 "Plan confirmation, receipts, reminders and payment problems.",
                 true, "On", SOURCE_DEFAULT, false, null));
+        out.add(new Setting("weeklySummary", "emails", "Monday summary",
+                "A short email each Monday: new plans, payments collected and anything that needs a look.",
+                settings.weeklySummary() ? "on" : "off", settings.weeklySummary() ? "On" : "Off",
+                settings.weeklySummary() && !settings.stored() ? SOURCE_DEFAULT : SOURCE_HOTEL, true,
+                List.of(new Option("on", "On", true, null), new Option("off", "Off", true, null))));
 
         return new SettingsView(settings.enabled(), settings.blissEnabledAt(), out);
     }

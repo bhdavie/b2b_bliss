@@ -98,6 +98,7 @@ const EDITABLE_HERE = new Set([
   "chargebackBufferDays",
   "feeTaxCode",
   "ledgerPaymentType",
+  "weeklySummary",
 ]);
 
 export function isEditableHere(s: BlissSetting): boolean {
