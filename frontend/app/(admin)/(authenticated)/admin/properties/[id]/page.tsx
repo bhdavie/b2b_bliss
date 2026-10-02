@@ -13,7 +13,7 @@ import {
   humanize,
   propertyName,
 } from "@/lib/adminFormat";
-import type { AdminFeeRateRow, AdminRecentBooking } from "@/lib/api";
+import { disputeLabel, type AdminFeeRateRow, type AdminRecentBooking } from "@/lib/api";
 
 const BOOKING_COLS =
   "grid grid-cols-[minmax(0,1fr)_100px_110px_120px_110px_130px_90px_90px] gap-x-4 px-5";
@@ -123,6 +123,35 @@ export default async function AdminPropertyDetailPage({
           </div>
         )}
       </Panel>
+
+      {(detail.disputes ?? []).length > 0 ? (
+        <Panel variant="filled" className="p-5">
+          <SectionHeading className="mb-4">Card disputes</SectionHeading>
+          <ul className="flex flex-col divide-y divide-sand-200">
+            {(detail.disputes ?? []).map((d) => (
+              <li key={d.id} className="flex flex-wrap items-start justify-between gap-3 py-2.5 text-[14px]">
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-ink-900">
+                    {formatMoney(d.amountMinor, { currency: d.currency })}, {disputeLabel(d.reason).toLowerCase()}
+                  </span>
+                  <span className="text-[12px] text-ink-500">
+                    {d.planId ? `Plan ${d.planId}` : "Not matched to a plan"}
+                    {d.evidenceDueBy ? `, evidence due ${new Date(d.evidenceDueBy).toUTCString()}` : ""}
+                  </span>
+                </span>
+                <a
+                  href={`https://dashboard.stripe.com/${d.livemode ? "" : "test/"}disputes/${d.stripeDisputeId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={d.closedAt ? "text-ink-500" : "font-medium text-danger"}
+                >
+                  {disputeLabel(d.status)}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      ) : null}
 
       {/* Card 3 — counts */}
       <Panel variant="filled" className="p-5">

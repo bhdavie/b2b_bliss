@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PlanDetailActions } from "@/components/merchant/PlanDetailActions";
 import { Panel, RecordTitle, SectionHeading } from "@/components/ui/primitives";
 import { fetchPlanServer } from "@/lib/auth";
-import type { PaymentPlanStatus } from "@/lib/api";
+import { disputeLabel, type PaymentPlanStatus } from "@/lib/api";
 import { formatMoneyCompact, formatPlainDate } from "@/lib/money";
 
 const STATUS_LABEL: Record<PaymentPlanStatus, string> = {
@@ -119,6 +119,23 @@ export default async function PlanDetailPage({
           </p>
         </Panel>
       ) : null}
+
+      {(plan.disputes ?? []).map((d) => (
+        <Panel key={d.openedAt} variant="filled" className="p-5">
+          <SectionHeading className="mb-4">
+            {d.open ? "Card dispute open" : "Card dispute closed"}
+          </SectionHeading>
+          <div className="text-[14px] text-ink-900">
+            The guest disputed {formatMoneyCompact(d.amountCents, plan)} with their card bank.
+            Reason: {disputeLabel(d.reason).toLowerCase()}. Status: {disputeLabel(d.status).toLowerCase()}.
+          </div>
+          {d.open ? (
+            <div className="mt-1.5 text-[13px] text-ink-500">
+              Bliss has been told and will be in touch about any evidence the bank needs.
+            </div>
+          ) : null}
+        </Panel>
+      ))}
 
       {plan.failedInstallment ? (
         <Panel variant="filled" className="p-5">

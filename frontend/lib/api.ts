@@ -293,6 +293,7 @@ export type AdminMerchantDetail = {
   feeRateHistory: AdminFeeRateRow[];
   counts: AdminCounts;
   recentBookings: AdminRecentBooking[];
+  disputes?: AdminDispute[];
 };
 
 export type SetFeeRatePayload = {
@@ -1055,7 +1056,42 @@ export type PlanDetail = {
   currency: string;
   locale: string | null;
   timeZone: string | null;
+  // Card disputes on the plan's payments, oldest first.
+  disputes?: PlanDispute[];
 };
+
+/** A card dispute (chargeback) on one of a plan's payments. */
+export type PlanDispute = {
+  amountCents: number;
+  currency: string;
+  reason: string | null;
+  status: string;
+  open: boolean;
+  evidenceDueBy: string | null;
+  openedAt: string;
+};
+
+/** A card dispute on one of a property's plans, as admin sees it. */
+export type AdminDispute = {
+  id: string;
+  stripeDisputeId: string;
+  planId: string | null;
+  amountMinor: number;
+  currency: string;
+  reason: string | null;
+  status: string;
+  evidenceDueBy: string | null;
+  livemode: boolean;
+  createdAt: string;
+  closedAt: string | null;
+};
+
+/** "product_not_received" as "Product not received". */
+export function disputeLabel(code: string | null): string {
+  if (!code) return "Not given";
+  const words = code.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 export type AttentionResponse = { plans: PlanDetail[]; count: number };
 

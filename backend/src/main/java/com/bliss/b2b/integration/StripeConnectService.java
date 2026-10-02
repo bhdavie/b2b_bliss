@@ -160,6 +160,23 @@ public class StripeConnectService {
         return Webhook.constructEvent(payload, signatureHeader, config.getWebhookSecret());
     }
 
+    /** Whether the platform endpoint (disputes) has its own signing secret. */
+    public boolean isPlatformWebhookConfigured() {
+        return config.getPlatformWebhookSecret() != null && !config.getPlatformWebhookSecret().isBlank();
+    }
+
+    /**
+     * Verifies an event sent to the platform endpoint, with that endpoint's own
+     * signing secret. An event signed for the Connect endpoint fails here.
+     */
+    public Event parsePlatformWebhookEvent(String payload, String signatureHeader)
+            throws SignatureVerificationException {
+        if (!isPlatformWebhookConfigured()) {
+            throw new StripeNotConfiguredException();
+        }
+        return Webhook.constructEvent(payload, signatureHeader, config.getPlatformWebhookSecret());
+    }
+
     private void requireConfigured() {
         if (!isConfigured()) {
             throw new StripeNotConfiguredException();

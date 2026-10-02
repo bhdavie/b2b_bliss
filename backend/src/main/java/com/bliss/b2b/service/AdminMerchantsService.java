@@ -166,7 +166,8 @@ public class AdminMerchantsService {
 
             return Optional.of(new MerchantDetail(
                     base.get(), profile, feeRateHistory(merchantId), counts,
-                    recentBookings(merchantId)));
+                    recentBookings(merchantId),
+                    h.attach(com.bliss.b2b.persistence.PlanDisputeDao.class).forMerchant(merchantId)));
         });
     }
 
@@ -356,7 +357,9 @@ public class AdminMerchantsService {
 
     public record MerchantDetail(
             MerchantRow merchant, Profile profile, List<FeeRateRow> feeRateHistory,
-            Counts counts, List<RecentBooking> recentBookings) {}
+            Counts counts, List<RecentBooking> recentBookings,
+            // Card disputes on the property's plans (V45), newest first.
+            List<com.bliss.b2b.persistence.PlanDisputeDao.Dispute> disputes) {}
 
     /** Convenience for the resource's history endpoint. */
     public List<FeeRateRow> historyOrEmpty(UUID merchantId) {
