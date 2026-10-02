@@ -22,7 +22,11 @@ CREATE TABLE plan_disputes (
     livemode                 BOOLEAN      NOT NULL DEFAULT FALSE,
     created_at               TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at               TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    closed_at                TIMESTAMPTZ
+    closed_at                TIMESTAMPTZ,
+    -- A dispute pauses its plan's automatic payments until it closes won (or
+    -- as a warning). After a loss they stay paused until an admin resumes them.
+    charges_resumed_at       TIMESTAMPTZ,
+    charges_resumed_by       VARCHAR(255)
 );
 CREATE INDEX plan_disputes_plan_idx ON plan_disputes (payment_plan_id);
 CREATE INDEX plan_disputes_merchant_idx ON plan_disputes (merchant_id);

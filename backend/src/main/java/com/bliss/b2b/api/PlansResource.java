@@ -293,10 +293,12 @@ public class PlansResource {
 
     /** A card dispute on one of the plan's payments, as the hotel sees it. */
     public record DisputeView(long amountCents, String currency, String reason, String status, boolean open,
-            java.time.Instant evidenceDueBy, java.time.Instant openedAt) {
+            java.time.Instant evidenceDueBy, java.time.Instant openedAt,
+            // Whether this dispute is holding the plan's automatic payments.
+            boolean paymentsPaused) {
         static DisputeView from(com.bliss.b2b.persistence.PlanDisputeDao.Dispute d) {
             return new DisputeView(d.amountMinor(), d.currency(), d.reason(), d.status(), d.open(),
-                    d.evidenceDueBy(), d.createdAt());
+                    d.evidenceDueBy(), d.createdAt(), d.pausesPayments());
         }
     }
 

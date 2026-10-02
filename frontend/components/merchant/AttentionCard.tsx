@@ -68,6 +68,7 @@ export function AttentionCard({ plans }: { plans: PlanDetail[] }) {
                       (plan.disputes ?? []).filter((d) => d.open).reduce((t, d) => t + d.amountCents, 0),
                       plan,
                     )}
+                    {(plan.disputes ?? []).some((d) => d.paymentsPaused) ? ", payments paused" : ""}
                   </div>
                 ) : plan.status === "balance_due" ? (
                   <div className="mt-1 text-xs font-medium text-brand-purple">

@@ -361,6 +361,12 @@ public class AdminMerchantsService {
             // Card disputes on the property's plans (V45), newest first.
             List<com.bliss.b2b.persistence.PlanDisputeDao.Dispute> disputes) {}
 
+    /** Resumes payments a dispute paused. Returns rows changed (0 when it wasn't pausing them). */
+    public int resumeDisputedPayments(UUID disputeId, String adminEmail, Instant at) {
+        return jdbi.withExtension(com.bliss.b2b.persistence.PlanDisputeDao.class,
+                d -> d.resumeCharges(disputeId, at, adminEmail));
+    }
+
     /** Convenience for the resource's history endpoint. */
     public List<FeeRateRow> historyOrEmpty(UUID merchantId) {
         return merchantExists(merchantId) ? feeRateHistory(merchantId) : new ArrayList<>();

@@ -129,6 +129,13 @@ export default async function PlanDetailPage({
             The guest disputed {formatMoneyCompact(d.amountCents, plan)} with their card bank.
             Reason: {disputeLabel(d.reason).toLowerCase()}. Status: {disputeLabel(d.status).toLowerCase()}.
           </div>
+          {d.paymentsPaused ? (
+            <div className="mt-1.5 text-[13px] font-medium text-ink-900">
+              {d.open
+                ? "Automatic payments on this plan are paused until the dispute closes."
+                : "Automatic payments on this plan stay paused. Bliss will be in touch about what happens next."}
+            </div>
+          ) : null}
           {d.open ? (
             <div className="mt-1.5 text-[13px] text-ink-500">
               Bliss has been told and will be in touch about any evidence the bank needs.

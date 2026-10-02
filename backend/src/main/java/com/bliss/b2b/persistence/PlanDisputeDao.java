@@ -16,6 +16,17 @@ public interface PlanDisputeDao {
     /** Statuses after which nothing more happens on a dispute. */
     String CLOSED_STATUSES = "('won', 'lost', 'warning_closed')";
 
+    /**
+     * SQL condition, true when plan {@code pp} has its payments paused by a
+     * dispute: one that is open or was lost, unless an admin resumed payments.
+     * A dispute won (or closed as a warning) never pauses.
+     */
+    String PAUSES_PLAN_PP = """
+            EXISTS (SELECT 1 FROM plan_disputes pd
+                    WHERE pd.payment_plan_id = pp.id
+                      AND pd.status NOT IN ('won', 'warning_closed')
+                      AND pd.charges_resumed_at IS NULL)""";
+
     record Dispute(
             @ColumnName("id") UUID id,
             @ColumnName("stripe_dispute_id") String stripeDisputeId,
@@ -31,12 +42,29 @@ public interface PlanDisputeDao {
             @ColumnName("evidence_due_by") Instant evidenceDueBy,
             @ColumnName("livemode") boolean livemode,
             @ColumnName("created_at") Instant createdAt,
-            @ColumnName("closed_at") Instant closedAt) {
+            @ColumnName("closed_at") Instant closedAt,
+            @ColumnName("charges_resumed_at") Instant chargesResumedAt) {
 
         public boolean open() {
             return !("won".equals(status) || "lost".equals(status) || "warning_closed".equals(status));
         }
+
+        /** Whether this dispute holds its plan's payments (see {@link #PAUSES_PLAN_PP}). */
+        public boolean pausesPayments() {
+            return !"won".equals(status) && !"warning_closed".equals(status) && chargesResumedAt == null;
+        }
     }
+
+    /** Whether a dispute pauses this plan's payments. */
+    @SqlQuery("SELECT " + PAUSES_PLAN_PP + " FROM payment_plans pp WHERE pp.id = :planId")
+    boolean paymentsPaused(@Bind("planId") UUID planId);
+
+    /** An admin lets the plan's payments resume despite the dispute. Returns rows changed. */
+    @SqlUpdate("""
+            UPDATE plan_disputes SET charges_resumed_at = :at, charges_resumed_by = :by, updated_at = NOW()
+            WHERE id = :id AND charges_resumed_at IS NULL AND status NOT IN ('won', 'warning_closed')
+            """)
+    int resumeCharges(@Bind("id") UUID id, @Bind("at") Instant at, @Bind("by") String by);
 
     /** Records a dispute the first time it is seen. Returns 1 when it is new, 0 when Bliss already had it. */
     @SqlUpdate("""

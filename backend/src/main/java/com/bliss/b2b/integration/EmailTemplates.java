@@ -206,7 +206,8 @@ public final class EmailTemplates {
         }
         body.append(".\n\nReason: ").append(reason).append('\n');
         body.append("Status: ").append(d.status() == null ? "open" : d.status().replace('_', ' ')).append('\n');
-        body.append("\nBliss has been told and will be in touch about any evidence the bank needs. "
+        body.append("\nThe plan's automatic payments are paused until the dispute closes. ");
+        body.append("Bliss has been told and will be in touch about any evidence the bank needs. "
                 + "You can see the plan in your dashboard.\n");
         return new EmailMessage(merchant.email(), "A guest disputed a payment", body.toString());
     }
@@ -237,6 +238,8 @@ public final class EmailTemplates {
         }
         if (d.planId() != null) {
             body.append("Plan: ").append(d.planId()).append('\n');
+            body.append("Automatic payments on this plan are paused until the dispute closes. If it is lost "
+                    + "they stay paused until you resume them on the property's admin page.\n");
         } else {
             body.append("Plan: not matched. The disputed charge isn't one Bliss recorded against a plan.\n");
         }

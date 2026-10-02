@@ -86,7 +86,7 @@ class DisputeTest {
     }
 
     /** A property and a Stripe plan whose first payment was paid by {@code intentId}. */
-    private record Fixture(Merchant merchant, UUID planId) {
+    private record Fixture(Merchant merchant, UUID planId, String bookingToken) {
     }
 
     private static Fixture planPaidBy(String intentId) {
@@ -131,7 +131,7 @@ class DisputeTest {
                            (:p, 2, :d2, 30000, 'scheduled', 'installment', NULL, NULL)""")
                     .bind("p", plan).bind("d", LocalDate.of(2026, 10, 2)).bind("d2", LocalDate.of(2026, 11, 2))
                     .bind("pi", intentId).execute();
-            return new Fixture(h.attach(MerchantDao.class).findById(merchant).orElseThrow(), plan);
+            return new Fixture(h.attach(MerchantDao.class).findById(merchant).orElseThrow(), plan, "tok-" + id);
         });
     }
 
@@ -232,6 +232,86 @@ class DisputeTest {
                 .detail(f.merchant().id(), java.time.Instant.now()).orElseThrow();
 
         assertThat(detail.disputes()).extracting(PlanDisputeDao.Dispute::stripeDisputeId).containsExactly(disputeId);
+    }
+
+    // --- Pausing payments ----------------------------------------------------
+
+    /** The day after payment 2 of every fixture plan falls due. */
+    private static final java.time.Instant AFTER_PAYMENT_2 = java.time.Instant.parse("2026-11-03T12:00:00Z");
+
+    private static boolean due(Fixture f) {
+        return jdbi.onDemand(com.bliss.b2b.persistence.DueChargeDao.class).findDueForCharge(AFTER_PAYMENT_2)
+                .stream().anyMatch(d -> d.planId().equals(f.planId()));
+    }
+
+    private static UUID payment2(Fixture f) {
+        return jdbi.withHandle(h -> h.createQuery(
+                        "SELECT id FROM payment_schedule WHERE payment_plan_id = :p AND sequence = 2")
+                .bind("p", f.planId()).mapTo(UUID.class).one());
+    }
+
+    @Test
+    void anOpenDisputePausesThePlansPayments_aWonOneResumesThem() {
+        String pi = id("pi_");
+        Fixture f = planPaidBy(pi);
+        String disputeId = id("du_");
+        assertThat(due(f)).as("payment 2 is due").isTrue();
+
+        service().apply("charge.dispute.created", dispute(disputeId, pi, "needs_response"));
+
+        assertThat(due(f)).as("paused while the dispute is open").isFalse();
+        assertThat(jdbi.onDemand(com.bliss.b2b.persistence.DueChargeDao.class).isStillChargeable(payment2(f)))
+                .as("and a payment already picked up is stopped under the lock").isFalse();
+        assertThat(plans().listAttention(new MerchantPrincipal(f.merchant())).plans()).singleElement()
+                .satisfies(p -> assertThat(p.disputes()).singleElement()
+                        .satisfies(d -> assertThat(d.paymentsPaused()).isTrue()));
+        assertThat(emails).allSatisfy(e -> assertThat(e.body()).contains("paused until the dispute closes"));
+
+        service().apply("charge.dispute.closed", dispute(disputeId, pi, "won"));
+
+        assertThat(due(f)).as("won: payments resume on their own").isTrue();
+    }
+
+    @Test
+    void aLostDisputeKeepsPaymentsPausedUntilAnAdminResumesThem() {
+        String pi = id("pi_");
+        Fixture f = planPaidBy(pi);
+        String disputeId = id("du_");
+        service().apply("charge.dispute.created", dispute(disputeId, pi, "needs_response"));
+        service().apply("charge.dispute.closed", dispute(disputeId, pi, "lost"));
+
+        assertThat(due(f)).as("lost: still paused").isFalse();
+
+        UUID rowId = jdbi.onDemand(PlanDisputeDao.class).find(disputeId).orElseThrow().id();
+        AdminMerchantsService admin = new AdminMerchantsService(jdbi);
+        assertThat(admin.resumeDisputedPayments(rowId, "brad@bliss.test", java.time.Instant.now())).isEqualTo(1);
+        assertThat(admin.resumeDisputedPayments(rowId, "brad@bliss.test", java.time.Instant.now()))
+                .as("already resumed").isZero();
+
+        assertThat(due(f)).isTrue();
+        assertThat(jdbi.onDemand(PlanDisputeDao.class).find(disputeId).orElseThrow().pausesPayments()).isFalse();
+    }
+
+    @Test
+    void theGuestCannotPayEarlyOrPayOffWhilePaymentsArePaused() {
+        String pi = id("pi_");
+        Fixture f = planPaidBy(pi);
+        service().apply("charge.dispute.created", dispute(id("du_"), pi, "needs_response"));
+        PlanPortalService portal = new PlanPortalService(jdbi, null, null, null, null, null,
+                java.time.Clock.systemUTC());
+
+        for (Runnable pay : List.<Runnable>of(() -> portal.payNextInstallment(f.bookingToken()),
+                () -> portal.payRemainingBalance(f.bookingToken()))) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(pay::run)
+                    .isInstanceOf(PlanPortalService.PortalException.class)
+                    .hasMessageContaining("paused")
+                    .extracting(e -> ((PlanPortalService.PortalException) e).code())
+                    .isEqualTo(PlanPortalService.PortalErrorCode.PAYMENTS_PAUSED);
+        }
+        String status = jdbi.withHandle(h -> h.createQuery(
+                        "SELECT status FROM payment_schedule WHERE payment_plan_id = :p AND sequence = 2")
+                .bind("p", f.planId()).mapTo(String.class).one());
+        assertThat(status).as("nothing was charged").isEqualTo("scheduled");
     }
 
     // --- The platform endpoint ------------------------------------------------

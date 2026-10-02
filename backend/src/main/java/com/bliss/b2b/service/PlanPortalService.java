@@ -142,6 +142,7 @@ public class PlanPortalService {
      * charged through the plan's rail (see {@link #routeOf}).
      */
     public PayResult payNextInstallment(String bookingToken) {
+        refuseIfPaused(bookingToken);
         return notifyPaid(switch (routeFor(bookingToken)) {
             case STRIPE -> payNextInstallmentStripe(bookingToken);
             case MEWS -> payNextInstallmentMews(bookingToken);
@@ -294,6 +295,7 @@ public class PlanPortalService {
      * twice for the same installment.
      */
     public PayResult payRemainingBalance(String bookingToken) {
+        refuseIfPaused(bookingToken);
         return notifyPaid(switch (routeFor(bookingToken)) {
             case STRIPE -> payRemainingBalanceStripe(bookingToken);
             case MEWS -> payRemainingBalanceMews(bookingToken);
@@ -597,6 +599,22 @@ public class PlanPortalService {
         });
     }
 
+    /**
+     * While a card dispute pauses the plan, the guest can't pay early or pay
+     * off either: the card is being disputed, and taking more from it adds to
+     * the exposure. The guest is pointed to the property.
+     */
+    private void refuseIfPaused(String bookingToken) {
+        boolean paused = jdbi.withHandle(handle -> {
+            Lookup look = resolveOrThrow(handle, bookingToken);
+            return handle.attach(com.bliss.b2b.persistence.PlanDisputeDao.class).paymentsPaused(look.plan.id());
+        });
+        if (paused) {
+            throw new PortalException(PortalErrorCode.PAYMENTS_PAUSED,
+                    "Payments on this plan are paused. Please contact the property.");
+        }
+    }
+
     /** Where a guest payment on this plan goes. */
     enum Route { STRIPE, MEWS, DEMO }
 
@@ -760,6 +778,8 @@ public class PlanPortalService {
         RAIL_UNAVAILABLE,
         /** The PMS failed for a reason other than the card (transport, 5xx). */
         PMS_ERROR,
+        /** A card dispute has paused the plan's payments. */
+        PAYMENTS_PAUSED,
     }
 
     public static class PortalException extends RuntimeException {

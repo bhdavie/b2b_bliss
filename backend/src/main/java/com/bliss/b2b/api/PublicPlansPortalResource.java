@@ -174,7 +174,7 @@ public class PublicPlansPortalResource {
         int status = switch (code) {
             case NOT_FOUND -> 404;
             case PLAN_NOT_ACTIVE, NO_NEXT_INSTALLMENT, SETUP_INTENT_NOT_AVAILABLE_IN_DEMO,
-                 PAYMENT_IN_FLIGHT -> 409;
+                 PAYMENT_IN_FLIGHT, PAYMENTS_PAUSED -> 409;
             case NO_CARD_ON_FILE, INVALID_INPUT -> 400;
             case CARD_DECLINED, CARD_REQUIRES_ACTION -> 402;
             case STRIPE_ERROR, PMS_ERROR -> 502;

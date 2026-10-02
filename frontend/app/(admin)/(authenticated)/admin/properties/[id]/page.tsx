@@ -13,7 +13,13 @@ import {
   humanize,
   propertyName,
 } from "@/lib/adminFormat";
-import { disputeLabel, type AdminFeeRateRow, type AdminRecentBooking } from "@/lib/api";
+import {
+  disputeLabel,
+  disputePausesPayments,
+  type AdminFeeRateRow,
+  type AdminRecentBooking,
+} from "@/lib/api";
+import { ResumePaymentsButton } from "@/components/admin/ResumePaymentsButton";
 
 const BOOKING_COLS =
   "grid grid-cols-[minmax(0,1fr)_100px_110px_120px_110px_130px_90px_90px] gap-x-4 px-5";
@@ -139,14 +145,22 @@ export default async function AdminPropertyDetailPage({
                     {d.evidenceDueBy ? `, evidence due ${new Date(d.evidenceDueBy).toUTCString()}` : ""}
                   </span>
                 </span>
-                <a
-                  href={`https://dashboard.stripe.com/${d.livemode ? "" : "test/"}disputes/${d.stripeDisputeId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={d.closedAt ? "text-ink-500" : "font-medium text-danger"}
-                >
-                  {disputeLabel(d.status)}
-                </a>
+                <span className="flex flex-col items-end gap-1">
+                  <a
+                    href={`https://dashboard.stripe.com/${d.livemode ? "" : "test/"}disputes/${d.stripeDisputeId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={d.closedAt ? "text-ink-500" : "font-medium text-danger"}
+                  >
+                    {disputeLabel(d.status)}
+                  </a>
+                  {disputePausesPayments(d) ? (
+                    <>
+                      <span className="text-[12px] text-ink-500">Payments paused</span>
+                      <ResumePaymentsButton disputeId={d.id} />
+                    </>
+                  ) : null}
+                </span>
               </li>
             ))}
           </ul>
