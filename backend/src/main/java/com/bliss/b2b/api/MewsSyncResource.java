@@ -27,7 +27,11 @@ import java.util.Map;
  * section 5): the last sync, each Bliss rate with its cancellation terms and
  * booking type, a "Resync now", and the hotel's booking type override.
  */
-@Path("/api/v1/merchants/me")
+// Rooted at /api/v1/merchants like MerchantsResource, not /api/v1/merchants/me:
+// a root at /me wins JAX-RS root matching for every /me path and 404s the
+// routes it doesn't define (GET /merchants/me went down that way). Jersey merges
+// resources sharing a root. Guarded by MerchantRoutesTest.
+@Path("/api/v1/merchants")
 @Produces(MediaType.APPLICATION_JSON)
 public class MewsSyncResource {
 
@@ -42,7 +46,7 @@ public class MewsSyncResource {
     }
 
     @GET
-    @Path("/mews-sync")
+    @Path("/me/mews-sync")
     public Response get(@Auth MerchantPrincipal principal) {
         if (principal.merchant().pmsType() != PmsType.MEWS) {
             return notMews();
@@ -51,7 +55,7 @@ public class MewsSyncResource {
     }
 
     @POST
-    @Path("/mews-sync")
+    @Path("/me/mews-sync")
     public Response resync(@Auth MerchantPrincipal principal) {
         if (principal.merchant().pmsType() != PmsType.MEWS) {
             return notMews();
@@ -65,7 +69,7 @@ public class MewsSyncResource {
     }
 
     @PUT
-    @Path("/bliss-rates/{rateId}/booking-type")
+    @Path("/me/bliss-rates/{rateId}/booking-type")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response setBookingType(@Auth MerchantPrincipal principal, @PathParam("rateId") String rateId,
             BookingTypeRequest req) {

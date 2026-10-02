@@ -24,10 +24,11 @@ export function VerifyClient() {
       return;
     }
     verifyMagicLinkToken(token)
-      .then(() => {
+      .then((merchant) => {
         setStatus("success");
-        // Dashboard hosts the setup checklist for incomplete properties.
-        router.push("/home");
+        // A property still setting up continues onboarding; a live one goes
+        // to its dashboard.
+        router.push(merchant.onboardingComplete ? "/home" : "/onboarding");
       })
       .catch((err: unknown) => {
         setStatus("error");

@@ -20,7 +20,11 @@ import java.util.UUID;
  * Hold mode, for the property (spec section 9): money Bliss is holding and
  * when it will be sent, what has been sent, and Stripe's payouts to the bank.
  */
-@Path("/api/v1/merchants/me")
+// Rooted at /api/v1/merchants like MerchantsResource, not /api/v1/merchants/me:
+// a root at /me wins JAX-RS root matching for every /me path and 404s the
+// routes it doesn't define (GET /merchants/me went down that way). Jersey merges
+// resources sharing a root. Guarded by MerchantRoutesTest.
+@Path("/api/v1/merchants")
 @Produces(MediaType.APPLICATION_JSON)
 public class PayoutsResource {
 
@@ -43,7 +47,7 @@ public class PayoutsResource {
     }
 
     @GET
-    @Path("/releases")
+    @Path("/me/releases")
     public List<ReleaseView> releases(@Auth MerchantPrincipal principal) {
         Map<UUID, Booking> bookings = new HashMap<>();
         return releaseDao.forMerchant(principal.merchant().id()).stream().map(r -> {
@@ -55,7 +59,7 @@ public class PayoutsResource {
     }
 
     @GET
-    @Path("/payouts")
+    @Path("/me/payouts")
     public List<PayoutReleaseDao.Payout> payouts(@Auth MerchantPrincipal principal) {
         return releaseDao.payoutsForMerchant(principal.merchant().id());
     }

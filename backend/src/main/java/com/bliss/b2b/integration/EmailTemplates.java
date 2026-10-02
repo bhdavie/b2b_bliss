@@ -334,6 +334,11 @@ public final class EmailTemplates {
                 .map(e -> new PropertyLocale(e.getKey(), null, merchant.localeTag()).format(e.getValue())).toList());
     }
 
+    /** "Oct 2, 2026, 1:09 PM" in US Eastern time, for Bliss's own alerts. */
+    private static final java.time.format.DateTimeFormatter SIGNUP_TIME = java.time.format.DateTimeFormatter
+            .ofPattern("MMM d, yyyy, h:mm a", java.util.Locale.US)
+            .withZone(java.time.ZoneId.of("America/New_York"));
+
     /** To Bliss when a new property signs up (its sign-up link was clicked). */
     public static EmailMessage newPropertySignup(String to, Merchant merchant) {
         String name = merchant.businessName() == null || merchant.businessName().isBlank()
@@ -341,7 +346,7 @@ public final class EmailTemplates {
         String body = "A new property signed up for Bliss.\n\n"
                 + "Name: " + name + "\n"
                 + "Email: " + merchant.email() + "\n"
-                + "Signed up: " + merchant.createdAt() + " (UTC)\n"
+                + "Signed up: " + SIGNUP_TIME.format(merchant.createdAt()) + " ET\n"
                 + "Onboarding step: " + merchant.onboardingState().wire().replace('_', ' ') + "\n";
         return new EmailMessage(to, "New property signup: " + merchant.email(), body);
     }

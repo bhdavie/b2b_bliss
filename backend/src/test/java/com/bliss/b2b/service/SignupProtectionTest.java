@@ -138,7 +138,8 @@ class SignupProtectionTest {
                 .satisfies(e -> {
                     assertThat(e.subject()).isEqualTo("New property signup: " + email);
                     assertThat(e.body()).contains("Name: Not entered yet").contains("Email: " + email)
-                            .contains("Signed up: ").contains("Onboarding step: created")
+                            .containsPattern("Signed up: [A-Z][a-z]{2} \\d{1,2}, \\d{4}, \\d{1,2}:\\d{2} [AP]M ET\n")
+                            .doesNotContain("UTC").contains("Onboarding step: created")
                             .doesNotContain("—");
                 });
     }
@@ -241,5 +242,18 @@ class SignupProtectionTest {
                 new CookieOptions(true, "None", ".bliss-payments.com"), false, 60,
                 jdbi.onDemand(MerchantDao.class), jdbi.onDemand(AdminUserDao.class),
                 new DemoPassword(new MasterPassword("master-secret-for-tests"), allowlist), allowlist);
+    }
+
+    @Test
+    void theSignupAlertShowsTheTimeInEasternTime() {
+        Merchant m = new Merchant(UUID.randomUUID(), "slug", "new@inn.test", null, null, null,
+                null, null, null, null, null, null, null, null, MerchantStatus.ACTIVE,
+                com.bliss.b2b.domain.PmsType.NONE, com.bliss.b2b.domain.OnboardingState.CREATED,
+                java.time.Instant.EPOCH, java.time.Instant.parse("2026-10-02T17:09:29Z"), java.time.Instant.EPOCH,
+                null, null, null, null, null);
+
+        EmailMessage e = com.bliss.b2b.integration.EmailTemplates.newPropertySignup("ops@bliss.test", m);
+
+        assertThat(e.body()).contains("Signed up: Oct 2, 2026, 1:09 PM ET");
     }
 }

@@ -20,7 +20,11 @@ import java.util.Map;
  * sections 4 and 9). GET lists every setting with its value and source; PUT
  * changes the ones Bliss owns; enable switches Bliss on with defaults.
  */
-@Path("/api/v1/merchants/me")
+// Rooted at /api/v1/merchants like MerchantsResource, not /api/v1/merchants/me:
+// a root at /me wins JAX-RS root matching for every /me path and 404s the
+// routes it doesn't define (GET /merchants/me went down that way). Jersey merges
+// resources sharing a root. Guarded by MerchantRoutesTest.
+@Path("/api/v1/merchants")
 @Produces(MediaType.APPLICATION_JSON)
 public class BlissSettingsResource {
 
@@ -39,13 +43,13 @@ public class BlissSettingsResource {
     }
 
     @GET
-    @Path("/bliss-settings")
+    @Path("/me/bliss-settings")
     public BlissSettingsService.SettingsView get(@Auth MerchantPrincipal principal) {
         return settings.view(principal.merchant());
     }
 
     @PUT
-    @Path("/bliss-settings")
+    @Path("/me/bliss-settings")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response update(@Auth MerchantPrincipal principal, UpdateRequest req) {
         if (req == null) {
@@ -75,7 +79,7 @@ public class BlissSettingsResource {
     }
 
     @POST
-    @Path("/bliss/enable")
+    @Path("/me/bliss/enable")
     public Response enable(@Auth MerchantPrincipal principal) {
         if (onboarding == null) {
             return Response.ok(settings.enable(principal.merchant())).build();
