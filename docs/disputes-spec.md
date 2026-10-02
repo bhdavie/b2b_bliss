@@ -64,7 +64,7 @@ answers 500 so Stripe retries. Without its secret the endpoint answers 503.
 | Variable | Value |
 |---|---|
 | `STRIPE_PLATFORM_WEBHOOK_SECRET` | The new platform endpoint's signing secret (`whsec_…`) |
-| `BLISS_OPS_EMAIL` | Where dispute emails go, for example `bhdavie@gmail.com` |
+| `BLISS_OPS_EMAIL` | Where dispute emails go. Already set in production (`brad@bliss-payments.com`), shared with new-signup alerts |
 
 ## Dashboard steps (live mode)
 
@@ -76,7 +76,7 @@ answers 500 so Stripe retries. Without its secret the endpoint answers 503.
 5. Name it, for example `bliss-production-platform`, save, and copy its signing
    secret.
 6. After this change is deployed, set it yourself:
-   `heroku config:set STRIPE_PLATFORM_WEBHOOK_SECRET=… BLISS_OPS_EMAIL=… -a bliss-b2b-api`.
+   `heroku config:set STRIPE_PLATFORM_WEBHOOK_SECRET=… -a bliss-b2b-api`.
    Setting it before the deploy is harmless; nothing reads it yet.
 
 ## Decided
