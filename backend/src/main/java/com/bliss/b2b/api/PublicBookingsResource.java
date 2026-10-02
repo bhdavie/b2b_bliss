@@ -76,7 +76,7 @@ public class PublicBookingsResource {
                 evaluateInput, rules);
         PublicBookingView view = PublicBookingView.build(
                 merchant, booking, eligibility, rules,
-                stripeService.isConfigured(), stripeService.publishableKey(),
+                stripeService.isLiveFor(merchant), stripeService.publishableKey(),
                 stripeConnectResolver.resolveOrNull(merchant.id()));
         return Response.ok(view).build();
     }

@@ -72,10 +72,11 @@ public class StripeConnectResource {
     @Path("/stripe/connect/account-link")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response createAccountLink(@Auth MerchantPrincipal principal) {
-        if (!stripe.isConfigured()) {
+        Merchant merchant = principal.merchant();
+        // A demo property never gets a real Stripe account; it uses demo-complete.
+        if (!stripe.isLiveFor(merchant)) {
             return notConfigured();
         }
-        Merchant merchant = principal.merchant();
         try {
             String stripeAccountId = merchant.stripeConnectAccountId();
             if (stripeAccountId == null || stripeAccountId.isBlank()) {
@@ -110,7 +111,7 @@ public class StripeConnectResource {
     @Path("/stripe/connect/demo-complete")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response demoComplete(@Auth MerchantPrincipal principal) {
-        if (stripe.isConfigured()) {
+        if (stripe.isLiveFor(principal.merchant())) {
             return Response.status(409)
                     .entity(Map.of(
                             "error", "stripe_configured",

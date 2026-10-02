@@ -67,6 +67,23 @@ public class StripePaymentsService {
         return config.isConfigured();
     }
 
+    private StripeDemoPolicy demoPolicy = StripeDemoPolicy.NONE;
+
+    /** Which properties always stay in demo mode, whatever keys are set. */
+    public StripePaymentsService withDemoPolicy(StripeDemoPolicy policy) {
+        this.demoPolicy = policy == null ? StripeDemoPolicy.NONE : policy;
+        return this;
+    }
+
+    /**
+     * Whether Stripe is real for this property: keys are set and it isn't a
+     * demo property. Every merchant-scoped choice between Stripe and demo mode
+     * asks this, not {@link #isConfigured()}.
+     */
+    public boolean isLiveFor(com.bliss.b2b.domain.Merchant merchant) {
+        return isConfigured() && !demoPolicy.isDemo(merchant);
+    }
+
     public String publishableKey() {
         return config.getPublishableKey();
     }
@@ -96,6 +113,7 @@ public class StripePaymentsService {
     public PaymentMethod attachPaymentMethod(String paymentMethodId, String stripeCustomerId)
             throws StripeException {
         requireConfigured();
+        refuseDemoIds(paymentMethodId, stripeCustomerId);
         PaymentMethod pm = PaymentMethod.retrieve(paymentMethodId);
         if (pm.getCustomer() == null || !pm.getCustomer().equals(stripeCustomerId)) {
             pm = pm.attach(PaymentMethodAttachParams.builder()
@@ -133,6 +151,11 @@ public class StripePaymentsService {
             SessionMode sessionMode
     ) throws StripeException {
         requireConfigured();
+        refuseDemoIds(stripeCustomerId, paymentMethodId);
+        if (destination != null) {
+            refuseDemoAccount(destination.accountId());
+            refuseDemoAccount(destination.onBehalfOf());
+        }
         // Demo cap: clamp only the amount sent to Stripe. The schedule row, plan
         // math, and the returned PaymentIntent metadata keep the real amount.
         long chargeAmount = capCharge(amountCents);
@@ -210,6 +233,24 @@ public class StripePaymentsService {
     }
 
     /**
+     * Backstop for demo properties: a synthetic customer or card id means a
+     * demo property's plan reached a real Stripe call, which must never charge.
+     */
+    static void refuseDemoIds(String... ids) {
+        for (String id : ids) {
+            if (StripeDemoPolicy.isDemoId(id)) {
+                throw new IllegalStateException("demo id " + id + " never reaches Stripe");
+            }
+        }
+    }
+
+    static void refuseDemoAccount(String accountId) {
+        if (StripeDemoPolicy.isDemoAccount(accountId)) {
+            throw new IllegalStateException("demo account " + accountId + " never reaches Stripe");
+        }
+    }
+
+    /**
      * Where a charge's funds go and what Bliss keeps. {@code accountId} is the
      * property's connected Standard account; {@code feeFraction} is its
      * {@code bliss_fee_percentage} (0.03 = 3%). A null Destination, or one with a
@@ -249,6 +290,7 @@ public class StripePaymentsService {
     public Transfer transferToProperty(String accountId, long amountMinor, String currency, String transferGroup,
             String idempotencyKey, Map<String, String> metadata) throws StripeException {
         requireConfigured();
+        refuseDemoAccount(accountId);
         TransferCreateParams params = TransferCreateParams.builder()
                 .setAmount(capCharge(amountMinor))
                 .setCurrency(currency.toLowerCase(java.util.Locale.ROOT))
@@ -271,6 +313,7 @@ public class StripePaymentsService {
     public Transfer debitPropertyAccount(String accountId, long amountMinor, String currency, String idempotencyKey)
             throws StripeException {
         requireConfigured();
+        refuseDemoAccount(accountId);
         String platform = com.stripe.model.Account.retrieve().getId();
         TransferCreateParams params = TransferCreateParams.builder()
                 .setAmount(amountMinor)
@@ -314,6 +357,7 @@ public class StripePaymentsService {
      */
     public SetupIntent createSetupIntent(String stripeCustomerId) throws StripeException {
         requireConfigured();
+        refuseDemoIds(stripeCustomerId);
         SetupIntentCreateParams params = SetupIntentCreateParams.builder()
                 .setCustomer(stripeCustomerId)
                 .setUsage(SetupIntentCreateParams.Usage.OFF_SESSION)
@@ -378,6 +422,7 @@ public class StripePaymentsService {
     public Refund refundPaymentIntent(String paymentIntentId, long amountMinor, String idempotencyKey)
             throws StripeException {
         requireConfigured();
+        refuseDemoIds(paymentIntentId);
         PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
         long collected = intent.getAmountReceived() == null ? 0L : intent.getAmountReceived();
         RefundCreateParams params = refundParams(

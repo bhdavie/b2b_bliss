@@ -77,10 +77,11 @@ public class StripeStandardConnectResource {
     @Path("/start")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response start(@Auth MerchantPrincipal principal, StartRequest req) {
-        if (!stripe.isConfigured()) {
+        Merchant merchant = principal.merchant();
+        // A demo property never gets a real Stripe account; it uses demo-complete.
+        if (!stripe.isLiveFor(merchant)) {
             return notConfigured();
         }
-        Merchant merchant = principal.merchant();
         try {
             StripeConnection existing = connectionDao.findByMerchant(merchant.id()).orElse(null);
             String accountId = existing == null ? null : existing.stripeAccountId();
@@ -118,7 +119,7 @@ public class StripeStandardConnectResource {
         Merchant merchant = principal.merchant();
         StripeConnection conn = connectionDao.findByMerchant(merchant.id()).orElse(null);
 
-        if (stripe.isConfigured() && conn != null) {
+        if (stripe.isLiveFor(merchant) && conn != null) {
             try {
                 Account account = stripe.fetchAccount(conn.stripeAccountId());
                 conn = syncFromAccount(merchant, conn, account);
@@ -128,7 +129,7 @@ public class StripeStandardConnectResource {
                 // Fall through and report the last stored status.
             }
         }
-        return Response.ok(statusView(conn, stripe.isConfigured())).build();
+        return Response.ok(statusView(conn, stripe.isLiveFor(merchant))).build();
     }
 
     /**
@@ -143,7 +144,7 @@ public class StripeStandardConnectResource {
     @Path("/demo-complete")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response demoComplete(@Auth MerchantPrincipal principal) {
-        if (stripe.isConfigured()) {
+        if (stripe.isLiveFor(principal.merchant())) {
             return Response.status(409)
                     .entity(Map.of(
                             "error", "stripe_configured",

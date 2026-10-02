@@ -213,7 +213,7 @@ public class BookingsResource {
         // exists to protect funds flow; without Stripe configured there is no
         // funds flow to protect, so we allow merchants to exercise the booking
         // form in dev. Production deploys must set STRIPE_SECRET_KEY.
-        if (!stripeService.isConfigured()) return null;
+        if (!stripeService.isLiveFor(merchant)) return null;
         ConnectStatus status = ConnectStatus.fromWire(merchant.stripeConnectStatus());
         if (status == ConnectStatus.CHARGES_ENABLED) return null;
         return Response.status(403).entity(Map.of(

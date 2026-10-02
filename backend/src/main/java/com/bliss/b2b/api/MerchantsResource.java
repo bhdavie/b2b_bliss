@@ -87,7 +87,7 @@ public class MerchantsResource {
         Merchant merchant = principal.merchant();
         boolean sourced = switch (merchant.pmsType()) {
             case MEWS, CLOUDBEDS -> true;
-            case STRIPE -> stripe.isConfigured();
+            case STRIPE -> stripe.isLiveFor(merchant);
             case NONE -> false;
         };
         if (sourced) {
@@ -127,9 +127,9 @@ public class MerchantsResource {
         if (stripeAccountId == null || stripeAccountId.isBlank()) {
             return new StripeStatusView(
                     ConnectStatus.NOT_STARTED.wire(), null, false, false, false, null,
-                    stripe.isConfigured());
+                    stripe.isLiveFor(merchant));
         }
-        if (!stripe.isConfigured()) {
+        if (!stripe.isLiveFor(merchant)) {
             ConnectStatus cached = ConnectStatus.fromWire(merchant.stripeConnectStatus());
             return new StripeStatusView(
                     cached.wire(), stripeAccountId, false, false, false, null, false);

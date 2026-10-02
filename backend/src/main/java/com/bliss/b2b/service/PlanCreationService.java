@@ -399,7 +399,8 @@ public class PlanCreationService {
                     "Cloudbeds is connected, but guest card capture is not yet available "
                             + "(tokenization seam pending). Contact the property to book.");
         }
-        if (!stripeService.isConfigured()) {
+        // Demo properties stay in demo mode even with live keys set.
+        if (!stripeService.isLiveFor(merchant)) {
             return acceptForBookingDemo(handle, booking, merchant,
                     customerEmail, customerFirstName, customerLastName,
                     customerPhone, paymentMethodId, requestedFrequency, demoCard);

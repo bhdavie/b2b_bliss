@@ -514,7 +514,7 @@ public class PlanPortalService {
      */
     public ReplaceCardResult replacePaymentMethod(
             String bookingToken, String newPaymentMethodId, PlanCreationService.DemoCard demoCard) {
-        if (!stripeService.isConfigured()) {
+        if (!stripeLiveFor(bookingToken)) {
             return replacePaymentMethodDemo(bookingToken, newPaymentMethodId, demoCard);
         }
         return jdbi.inTransaction(handle -> {
@@ -576,7 +576,7 @@ public class PlanPortalService {
      * here so the API doesn't silently 500 if it does.
      */
     public String createSetupIntentForCustomer(String bookingToken) {
-        if (!stripeService.isConfigured()) {
+        if (!stripeLiveFor(bookingToken)) {
             throw new PortalException(PortalErrorCode.SETUP_INTENT_NOT_AVAILABLE_IN_DEMO,
                     "SetupIntent flow is not used in demo mode");
         }
@@ -605,7 +605,17 @@ public class PlanPortalService {
             Lookup look = resolveOrThrow(handle, bookingToken);
             ChargeRoute route = handle.attach(PaymentPlanDao.class).chargeRoute(look.plan.id())
                     .orElseThrow(() -> new PortalException(PortalErrorCode.NOT_FOUND, "plan not found"));
-            return routeOf(route, stripeService.isConfigured());
+            return routeOf(route, stripeService.isLiveFor(
+                    handle.attach(MerchantDao.class).findById(look.booking.merchantId()).orElse(null)));
+        });
+    }
+
+    /** Whether Stripe is real for this plan's property; demo properties never are. */
+    private boolean stripeLiveFor(String bookingToken) {
+        return jdbi.withHandle(handle -> {
+            Lookup look = resolveOrThrow(handle, bookingToken);
+            return stripeService.isLiveFor(
+                    handle.attach(MerchantDao.class).findById(look.booking.merchantId()).orElse(null));
         });
     }
 

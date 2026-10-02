@@ -78,7 +78,10 @@ public class JdbiStripeInstallmentCharger implements StripeInstallmentCharger {
         // Demo mode: no Stripe configured -> settle exactly like pay-early demo
         // (markPaidNow + synthetic intent id). The due-charge query already
         // guarantees the plan is active, matching the Mews branch's trust.
-        if (!stripeService.isConfigured()) {
+        boolean live = jdbi.withHandle(h -> h.attach(MerchantDao.class).findById(due.merchantId()))
+                .map(stripeService::isLiveFor).orElse(false);
+        if (!live) {
+            // Demo properties stay in demo mode even with live keys set.
             String demoIntentId = StripeIds.intentIdFor(due.scheduleId());
             jdbi.useHandle(h -> h.attach(PaymentScheduleDao.class)
                     .markPaidNow(due.scheduleId(), demoIntentId, now));

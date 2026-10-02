@@ -54,7 +54,9 @@ public class StripeConnectResolver {
     public Optional<String> resolve(UUID merchantId) {
         return connectionDao.findByMerchant(merchantId)
                 .filter(StripeConnection::isChargesEnabled)
-                .map(StripeConnection::stripeAccountId);
+                .map(StripeConnection::stripeAccountId)
+                // A synthetic demo account is never a real destination.
+                .filter(id -> !StripeDemoPolicy.isDemoAccount(id));
     }
 
     /**

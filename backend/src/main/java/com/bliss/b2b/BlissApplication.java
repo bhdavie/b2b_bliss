@@ -181,6 +181,15 @@ public class BlissApplication extends Application<BlissConfiguration> {
         // into charges as a direct charge (empty -> platform key, current path).
         StripeConnectStandardService stripeConnectStandardService =
                 new StripeConnectStandardService(config.getStripe());
+        // Demo properties (acct_demo_ accounts, listed demo Mews slugs, demo
+        // logins: the Marbrook properties) stay in Stripe demo mode whatever
+        // keys are set, so live keys never charge a card for them.
+        com.bliss.b2b.integration.StripeDemoPolicy stripeDemoPolicy =
+                new com.bliss.b2b.integration.StripeDemoPolicy(
+                        config.getApp().getDemoMewsSlugs(), config.getDemoLoginEmails());
+        stripeService.withDemoPolicy(stripeDemoPolicy);
+        stripePaymentsService.withDemoPolicy(stripeDemoPolicy);
+        stripeConnectStandardService.withDemoPolicy(stripeDemoPolicy);
         com.bliss.b2b.persistence.MerchantStripeConnectionDao stripeConnectionDao =
                 jdbi.onDemand(com.bliss.b2b.persistence.MerchantStripeConnectionDao.class);
         StripeConnectResolver stripeConnectResolver = new StripeConnectResolver(jdbi);

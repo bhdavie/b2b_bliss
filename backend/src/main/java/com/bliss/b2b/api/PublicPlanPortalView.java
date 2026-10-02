@@ -48,7 +48,8 @@ public record PublicPlanPortalView(
             StripeConnectResolver stripeConnectResolver) {
         // As-of-today derivation (single source of truth, see PlanProgress).
         var progress = s.progress();
-        boolean stripeConfigured = stripeService.isConfigured();
+        // Demo properties stay in demo mode even with live keys set.
+        boolean stripeConfigured = stripeService.isLiveFor(s.merchant());
         String rail = s.merchant().pmsType() == PmsType.MEWS
                 ? "mews"
                 : (stripeConfigured ? "stripe" : "demo");

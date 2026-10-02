@@ -38,6 +38,23 @@ public class StripeConnectStandardService {
         return config.isConfigured();
     }
 
+    private StripeDemoPolicy demoPolicy = StripeDemoPolicy.NONE;
+
+    /** Which properties always stay in demo mode, whatever keys are set. */
+    public StripeConnectStandardService withDemoPolicy(StripeDemoPolicy policy) {
+        this.demoPolicy = policy == null ? StripeDemoPolicy.NONE : policy;
+        return this;
+    }
+
+    /**
+     * Whether Stripe is real for this property: keys are set and it isn't a
+     * demo property. Every merchant-scoped choice between Stripe and demo mode
+     * asks this, not {@link #isConfigured()}.
+     */
+    public boolean isLiveFor(com.bliss.b2b.domain.Merchant merchant) {
+        return isConfigured() && !demoPolicy.isDemo(merchant);
+    }
+
     /**
      * Creates a Stripe Connect *Standard* account for the property. Returns the
      * new {@code acct_...} id, which should be persisted in

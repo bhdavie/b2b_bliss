@@ -113,14 +113,14 @@ public class PublicMerchantsResource {
                         rules.discountBasisPoints(),
                         rules.blackoutDates().stream().map(java.time.LocalDate::toString).toList()),
                 new PublicMerchantView.Stripe(
-                        stripeService.isConfigured(),
-                        stripeService.isConfigured() ? stripeService.publishableKey() : null,
+                        stripeService.isLiveFor(merchant),
+                        stripeService.isLiveFor(merchant) ? stripeService.publishableKey() : null,
                         chargesEnabled,
-                        stripeService.isConfigured()
+                        stripeService.isLiveFor(merchant)
                                 ? stripeConnectResolver.resolveOrNull(merchant.id()) : null),
                 merchant.pmsType() == com.bliss.b2b.domain.PmsType.MEWS
                         ? "mews"
-                        : (stripeService.isConfigured() ? "stripe" : "demo"),
+                        : (stripeService.isLiveFor(merchant) ? "stripe" : "demo"),
                 merchant.currency(),
                 merchant.localeTag(),
                 merchant.timeZone()
