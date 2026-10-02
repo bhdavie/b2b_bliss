@@ -75,7 +75,8 @@ public interface PayoutReleaseDao {
     @SqlQuery("""
             SELECT * FROM payout_releases
             WHERE status = 'scheduled' AND release_at <= :now AND step <> 'fee_debit'
-            ORDER BY release_at
+            -- Ties broken by creation, so releases due together go out in payment order.
+            ORDER BY release_at, created_at
             """)
     @RegisterConstructorMapper(Release.class)
     List<Release> due(@Bind("now") Instant now);
